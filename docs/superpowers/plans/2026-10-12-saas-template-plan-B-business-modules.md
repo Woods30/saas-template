@@ -214,6 +214,18 @@ export const newsletterSubscriptions = sqliteTable('newsletter_subscriptions', {
   status: text('status').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
+
+// 幂等表：所有外部 webhook 统一落点，避免重投/乱序造成重复副作用。
+// 业务 handler 在 transaction 中先 INSERT event id，成功后 UPDATE processedAt；
+// 失败 DELETE 整行让源端重投。
+export const webhookEvents = sqliteTable('webhook_events', {
+  id: text('id').primaryKey(), // source event id (e.g. `evt_xxx` for Stripe)
+  source: text('source').notNull(), // 'stripe' / 'github' / ...
+  type: text('type').notNull(),
+  payload: text('payload').notNull(), // raw JSON for replay
+  receivedAt: integer('received_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  processedAt: integer('processed_at', { mode: 'timestamp' }),
+});
 ```
 
 **Step 2.4: 写入 `src/db/index.ts`**
@@ -285,27 +297,39 @@ export interface SessionUser {
 **Step 3.2: 写入 `src/auth/auth.ts`**
 
 ```ts
-import { betterAuth } from 'better-auth';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { getRequestEvent } from 'solid-js/web';
+import { betterAuth } from 'better-auth/minimal';
+import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { createDb, schema } from '@/db';
 import { parseServerEnv } from '@/env/server';
 
+/**
+ * Better Auth v1.6+ D1 集成。
+ *
+ * 关键点：
+ * 1. 主入口走 `better-auth/minimal`（无 node-only 依赖），更适合 Workers。
+ * 2. `drizzleAdapter` 来自独立包 `@better-auth/drizzle-adapter`。
+ * 3. D1 binding 直接传 `database: env.DB`，无需额外 driver。
+ * 4. 不读取 `process.env`：env 从 worker 入口注入到 `parsed`，避免 SSR/client
+ *    行为漂移。
+ */
 export function getAuth(env: Env) {
-  const parsed = parseServerEnv({ ...(env as unknown as Record<string, unknown>), ...process.env });
+  const parsed = parseServerEnv(env as unknown as Record<string, unknown>);
   const db = createDb(env.DB);
 
   return betterAuth({
     secret: parsed.BETTER_AUTH_SECRET,
-    database: drizzleAdapter(db, {
-      provider: 'sqlite',
-      schema: {
-        user: schema.users,
-        session: schema.sessions,
-        account: schema.accounts,
-        verification: schema.verifications,
-      },
-    }),
+    database: env.DB,
+    plugins: [
+      drizzleAdapter(db, {
+        provider: 'sqlite',
+        schema: {
+          user: schema.users,
+          session: schema.sessions,
+          account: schema.accounts,
+          verification: schema.verifications,
+        },
+      }),
+    ],
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true,
@@ -580,27 +604,21 @@ export interface FileInfo {
 
 ```ts
 import type { R2Bucket } from '@cloudflare/workers-types';
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { FileInfo, UploadOptions, UploadResult } from '../types';
 
+/**
+ * R2 storage provider — 走 native R2 binding，不使用 S3 SDK。
+ *
+ * 设计依据：Cloudflare Workers 上 R2 通过 binding（`env.BUCKET`）访问，零 egress、
+ * 原生 API 已经覆盖 put/get/head/list/delete 全集；S3 SDK 额外引入 `@aws-sdk/*`
+ * 包体并需要 CORS-compatible 凭据，与 spec §3 "binding 而非凭据" 一致。
+ * 预签名 URL 等需要 S3 协议的功能由后续 R2 presign 单独提供。
+ */
 export class R2StorageProvider {
-  private readonly s3: S3Client;
-
   constructor(
     private readonly bucket: R2Bucket,
     private readonly bindingName = 'BUCKET',
-  ) {
-    // R2 S3 兼容端点（通过 Cloudflare account id 推断）
-    this.s3 = new S3Client({
-      region: 'auto',
-      endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY_ID ?? '',
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? '',
-      },
-    });
-  }
+  ) {}
 
   private buildKey(filename: string, options: UploadOptions): string {
     const parts = [options.folder ?? 'uploads'];
@@ -831,14 +849,22 @@ export interface MailProvider {
 **Step 6.4: 写入 `src/mail/provider/cloudflare.ts`**
 
 ```ts
+import { EmailMessage } from 'cloudflare:email';
 import type { MailProvider, SendEmailResult, SendTemplateParams } from '../types';
 import { renderTemplate } from '../render';
 
+/**
+ * Cloudflare Email Service provider — 走 Email Service binding（`env.EMAIL.send`）。
+ *
+ * 设计依据：spec §3 + §9 明确"binding 而非凭据"。Cloudflare Email Service
+ * 通过 binding `env.EMAIL` 暴露 `send(message)`，消息体由 `EmailMessage` 构造
+ * （来自 `cloudflare:email` 模块）。不存在 `accounts/.../email/rfz/send` 公开
+ * HTTP 端点。`wrangler.jsonc` 必须声明 `[[send_email]]` 绑定。
+ */
 export class CloudflareEmailProvider implements MailProvider {
   constructor(
-    private readonly accountId: string,
-    private readonly apiToken: string,
-    private readonly sender: string,
+    private readonly binding: SendEmail, // Workers 生成的 SendEmail binding 类型
+    private readonly defaultSender: string,
   ) {}
 
   getProviderName() {
@@ -847,30 +873,27 @@ export class CloudflareEmailProvider implements MailProvider {
 
   async sendTemplate(params: SendTemplateParams): Promise<SendEmailResult> {
     const { subject, html } = await renderTemplate(params);
-    const res = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/email/rfz/send`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.apiToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: params.fromAddress ?? this.sender,
-          to: params.to,
-          subject,
-          html,
-        }),
-      },
-    );
-    if (!res.ok) {
-      return { ok: false, error: `${res.status}: ${await res.text()}` };
+    const from = params.fromAddress ?? this.defaultSender;
+    try {
+      const message = new EmailMessage(from, params.to, subject, html);
+      await this.binding.send(message);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
-    const data = (await res.json()) as { result?: { id?: string } };
-    return { ok: true, id: data.result?.id };
   }
 }
 ```
+
+> 配套 `wrangler.jsonc`（Sub-Plan B Task 16 已声明）需追加：
+>
+> ```jsonc
+> "send_email": [
+>   { "name": "EMAIL", "destination_address": "support@example.com" }
+> ]
+> ```
+>
+> 其中 `destination_address` 必须与 DNS MX 记录指向的地址一致；`from` 地址必须是已验证域名。
 
 **Step 6.5: 写入 `src/mail/provider/resend.ts`**
 
@@ -976,16 +999,8 @@ export default function ContactMessage({ fromName, fromEmail, subject, message }
 **Step 6.9: 写入 `src/mail/render.ts`**
 
 ```ts
+import type { ComponentType } from 'react';
 import type { EmailTemplate, SendTemplateParams } from './types';
-import VerifyEmail from './templates/verify-email';
-import ForgotPassword from './templates/forgot-password';
-import ContactMessage from './templates/contact-message';
-
-const templates = {
-  verifyEmail: VerifyEmail,
-  forgotPassword: ForgotPassword,
-  contactMessage: ContactMessage,
-} as const;
 
 const subjects: Record<EmailTemplate, Record<'zh' | 'en', string>> = {
   verifyEmail: { zh: '验证你的邮箱', en: 'Verify your email' },
@@ -993,11 +1008,21 @@ const subjects: Record<EmailTemplate, Record<'zh' | 'en', string>> = {
   contactMessage: { zh: '新的联系消息', en: 'New contact message' },
 };
 
-export async function renderTemplate(params: SendTemplateParams) {
-  const Component = templates[params.template];
-  const element = Component(params.context as never);
+// 动态 import：避免把 React Email（~200KB）打入客户端 bundle。
+// 仅在 server function / worker 中按需加载。
+type TemplateContext = {
+  verifyEmail: { username: string; actionUrl: string };
+  forgotPassword: { username: string; actionUrl: string };
+  contactMessage: { fromName: string; fromEmail: string; subject: string; message: string };
+};
+
+export async function renderTemplate<K extends EmailTemplate>(
+  params: SendTemplateParams & { template: K },
+): Promise<{ subject: string; html: string }> {
   const { render } = await import('@react-email/render');
-  const html = await render(element);
+  const mod = await import(`./templates/${params.template}.tsx`);
+  const Component = mod.default as ComponentType<TemplateContext[K]>;
+  const html = await render(Component(params.context as TemplateContext[K]));
   return {
     subject: subjects[params.template][params.locale],
     html,
@@ -1056,16 +1081,14 @@ export type { CloudflareEmailProvider, ResendMailProvider };
 
 ```ts
 import { registerMailProvider, CloudflareEmailProvider, ResendMailProvider } from '@/mail';
-import { parseServerEnv } from '@/env/server';
 
-const env = parseServerEnv({ ...process.env });
-if (env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_EMAIL_SENDER) {
+if (env.EMAIL) {
   registerMailProvider('cloudflare', () =>
-    new CloudflareEmailProvider(env.CLOUDFLARE_ACCOUNT_ID!, env.CLOUDFLARE_API_TOKEN!, env.CLOUDFLARE_EMAIL_SENDER!),
+    new CloudflareEmailProvider(env.EMAIL, env.CLOUDFLARE_EMAIL_SENDER ?? 'noreply@example.com'),
   );
 }
 if (env.RESEND_API_KEY) {
-  registerMailProvider('resend', () => new ResendMailProvider(env.RESEND_API_KEY!, 'SaaS Template <noreply@example.com>'));
+  registerMailProvider('resend', () => new ResendMailProvider(env.RESEND_API_KEY, 'SaaS Template <noreply@example.com>'));
 }
 ```
 
@@ -1334,26 +1357,18 @@ export function registerNotificationProvider(name: NotificationChannel, factory:
   registry[name] = factory;
 }
 
-export async function notify(name: NotificationChannel, payload: NotificationPayload) {
+export async function notify(name: NotificationChannel, payload: NotificationPayload): Promise<boolean> {
   const factory = registry[name];
   if (!factory) return false;
-  const result = await result.send(payload);
-  if (!result) {
+  const provider = factory();
+  const ok = await provider.send(payload);
+  if (!ok) {
     console.warn(`[notification] ${name} 投递失败`);
   }
-  return result;
+  return ok;
 }
 
 export type { NotificationChannel, NotificationPayload, NotificationProvider };
-```
-
-> 注：上方 `result.send(payload)` 应为 `provider.send(payload)`；修正：
-
-```ts
-const provider = factory();
-const result = await provider.send(payload);
-if (!result) console.warn(`[notification] ${name} 投递失败`);
-return result;
 ```
 
 **Step 8.5: 在 `src/worker.ts` 注册**
@@ -1538,8 +1553,8 @@ export interface PaymentProvider {
   getProviderName(): string;
   createCheckoutSession(params: CheckoutParams): Promise<CheckoutResult>;
   createCustomerPortalLink(params: { customerId: string; returnUrl: string }): Promise<PortalResult>;
-  verifyWebhook(rawBody: string, signature: string): boolean;
-  parseWebhookEvent(rawBody: string, signature: string): Stripe.Event;
+  verifyWebhook(rawBody: string, signature: string): Promise<boolean>;
+  parseWebhookEvent(rawBody: string, signature: string): Promise<Stripe.Event>;
 }
 ```
 
@@ -1549,11 +1564,23 @@ export interface PaymentProvider {
 import Stripe from 'stripe';
 import type { CheckoutParams, CheckoutResult, PaymentProvider, PortalResult } from '../types';
 
+/**
+ * Stripe payment provider — Cloudflare Workers 适配。
+ *
+ * 关键点：
+ * 1. `httpClient` 用 `Stripe.createFetchHttpClient()`（Workers 原生 fetch）。
+ * 2. `webhook` 验签用 `constructEventAsync` + `createSubtleCryptoProvider()`，
+ *    因为同步 `constructEvent` 依赖 Node `crypto` 模块，在 Workers 上不可用。
+ * 3. `apiVersion` 锁为发布日 Stripe 文档 stable 版本。
+ */
 export class StripePaymentProvider implements PaymentProvider {
   private readonly stripe: Stripe;
 
   constructor(secretKey: string, private readonly webhookSecret: string) {
-    this.stripe = new Stripe(secretKey, { apiVersion: '2025-09-30.clover' as Stripe.LatestApiVersion });
+    this.stripe = new Stripe(secretKey, {
+      apiVersion: '2025-09-30.clover' as Stripe.LatestApiVersion,
+      httpClient: Stripe.createFetchHttpClient(),
+    });
   }
 
   getProviderName() {
@@ -1580,20 +1607,33 @@ export class StripePaymentProvider implements PaymentProvider {
     return { url: portal.url };
   }
 
-  verifyWebhook(rawBody: string, signature: string): boolean {
+  async parseWebhookEvent(rawBody: string, signature: string): Promise<Stripe.Event> {
+    return this.stripe.webhooks.constructEventAsync(
+      rawBody,
+      signature,
+      this.webhookSecret,
+      undefined,
+      Stripe.createSubtleCryptoProvider(),
+    );
+  }
+
+  async verifyWebhook(rawBody: string, signature: string): Promise<boolean> {
     try {
-      this.stripe.webhooks.constructEvent(rawBody, signature, this.webhookSecret);
+      await this.parseWebhookEvent(rawBody, signature);
       return true;
     } catch {
       return false;
     }
   }
-
-  parseWebhookEvent(rawBody: string, signature: string): Stripe.Event {
-    return this.stripe.webhooks.constructEvent(rawBody, signature, this.webhookSecret);
-  }
 }
 ```
+
+> Provider 接口同步更新（types.ts 同步标注 async）：
+>
+> ```ts
+> verifyWebhook(rawBody: string, signature: string): Promise<boolean>;
+> parseWebhookEvent(rawBody: string, signature: string): Promise<Stripe.Event>;
+> ```
 
 **Step 10.3: 写入 `src/payment/index.ts`**
 
@@ -1667,6 +1707,21 @@ import { createDb, schema } from '@/db';
 import { eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
+/**
+ * Stripe webhook 路由 — 实现幂等、重投、乱序保护。
+ *
+ * 幂等表 `webhook_events` 在 Sub-Plan B Task 2 schema 已声明：
+ * - `id`: Stripe event id（`evt_xxx`），主键
+ * - `type`: 事件类型
+ * - `processed_at`: 处理完成时间（NULL = 在处理中）
+ * - `payload`: 原始 JSON（用于排障与回放）
+ *
+ * 流程：
+ * 1. 验签失败 → 400（不写库）。
+ * 2. INSERT OR IGNORE event id；已存在 → 直接 200。
+ * 3. 业务 switch；任意抛错 → 返回 500（Stripe 会重投）。
+ * 4. 成功后 UPDATE `processed_at = now()`。
+ */
 export const Route = createFileRoute('/api/webhooks/stripe')({
   server: {
     handlers: {
@@ -1676,73 +1731,116 @@ export const Route = createFileRoute('/api/webhooks/stripe')({
         const signature = request.headers.get('stripe-signature') ?? '';
         const provider = getPaymentProvider(websiteConfig.payment.provider);
 
-        if (!provider.verifyWebhook(rawBody, signature)) {
+        const event = await provider.parseWebhookEvent(rawBody, signature).catch((err) => {
+          console.warn('[stripe-webhook] signature verify failed', err);
+          return null;
+        });
+        if (!event) {
           return new Response('invalid signature', { status: 400 });
         }
-        const event = provider.parseWebhookEvent(rawBody, signature);
-        const db = createDb(env.DB);
 
-        switch (event.type) {
-          case 'checkout.session.completed': {
-            const s = event.data.object as Stripe.Checkout.Session;
-            await db.insert(schema.subscriptions).values({
-              id: `sub_${s.id}`,
-              userId: String(s.metadata?.userId ?? ''),
-              customerId: String(s.customer ?? ''),
-              subscriptionId: String(s.subscription ?? ''),
-              status: 'active',
-              priceId: '',
-            });
-            break;
-          }
-          case 'invoice.paid': {
-            const inv = event.data.object as Stripe.Invoice;
-            await db.insert(schema.payments).values({
-              id: `pay_${inv.id}`,
-              userId: null,
-              type: inv.subscription ? 'subscription' : 'invoice',
-              stripeInvoiceId: inv.id,
-              status: 'paid',
-              amount: inv.amount_paid,
-              currency: inv.currency,
-              paidAt: new Date(inv.created * 1000),
-            });
-            break;
-          }
-          case 'customer.subscription.updated':
-          case 'customer.subscription.created': {
-            const sub = event.data.object as Stripe.Subscription;
-            await db
-              .update(schema.subscriptions)
-              .set({
-                status: sub.status,
-                priceId: sub.items.data[0]?.price.id ?? '',
-                currentPeriodStart: new Date(sub.current_period_start * 1000),
-                currentPeriodEnd: new Date(sub.current_period_end * 1000),
-                cancelAtPeriodEnd: sub.cancel_at_period_end,
-              })
-              .where(eq(schema.subscriptions.subscriptionId, sub.id));
-            break;
-          }
-          case 'customer.subscription.deleted': {
-            const sub = event.data.object as Stripe.Subscription;
-            await db
-              .update(schema.subscriptions)
-              .set({ status: 'canceled', cancelAtPeriodEnd: true })
-              .where(eq(schema.subscriptions.subscriptionId, sub.id));
-            break;
-          }
-          case 'charge.refunded': {
-            const ch = event.data.object as Stripe.Charge;
-            await db
-              .update(schema.payments)
-              .set({ status: 'refunded', refundedAt: new Date() })
-              .where(eq(schema.payments.stripeChargeId, ch.id));
-            break;
-          }
+        const db = createDb(env.DB);
+        // 幂等：先尝试插入
+        const inserted = await db
+          .insert(schema.webhookEvents)
+          .values({
+            id: event.id, // evt_xxx 已是全局唯一
+            type: event.type,
+            payload: JSON.stringify(event),
+            receivedAt: new Date(),
+            processedAt: null,
+          })
+          .onConflictDoNothing({ target: schema.webhookEvents.id })
+          .returning({ id: schema.webhookEvents.id });
+
+        if (inserted.length === 0) {
+          // 已处理过，直接 ack
+          return new Response('duplicate', { status: 200 });
         }
 
-        return new Response('ok');
+        try {
+          switch (event.type) {
+            case 'checkout.session.completed': {
+              const s = event.data.object as Stripe.Checkout.Session;
+              // Stripe subscription id 形如 sub_xxx；不要重复加前缀
+              await db
+                .insert(schema.subscriptions)
+                .values({
+                  id: String(s.subscription ?? s.id),
+                  userId: String(s.metadata?.userId ?? ''),
+                  customerId: String(s.customer ?? ''),
+                  subscriptionId: String(s.subscription ?? ''),
+                  status: 'active',
+                  priceId: '',
+                })
+                .onConflictDoNothing({ target: schema.subscriptions.id });
+              break;
+            }
+            case 'invoice.paid': {
+              const inv = event.data.object as Stripe.Invoice;
+              await db
+                .insert(schema.payments)
+                .values({
+                  id: inv.id ?? `pay_${Date.now()}`,
+                  userId: null,
+                  type: inv.subscription ? 'subscription' : 'invoice',
+                  stripeInvoiceId: inv.id ?? null,
+                  status: 'paid',
+                  amount: inv.amount_paid,
+                  currency: inv.currency,
+                  paidAt: new Date(inv.created * 1000),
+                })
+                .onConflictDoNothing({ target: schema.payments.id });
+              break;
+            }
+            case 'customer.subscription.updated':
+            case 'customer.subscription.created': {
+              const sub = event.data.object as Stripe.Subscription;
+              await db
+                .update(schema.subscriptions)
+                .set({
+                  status: sub.status,
+                  priceId: sub.items.data[0]?.price.id ?? '',
+                  currentPeriodStart: new Date(sub.current_period_start * 1000),
+                  currentPeriodEnd: new Date(sub.current_period_end * 1000),
+                  cancelAtPeriodEnd: sub.cancel_at_period_end,
+                })
+                .where(eq(schema.subscriptions.subscriptionId, sub.id));
+              break;
+            }
+            case 'customer.subscription.deleted': {
+              const sub = event.data.object as Stripe.Subscription;
+              await db
+                .update(schema.subscriptions)
+                .set({ status: 'canceled', cancelAtPeriodEnd: true })
+                .where(eq(schema.subscriptions.subscriptionId, sub.id));
+              break;
+            }
+            case 'charge.refunded': {
+              const ch = event.data.object as Stripe.Charge;
+              await db
+                .update(schema.payments)
+                .set({ status: 'refunded', refundedAt: new Date() })
+                .where(eq(schema.payments.stripeChargeId, ch.id));
+              break;
+            }
+            // 未处理类型：200 OK + processedAt 标记，避免 Stripe 重投
+            default:
+              break;
+          }
+
+          await db
+            .update(schema.webhookEvents)
+            .set({ processedAt: new Date() })
+            .where(eq(schema.webhookEvents.id, event.id));
+
+          return new Response('ok');
+        } catch (err) {
+          // 业务失败：删除已插入的事件行，让 Stripe 重投
+          await db.delete(schema.webhookEvents).where(eq(schema.webhookEvents.id, event.id));
+          console.error('[stripe-webhook] handler error', err);
+          return new Response('handler error', { status: 500 });
+        }
       },
     },
   },
@@ -2601,8 +2699,14 @@ async function main() {
   // 9. 写入 .env
   env.CLOUDFLARE_DATABASE_ID = dbId;
   env.BETTER_AUTH_SECRET = authSecret;
-  if (!existsSync('.env.example')) {
-    execSync('cp .env.example .env');
+  // 首次运行无 .env.example → 报错（不要默默跳过）。
+  // 真正流程：先 `cp .env.example .env`（用户手动或文档引导），再 `pnpm run setup`。
+  if (!existsSync('.env')) {
+    if (existsSync('.env.example')) {
+      execSync('cp .env.example .env');
+    } else {
+      throw new Error('缺少 .env 与 .env.example；请先从模板仓库拉取 .env.example');
+    }
   }
   writeEnv(env);
 
@@ -2771,3 +2875,22 @@ git commit -m "chore: Sub-Plan B 收尾（lint + 测试 + 构建验证）" --all
 - [ ] 单元测试 + 类型校验 + 构建全部通过
 
 进入 Sub-Plan C 之前，确保以上所有项就位。
+
+---
+
+## Not in Scope（Sub-Plan B 显式不做）
+
+按 writing-plans 规范，本 sub-plan 明确**不**包含：
+
+- **Marketing blocks / 营销页面 / Content Collections / 文档站 / 博客 / PWA**（→ Sub-Plan C）。
+- **Vitest Workers 池 / Playwright E2E / CI 流水线 / 性能 / 安全中间件**（→ Sub-Plan D）。
+- **Stripe Tax / 多币种切换 UI / 折扣码 / 试用周期 UI**：spec §12 已列出但本期仅留 price-plan helper；UI 切换另立 plan。
+- **Creem / Waffo 实际 provider**：仅在 `registerPaymentProvider` 注册表占位；实现需各家文档，待产品决定接入。
+- **Beehiiv / Resend 实际 Newsletter 集成测试**：只写最小 happy-path（Sub-Plan D 集成测试扩展）。
+- **Better Auth 完整插件链**（2FA、magic link、organization、admin plugin）：本期仅邮箱密码 + Google OAuth + 邮箱验证。
+- **多租户 / 团队账号 / RBAC 角色细分**：spec §14 仅 user / admin 二元；细分留待 v0.2。
+- **AI Gateway / LLM 调用 schema**：仅在 schema 占位；调用与缓存策略后续 plan。
+- **Cloudflare Turnstile**：env 已声明；UI 接入留待 v0.2。
+- **支付退款与争议处理 UI**：webhook 数据已落库（`status: 'refunded'`）；管理端 UI 由 v0.2 提供。
+- **预签名下载链接**：本期 R2 走 native binding；如需 S3 兼容预签名由后续 plan 单独接入。
+- **cloudflare:email binding 之外的 SMTP 兼容**：Resend 是唯一 fallback；Postmark / SES 不在本期。
