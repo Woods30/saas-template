@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, Navigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { authClient } from '@/auth/client'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,7 @@ function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
+  const [missingToken, setMissingToken] = useState(false)
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -24,8 +25,7 @@ function ResetPasswordPage() {
     const params = new URLSearchParams(window.location.search)
     const token = params.get('token')
     if (!token) {
-      setError('缺少重置令牌')
-      setSubmitting(false)
+      setMissingToken(true)
       return
     }
     const { error: authError } = await authClient.resetPassword({
@@ -65,12 +65,16 @@ function ResetPasswordPage() {
     )
   }
 
+  if (missingToken) {
+    return <Navigate to="/{-$locale}/auth/error" />
+  }
+
   return (
     <main className="mx-auto max-w-md p-6">
       <Card>
         <CardHeader>
           <CardTitle>{m.auth_reset_title()}</CardTitle>
-          <CardDescription>{m.auth_login_to_register()}</CardDescription>
+          <CardDescription>{m.auth_forgot_to_login()}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
