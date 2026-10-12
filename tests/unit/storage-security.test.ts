@@ -20,6 +20,7 @@ function createMockBucket() {
       objects: [],
       truncated: false,
     }),
+    // biome-ignore lint/suspicious/noExplicitAny: mock R2Bucket, vi.fn type incompatible with overloaded R2 methods
   } as any
   return mock
 }
@@ -162,7 +163,7 @@ describe('R2StorageProvider — 安全加固', () => {
       const provider = new R2StorageProvider(bucket)
 
       await expect(provider.downloadFile('uploads/user1/123-file.png')).rejects.toThrow(
-        'authorized: true',
+        '拒绝非 public 文件（缺省视为 private）',
       )
     })
 
@@ -179,6 +180,21 @@ describe('R2StorageProvider — 安全加固', () => {
       const result = await provider.downloadFile('uploads/user1/123-file.png', true)
 
       expect(result).toBeInstanceOf(ReadableStream)
+    })
+
+    it('visibility 缺省（undefined）且未传 authorized → 拒绝（默认 private）', async () => {
+      const bucket = createMockBucket()
+      ;(bucket.head as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        size: 100,
+        httpMetadata: { contentType: 'image/png' },
+        uploaded: new Date(),
+        customMetadata: {},
+      })
+      const provider = new R2StorageProvider(bucket)
+
+      await expect(provider.downloadFile('uploads/user1/123-file.png')).rejects.toThrow(
+        'authorized: true',
+      )
     })
 
     it('visibility=public 且未传 authorized → 正常返回流', async () => {

@@ -127,8 +127,10 @@ export class R2StorageProvider {
     if (!obj) return null
 
     const visibility = obj.customMetadata?.visibility
-    if (visibility === 'private' && !authorized) {
-      throw new Error('storage: downloadFile 下载 private 文件需要显式传入 authorized: true')
+    if (visibility !== 'public' && !authorized) {
+      throw new Error(
+        'storage: downloadFile 拒绝非 public 文件（缺省视为 private），需要显式传入 authorized: true',
+      )
     }
 
     const result = await this.bucket.get(key)

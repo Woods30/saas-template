@@ -1,19 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // ---------------------------------------------------------------------------
-// Mock cloudflare:email (Node.js test environment — no such module)
-// ---------------------------------------------------------------------------
-vi.mock('cloudflare:email', () => ({
-  EmailMessage: class MockEmailMessage {
-    constructor(
-      public readonly from: string,
-      public readonly to: string,
-      public readonly raw: string,
-    ) {}
-  },
-}))
-
-// ---------------------------------------------------------------------------
 // Mock server-context ALS
 // ---------------------------------------------------------------------------
 const mockMailProviderRegistry: Record<string, (() => object) | undefined> = {}
@@ -217,14 +204,16 @@ describe('sendMail', () => {
 // CloudflareEmailProvider — EmailMessage construction
 // ---------------------------------------------------------------------------
 describe('CloudflareEmailProvider', () => {
-  it('calls binding.send with EmailMessage(from, to, raw)', async () => {
-    let capturedMsg: { from: string; to: string; raw: string } | undefined
+  it('calls binding.send with EmailMessageBuilder(from, to, subject, html)', async () => {
+    let capturedMsg: { from: string; to: string; subject: string; html: string } | undefined
     const fakeSend = vi
       .fn()
-      .mockImplementation(async (msg: { from: string; to: string; raw: string }) => {
-        capturedMsg = { from: msg.from, to: msg.to, raw: msg.raw as string }
-        return { messageId: 'cf-123' }
-      })
+      .mockImplementation(
+        async (msg: { from: string; to: string; subject: string; html: string }) => {
+          capturedMsg = { from: msg.from, to: msg.to, subject: msg.subject, html: msg.html }
+          return { messageId: 'cf-123' }
+        },
+      )
     // biome-ignore lint/suspicious/noExplicitAny: fake binding matches SendEmail interface shape
     const fakeBinding = { send: fakeSend } as any
 
@@ -243,7 +232,8 @@ describe('CloudflareEmailProvider', () => {
     expect(fakeSend).toHaveBeenCalledTimes(1)
     expect(capturedMsg?.from).toBe('custom@example.com')
     expect(capturedMsg?.to).toBe('user@example.com')
-    expect(typeof capturedMsg?.raw).toBe('string')
+    expect(capturedMsg?.subject).toBe('验证你的邮箱')
+    expect(typeof capturedMsg?.html).toBe('string')
   })
 
   it('returns error when binding.send throws', async () => {

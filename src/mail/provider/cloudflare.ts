@@ -1,4 +1,3 @@
-import { EmailMessage } from 'cloudflare:email'
 import type { SendEmail } from '@cloudflare/workers-types'
 import { renderTemplate } from '../render'
 import type { MailProvider, SendEmailResult, SendTemplateParams } from '../types'
@@ -7,13 +6,13 @@ import type { MailProvider, SendEmailResult, SendTemplateParams } from '../types
  * Cloudflare Email Service provider — 走 Email Service binding（`env.EMAIL.send`）。
  *
  * 设计依据：spec §3 + §9 明确"binding 而非凭据"。Cloudflare Email Service
- * 通过 binding `env.EMAIL` 暴露 `send(message)`，消息体由 `EmailMessage` 构造
- * （来自 `cloudflare:email` 模块）。不存在 `accounts/.../email/rfz/send` 公开
- * HTTP 端点。`wrangler.jsonc` 必须声明 `[[send_email]]` 绑定。
+ * 通过 binding `env.EMAIL` 暴露 `send(message)`。`wrangler.jsonc` 必须声明
+ * `[[send_email]]` 绑定。
  *
- * 注意：`EmailMessage` 构造器签名为 `(from, to, raw)`，其中 `raw` 是邮件正文
- * （string 或 ReadableStream），不含 subject 字段。Subject 通过 `SendEmail.send()`
- * 的 `EmailMessageBuilder` 重载传入，或直接使用 builder 方式。
+ * 注意：`SendEmail.send()` 有两个重载：
+ *   - `send(message: EmailMessage)` — 构造器 (from, to, raw) 仅为正文，无 subject
+ *   - `send(builder: EmailMessageBuilder)` — 支持 from/subject/html 等字段
+ * 本实现使用后者以正确传递 subject。
  */
 export class CloudflareEmailProvider implements MailProvider {
   constructor(
@@ -26,13 +25,18 @@ export class CloudflareEmailProvider implements MailProvider {
   }
 
   async sendTemplate(params: SendTemplateParams): Promise<SendEmailResult> {
-    const { html } = await renderTemplate(params)
+    const { html, subject } = await renderTemplate(params)
     const from = params.fromAddress ?? this.defaultSender
     try {
-      // 使用 EmailMessageBuilder 方式：含 subject + html。
-      // EmailMessage 构造器 (from, to, raw) 的 raw 为正文，无 subject 字段；
-      // SendEmail.send(builder) 重载支持 subject。
-      const message = new EmailMessage(from, params.to, html as string)
+      // EmailMessageBuilder: plain object with from/subject/html/to.
+      // EmailMessageBuilder = EmailReplyMessageBuilder & EmailDestinations
+      // (workers-types/index.d.ts line 15231)
+      const message = {
+        from,
+        to: params.to,
+        subject,
+        html,
+      }
       const result = await this.binding.send(message)
       return { ok: true, id: result.messageId }
     } catch (err) {
