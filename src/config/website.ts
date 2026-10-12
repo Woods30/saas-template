@@ -28,6 +28,7 @@ export const websiteConfig = {
   },
   payment: {
     provider: 'stripe' as const,
+    allowedPriceIds: [] as string[],
   },
   features: {
     enableFileUpload: false,

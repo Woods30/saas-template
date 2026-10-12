@@ -15,6 +15,8 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiContactSplatRouteImport } from './routes/api/contact/$'
 import { Route as ApiEmailSplatRouteImport } from './routes/api/email/$'
 import { Route as ApiNewsletterSplatRouteImport } from './routes/api/newsletter/$'
+import { Route as ApiPaymentSplatRouteImport } from './routes/api/payment/$'
+import { Route as ApiWebhooksStripeRouteImport } from './routes/api/webhooks/stripe'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -47,6 +49,16 @@ const ApiNewsletterSplatRoute = ApiNewsletterSplatRouteImport.update({
   path: '/api/newsletter/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPaymentSplatRoute = ApiPaymentSplatRouteImport.update({
+  id: '/api/payment/$',
+  path: '/api/payment/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiWebhooksStripeRoute = ApiWebhooksStripeRouteImport.update({
+  id: '/api/webhooks/stripe',
+  path: '/api/webhooks/stripe',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -55,6 +67,8 @@ export interface FileRoutesByFullPath {
   '/api/contact/$': typeof ApiContactSplatRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/newsletter/$': typeof ApiNewsletterSplatRoute
+  '/api/payment/$': typeof ApiPaymentSplatRoute
+  '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -63,6 +77,8 @@ export interface FileRoutesByTo {
   '/api/contact/$': typeof ApiContactSplatRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/newsletter/$': typeof ApiNewsletterSplatRoute
+  '/api/payment/$': typeof ApiPaymentSplatRoute
+  '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -72,6 +88,8 @@ export interface FileRoutesById {
   '/api/contact/$': typeof ApiContactSplatRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/newsletter/$': typeof ApiNewsletterSplatRoute
+  '/api/payment/$': typeof ApiPaymentSplatRoute
+  '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -82,6 +100,8 @@ export interface FileRouteTypes {
     | '/api/contact/$'
     | '/api/email/$'
     | '/api/newsletter/$'
+    | '/api/payment/$'
+    | '/api/webhooks/stripe'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -90,6 +110,8 @@ export interface FileRouteTypes {
     | '/api/contact/$'
     | '/api/email/$'
     | '/api/newsletter/$'
+    | '/api/payment/$'
+    | '/api/webhooks/stripe'
   id:
     | '__root__'
     | '/'
@@ -98,6 +120,8 @@ export interface FileRouteTypes {
     | '/api/contact/$'
     | '/api/email/$'
     | '/api/newsletter/$'
+    | '/api/payment/$'
+    | '/api/webhooks/stripe'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -107,6 +131,8 @@ export interface RootRouteChildren {
   ApiContactSplatRoute: typeof ApiContactSplatRoute
   ApiEmailSplatRoute: typeof ApiEmailSplatRoute
   ApiNewsletterSplatRoute: typeof ApiNewsletterSplatRoute
+  ApiPaymentSplatRoute: typeof ApiPaymentSplatRoute
+  ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -153,6 +179,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiNewsletterSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/payment/$': {
+      id: '/api/payment/$'
+      path: '/api/payment/$'
+      fullPath: '/api/payment/$'
+      preLoaderRoute: typeof ApiPaymentSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/webhooks/stripe': {
+      id: '/api/webhooks/stripe'
+      path: '/api/webhooks/stripe'
+      fullPath: '/api/webhooks/stripe'
+      preLoaderRoute: typeof ApiWebhooksStripeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -163,6 +203,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiContactSplatRoute: ApiContactSplatRoute,
   ApiEmailSplatRoute: ApiEmailSplatRoute,
   ApiNewsletterSplatRoute: ApiNewsletterSplatRoute,
+  ApiPaymentSplatRoute: ApiPaymentSplatRoute,
+  ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

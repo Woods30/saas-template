@@ -20,6 +20,113 @@ import { getPaymentProvider } from '@/payment'
  * 3. 业务 switch；任意抛错 → 500（让 Stripe 重投）
  * 4. 成功后 UPDATE `processedAt = now()`
  */
+
+// ------------------------------------------------------------------------------------------------
+// Exported handlers — extracted for unit-test coverage of Fix 3, 4, 5
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * Handles checkout.session.completed event.
+ * Fix 3: Validates userId in metadata exists before INSERT.
+ * Fix 5: Skips INSERT when subscription id is absent (customer.subscription.created is source of truth).
+ */
+export async function handleCheckoutCompleted(
+  db: ReturnType<typeof createDb>,
+  event: { id: string; data: { object: unknown } },
+): Promise<void> {
+  const s = event.data.object as {
+    id: string
+    subscription?: string
+    customer?: string
+    metadata?: { userId?: string }
+  }
+
+  // Fix 5: If no subscription id, skip INSERT
+  if (!s.subscription) {
+    console.warn('[stripe-webhook] checkout.session.completed: no subscription id, skipping INSERT')
+    return
+  }
+
+  // Fix 3: Validate userId in metadata exists in DB before INSERT
+  const rawUserId = s.metadata?.userId
+  if (!rawUserId) {
+    console.warn('[stripe-webhook] checkout.session.completed: missing userId in metadata')
+    return
+  }
+  const userExists = await db
+    .select({ id: schema.users.id })
+    .from(schema.users)
+    .where(eq(schema.users.id, rawUserId))
+    .limit(1)
+  if (userExists.length === 0) {
+    console.warn(`[stripe-webhook] checkout.session.completed: userId ${rawUserId} not found in DB`)
+    return
+  }
+
+  await db
+    .insert(schema.subscriptions)
+    .values({
+      id: String(s.subscription),
+      userId: rawUserId,
+      customerId: String(s.customer ?? ''),
+      subscriptionId: String(s.subscription),
+      status: 'active',
+      priceId: '',
+    })
+    .onConflictDoNothing({ target: schema.subscriptions.id })
+}
+
+/**
+ * Handles invoice.paid event.
+ * Fix 4: Persists stripeChargeId and looks up userId from subscriptions via customerId.
+ */
+export async function handleInvoicePaid(
+  db: ReturnType<typeof createDb>,
+  event: { id: string; data: { object: unknown } },
+): Promise<void> {
+  const inv = event.data.object as {
+    id?: string
+    subscription?: string
+    customer?: string
+    charge?: string | null
+    amount_paid: number
+    currency: string
+    created: number
+  }
+
+  // Fix 4: Look up userId via subscriptions matching customerId
+  let userId: string | null = null
+  if (inv.customer) {
+    const subRows = await db
+      .select({ userId: schema.subscriptions.userId })
+      .from(schema.subscriptions)
+      .where(eq(schema.subscriptions.customerId, inv.customer))
+      .limit(1)
+    if (subRows[0]) {
+      userId = subRows[0].userId
+    }
+  }
+
+  await db
+    .insert(schema.payments)
+    .values({
+      id: inv.id ?? `pay_${Date.now()}`,
+      userId,
+      type: inv.subscription ? 'subscription' : 'invoice',
+      stripeInvoiceId: inv.id ?? null,
+      stripeChargeId: inv.charge ?? null,
+      status: 'paid',
+      amount: inv.amount_paid,
+      currency: inv.currency,
+      paidAt: new Date(inv.created * 1000),
+    })
+    .onConflictDoNothing({ target: schema.payments.id })
+}
+
+// ------------------------------------------------------------------------------------------------
+// Route
+// ------------------------------------------------------------------------------------------------
+
 export const Route = createFileRoute('/api/webhooks/stripe')({
   server: {
     handlers: {
@@ -65,49 +172,12 @@ export const Route = createFileRoute('/api/webhooks/stripe')({
 
         try {
           switch (typedEvent.type) {
-            case 'checkout.session.completed': {
-              const s = typedEvent.data.object as {
-                id: string
-                subscription?: string
-                customer?: string
-                metadata?: { userId?: string }
-              }
-              await db
-                .insert(schema.subscriptions)
-                .values({
-                  id: String(s.subscription ?? s.id),
-                  userId: String(s.metadata?.userId ?? ''),
-                  customerId: String(s.customer ?? ''),
-                  subscriptionId: String(s.subscription ?? ''),
-                  status: 'active',
-                  priceId: '',
-                })
-                .onConflictDoNothing({ target: schema.subscriptions.id })
+            case 'checkout.session.completed':
+              await handleCheckoutCompleted(db, typedEvent)
               break
-            }
-            case 'invoice.paid': {
-              const inv = typedEvent.data.object as {
-                id?: string
-                subscription?: string
-                amount_paid: number
-                currency: string
-                created: number
-              }
-              await db
-                .insert(schema.payments)
-                .values({
-                  id: inv.id ?? `pay_${Date.now()}`,
-                  userId: null,
-                  type: inv.subscription ? 'subscription' : 'invoice',
-                  stripeInvoiceId: inv.id ?? null,
-                  status: 'paid',
-                  amount: inv.amount_paid,
-                  currency: inv.currency,
-                  paidAt: new Date(inv.created * 1000),
-                })
-                .onConflictDoNothing({ target: schema.payments.id })
+            case 'invoice.paid':
+              await handleInvoicePaid(db, typedEvent)
               break
-            }
             case 'customer.subscription.updated':
             case 'customer.subscription.created': {
               const sub = typedEvent.data.object as {
