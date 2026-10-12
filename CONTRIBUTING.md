@@ -9,7 +9,7 @@
 
 ```bash
 pnpm install
-cp .env.example .env   # .env.example 由 Plan A 的后续任务（Task 12）交付
+cp .env.example .env   # 照抄示例即可，optional 字段留空
 ```
 
 ## 文档规约
@@ -41,9 +41,6 @@ cp .env.example .env   # .env.example 由 Plan A 的后续任务（Task 12）交
 - 遵循 TDD：先写失败测试，再写实现，再 commit。
 - 提交消息格式：`<type>(<scope>): <subject>`（subject 使用中文）。
 - 提交前运行 `pnpm check` 与 `pnpm test`。
-
-> `pnpm check` 依赖 Task 12 交付的 `scripts/check-env.ts`；在该任务落地前，`pnpm check` 会在
-> `check:env` 一步失败。此时可先运行 `pnpm locale:compile && biome check . && tsc --noEmit`。
 
 ## 验证清单
 

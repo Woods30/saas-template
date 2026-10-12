@@ -36,13 +36,12 @@
 
 ```bash
 pnpm install
-cp .env.example .env   # .env.example 由 Plan A 的后续任务（Task 12）交付
+cp .env.example .env   # 照抄示例即可启动，optional 字段留空
 pnpm dev               # http://localhost:3000
 ```
 
-> `.env.example` 与 `scripts/check-env*.ts` 由紧接的 Task 12 交付；在它落地前，`pnpm check`
-> 会在 `check:env` 一步失败。生产部署所需的 secrets 需另行在 Cloudflare 配置，本地 `.env`
-> 校验不代表云端已配置。
+> `pnpm check` 会校验本地 `.env`；生产部署所需的 secrets 需另行在 Cloudflare 配置，
+> 本地 `.env` 校验不代表云端已配置。
 
 ## 命令
 
@@ -67,8 +66,8 @@ pnpm dev               # http://localhost:3000
 | `pnpm lint` | 用 Biome 检查 lint |
 | `pnpm lint:fix` | 用 Biome 自动修复 |
 
-> `pnpm check:env` / `pnpm check:env:prod` / `pnpm check:client-bundle` 依赖 Task 12 交付的
-> `scripts/check-env.ts`、`scripts/check-env-prod.ts`、`scripts/check-client-bundle.ts`。
+> `pnpm check:client-bundle` 需先运行 `pnpm build`；`pnpm check:env:prod` 校验生产所需
+> secrets 是否齐备（本地 `.env` 或进程 env 提供）。
 
 ## 环境变量
 

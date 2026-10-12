@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { treatEmptyAsUndefined } from './normalize'
 
 const schema = z.object({
   BETTER_AUTH_SECRET: z.string().min(32, 'BETTER_AUTH_SECRET 必须 ≥ 32 字符').optional(),
@@ -22,11 +23,11 @@ const schema = z.object({
 export type ServerEnv = z.infer<typeof schema>
 
 export function parseServerEnv(raw: unknown): ServerEnv {
-  return schema.parse(raw)
+  return schema.parse(treatEmptyAsUndefined(raw))
 }
 
 export function validateProdServerEnv(raw: unknown): ServerEnv {
-  const env = schema.parse(raw)
+  const env = schema.parse(treatEmptyAsUndefined(raw))
   if (env.NODE_ENV === 'production') {
     if (!env.BETTER_AUTH_SECRET) {
       throw new Error('生产环境必须设置 BETTER_AUTH_SECRET')

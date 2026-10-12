@@ -15,6 +15,17 @@ describe('parsePublicEnv', () => {
   it('仅接受 stripe 作为支付 provider', () => {
     expect(() => parsePublicEnv({ VITE_PAYMENT_PROVIDER: 'creem' })).toThrow()
   })
+
+  it('空串视为未设置：VITE_BASE_URL 回退默认值', () => {
+    const env = parsePublicEnv({ VITE_BASE_URL: '' })
+    expect(env.VITE_BASE_URL).toBe('http://localhost:3000')
+  })
+
+  it('空串视为未设置：optional enum 不报错', () => {
+    const env = parsePublicEnv({ VITE_PAYMENT_PROVIDER: '', VITE_GA_ID: '' })
+    expect(env.VITE_PAYMENT_PROVIDER).toBeUndefined()
+    expect(env.VITE_GA_ID).toBeUndefined()
+  })
 })
 
 describe('parseServerEnv', () => {
@@ -40,5 +51,11 @@ describe('validateProdServerEnv', () => {
       BETTER_AUTH_SECRET: 'a'.repeat(32),
     })
     expect(env.BETTER_AUTH_SECRET).toHaveLength(32)
+  })
+
+  it('空串视为未设置：生产模式空 BETTER_AUTH_SECRET 仍失败', () => {
+    expect(() => validateProdServerEnv({ NODE_ENV: 'production', BETTER_AUTH_SECRET: '' })).toThrow(
+      /BETTER_AUTH_SECRET/,
+    )
   })
 })
