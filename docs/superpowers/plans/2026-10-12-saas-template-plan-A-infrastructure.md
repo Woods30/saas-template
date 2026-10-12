@@ -390,7 +390,8 @@ export function validateProdServerEnv(raw: unknown): ServerEnv {
 
 ```ts
 import { describe, expect, it } from 'vitest';
-import { parsePublicEnv, parseServerEnv, validateProdServerEnv } from '@/env/public';
+import { parsePublicEnv } from '@/env/public';
+import { parseServerEnv, validateProdServerEnv } from '@/env/server';
 
 describe('parsePublicEnv', () => {
   it('使用默认 VITE_BASE_URL', () => {
@@ -1197,33 +1198,40 @@ export { cn } from 'cn';
 **Step 10.2: 写入 `src/lib/urls.ts`**
 
 ```ts
-import { parsePublicEnv } from '@/env/public';
-
-const env = parsePublicEnv({});
+import { publicEnv } from '@/env/public';
 
 export function getBaseUrl(): string {
-  return env.VITE_BASE_URL;
+  return publicEnv.VITE_BASE_URL;
 }
 
 export function getCanonicalUrl(path: string): string {
-  const base = getBaseUrl().replace(/\/$/, '');
+  const base = getBaseUrl().replace(/\/+$/, '');
   const normalized = path.startsWith('/') ? path : `/${path}`;
-  return `${base}${normalized}`;
+  return `${base}${normalized === '/' ? '/' : normalized}`;
 }
 ```
 
-> 注：实际应用 `parsePublicEnv(import.meta.env)`；为避免 SSR 时 `import.meta.env` 缺失，此处用占位。
+> 注：`publicEnv` 是 `src/env/public.ts` 导出的 `parsePublicEnv(import.meta.env)` 结果，为全仓
+> **唯一**的 env 读取边界（见 Task 4）。业务代码不得直接读 `import.meta.env` / `process.env`。
+> `getBaseUrl` 需容忍任意数量尾斜杠。
 
 **Step 10.3: 写入 `src/lib/seo.ts`**
 
 ```ts
-import { getCanonicalUrl } from '@/lib/urls';
+import { getBaseUrl, getCanonicalUrl } from '@/lib/urls';
 
 interface SeoOptions {
   title: string;
   description?: string;
   image?: string;
   type?: 'website' | 'article';
+}
+
+/** 相对路径补全为绝对 URL；绝对 URL（scheme://）与协议相对 URL（//host）原样/按协议处理。 */
+function toAbsoluteUrl(value: string): string {
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) return value;   // 绝对 URL
+  if (value.startsWith('//')) return `${new URL(getBaseUrl()).protocol}${value}`; // 协议相对
+  return new URL(value, getBaseUrl()).toString();             // 相对路径
 }
 
 export function seo(path: string, options: SeoOptions) {
@@ -1240,7 +1248,9 @@ export function seo(path: string, options: SeoOptions) {
       ...(options.description
         ? [{ property: 'og:description', content: options.description }]
         : []),
-      ...(options.image ? [{ property: 'og:image', content: options.image }] : []),
+      ...(options.image
+        ? [{ property: 'og:image', content: toAbsoluteUrl(options.image) }]
+        : []),
       { name: 'twitter:card', content: 'summary_large_image' },
     ],
     links: [{ rel: 'canonical', href: url }],
@@ -1248,19 +1258,19 @@ export function seo(path: string, options: SeoOptions) {
 }
 ```
 
+> **注意**：`toAbsoluteUrl` 的 scheme 判断不能只认 `scheme://`——协议相对 URL（`//cdn.example.com/og.png`）
+> 会被误当相对路径拼成畸形值。前导斜杠规范化可抽成 `src/lib/urls.ts` 的 `normalizeLeadingSlash`
+> 供 `seo.ts` 复用，避免两处各写一遍。
+
 **Step 10.4: 写入 `src/config/website.ts`（最小骨架）**
 
 ```ts
-import { parsePublicEnv } from '@/env/public';
-
-const env = parsePublicEnv({});
+import { publicEnv } from '@/env/public';
 
 export const websiteConfig = {
-  baseUrl: env.VITE_BASE_URL,
+  baseUrl: publicEnv.VITE_BASE_URL,
   metadata: {
     name: 'SaaS Template',
-    title: 'SaaS 起步模板',
-    description: '基于 TanStack Start 与 Cloudflare Workers 的 SaaS 起手模板',
     images: {
       ogImage: '/og.png',
       logoLight: '/logo-light.png',
@@ -1282,36 +1292,57 @@ export const websiteConfig = {
 export type WebsiteConfig = typeof websiteConfig;
 ```
 
+> **关键**：本配置在**模块加载期**求值，故只能承载**语言无关**的值（站点名、baseUrl、
+> feature 开关、图片路径）。随语言变化的文案**不得**放这里——模块顶层调用 Paraglide 的
+> `m.*()` 会被冻结为「首个请求」的语言（实测中英文请求都返回中文）。语言相关文案一律在
+> 组件或 `head()` 回调内调用 `m.*()`（见 Step 10.5）。
+
 **Step 10.5: 在 `src/routes/index.tsx` 使用 seo() helper**
+
+`head()` 是**每请求调用**的函数，在其中调用 `m.*()` 是安全的——与 `__root.tsx` 的 `head()`
+一致（见 Task 9）。因此 title / description 用 `m.*()`，随语言正确切换。
 
 ```tsx
 import { createFileRoute } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
+import { websiteConfig } from '@/config/website';
 import { seo } from '@/lib/seo';
+import { m } from '@/locale/paraglide/messages.js';
 
 export const Route = createFileRoute('/')({
-  head: () => seo('/', { title: 'SaaS Template', description: '...', type: 'website' }),
+  head: () =>
+    seo('/', {
+      title: m.site_name(),
+      description: m.site_description(),
+      type: 'website',
+    }),
   component: HomePage,
 });
 
 function HomePage() {
   return (
-    <main style={{ padding: 24 }}>
-      <h1 className="text-3xl font-bold">SaaS Template</h1>
-      <Button className="mt-4">基础设施就绪</Button>
+    <main className="px-6 py-8">
+      <h1 className="text-3xl font-bold">{m.site_title()}</h1>
+      <p className="mt-2 text-muted-foreground">{m.site_description()}</p>
+      <Button className="mt-6">{websiteConfig.metadata.name}</Button>
     </main>
   );
 }
 ```
 
+> 反例（**不要**这样写）：`head: () => seo('/', { description: websiteConfig.metadata.description })`。
+> 若 `description` 来自模块期求值的中文字面量，英文站点会 `<html lang="en">` 却输出中文
+> description，回退 i18n。
+
 **Step 10.6: 校验**
 
 ```bash
 pnpm run typecheck
-pnpm dev
+pnpm exec vite dev --port 3010
 ```
 
-预期：dev server 启动；首页 `<head>` 包含 OG 与 canonical。
+预期：首页 `<head>` 含 canonical 与 OG。**必须**分别用 `Accept-Language: zh-CN` 与 `en` 各发一次
+请求，确认 `<html lang>` 与 `<meta name="description">` 语言一致——这是本任务最易回退的点。
 
 **Step 10.7: Commit**
 
