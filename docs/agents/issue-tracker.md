@@ -1,7 +1,7 @@
 # Issue Tracker: GitHub Issues
 
 本仓库使用 **GitHub Issues** 进行任务追踪。canonical remote 为
-`Woods30/saas-tempalte.git`（远程名拼写 `saas-tempalte` 缺字母 `l`，建议后续重命名）。
+`Woods30/saas-template.git`。
 
 ## 语言
 
