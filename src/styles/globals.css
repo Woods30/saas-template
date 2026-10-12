@@ -1,22 +1,35 @@
-/*
- * 全局样式占位。
- * Task 8 接入 @tailwindcss/vite 后会在此补回 `@import 'tailwindcss'` 与 `@theme` token；
- * 当前插件尚未注册，若提前写入该 import 会解析失败。
- */
+@import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #000000;
+@theme {
+  --color-background: #ffffff;
+  --color-foreground: #0a0a0a;
+  --color-primary: #0070f3;
+  --color-primary-foreground: #ffffff;
+  --color-muted: #f4f4f5;
+  --color-muted-foreground: #71717a;
+  --color-border: #e4e4e7;
+  --radius: 0.5rem;
 }
 
+/*
+ * Tailwind v4 要求 `@theme` 只能定义在顶层，不能嵌进 @media（见官方 theme 文档）。
+ * 若把深色 token 写成 `@media { @theme { ... } }`，它会被合并进顶层 :root 并以深色值
+ * 覆盖浅色值，导致浅色 token 丢失、页面恒为深色。因此深色模式改用普通 :root 覆盖：
+ * token 仍由顶层 @theme 定义，这里只在深色偏好下重写其取值。
+ */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --color-background: #0a0a0a;
+    --color-foreground: #ededed;
+    --color-primary: #3291ff;
+    --color-primary-foreground: #0a0a0a;
+    --color-muted: #27272a;
+    --color-muted-foreground: #a1a1aa;
+    --color-border: #27272a;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-background);
+  color: var(--color-foreground);
 }
