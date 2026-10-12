@@ -20,8 +20,8 @@
     "locale:sort": "tsx scripts/locale-sort.ts",
     "locale:check": "tsx scripts/check-locale.ts",
     "typecheck": "pnpm run locale:compile && tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "pnpm run locale:compile && vitest run",
+    "test:watch": "pnpm run locale:compile && vitest",
     "format": "biome format --write .",
     "lint": "biome lint .",
     "lint:fix": "biome check --write ."
