@@ -2,20 +2,21 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 落地 8 个 marketing blocks、marketing 页面、根级 Content Collections（docs/blog/changelog/legal），并完成 SEO、PWA、Analytics、locale 路由。
+**Goal:** 落地 8 个 marketing blocks（Hero / Features / Stats / Pricing / FAQ / Testimonials / NewsletterCta / CTA）、marketing 页面、根级 Content Collections（docs/blog/changelog/legal），并完成 SEO、PWA manifest、Analytics、locale 路由。
 
-**Architecture:** 营销页面（首页/特性/价格/关于/联系/法务）由 marketing layout 包裹，blocks 来自 `src/blocks/marketing/`，每个 block 独立可组合。Docs/Blog/Changelog/Legal 通过 Content Collections 在仓库根目录 `content/` 下管理，使用文件名后缀约定（`*.zh.md` / `*.en.md`）。`Paraglide JS` 处理 URL 中的可选 locale 前缀。
+**Architecture:** 营销页面（首页/特性/价格/关于/联系/法务）由 marketing layout 包裹，blocks 来自 `src/components/blocks/marketing/`，每个 block 独立可组合。Docs/Blog/Changelog/Legal 通过 Content Collections 在仓库根目录 `content/` 下管理，使用文件名后缀约定（`*.zh.md` / `*.en.md`）。`Paraglide JS` 处理 URL 中的可选 locale 前缀。
 
 **Tech Stack:** @content-collections/core, @content-collections/tanstack-start, vite-plugin-svgr, lucide-react, web-push.
 
 ## Global Constraints（继承自 Sub-Plan A/B）
 
 - 营销页面与 blocks 全部 TypeScript + 函数组件；不引入 class 组件。
-- 业务与 UI 分层：UI 在 `src/components/` 与 `src/blocks/`，业务在 `src/<feature>/`。
+- 业务与 UI 分层：UI 在 `src/components/` 与 `src/components/blocks/`，业务在 `src/<feature>/`。**blocks 目录与 spec §4 对齐**：`src/components/blocks/marketing/`（原计划错写为 `src/components/blocks/marketing/`）。
 - 全部文案来自 `messages/{zh,en}.json`（Paraglide 产物）。
 - 不实现具体 docs 教程内容（仅骨架 + 一篇示例文档）。
 - 不实现多 analytics provider 全部集成；只写 GA4 + Plausible + Umami + Clarity 集成点位。
-- 不实施 PWA push 通知；只做 manifest + service worker 缓存策略。
+- **不实施 PWA service worker 与 push 通知**：spec §17 显式排除；只做 `manifest.json` 接入。
+- 营销路由统一使用 `_layout` pathless layout 分组（spec §4）；不混用 TanStack `(_group)` 语法。
 - 提交前必须 `pnpm run check` 与 `pnpm run test` 通过。
 
 ---
@@ -28,9 +29,11 @@
 **Step 1.1: 安装**
 
 ```bash
-pnpm add @content-collections/core @content-collections/tanstack-start vite-plugin-svgr lucide-react
+pnpm add @content-collections/core @content-collections/vite vite-plugin-svgr lucide-react
 pnpm add -D @content-collections/cli
 ```
+
+> 注意：原计划写 `@content-collections/tanstack-start`（npm 上不存在）。官方包是 `@content-collections/vite`（vite 通用插件），与 TanStack Start 兼容——它在 build 时把 `content/**` 编译为 `import { allDocs } from 'content-collections'` 的纯 ESM 模块。
 
 **Step 1.2: 确认版本**
 
@@ -287,28 +290,20 @@ locale: zh
 **Step 2.12: 修改 `vite.config.ts` 追加 plugin**
 
 ```ts
-import { tanstackStart } from '@tanstack/react-start/plugin/vite';
-// ... 已有 import 保留
+import contentCollections from '@content-collections/vite';
 ```
 
 在 plugins 数组里追加：
 
 ```ts
-const contentCollections = (await import('@content-collections/tanstack-start')).default();
-
 plugins: [
-  // ... 已有
-  contentCollections,
+  // ... 已有（cloudflare → tanstackStart → tailwindcss → tsconfigPaths）
+  contentCollections(),
   // ...
 ]
 ```
 
-> 若 `@content-collections/tanstack-start` 提供具名导出 `default`，使用上述写法；
-> 否则按官方 README 切换为：
-
-```ts
-import contentCollections from '@content-collections/tanstack-start';
-```
+> 注意：必须保持原有顺序（cloudflare 在最前）；`contentCollections` 插在 `tailwindcss` 之后、`tsconfigPaths` 之前。
 
 **Step 2.13: 修改 `tsconfig.json`**
 
@@ -398,14 +393,20 @@ export { parseLocale, DEFAULT_LOCALE, SUPPORTED_LOCALES, type Locale } from './l
 **Step 3.3: 写入 `src/lib/get-server-locale.ts`**
 
 ```ts
+import { getRequest } from '@tanstack/react-start/server';
 import { parseLocale, type Locale } from './locale';
-import { getRequestEvent } from 'solid-js/web';
 
+/**
+ * Server-only: 从当前 request URL 第一段推断 locale。
+ * 配套 Paraglide JS（spec §5.4 锁定方案）：实际运行时组件应直接调用
+ * `import { m } from '@/locale/paraglide/messages'`，本函数仅用于：
+ *   1. server function 内的 i18n 分支
+ *   2. SEO helper 生成 hreflang 链接
+ *   3. `beforeLoad` 注入 route context
+ */
 export function getServerLocale(): Locale {
-  const event = getRequestEvent();
-  if (!event) return 'zh';
-  const url = new URL(event.request.url);
-  const seg = url.pathname.split('/')[1] ?? '';
+  const request = getRequest();
+  const seg = new URL(request.url).pathname.split('/')[1] ?? '';
   return parseLocale(seg);
 }
 ```
@@ -413,26 +414,26 @@ export function getServerLocale(): Locale {
 **Step 3.4: 写入 `src/components/LocaleSwitcher.tsx`**
 
 ```tsx
-import { useRouter } from '@tanstack/react-router';
+import { useRouter, useLocation } from '@tanstack/react-router';
 import { SUPPORTED_LOCALES, type Locale } from '@/lib/locale';
 
 const labels: Record<Locale, string> = { zh: '中文', en: 'English' };
 
 export function LocaleSwitcher({ current }: { current: Locale }) {
   const router = useRouter();
+  const location = useLocation();
   return (
     <select
       value={current}
       onChange={(e) => {
         const target = e.target.value as Locale;
-        const path = window.location.pathname;
-        const segs = path.split('/');
-        if (SUPPORTED_LOCALES.includes(segs[1] as Locale)) {
-          segs[1] = target;
+        const segs = location.pathname.split('/').filter(Boolean);
+        if (SUPPORTED_LOCALES.includes(segs[0] as Locale)) {
+          segs[0] = target;
         } else {
-          segs.splice(1, 0, target);
+          segs.unshift(target);
         }
-        router.navigate({ to: segs.join('/') || '/' });
+        router.navigate({ to: '/' + segs.join('/') });
       }}
       className="rounded border bg-white px-2 py-1 text-sm"
     >
@@ -443,6 +444,8 @@ export function LocaleSwitcher({ current }: { current: Locale }) {
   );
 }
 ```
+
+> 关键修正（按审查报告 1.5 + 1.22）：原计划用 `window.location.pathname` 会在 SSR 阶段 `window` 未定义时报错；改用 `useLocation()` 的 router state 在 server/client 双端一致。`getServerLocale` 也不再用 Solid 的 `getRequestEvent`，统一用 TanStack Start 自己的 `getRequest()`。
 
 **Step 3.5: 在 `src/routes/__root.tsx` 注入 locale context**
 
@@ -562,11 +565,11 @@ git commit -m "feat(marketing): 营销 layout（Navbar + Footer）"
 ### Task 5: Block - Hero
 
 **Files:**
-- Create: `src/blocks/marketing/hero/Hero.tsx`
-- Create: `src/blocks/marketing/hero/types.ts`
-- Create: `src/blocks/marketing/hero/index.ts`
+- Create: `src/components/blocks/marketing/hero/Hero.tsx`
+- Create: `src/components/blocks/marketing/hero/types.ts`
+- Create: `src/components/blocks/marketing/hero/index.ts`
 
-**Step 5.1: `src/blocks/marketing/hero/types.ts`**
+**Step 5.1: `src/components/blocks/marketing/hero/types.ts`**
 
 ```ts
 export interface HeroProps {
@@ -580,7 +583,7 @@ export interface HeroProps {
 }
 ```
 
-**Step 5.2: `src/blocks/marketing/hero/Hero.tsx`**
+**Step 5.2: `src/components/blocks/marketing/hero/Hero.tsx`**
 
 ```tsx
 import { Link } from '@tanstack/react-router';
@@ -615,7 +618,7 @@ export function Hero(props: HeroProps) {
 }
 ```
 
-**Step 5.3: `src/blocks/marketing/hero/index.ts`**
+**Step 5.3: `src/components/blocks/marketing/hero/index.ts`**
 
 ```ts
 export { Hero } from './Hero';
@@ -625,7 +628,7 @@ export type { HeroProps } from './types';
 **Step 5.4: Commit**
 
 ```bash
-git add src/blocks/marketing/hero
+git add src/components/blocks/marketing/hero
 git commit -m "feat(blocks): Hero block"
 ```
 
@@ -634,9 +637,9 @@ git commit -m "feat(blocks): Hero block"
 ### Task 6: Block - Features
 
 **Files:**
-- Create: `src/blocks/marketing/features/Features.tsx`
-- Create: `src/blocks/marketing/features/types.ts`
-- Create: `src/blocks/marketing/features/index.ts`
+- Create: `src/components/blocks/marketing/features/Features.tsx`
+- Create: `src/components/blocks/marketing/features/types.ts`
+- Create: `src/components/blocks/marketing/features/index.ts`
 
 **Step 6.1: `types.ts`**
 
@@ -688,7 +691,7 @@ export type { FeaturesProps, FeatureItem } from './types';
 **Step 6.4: Commit**
 
 ```bash
-git add src/blocks/marketing/features
+git add src/components/blocks/marketing/features
 git commit -m "feat(blocks): Features block"
 ```
 
@@ -697,9 +700,9 @@ git commit -m "feat(blocks): Features block"
 ### Task 7: Block - Stats
 
 **Files:**
-- Create: `src/blocks/marketing/stats/Stats.tsx`
-- Create: `src/blocks/marketing/stats/types.ts`
-- Create: `src/blocks/marketing/stats/index.ts`
+- Create: `src/components/blocks/marketing/stats/Stats.tsx`
+- Create: `src/components/blocks/marketing/stats/types.ts`
+- Create: `src/components/blocks/marketing/stats/index.ts`
 
 **Step 7.1: `types.ts`**
 
@@ -739,27 +742,142 @@ export type { StatsProps, StatItem } from './types';
 **Step 7.4: Commit**
 
 ```bash
-git add src/blocks/marketing/stats
+git add src/components/blocks/marketing/stats
 git commit -m "feat(blocks): Stats block"
 ```
 
 ---
 
-### Task 8: Block - FAQ
+### Task 8: Block - Pricing
 
 **Files:**
-- Create: `src/blocks/marketing/faq/Faq.tsx`
-- Create: `src/blocks/marketing/faq/types.ts`
-- Create: `src/blocks/marketing/faq/index.ts`
+- Create: `src/components/blocks/marketing/pricing/Pricing.tsx`
+- Create: `src/components/blocks/marketing/pricing/types.ts`
+- Create: `src/components/blocks/marketing/pricing/index.ts`
 
 **Step 8.1: `types.ts`**
+
+```ts
+import type { ReactNode } from 'react';
+
+export interface PricingPlan {
+  id: string;
+  name: string;
+  description?: string;
+  /** 月付/年付/一次性价格；空数组表示 free 方案 */
+  prices: Array<{
+    amount: number; // 以分为单位
+    currency: string;
+    interval?: 'month' | 'year' | 'one_time';
+    label?: string; // 例如 "月付"
+  }>;
+  features: string[];
+  cta: { label: string; href: string };
+  highlighted?: boolean;
+  badge?: string;
+}
+
+export interface PricingProps {
+  title?: string;
+  subtitle?: string;
+  plans: PricingPlan[];
+  /** 渲染自定义 CTA（用于接 authClient + createCheckoutSession） */
+  renderCta?: (plan: PricingPlan) => ReactNode;
+}
+```
+
+**Step 8.2: `Pricing.tsx`**
+
+```tsx
+import { Link } from '@tanstack/react-router';
+import type { PricingProps } from './types';
+
+export function Pricing({ title, subtitle, plans, renderCta }: PricingProps) {
+  return (
+    <section className="mx-auto max-w-6xl px-6 py-20">
+      {title && <h2 className="text-3xl font-bold text-center">{title}</h2>}
+      {subtitle && <p className="mt-2 text-center text-muted-foreground">{subtitle}</p>}
+      <div className="mt-10 grid gap-6 md:grid-cols-3">
+        {plans.map((plan) => (
+          <div
+            key={plan.id}
+            className={`relative flex flex-col rounded-lg border p-6 ${
+              plan.highlighted ? 'border-blue-500 shadow-lg ring-2 ring-blue-500/20' : ''
+            }`}
+          >
+            {plan.badge && (
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-blue-500 px-3 py-1 text-xs font-medium text-white">
+                {plan.badge}
+              </span>
+            )}
+            <h3 className="text-xl font-semibold">{plan.name}</h3>
+            {plan.description && <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>}
+            <div className="mt-4 space-y-1">
+              {plan.prices.map((p, i) => (
+                <p key={i} className="text-2xl font-bold">
+                  {(p.amount / 100).toLocaleString('en-US', { style: 'currency', currency: p.currency.toUpperCase() })}
+                  {p.interval && p.interval !== 'one_time' && (
+                    <span className="text-sm font-normal text-muted-foreground"> /{p.interval === 'month' ? '月' : '年'}</span>
+                  )}
+                </p>
+              ))}
+            </div>
+            <ul className="mt-4 flex-1 space-y-2 text-sm">
+              {plan.features.map((f, i) => (
+                <li key={i} className="flex gap-2"><span aria-hidden>✓</span>{f}</li>
+              ))}
+            </ul>
+            <div className="mt-6">
+              {renderCta ? (
+                renderCta(plan)
+              ) : (
+                <Link
+                  to={plan.cta.href}
+                  className="block w-full rounded bg-blue-600 px-4 py-2 text-center font-medium text-white hover:bg-blue-700"
+                >
+                  {plan.cta.label}
+                </Link>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+```
+
+**Step 8.3: `index.ts`**
+
+```ts
+export { Pricing } from './Pricing';
+export type { PricingProps, PricingPlan } from './types';
+```
+
+**Step 8.4: Commit**
+
+```bash
+git add src/components/blocks/marketing/pricing
+git commit -m "feat(blocks): Pricing block（与 spec §5.3/§19 8 个 blocks 对齐）"
+```
+
+---
+
+### Task 9: Block - FAQ
+
+**Files:**
+- Create: `src/components/blocks/marketing/faq/Faq.tsx`
+- Create: `src/components/blocks/marketing/faq/types.ts`
+- Create: `src/components/blocks/marketing/faq/index.ts`
+
+**Step 9.1: `types.ts`**
 
 ```ts
 export interface FaqItem { question: string; answer: string }
 export interface FaqProps { title?: string; items: FaqItem[] }
 ```
 
-**Step 8.2: `Faq.tsx`**
+**Step 9.2: `Faq.tsx`**
 
 ```tsx
 import type { FaqProps } from './types';
@@ -781,37 +899,37 @@ export function Faq({ title, items }: FaqProps) {
 }
 ```
 
-**Step 8.3: `index.ts`**
+**Step 9.3: `index.ts`**
 
 ```ts
 export { Faq } from './Faq';
 export type { FaqProps, FaqItem } from './types';
 ```
 
-**Step 8.4: Commit**
+**Step 9.4: Commit**
 
 ```bash
-git add src/blocks/marketing/faq
+git add src/components/blocks/marketing/faq
 git commit -m "feat(blocks): Faq block"
 ```
 
 ---
 
-### Task 9: Block - Testimonials
+### Task 10: Block - Testimonials
 
 **Files:**
-- Create: `src/blocks/marketing/testimonials/Testimonials.tsx`
-- Create: `src/blocks/marketing/testimonials/types.ts`
-- Create: `src/blocks/marketing/testimonials/index.ts`
+- Create: `src/components/blocks/marketing/testimonials/Testimonials.tsx`
+- Create: `src/components/blocks/marketing/testimonials/types.ts`
+- Create: `src/components/blocks/marketing/testimonials/index.ts`
 
-**Step 9.1: `types.ts`**
+**Step 10.1: `types.ts`**
 
 ```ts
 export interface Testimonial { quote: string; author: string; role?: string; avatar?: string }
 export interface TestimonialsProps { title?: string; items: Testimonial[] }
 ```
 
-**Step 9.2: `Testimonials.tsx`**
+**Step 10.2: `Testimonials.tsx`**
 
 ```tsx
 import type { TestimonialsProps } from './types';
@@ -835,31 +953,31 @@ export function Testimonials({ title, items }: TestimonialsProps) {
 }
 ```
 
-**Step 9.3: `index.ts`**
+**Step 10.3: `index.ts`**
 
 ```ts
 export { Testimonials } from './Testimonials';
 export type { TestimonialsProps, Testimonial } from './types';
 ```
 
-**Step 9.4: Commit**
+**Step 10.4: Commit**
 
 ```bash
-git add src/blocks/marketing/testimonials
+git add src/components/blocks/marketing/testimonials
 git commit -m "feat(blocks): Testimonials block"
 ```
 
 ---
 
-### Task 10: Block - NewsletterCTA
+### Task 11: Block - NewsletterCTA
 
 **Files:**
-- Create: `src/blocks/marketing/newsletter-cta/NewsletterCta.tsx`
-- Create: `src/blocks/marketing/newsletter-cta/types.ts`
-- Create: `src/blocks/marketing/newsletter-cta/index.ts`
+- Create: `src/components/blocks/marketing/newsletter-cta/NewsletterCta.tsx`
+- Create: `src/components/blocks/marketing/newsletter-cta/types.ts`
+- Create: `src/components/blocks/marketing/newsletter-cta/index.ts`
 - Create: `src/api/newsletter-subscribe.ts`
 
-**Step 10.1: `types.ts`**
+**Step 11.1: `types.ts`**
 
 ```ts
 export interface NewsletterCtaProps {
@@ -871,7 +989,7 @@ export interface NewsletterCtaProps {
 }
 ```
 
-**Step 10.2: `NewsletterCta.tsx`**
+**Step 11.2: `NewsletterCta.tsx`**
 
 ```tsx
 import { useState } from 'react';
@@ -916,14 +1034,14 @@ export function NewsletterCta({ title, description, placeholder = 'you@example.c
 }
 ```
 
-**Step 10.3: `index.ts`**
+**Step 11.3: `index.ts`**
 
 ```ts
 export { NewsletterCta } from './NewsletterCta';
 export type { NewsletterCtaProps } from './types';
 ```
 
-**Step 10.4: 写入 `src/api/newsletter-subscribe.ts`**
+**Step 11.4: 写入 `src/api/newsletter-subscribe.ts`**
 
 ```ts
 import { createServerFn } from '@tanstack/react-start';
@@ -942,7 +1060,7 @@ export const newsletterSubscribe = createServerFn({ method: 'POST' })
   });
 ```
 
-**Step 10.5: 写入 `src/routes/api/newsletter/subscribe.ts`**
+**Step 11.5: 写入 `src/routes/api/newsletter/subscribe.ts`**
 
 ```ts
 import { createFileRoute } from '@tanstack/react-router';
@@ -961,23 +1079,23 @@ export const Route = createFileRoute('/api/newsletter/subscribe')({
 });
 ```
 
-**Step 10.6: Commit**
+**Step 11.6: Commit**
 
 ```bash
-git add src/blocks/marketing/newsletter-cta src/api/newsletter-subscribe.ts src/routes/api/newsletter
+git add src/components/blocks/marketing/newsletter-cta src/api/newsletter-subscribe.ts src/routes/api/newsletter
 git commit -m "feat(blocks): NewsletterCTA + 订阅 API"
 ```
 
 ---
 
-### Task 11: Block - CTA
+### Task 12: Block - CTA
 
 **Files:**
-- Create: `src/blocks/marketing/cta/Cta.tsx`
-- Create: `src/blocks/marketing/cta/types.ts`
-- Create: `src/blocks/marketing/cta/index.ts`
+- Create: `src/components/blocks/marketing/cta/Cta.tsx`
+- Create: `src/components/blocks/marketing/cta/types.ts`
+- Create: `src/components/blocks/marketing/cta/index.ts`
 
-**Step 11.1: `types.ts`**
+**Step 12.1: `types.ts`**
 
 ```ts
 export interface CtaProps {
@@ -988,7 +1106,7 @@ export interface CtaProps {
 }
 ```
 
-**Step 11.2: `Cta.tsx`**
+**Step 12.2: `Cta.tsx`**
 
 ```tsx
 import { Link } from '@tanstack/react-router';
@@ -1016,28 +1134,28 @@ export function Cta({ title, description, primaryCta, secondaryCta }: CtaProps) 
 }
 ```
 
-**Step 11.3: `index.ts`**
+**Step 12.3: `index.ts`**
 
 ```ts
 export { Cta } from './Cta';
 export type { CtaProps } from './types';
 ```
 
-**Step 11.4: Commit**
+**Step 12.4: Commit**
 
 ```bash
-git add src/blocks/marketing/cta
+git add src/components/blocks/marketing/cta
 git commit -m "feat(blocks): CTA block"
 ```
 
 ---
 
-### Task 12: Block 注册表 + Blocks 共享类型
+### Task 13: Block 注册表 + Blocks 共享类型
 
 **Files:**
-- Create: `src/blocks/marketing/index.ts`
+- Create: `src/components/blocks/marketing/index.ts`
 
-**Step 12.1: 写入 `src/blocks/marketing/index.ts`**
+**Step 13.1: 写入 `src/components/blocks/marketing/index.ts`**
 
 ```ts
 import { Hero } from './hero';
@@ -1062,13 +1180,13 @@ export type { NewsletterCtaProps } from './newsletter-cta';
 export type { CtaProps } from './cta';
 ```
 
-**Step 12.2: 单元测试（blocks 注册表 smoke）**
+**Step 13.2: 单元测试（blocks 注册表 smoke）**
 
 Create: `tests/unit/blocks.test.ts`
 
 ```ts
 import { describe, expect, it } from 'vitest';
-import { blocks } from '@/blocks/marketing';
+import { blocks } from '@/components/blocks/marketing';
 
 describe('blocks registry', () => {
   it('导出全部 7 个 blocks', () => {
@@ -1077,22 +1195,22 @@ describe('blocks registry', () => {
 });
 ```
 
-**Step 12.3: 测试**
+**Step 13.3: 测试**
 
 ```bash
 pnpm run test
 ```
 
-**Step 12.4: Commit**
+**Step 13.4: Commit**
 
 ```bash
-git add src/blocks/marketing/index.ts tests/unit/blocks.test.ts
+git add src/components/blocks/marketing/index.ts tests/unit/blocks.test.ts
 git commit -m "feat(blocks): 营销 blocks 注册表 + 索引"
 ```
 
 ---
 
-### Task 13: 首页与营销页面
+### Task 14: 首页与营销页面
 
 **Files:**
 - Create: `src/routes/{-$locale}/_layout/marketing/index.tsx`
@@ -1105,10 +1223,10 @@ git commit -m "feat(blocks): 营销 blocks 注册表 + 索引"
 - Create: `src/config/blocks/about.ts`
 - Create: `src/config/blocks/index.ts`
 
-**Step 13.1: 写入 `src/config/blocks/home.ts`**
+**Step 14.1: 写入 `src/config/blocks/home.ts`**
 
 ```ts
-import type { HeroProps, FeaturesProps, StatsProps, TestimonialsProps, CtaProps } from '@/blocks/marketing';
+import type { HeroProps, FeaturesProps, StatsProps, TestimonialsProps, CtaProps } from '@/components/blocks/marketing';
 
 export const homeBlocks = {
   Hero: {
@@ -1155,10 +1273,10 @@ export const homeBlocks = {
 };
 ```
 
-**Step 13.2: 写入 `src/config/blocks/features.ts`**
+**Step 14.2: 写入 `src/config/blocks/features.ts`**
 
 ```ts
-import type { HeroProps, FeaturesProps, FaqProps, CtaProps } from '@/blocks/marketing';
+import type { HeroProps, FeaturesProps, FaqProps, CtaProps } from '@/components/blocks/marketing';
 
 export const featuresBlocks = {
   Hero: {
@@ -1189,10 +1307,10 @@ export const featuresBlocks = {
 };
 ```
 
-**Step 13.3: 写入 `src/config/blocks/about.ts`**
+**Step 14.3: 写入 `src/config/blocks/about.ts`**
 
 ```ts
-import type { HeroProps, StatsProps, CtaProps } from '@/blocks/marketing';
+import type { HeroProps, StatsProps, CtaProps } from '@/components/blocks/marketing';
 
 export const aboutBlocks = {
   Hero: { title: '关于 SaaS Template', subtitle: '为 SaaS 开发者打造的快速起步模板' } satisfies HeroProps,
@@ -1210,7 +1328,7 @@ export const aboutBlocks = {
 };
 ```
 
-**Step 13.4: 写入 `src/config/blocks/index.ts`**
+**Step 14.4: 写入 `src/config/blocks/index.ts`**
 
 ```ts
 export { homeBlocks } from './home';
@@ -1218,11 +1336,11 @@ export { featuresBlocks } from './features';
 export { aboutBlocks } from './about';
 ```
 
-**Step 13.5: 写入 `src/routes/{-$locale}/_layout/marketing/index.tsx`**
+**Step 14.5: 写入 `src/routes/{-$locale}/_layout/marketing/index.tsx`**
 
 ```tsx
 import { createFileRoute } from '@tanstack/react-router';
-import { Hero, Stats, Features, Testimonials, Cta } from '@/blocks/marketing';
+import { Hero, Stats, Features, Testimonials, Cta } from '@/components/blocks/marketing';
 import { homeBlocks } from '@/config/blocks';
 
 export const Route = createFileRoute('/{-$locale}/_layout/marketing/')({
@@ -1242,11 +1360,11 @@ function HomePage() {
 }
 ```
 
-**Step 13.6: 写入 `src/routes/{-$locale}/_layout/marketing/features.tsx`**
+**Step 14.6: 写入 `src/routes/{-$locale}/_layout/marketing/features.tsx`**
 
 ```tsx
 import { createFileRoute } from '@tanstack/react-router';
-import { Hero, Features, Faq, Cta } from '@/blocks/marketing';
+import { Hero, Features, Faq, Cta } from '@/components/blocks/marketing';
 import { featuresBlocks } from '@/config/blocks';
 
 export const Route = createFileRoute('/{-$locale}/_layout/marketing/features')({
@@ -1265,11 +1383,11 @@ function FeaturesPage() {
 }
 ```
 
-**Step 13.7: 写入 `src/routes/{-$locale}/_layout/marketing/about.tsx`**
+**Step 14.7: 写入 `src/routes/{-$locale}/_layout/marketing/about.tsx`**
 
 ```tsx
 import { createFileRoute } from '@tanstack/react-router';
-import { Hero, Stats, Cta } from '@/blocks/marketing';
+import { Hero, Stats, Cta } from '@/components/blocks/marketing';
 import { aboutBlocks } from '@/config/blocks';
 
 export const Route = createFileRoute('/{-$locale}/_layout/marketing/about')({
@@ -1290,7 +1408,7 @@ function AboutPage() {
 > Pricing 页在 Sub-Plan B Task 14 已创建 `src/routes/{-$locale}/pricing.tsx`（不在 marketing layout 内以避免双重 navbar）。
 > Contact 页在 Sub-Plan B Task 9 已创建 `src/routes/{-$locale}/contact.tsx`，同上。
 
-**Step 13.8: Commit**
+**Step 14.8: Commit**
 
 ```bash
 git add src/config/blocks src/routes/{-\$locale}/_layout/marketing/index.tsx src/routes/{-\$locale}/_layout/marketing/features.tsx src/routes/{-\$locale}/_layout/marketing/about.tsx
@@ -1299,7 +1417,7 @@ git commit -m "feat(marketing): 首页/特性/关于页面（blocks 拼装）"
 
 ---
 
-### Task 14: 文档站（Content Collections + Slug 路由）
+### Task 15: 文档站（Content Collections + Slug 路由）
 
 **Files:**
 - Create: `src/routes/{-$locale}/_layout/marketing/docs/index.tsx`
@@ -1308,7 +1426,7 @@ git commit -m "feat(marketing): 首页/特性/关于页面（blocks 拼装）"
 - Create: `src/components/mdx/Mdx.tsx`
 - Create: `src/styles/mdx.css`
 
-**Step 14.1: 安装 MDX 渲染器**
+**Step 15.1: 安装 MDX 渲染器**
 
 ```bash
 pnpm add react-router-dom@^7
@@ -1317,7 +1435,7 @@ pnpm add -D @types/react-router-dom
 
 > 实际 MDX 方案以 TanStack Start 1.x 推荐为准（如 `@mdx-js/rollup` + `remark-gfm` + `rehype-pretty-code`）；若 runtime 兼容可调整。
 
-**Step 14.2: 写入 `src/components/mdx/Mdx.tsx`**
+**Step 15.2: 写入 `src/components/mdx/Mdx.tsx`**
 
 ```tsx
 import { MDXProvider } from '@mdx-js/react';
@@ -1348,7 +1466,7 @@ export function Mdx({ children }: { children: string }) {
 > ```
 > 选用 TanStack Start 兼容的方案。文档站以预编译为骨架。
 
-**Step 14.3: 写入 `src/styles/mdx.css`**
+**Step 15.3: 写入 `src/styles/mdx.css`**
 
 ```css
 .mdx { @apply prose max-w-3xl; }
@@ -1359,7 +1477,7 @@ export function Mdx({ children }: { children: string }) {
 .mdx pre { @apply rounded bg-zinc-900 text-zinc-100 p-4 overflow-auto; }
 ```
 
-**Step 14.4: 写入 `src/components/docs/DocsSidebar.tsx`**
+**Step 15.4: 写入 `src/components/docs/DocsSidebar.tsx`**
 
 ```tsx
 import { Link } from '@tanstack/react-router';
@@ -1386,7 +1504,7 @@ export function DocsSidebar({ locale }: { locale: 'zh' | 'en' }) {
 }
 ```
 
-**Step 14.5: 写入 `src/routes/{-$locale}/_layout/marketing/docs/index.tsx`**
+**Step 15.5: 写入 `src/routes/{-$locale}/_layout/marketing/docs/index.tsx`**
 
 ```tsx
 import { createFileRoute, redirect } from '@tanstack/react-router';
@@ -1404,7 +1522,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/marketing/docs/')({
 });
 ```
 
-**Step 14.6: 写入 `src/routes/{-$locale}/_layout/marketing/docs/$slug.tsx`**
+**Step 15.6: 写入 `src/routes/{-$locale}/_layout/marketing/docs/$slug.tsx`**
 
 ```tsx
 import { createFileRoute, notFound } from '@tanstack/react-router';
@@ -1436,7 +1554,7 @@ function DocPage() {
 }
 ```
 
-**Step 14.7: Commit**
+**Step 15.7: Commit**
 
 ```bash
 git add src/components/docs src/components/mdx src/styles/mdx.css src/routes/{-\$locale}/_layout/marketing/docs
@@ -1445,14 +1563,14 @@ git commit -m "feat(docs): 文档站（Content Collections + 侧栏）"
 
 ---
 
-### Task 15: 博客列表与详情
+### Task 16: 博客列表与详情
 
 **Files:**
 - Create: `src/routes/{-$locale}/_layout/marketing/blog/index.tsx`
 - Create: `src/routes/{-$locale}/_layout/marketing/blog/$slug.tsx`
 - Create: `src/components/blog/PostCard.tsx`
 
-**Step 15.1: 写入 `src/components/blog/PostCard.tsx`**
+**Step 16.1: 写入 `src/components/blog/PostCard.tsx`**
 
 ```tsx
 import { Link } from '@tanstack/react-router';
@@ -1480,7 +1598,7 @@ export interface Post {
 }
 ```
 
-**Step 15.2: 写入 `src/routes/{-$locale}/_layout/marketing/blog/index.tsx`**
+**Step 16.2: 写入 `src/routes/{-$locale}/_layout/marketing/blog/index.tsx`**
 
 ```tsx
 import { createFileRoute } from '@tanstack/react-router';
@@ -1509,7 +1627,7 @@ function BlogIndex() {
 }
 ```
 
-**Step 15.3: 写入 `src/routes/{-$locale}/_layout/marketing/blog/$slug.tsx`**
+**Step 16.3: 写入 `src/routes/{-$locale}/_layout/marketing/blog/$slug.tsx`**
 
 ```tsx
 import { createFileRoute, notFound } from '@tanstack/react-router';
@@ -1541,7 +1659,7 @@ function BlogPost() {
 }
 ```
 
-**Step 15.4: Commit**
+**Step 16.4: Commit**
 
 ```bash
 git add src/components/blog src/routes/{-\$locale}/_layout/marketing/blog
@@ -1550,12 +1668,12 @@ git commit -m "feat(blog): 列表 + 详情页"
 
 ---
 
-### Task 16: 更新日志
+### Task 17: 更新日志
 
 **Files:**
 - Create: `src/routes/{-$locale}/_layout/marketing/changelog/index.tsx`
 
-**Step 16.1: 写入 `src/routes/{-$locale}/_layout/marketing/changelog/index.tsx`**
+**Step 17.1: 写入 `src/routes/{-$locale}/_layout/marketing/changelog/index.tsx`**
 
 ```tsx
 import { createFileRoute } from '@tanstack/react-router';
@@ -1590,7 +1708,7 @@ function ChangelogPage() {
 }
 ```
 
-**Step 16.2: Commit**
+**Step 17.2: Commit**
 
 ```bash
 git add src/routes/{-\$locale}/_layout/marketing/changelog
@@ -1599,12 +1717,12 @@ git commit -m "feat(changelog): 更新日志页"
 
 ---
 
-### Task 17: Legal 页面（动态 slug）
+### Task 18: Legal 页面（动态 slug）
 
 **Files:**
 - Create: `src/routes/{-$locale}/_layout/marketing/legal/$slug.tsx`
 
-**Step 17.1: 写入 `src/routes/{-$locale}/_layout/marketing/legal/$slug.tsx`**
+**Step 18.1: 写入 `src/routes/{-$locale}/_layout/marketing/legal/$slug.tsx`**
 
 ```tsx
 import { createFileRoute, notFound } from '@tanstack/react-router';
@@ -1636,7 +1754,7 @@ function LegalPage() {
 
 > slug 解析约定：URL `/legal/terms` 命中 `terms.md` 或 `terms.zh.md`，按当前 locale 优先。
 
-**Step 17.2: Commit**
+**Step 18.2: Commit**
 
 ```bash
 git add src/routes/{-\$locale}/_layout/marketing/legal
@@ -1645,48 +1763,118 @@ git commit -m "feat(legal): 服务条款与隐私政策页"
 
 ---
 
-### Task 18: SEO（sitemap + robots + JSON-LD + OG image）
+### Task 19: SEO（per-locale sitemap + robots + JSON-LD + OG image）
 
 **Files:**
 - Create: `src/routes/sitemap.xml.ts`
+- Create: `src/routes/[locale]/sitemap.xml.ts`
 - Create: `src/routes/robots.txt.ts`
 - Create: `src/lib/json-ld.ts`
+- Create: `src/lib/hreflang.ts`
 - Create: `src/components/JsonLd.tsx`
 - Create: `src/routes/api/og.tsx`
 
-**Step 18.1: 写入 `src/routes/sitemap.xml.ts`**
+**Step 19.1: 写入 `src/lib/hreflang.ts`**
+
+```ts
+import { websiteConfig } from '@/config/website';
+import { SUPPORTED_LOCALES, type Locale } from '@/lib/locale';
+
+export interface AlternateLink { hreflang: string; href: string }
+
+export function getAlternateLinks(pathname: string): AlternateLink[] {
+  const normalized = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  return [
+    { hreflang: 'x-default', href: `${websiteConfig.url}${normalized}` },
+    ...SUPPORTED_LOCALES.map((l: Locale) => ({
+      hreflang: l,
+      href: `${websiteConfig.url}/${l}${normalized === '/' ? '' : normalized}`,
+    })),
+  ];
+}
+```
+
+**Step 19.2: 写入 `src/routes/sitemap.xml.ts`（根 sitemap 索引）**
 
 ```ts
 import { createFileRoute } from '@tanstack/react-router';
 import { websiteConfig } from '@/config/website';
-import { allBlogs, allDocs, allChangelogs } from 'content-collections';
+import { SUPPORTED_LOCALES } from '@/lib/locale';
 
 export const Route = createFileRoute('/sitemap.xml')({
   server: {
     handlers: {
       GET: () => {
-        const base = websiteConfig.url;
-        const urls = [
-          '',
-          '/features',
-          '/pricing',
-          '/about',
-          '/contact',
-          '/blog',
-          '/docs',
-          '/changelog',
-          '/legal/terms',
-          '/legal/privacy',
-        ];
-        const blog = allBlogs.map((p) => `/blog/${p._meta.path}`);
-        const docs = allDocs.map((d) => `/docs/${d._meta.path}`);
-        const changelog = allChangelogs.map((c) => `/changelog#${c._meta.path}`);
-
+        const base = websiteConfig.url.replace(/\/$/, '');
+        // 根 sitemap 只暴露 locale 索引；具体 URL 走 /[locale]/sitemap.xml
         const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${[...urls, ...blog, ...docs, ...changelog]
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${SUPPORTED_LOCALES.map((l) => `<sitemap><loc>${base}/${l}/sitemap.xml</loc></sitemap>`).join('\n')}
+</sitemapindex>`;
+        return new Response(xml, { headers: { 'Content-Type': 'application/xml' } });
+      },
+    },
+  },
+});
+```
+
+**Step 19.3: 写入 `src/routes/[locale]/sitemap.xml.ts`（per-locale sitemap，含 hreflang）**
+
+```ts
+import { createFileRoute } from '@tanstack/react-router';
+import { websiteConfig } from '@/config/website';
+import { allBlogs, allDocs, allChangelogs } from 'content-collections';
+import { isSupportedLocale } from '@/lib/locale';
+
+const STATIC_PATHS = [
+  '/',
+  '/features',
+  '/pricing',
+  '/about',
+  '/contact',
+  '/blog',
+  '/docs',
+  '/changelog',
+  '/legal/terms',
+  '/legal/privacy',
+];
+
+export const Route = createFileRoute('/$locale/sitemap.xml')({
+  server: {
+    handlers: {
+      GET: ({ params }) => {
+        const locale = params.locale;
+        if (!isSupportedLocale(locale)) {
+          return new Response('not found', { status: 404 });
+        }
+        const base = websiteConfig.url.replace(/\/$/, '');
+
+        // 静态页
+        const staticUrls = STATIC_PATHS.flatMap((p) =>
+          SUPPORTED_LOCALES.map((l) => ({ loc: `${base}/${l}${p === '/' ? '' : p}`, alternates: getAlternateLinks(p) })),
+        );
+
+        // 动态内容（按当前 locale 过滤）
+        const blog = allBlogs
+          .filter((p) => p.locale === locale)
+          .map((p) => ({ loc: `${base}/${locale}/blog/${p._meta.path}`, alternates: [] as AlternateLink[] }));
+        const docs = allDocs
+          .filter((d) => d.locale === locale)
+          .map((d) => ({ loc: `${base}/${locale}/docs/${d._meta.path}`, alternates: [] as AlternateLink[] }));
+        const changelog = allChangelogs
+          .filter((c) => c.locale === locale)
+          .map((c) => ({ loc: `${base}/${locale}/changelog#${c._meta.path}`, alternates: [] as AlternateLink[] }));
+
+        const all = [...staticUrls, ...blog, ...docs, ...changelog];
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+${all
   .map(
-    (u) => `<url><loc>${base}${u}</loc><changefreq>weekly</changefreq></url>`,
+    (u) =>
+      `<url><loc>${u.loc}</loc>${u.alternates
+        .map((a) => `<xhtml:link rel="alternate" hreflang="${a.hreflang}" href="${a.href}"/>`)
+        .join('')}<changefreq>weekly</changefreq></url>`,
   )
   .join('\n')}
 </urlset>`;
@@ -1697,7 +1885,7 @@ ${[...urls, ...blog, ...docs, ...changelog]
 });
 ```
 
-**Step 18.2: 写入 `src/routes/robots.txt.ts`**
+**Step 19.4: 写入 `src/routes/robots.txt.ts`**
 
 ```ts
 import { createFileRoute } from '@tanstack/react-router';
@@ -1721,10 +1909,11 @@ Sitemap: ${websiteConfig.url}/sitemap.xml
 });
 ```
 
-**Step 18.3: 写入 `src/lib/json-ld.ts`**
+**Step 19.5: 写入 `src/lib/json-ld.ts`（补 BreadcrumbList + Article）**
 
 ```ts
 import { websiteConfig } from '@/config/website';
+import { getAlternateLinks } from '@/lib/hreflang';
 
 export function organizationJsonLd() {
   return {
@@ -1744,16 +1933,37 @@ export function softwareApplicationJsonLd() {
     name: websiteConfig.name,
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web',
-    offers: {
-      '@type': 'Offer',
-      price: 0,
-      priceCurrency: 'USD',
-    },
+    offers: { '@type': 'Offer', price: 0, priceCurrency: 'USD' },
+  };
+}
+
+export function breadcrumbJsonLd(items: Array<{ name: string; href: string }>) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((it, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: it.name,
+      item: `${websiteConfig.url}${it.href}`,
+    })),
+  };
+}
+
+export function articleJsonLd(opts: { title: string; description: string; date: string; author?: string; path: string }) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: opts.title,
+    description: opts.description,
+    datePublished: opts.date,
+    author: { '@type': 'Person', name: opts.author ?? websiteConfig.metadata.name },
+    url: `${websiteConfig.url}${opts.path}`,
   };
 }
 ```
 
-**Step 18.4: 写入 `src/components/JsonLd.tsx`**
+**Step 19.6: 写入 `src/components/JsonLd.tsx`**
 
 ```tsx
 export function JsonLd({ data }: { data: object | object[] }) {
@@ -1761,25 +1971,49 @@ export function JsonLd({ data }: { data: object | object[] }) {
   return (
     <script
       type="application/ld+json"
-      // eslint-disable-next-line react/no-danger
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: required for JSON-LD
       dangerouslySetInnerHTML={{ __html: json }}
     />
   );
 }
 ```
 
-**Step 18.5: 在 `src/routes/__root.tsx` 注入 JSON-LD**
+**Step 19.7: 在 `src/routes/__root.tsx` 注入 Organization JSON-LD + hreflang**
 
 ```tsx
 import { JsonLd } from '@/components/JsonLd';
 import { organizationJsonLd } from '@/lib/json-ld';
+import { getAlternateLinks } from '@/lib/hreflang';
 
 <head>
   <JsonLd data={organizationJsonLd()} />
+  {getAlternateLinks(location.pathname).map((a) => (
+    <link key={a.hreflang} rel="alternate" hrefLang={a.hreflang} href={a.href} />
+  ))}
 </head>
 ```
 
-**Step 18.6: 写入 `src/routes/api/og.tsx`（使用 satori 动态生成 OG 图）**
+**Step 19.8: 在 docs / blog / changelog 路由注入 BreadcrumbList + Article**
+
+以 `docs/$slug.tsx` 为例：
+
+```tsx
+import { JsonLd } from '@/components/JsonLd';
+import { breadcrumbJsonLd, articleJsonLd } from '@/lib/json-ld';
+
+const doc = Route.useRouteContext().doc;
+const breadcrumbs = [
+  { name: '首页', href: '/' },
+  { name: '文档', href: '/docs' },
+  { name: doc.title, href: `/docs/${doc._meta.path}` },
+];
+// 注入
+<JsonLd data={[breadcrumbJsonLd(breadcrumbs), articleJsonLd({ title: doc.title, description: doc.description, date: doc._meta.path, path: `/docs/${doc._meta.path}` })]} />
+```
+
+> blog / changelog 路由同样模式：先 BreadcrumbList（首页 → 列表 → 详情），再 Article（带 `datePublished`）。
+
+**Step 19.9: 写入 `src/routes/api/og.tsx`（使用 satori 动态生成 OG 图）**
 
 ```bash
 pnpm add satori @resvg/resvg-js
@@ -1797,12 +2031,20 @@ export const Route = createFileRoute('/api/og')({
         const subtitle = url.searchParams.get('subtitle') ?? '';
         const { default: satori } = await import('satori');
         const { Resvg } = await import('@resvg/resvg-js');
-        const fontData = await fetch('https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.0/files/inter-latin-400-normal.woff').then((r) => r.arrayBuffer());
+        const fontData = await fetch(
+          'https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.0/files/inter-latin-400-normal.woff',
+        ).then((r) => r.arrayBuffer());
         const svg = await satori(
-          { type: 'div', props: { style: { width: 1200, height: 630, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: '#0f172a', color: 'white', padding: 64 }, children: [
-            { type: 'h1', props: { style: { fontSize: 72, fontWeight: 700 }, children: title } },
-            subtitle && { type: 'p', props: { style: { fontSize: 36, opacity: 0.8, marginTop: 24 }, children: subtitle } },
-          ].filter(Boolean) } },
+          {
+            type: 'div',
+            props: {
+              style: { width: 1200, height: 630, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: '#0f172a', color: 'white', padding: 64 },
+              children: [
+                { type: 'h1', props: { style: { fontSize: 72, fontWeight: 700 }, children: title } },
+                subtitle && { type: 'p', props: { style: { fontSize: 36, opacity: 0.8, marginTop: 24 }, children: subtitle } },
+              ].filter(Boolean),
+            },
+          },
           { width: 1200, height: 630, fonts: [{ name: 'Inter', data: fontData, weight: 400, style: 'normal' }] },
         );
         const png = new Resvg(svg).render().asPng();
@@ -1813,25 +2055,26 @@ export const Route = createFileRoute('/api/og')({
 });
 ```
 
-**Step 18.7: Commit**
+**Step 19.10: Commit**
 
 ```bash
-git add src/routes/sitemap.xml.ts src/routes/robots.txt.ts src/lib/json-ld.ts src/components/JsonLd.tsx src/routes/api/og.tsx src/routes/__root.tsx package.json pnpm-lock.yaml
-git commit -m "feat(seo): sitemap/robots/JSON-LD/OG 图"
+git add src/routes/sitemap.xml.ts src/routes/ src/lib src/components/JsonLd.tsx package.json pnpm-lock.yaml
+git commit -m "feat(seo): per-locale sitemap + hreflang + BreadcrumbList/Article JSON-LD + OG 图"
 ```
 
 ---
 
-### Task 19: PWA（manifest + service worker）
+### Task 20: PWA（仅 manifest，不含 service worker）
 
 **Files:**
-- Create: `public/manifest.webmanifest`
-- Create: `public/sw.js`
+- Create: `public/manifest.json`
 - Create: `public/icon-192.png`（占位，README 中说明后续替换）
 - Create: `public/icon-512.png`（占位）
-- Modify: `src/routes/__root.tsx`（注册 SW）
+- Modify: `src/routes/__root.tsx`（注入 manifest link）
 
-**Step 19.1: 写入 `public/manifest.webmanifest`**
+> **设计依据**：spec §17 显式 YAGNI Service Worker（边缘 SSR + Cloudflare CDN 已经覆盖缓存场景；SW 不会经过 SSR 响应，仅对静态资源有效，与"0 冷启动"目标矛盾）。本期只接 `manifest.json`，不写 `sw.js`、不注册 service worker。
+
+**Step 20.1: 写入 `public/manifest.json`**
 
 ```json
 {
@@ -1848,63 +2091,16 @@ git commit -m "feat(seo): sitemap/robots/JSON-LD/OG 图"
 }
 ```
 
-**Step 19.2: 写入 `public/sw.js`**
+**Step 20.2: 在 `src/routes/__root.tsx` 注入 manifest link**
 
-```js
-const CACHE = 'saas-template-v1';
-const PRECACHE = ['/', '/pricing', '/blog', '/docs', '/manifest.webmanifest'];
-
-self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)));
-});
-
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))),
-    ),
-  );
-});
-
-self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-  const url = new URL(event.request.url);
-  if (url.pathname.startsWith('/api/')) return;
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const network = fetch(event.request)
-        .then((res) => {
-          if (res.ok && res.type === 'basic') {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(event.request, copy));
-          }
-          return res;
-        })
-        .catch(() => cached);
-      return cached ?? network;
-    }),
-  );
-});
-```
-
-**Step 19.3: 在 `src/routes/__root.tsx` 注册 SW**
+在 `<head>` 中添加（不写 SW 注册代码）：
 
 ```tsx
-useEffect(() => {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(console.error);
-  }
-}, []);
-```
-
-**Step 19.4: 在 `<head>` 注入 manifest link**
-
-```tsx
-<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="manifest" href="/manifest.json" />
 <meta name="theme-color" content="#0070f3" />
 ```
 
-**Step 19.5: 占位图标说明**
+**Step 20.3: 占位图标说明**
 
 > 真实图标替换：在 `public/icon-192.png` 与 `public/icon-512.png` 放入设计稿（默认生成两份 1×1 PNG 占位，运行期可正常加载）。
 
@@ -1914,16 +2110,16 @@ printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\
 printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x02\x00\x00\x00\x02\x08\x06\x00\x00\x00\xfd\x87\x65\x32\x00\x00\x00\x16IDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82' > public/icon-512.png
 ```
 
-**Step 19.6: Commit**
+**Step 20.4: Commit**
 
 ```bash
-git add public/manifest.webmanifest public/sw.js public/icon-192.png public/icon-512.png src/routes/__root.tsx
-git commit -m "feat(pwa): manifest + service worker + 占位图标"
+git add public/manifest.json public/icon-192.png public/icon-512.png src/routes/__root.tsx
+git commit -m "feat(pwa): manifest + 占位图标（不含 service worker）"
 ```
 
 ---
 
-### Task 20: Analytics（多 provider）
+### Task 21: Analytics（多 provider）
 
 **Files:**
 - Create: `src/lib/analytics/types.ts`
@@ -1934,7 +2130,7 @@ git commit -m "feat(pwa): manifest + service worker + 占位图标"
 - Create: `src/lib/analytics/index.ts`
 - Create: `src/components/AnalyticsProvider.tsx`
 
-**Step 20.1: 写入 `src/lib/analytics/types.ts`**
+**Step 21.1: 写入 `src/lib/analytics/types.ts`**
 
 ```ts
 export type AnalyticsEvent = { name: string; params?: Record<string, string | number | boolean> };
@@ -1946,7 +2142,7 @@ export interface AnalyticsProvider {
 }
 ```
 
-**Step 20.2: 写入 `src/lib/analytics/ga.ts`**
+**Step 21.2: 写入 `src/lib/analytics/ga.ts`**
 
 ```ts
 import type { AnalyticsEvent, AnalyticsProvider } from './types';
@@ -1966,7 +2162,7 @@ export class GAAnalyticsProvider implements AnalyticsProvider {
 }
 ```
 
-**Step 20.3: 写入 `src/lib/analytics/plausible.ts`**
+**Step 21.3: 写入 `src/lib/analytics/plausible.ts`**
 
 ```ts
 import type { AnalyticsEvent, AnalyticsProvider } from './types';
@@ -1986,7 +2182,7 @@ export class PlausibleAnalyticsProvider implements AnalyticsProvider {
 }
 ```
 
-**Step 20.4: 写入 `src/lib/analytics/umami.ts`**
+**Step 21.4: 写入 `src/lib/analytics/umami.ts`**
 
 ```ts
 import type { AnalyticsEvent, AnalyticsProvider } from './types';
@@ -2005,7 +2201,7 @@ export class UmamiAnalyticsProvider implements AnalyticsProvider {
 }
 ```
 
-**Step 20.5: 写入 `src/lib/analytics/clarity.ts`**
+**Step 21.5: 写入 `src/lib/analytics/clarity.ts`**
 
 ```ts
 import type { AnalyticsEvent, AnalyticsProvider } from './types';
@@ -2024,7 +2220,7 @@ export class ClarityAnalyticsProvider implements AnalyticsProvider {
 }
 ```
 
-**Step 20.6: 写入 `src/lib/analytics/index.ts`**
+**Step 21.6: 写入 `src/lib/analytics/index.ts`**
 
 ```ts
 import type { AnalyticsProvider, AnalyticsProviderName, AnalyticsEvent } from './types';
@@ -2035,28 +2231,39 @@ import { ClarityAnalyticsProvider } from './clarity';
 
 const providers: AnalyticsProvider[] = [];
 
-export function initAnalytics(publicEnv: { VITE_ANALYTICS?: string; VITE_GA_MEASUREMENT_ID?: string; VITE_PLAUSIBLE_DOMAIN?: string; VITE_UMAMI_WEBSITE_ID?: string; VITE_CLARITY_PROJECT_ID?: string }) {
+export function initAnalytics(
+  publicEnv: {
+    VITE_ANALYTICS?: string;
+    VITE_GA_MEASUREMENT_ID?: string;
+    VITE_PLAUSIBLE_DOMAIN?: string;
+    VITE_UMAMI_WEBSITE_ID?: string;
+    VITE_CLARITY_PROJECT_ID?: string;
+  },
+  /** 当前请求的 CSP nonce（由 Sub-Plan D 17.1 buildCspHeader 生成并注入到 head meta）。 */
+  nonce?: string,
+) {
   providers.length = 0;
   const enabled = (publicEnv.VITE_ANALYTICS ?? '').split(',').map((s) => s.trim()).filter(Boolean) as AnalyticsProviderName[];
 
   if (enabled.includes('ga') && publicEnv.VITE_GA_MEASUREMENT_ID) {
     providers.push(new GAAnalyticsProvider(publicEnv.VITE_GA_MEASUREMENT_ID));
-    injectScript(`https://www.googletagmanager.com/gtag/js?id=${publicEnv.VITE_GA_MEASUREMENT_ID}`);
+    // 注入 gtag.js 时带 nonce 满足 CSP `script-src 'nonce-...'`
+    injectScript(`https://www.googletagmanager.com/gtag/js?id=${publicEnv.VITE_GA_MEASUREMENT_ID}`, nonce ? { nonce } : {});
     window.dataLayer = window.dataLayer ?? [];
     (window as unknown as { gtag: (a: string, b: string, c?: object) => void }).gtag = function gtag(...args: unknown[]) { (window.dataLayer as unknown[]).push(args); };
     (window as unknown as { gtag: (a: string, b: string, c?: object) => void }).gtag('js', new Date());
   }
   if (enabled.includes('plausible') && publicEnv.VITE_PLAUSIBLE_DOMAIN) {
     providers.push(new PlausibleAnalyticsProvider(publicEnv.VITE_PLAUSIBLE_DOMAIN));
-    injectScript('https://plausible.io/js/script.js', { 'data-domain': publicEnv.VITE_PLAUSIBLE_DOMAIN });
+    injectScript('https://plausible.io/js/script.js', { 'data-domain': publicEnv.VITE_PLAUSIBLE_DOMAIN, ...(nonce ? { nonce } : {}) });
   }
   if (enabled.includes('umami') && publicEnv.VITE_UMAMI_WEBSITE_ID) {
     providers.push(new UmamiAnalyticsProvider(publicEnv.VITE_UMAMI_WEBSITE_ID));
-    injectScript('https://umami.example.com/script.js', { 'data-website-id': publicEnv.VITE_UMAMI_WEBSITE_ID });
+    injectScript('https://umami.example.com/script.js', { 'data-website-id': publicEnv.VITE_UMAMI_WEBSITE_ID, ...(nonce ? { nonce } : {}) });
   }
   if (enabled.includes('clarity') && publicEnv.VITE_CLARITY_PROJECT_ID) {
     providers.push(new ClarityAnalyticsProvider(publicEnv.VITE_CLARITY_PROJECT_ID));
-    injectScript(`https://www.clarity.ms/tag/${publicEnv.VITE_CLARITY_PROJECT_ID}`);
+    injectScript(`https://www.clarity.ms/tag/${publicEnv.VITE_CLARITY_PROJECT_ID}`, nonce ? { nonce } : {});
   }
 }
 
@@ -2080,7 +2287,7 @@ export function page(path: string) {
 export type { AnalyticsEvent, AnalyticsProvider, AnalyticsProviderName };
 ```
 
-**Step 20.7: 写入 `src/components/AnalyticsProvider.tsx`**
+**Step 21.7: 写入 `src/components/AnalyticsProvider.tsx`**
 
 ```tsx
 import { useEffect } from 'react';
@@ -2091,7 +2298,11 @@ import { publicEnv } from '@/env/public';
 export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   useEffect(() => {
-    initAnalytics(publicEnv);
+    // 从 `<meta name="csp-nonce">` 读取当前请求的 CSP nonce；
+    // 由 server 端 `applyCsp`（Sub-Plan D Task 17）写入。
+    const nonceMeta = document.querySelector<HTMLMetaElement>('meta[name="csp-nonce"]');
+    const nonce = nonceMeta?.content || undefined;
+    initAnalytics(publicEnv, nonce);
     const unsub = router.subscribe('onLoad', ({ toLocation }) => page(toLocation.pathname));
     return unsub;
   }, [router]);
@@ -2099,7 +2310,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
 }
 ```
 
-**Step 20.8: 在 `src/routes/__root.tsx` 包裹**
+**Step 21.8: 在 `src/routes/__root.tsx` 包裹**
 
 ```tsx
 import { AnalyticsProvider } from '@/components/AnalyticsProvider';
@@ -2109,7 +2320,7 @@ import { AnalyticsProvider } from '@/components/AnalyticsProvider';
 </AnalyticsProvider>
 ```
 
-**Step 20.9: Commit**
+**Step 21.9: Commit**
 
 ```bash
 git add src/lib/analytics src/components/AnalyticsProvider.tsx src/routes/__root.tsx
@@ -2118,13 +2329,13 @@ git commit -m "feat(analytics): GA/Plausible/Umami/Clarity 多 provider"
 
 ---
 
-### Task 21: 错误页（404/500）
+### Task 22: 错误页（404/500）
 
 **Files:**
 - Create: `src/routes/404.tsx`
 - Create: `src/routes/500.tsx`
 
-**Step 21.1: 写入 `src/routes/404.tsx`**
+**Step 22.1: 写入 `src/routes/404.tsx`**
 
 ```tsx
 import { createFileRoute, Link } from '@tanstack/react-router';
@@ -2144,7 +2355,7 @@ function NotFound() {
 }
 ```
 
-**Step 21.2: 写入 `src/routes/500.tsx`**
+**Step 22.2: 写入 `src/routes/500.tsx`**
 
 ```tsx
 import { createFileRoute } from '@tanstack/react-router';
@@ -2163,7 +2374,7 @@ function ServerError() {
 }
 ```
 
-**Step 21.3: Commit**
+**Step 22.3: Commit**
 
 ```bash
 git add src/routes/404.tsx src/routes/500.tsx
@@ -2172,11 +2383,11 @@ git commit -m "feat(seo): 404 / 500 错误页"
 
 ---
 
-### Task 22: Sub-Plan C 端到端验证
+### Task 23: Sub-Plan C 端到端验证
 
 **Files:** 无新增
 
-**Step 22.1: 类型校验**
+**Step 23.1: 类型校验**
 
 ```bash
 pnpm run typecheck
@@ -2184,7 +2395,7 @@ pnpm run typecheck
 
 预期：0 错误。
 
-**Step 22.2: 单元测试**
+**Step 23.2: 单元测试**
 
 ```bash
 pnpm run test
@@ -2192,7 +2403,7 @@ pnpm run test
 
 预期：blocks.test.ts + 价格/缓存/存储/环境全部 PASS。
 
-**Step 22.3: 完整 check**
+**Step 23.3: 完整 check**
 
 ```bash
 pnpm run check
@@ -2200,7 +2411,7 @@ pnpm run check
 
 预期：通过。
 
-**Step 22.4: Content Collections 重新生成**
+**Step 23.4: Content Collections 重新生成**
 
 ```bash
 pnpm run content:build
@@ -2208,7 +2419,7 @@ pnpm run content:build
 
 预期：`.content-collections/generated/` 重建。
 
-**Step 22.5: 构建**
+**Step 23.5: 构建**
 
 ```bash
 pnpm run build
@@ -2216,7 +2427,7 @@ pnpm run build
 
 预期：成功。
 
-**Step 22.6: dev server 冒烟**
+**Step 23.6: dev server 冒烟**
 
 ```bash
 pnpm dev
@@ -2234,20 +2445,19 @@ pnpm dev
 - `/legal/terms` 返回 200
 - `/sitemap.xml` 返回 200 XML
 - `/robots.txt` 返回 200 text
-- `/manifest.webmanifest` 返回 200 JSON
-- `/sw.js` 返回 200 JS
+- `/manifest.json` 返回 200 JSON
 - `/api/og?title=Hello&subtitle=Test` 返回 200 PNG
 - `/404` 返回 200
 
-**Step 22.7: 浏览器手动验证**
+**Step 23.7: 浏览器手动验证**
 
 使用 Playwright 浏览器：
 
 - 切语言：navbar `LocaleSwitcher` 选择 English，URL 变为 `/en/...`。
-- Service worker 在 DevTools → Application → Service Workers 可见并 `activated`。
-- 切到 Offline 刷新 `/`，仍能看到缓存的首页。
+- DevTools → Application → Manifest 看到 `SaaS Template`，`start_url` 指向 `/`。
+- （不验证 service worker；spec §17 已 YAGNI。）
 
-**Step 22.8: 提交（如有调整）**
+**Step 23.8: 提交（如有调整）**
 
 ```bash
 git add -A
@@ -2259,14 +2469,33 @@ git commit -m "chore: Sub-Plan C 收尾（lint + 测试 + 构建验证）" --all
 ## Sub-Plan C 完成标志
 
 - [ ] Content Collections 已生成（4 个 collections）
-- [ ] 8 个 marketing blocks 全部实现
+- [ ] 8 个 marketing blocks 全部实现（Hero / Features / Stats / Pricing / Faq / Testimonials / NewsletterCta / Cta）
 - [ ] 首页 / features / pricing / about / contact 页面均渲染
 - [ ] 文档站、博客、更新日志、法律页面均可访问
-- [ ] sitemap.xml / robots.txt / OG image 端点就位
-- [ ] JSON-LD organization 在 head 注入
-- [ ] PWA manifest + service worker 注册成功
-- [ ] Analytics Provider 包裹根路由，env 驱动 4 选 N
+- [ ] sitemap.xml（per-locale + hreflang） / robots.txt / OG image 端点就位
+- [ ] JSON-LD Organization + BreadcrumbList + Article 在 head 注入
+- [ ] PWA manifest.json 接入（不含 service worker）
+- [ ] Analytics Provider 包裹根路由，env 驱动 4 选 N，注入 CSP nonce
 - [ ] locale 切换 URL 正常
 - [ ] 单元测试 + 类型校验 + 构建全部通过
 
 进入 Sub-Plan D 之前，确保以上所有项就位。
+
+---
+
+## Not in Scope（Sub-Plan C 显式不做）
+
+按 writing-plans 规范，本 sub-plan 明确**不**包含：
+
+- **业务模块与 server function**：支付、邮件、订阅、通知、文件存储、联系表单、admin、dashboard 守卫、auth API（→ Sub-Plan B）。
+- **Vitest Workers 池 / Playwright E2E / CI / 安全中间件 / 性能 / README & CHANGELOG & 架构文档**（→ Sub-Plan D）。
+- **PWA service worker 与 push 通知**：spec §17 YAGNI。
+- **i18n URL 前缀路由**：spec 决策表第 6 项已选 `paraglide-js` cookie + URL 软切换；URL 前缀化留待 v0.2。
+- **完整 Marketing A/B 测试与漏斗分析**：Analytics 接入由 env 驱动；A/B 实验框架不在本期。
+- **Pricing block 的 Stripe 收银台直接嵌入**：Pricing 块只渲染 UI；点击后由 Sub-Plan B Task 14 的 `pricing.tsx` 走 `createCheckoutSession`。
+- **Blocks 的可视化编辑器（shadcn Studio 之类）**：blocks 是纯 props-driven；编辑器另立 plan。
+- **OG 图字体本地化**：本期用 Inter 拉丁字符；中日韩字符集由 v0.2 加 `fontsource-noto-sans-sc`。
+- **Web Vitals 上报**：Sub-Plan D 完成 analytics，但 LCP/INP/CLS 上报到 GA/Plausible 由 v0.2。
+- **a11y 自动化（@axe-core/playwright）**：Sub-Plan D 引入。
+- **视觉回归测试**：Sub-Plan D 不做；v0.2 用 Chromatic。
+- **MDX 运行时编译**：本期只预编译 + 静态 MDX 渲染；`@mdx-js/rollup` 完整支持（如 rehype-pretty-code 主题）由 v0.2 补。
