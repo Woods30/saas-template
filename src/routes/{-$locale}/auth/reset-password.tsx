@@ -57,7 +57,7 @@ function ResetPasswordPage() {
               to="/{-$locale}/auth/login"
               className="mt-4 block text-center text-sm text-muted-foreground underline"
             >
-              {m.auth_login_to_register()}
+              {m.auth_forgot_to_login()}
             </Link>
           </CardContent>
         </Card>
