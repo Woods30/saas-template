@@ -67,21 +67,50 @@ function walk(dir: string): string[] {
  * 关键特征：KEY 出现在 `get KEY()` 紧跟的 `{` 之后，并且 KEY 也作为参数传给同一个
  * `s()` 函数。我们移除整个 `get KEY(){return s("KEY")}` 段，让剩下的内容
  * 只在真的"泄露"场景下命中。
+ *
+ * 注：此模式要求 `s(` 紧跟 KEY 字符串字面量，且 KEY 字段名在 `get` 与字符串字面量两处
+ * 完全一致（backreference 强制）。攻击者无法借此把真实 secret 注入——真实 secret 必然
+ * 出现在 `=` / `:` 后的字符串字面量里，会被 `LEAK_PATTERNS` 抓住。
  */
+const BETTER_AUTH_PROXY_PATTERN =
+  /get\s+([A-Z_][A-Z0-9_]*)\s*\(\s*\)\s*\{\s*return\s+s\s*\(\s*[`'"]\1[`'"]\s*\)\s*\}/g
+
 function stripBetterAuthEnvProxy(content: string): string {
-  return content.replace(
-    /get\s+([A-Z_][A-Z0-9_]*)\s*\(\s*\)\s*\{\s*return\s+s\s*\(\s*[`'"]\1[`'"]\s*\)\s*\}/g,
-    '/* env getter stripped */',
-  )
+  return content.replace(BETTER_AUTH_PROXY_PATTERN, '/* env getter stripped */')
 }
 
 /**
+ * 预编译的泄露检测正则（每条对应 FORBIDDEN_KEYS 中一个 key 的一种模式）。
+ * 在模块加载期一次性求值，运行期仅复用同一 RegExp 实例，避免在热路径上反复构造。
+ * 模式：
+ *  1. LITERAL  `"KEY": "value"` / `KEY="value"`
+ *  2. VITE     `import.meta.env.KEY`
+ *  3. PROCESS  `process.env.KEY`（Vite 替换为字面量后仍能识别）
+ */
+interface LeakPattern {
+  key: string
+  literal: RegExp
+  vite: RegExp
+  processEnv: RegExp
+}
+
+/** 单个 key 编译为三条正则：字面量、Vite 内联、process.env。 */
+function compilePatternsFor(key: string): LeakPattern {
+  // 字段名由硬编码数组控制，仅含 `[A-Z0-9_]`，转义后注入 RegExp 模板安全。
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return {
+    key,
+    literal: new RegExp(`["']?${escaped}["']?\\s*[:=]\\s*["']`, 'g'),
+    vite: new RegExp(`import\\.meta\\.env\\.${escaped}\\b`, 'g'),
+    processEnv: new RegExp(`\\bprocess\\.env\\.${escaped}\\b`, 'g'),
+  }
+}
+
+/** 模块加载期一次性预编译，运行期零字符串拼接。 */
+const LEAK_PATTERNS: ReadonlyArray<LeakPattern> = FORBIDDEN_KEYS.map(compilePatternsFor)
+
+/**
  * 检测文件中是否存在"真实泄露"的服务端字段名。
- *
- * 检测模式（任一命中即视为泄露）：
- * 1. `KEY: "..."` 或 `KEY="..."`  —— 字面量赋值
- * 2. `import.meta.env.KEY`        —— Vite 内联
- * 3. `KEY=...` 环境文件残留       —— `.env` 被复制进 dist
  *
  * 不会命中：
  * - `get KEY(){return s("KEY")}` —— better-auth runtime getter（先剥离）
@@ -91,20 +120,8 @@ function stripBetterAuthEnvProxy(content: string): string {
 function findLeaks(content: string): string[] {
   const stripped = stripBetterAuthEnvProxy(content)
   const leaks: string[] = []
-  for (const key of FORBIDDEN_KEYS) {
-    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    // 模式 1: 字面量赋值（"KEY": "value" 或 KEY="value"）
-    const literalPattern = new RegExp(`["']?${escaped}["']?\\s*[:=]\\s*["']`, 'g')
-    // 模式 2: Vite 内联（import.meta.env.KEY）
-    const vitePattern = new RegExp(`import\\.meta\\.env\\.${escaped}\\b`, 'g')
-    // 模式 3: process.env.KEY（防止 Vite 替换为字面量后还能识别）
-    const processPattern = new RegExp(`\\bprocess\\.env\\.${escaped}\\b`, 'g')
-
-    if (
-      literalPattern.test(stripped) ||
-      vitePattern.test(stripped) ||
-      processPattern.test(stripped)
-    ) {
+  for (const { key, literal, vite, processEnv } of LEAK_PATTERNS) {
+    if (literal.test(stripped) || vite.test(stripped) || processEnv.test(stripped)) {
       leaks.push(key)
     }
   }
