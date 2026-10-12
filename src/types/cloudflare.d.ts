@@ -8,7 +8,9 @@
  * 注意：Cloudflare 不提供预定义的全局 `Env`，这里手动声明
  * 与 `wrangler types` 生成的 `Env` 接口等效，供全项目使用。
  */
+/// <reference types="@cloudflare/workers-types" />
 interface Env {
   DB: D1Database
   CACHE: KVNamespace
+  BUCKET: R2Bucket
 }

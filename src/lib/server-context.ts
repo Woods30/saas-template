@@ -9,10 +9,12 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { KVCacheProvider } from '@/cache/provider/kv'
+import type { R2StorageProvider } from '@/storage/provider/r2'
 
 interface ServerContext {
   env: Env
   cacheProvider: KVCacheProvider
+  storageProvider: R2StorageProvider
 }
 
 const als = new AsyncLocalStorage<ServerContext>()
@@ -29,6 +31,7 @@ export function getServerContext(): ServerContext {
     return {
       env: undefined as unknown as Env,
       cacheProvider: undefined as unknown as KVCacheProvider,
+      storageProvider: undefined as unknown as R2StorageProvider,
     }
   }
   return ctx
