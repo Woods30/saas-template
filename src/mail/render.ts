@@ -20,18 +20,46 @@ type TemplateContext = {
 /**
  * Per-template context schemas — strict() rejects unknown fields,
  * preventing __proto__ pollution and unexpected template behaviour.
+ *
+ * actionUrl fields in verifyEmail/forgotPassword are additionally validated
+ * against a host allowlist (defense-in-depth; these templates are not
+ * exposed through the public route — they are reserved for server-side
+ * auth-flow calls with freshly-minted tokens).
  */
+const ALLOWED_HOST_SUFFIXES = [process.env.APP_DOMAIN ?? 'example.com']
+
+const actionUrlSchema = z
+  .string()
+  .url()
+  .max(2000)
+  .refine(
+    (url) => {
+      try {
+        const parsed = new URL(url)
+        return (
+          parsed.protocol === 'https:' &&
+          ALLOWED_HOST_SUFFIXES.some(
+            (suffix) => parsed.hostname === suffix || parsed.hostname.endsWith('.' + suffix),
+          )
+        )
+      } catch {
+        return false
+      }
+    },
+    { message: 'URL must be https and match an allowed host' },
+  )
+
 const contextSchemas = {
   verifyEmail: z
     .object({
       username: z.string().max(200),
-      actionUrl: z.string().url().max(2000),
+      actionUrl: actionUrlSchema,
     })
     .strict(),
   forgotPassword: z
     .object({
       username: z.string().max(200),
-      actionUrl: z.string().url().max(2000),
+      actionUrl: actionUrlSchema,
     })
     .strict(),
   contactMessage: z

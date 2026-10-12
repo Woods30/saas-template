@@ -18,11 +18,19 @@ import { sendMail } from '@/mail'
  *
  * env 从 ALS server context 获取（由 src/server.ts 注入）。
  */
+// Shared contact-message context schema (exported for unit-test import)
+export const contactMessageContextSchema = z.object({
+  fromName: z.string().max(200),
+  fromEmail: z.string().email().max(200),
+  subject: z.string().max(500),
+  message: z.string().max(10000),
+})
+
 const bodySchema = z.object({
   to: z.string().email(),
-  template: z.enum(['verifyEmail', 'forgotPassword', 'contactMessage']),
+  template: z.literal('contactMessage'),
   locale: z.enum(['zh', 'en']),
-  context: z.record(z.string(), z.unknown()),
+  context: contactMessageContextSchema,
 })
 
 export const Route = createFileRoute('/api/email/$')({
@@ -45,13 +53,18 @@ export const Route = createFileRoute('/api/email/$')({
           return new Response('Bad Request', { status: 400 })
         }
 
-        // --- Recipient allowlist ---
+        // --- Caller must be in ADMIN_EMAILS allowlist (Finding 2) ---
         const rawAdminEmails = (env as { ADMIN_EMAILS?: string }).ADMIN_EMAILS ?? ''
         const adminEmails = rawAdminEmails
-          ? rawAdminEmails.split(',').map((e: string) => e.trim())
+          ? rawAdminEmails.split(',').map((e: string) => e.trim().toLowerCase())
           : []
-        if (adminEmails.length > 0 && !adminEmails.includes(body.to)) {
+        if (!adminEmails.includes(body.to.toLowerCase())) {
           return new Response('Recipient not allowed', { status: 403 })
+        }
+
+        const callerEmail = session.user?.email
+        if (!callerEmail || !adminEmails.includes(callerEmail.toLowerCase())) {
+          return new Response('Forbidden', { status: 403 })
         }
 
         // --- Determine default sender from provider ---
