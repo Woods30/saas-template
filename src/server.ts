@@ -9,7 +9,9 @@
  * 注意 `wrangler.jsonc` 的 `main` 需要同步指向本文件。
  */
 
+import type { KVNamespace } from '@cloudflare/workers-types'
 import { createStartHandler, defaultStreamHandler } from '@tanstack/react-start/server'
+import { KVCacheProvider } from './cache/provider/kv'
 import { LOCALE_COOKIE_NAME, readLocaleCookie } from './lib/locale'
 import { als } from './lib/server-context'
 import { registerServerLocaleStrategy } from './locale/middleware'
@@ -25,14 +27,17 @@ const LOCALE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     // 将 env 存入 ALS，供 `src/lib/server-context.ts` 的 `getServerContext()` 使用。
-    return als.run({ env }, async () => {
-      // 不使用 URL 前缀策略，中间件不会改写 URL；原样把 request 交给框架处理。
-      const response = await paraglideMiddleware(request, async ({ locale }) => {
-        const result = await fetch(request)
-        return persistLocaleCookie(result, request, locale)
-      })
-      return response
-    })
+    return als.run(
+      { env, cacheProvider: new KVCacheProvider(env.CACHE as KVNamespace) },
+      async () => {
+        // 不使用 URL 前缀策略，中间件不会改写 URL；原样把 request 交给框架处理。
+        const response = await paraglideMiddleware(request, async ({ locale }) => {
+          const result = await fetch(request)
+          return persistLocaleCookie(result, request, locale)
+        })
+        return response
+      },
+    )
   },
 }
 

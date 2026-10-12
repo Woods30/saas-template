@@ -8,9 +8,11 @@
  * 注入，每个请求相互隔离。
  */
 import { AsyncLocalStorage } from 'node:async_hooks'
+import type { KVCacheProvider } from '@/cache/provider/kv'
 
 interface ServerContext {
   env: Env
+  cacheProvider: KVCacheProvider
 }
 
 const als = new AsyncLocalStorage<ServerContext>()
@@ -22,8 +24,12 @@ const als = new AsyncLocalStorage<ServerContext>()
 export function getServerContext(): ServerContext {
   const ctx = als.getStore()
   if (!ctx) {
-    // 客户端调用或 outside of ALS context
-    return { env: undefined as unknown as Env }
+    // 客户端调用或 outside of ALS context — 典型于测试环境
+    // 返回带 undefined env 的宽松对象，调用方需自行防御
+    return {
+      env: undefined as unknown as Env,
+      cacheProvider: undefined as unknown as KVCacheProvider,
+    }
   }
   return ctx
 }
