@@ -1,0 +1,7 @@
+allowBuilds:
+  esbuild: true
+  workerd: true
+minimumReleaseAgeExclude:
+  - '@tanstack/query-core@5.104.2'
+  - '@tanstack/react-query@5.104.2'
+  - zod@4.6.6

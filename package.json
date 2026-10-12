@@ -25,27 +25,27 @@
     "lint:fix": "biome check --write ."
   },
   "dependencies": {
-    "@tanstack/react-router": "TBD-locked",
-    "@tanstack/react-start": "TBD-locked",
-    "@tanstack/react-query": "TBD-locked",
-    "react": "TBD-locked",
-    "react-dom": "TBD-locked",
-    "zod": "TBD-locked"
+    "@tanstack/react-router": "^1.170.42",
+    "@tanstack/react-start": "^1.168.61",
+    "@tanstack/react-query": "^5.104.2",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.6"
   },
   "devDependencies": {
-    "@biomejs/biome": "TBD-locked",
-    "@cloudflare/vite-plugin": "TBD-locked",
-    "@inlang/paraglide-js": "TBD-locked",
-    "@tailwindcss/vite": "TBD-locked",
-    "@types/node": "TBD-locked",
-    "@types/react": "TBD-locked",
-    "@types/react-dom": "TBD-locked",
-    "tailwindcss": "TBD-locked",
-    "typescript": "TBD-locked",
-    "vite": "TBD-locked",
-    "vite-tsconfig-paths": "TBD-locked",
-    "vitest": "TBD-locked",
-    "tsx": "TBD-locked",
-    "wrangler": "TBD-locked"
+    "@biomejs/biome": "^2.5.15",
+    "@cloudflare/vite-plugin": "^1.63.1",
+    "@inlang/paraglide-js": "^2.27.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^5.0.3",
+    "tsx": "^4.23.15",
+    "wrangler": "^4.149.0"
   }
 }
