@@ -47,6 +47,8 @@ function persistLocaleCookie(response: Response, request: Request, locale: strin
     return response
   }
   const headers = new Headers(response.headers)
+  // CDN 缓存需按语言与 cookie 区分响应，否则不同 locale/cookie 的访客会被命中对方的 HTML。
+  headers.append('Vary', 'Accept-Language, Cookie')
   headers.append(
     'Set-Cookie',
     `${LOCALE_COOKIE_NAME}=${locale}; Path=/; Max-Age=${LOCALE_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`,
