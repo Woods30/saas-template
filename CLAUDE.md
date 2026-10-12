@@ -20,3 +20,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### 与用户级 CLAUDE.md 的关系
 
 仓库级 CLAUDE.md 不覆盖用户在 `~/.claude/CLAUDE.md` 中定义的全局行为（如 TDD 周期、提交纪律、确认规则等），仅补充本项目特有的规约。全局规则优先适用。
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues via `gh` CLI。Issue / PR 标题、正文、评论统一使用中文。See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+默认五标签：`needs-triage` / `needs-info` / `ready-for-agent` / `ready-for-human` / `wontfix`。See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+单仓 single-context：根 `CONTEXT.md`（待补充）+ `docs/adr/`。See `docs/agents/domain.md`.
