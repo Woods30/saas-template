@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
+import { websiteConfig } from '@/config/website'
 import { checkRateLimit, subscribe, unsubscribe } from '@/newsletter'
 
 const subscribeBodySchema = z.object({
@@ -42,7 +43,7 @@ export const Route = createFileRoute('/api/newsletter/$')({
         if (!parsed.success) return jsonOk()
 
         try {
-          await subscribe('resend', { email: parsed.data.email })
+          await subscribe(websiteConfig.newsletter.provider, { email: parsed.data.email })
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           console.warn(`[newsletter] subscribe failed: ${msg.split('\n')[0]}`)
@@ -62,7 +63,7 @@ export const Route = createFileRoute('/api/newsletter/$')({
         if (!parsed.success) return jsonOk()
 
         try {
-          await unsubscribe('resend', { email: parsed.data.email })
+          await unsubscribe(websiteConfig.newsletter.provider, { email: parsed.data.email })
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           console.warn(`[newsletter] unsubscribe failed: ${msg.split('\n')[0]}`)

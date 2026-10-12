@@ -26,6 +26,9 @@ export const websiteConfig = {
   notification: {
     enable: false as boolean,
   },
+  newsletter: {
+    provider: 'resend' as 'resend' | 'beehiiv',
+  },
   payment: {
     provider: 'stripe' as const,
     allowedPriceIds: [] as string[],
