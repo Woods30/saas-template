@@ -13,4 +13,7 @@ interface Env {
   DB: D1Database
   CACHE: KVNamespace
   BUCKET: R2Bucket
+  EMAIL: SendEmail
+  CLOUDFLARE_EMAIL_SENDER?: string
+  RESEND_API_KEY?: string
 }

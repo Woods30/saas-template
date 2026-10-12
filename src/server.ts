@@ -16,6 +16,8 @@ import { LOCALE_COOKIE_NAME, readLocaleCookie } from './lib/locale'
 import { als } from './lib/server-context'
 import { registerServerLocaleStrategy } from './locale/middleware'
 import { paraglideMiddleware } from './locale/paraglide/server.js'
+import { CloudflareEmailProvider } from './mail'
+import { ResendMailProvider } from './mail/provider/resend'
 import { R2StorageProvider } from './storage/provider/r2'
 
 // 模块加载期注册自定义策略，早于任何请求进入 paraglideMiddleware。
@@ -33,6 +35,7 @@ export default {
         env,
         cacheProvider: new KVCacheProvider(env.CACHE as KVNamespace),
         storageProvider: new R2StorageProvider(env.BUCKET as unknown as R2Bucket),
+        mailProviderRegistry: buildMailProviderRegistry(env),
       },
       async () => {
         // 不使用 URL 前缀策略，中间件不会改写 URL；原样把 request 交给框架处理。
@@ -44,6 +47,25 @@ export default {
       },
     )
   },
+}
+
+/**
+ * Build per-request mail provider registry from env bindings.
+ * Returns a plain object (not a Map) matching the registry shape.
+ */
+function buildMailProviderRegistry(
+  env: Env,
+): Record<string, (() => import('./mail').MailProvider) | undefined> {
+  const registry: Record<string, (() => import('./mail').MailProvider) | undefined> = {}
+  if (env.EMAIL) {
+    registry.cloudflare = () =>
+      new CloudflareEmailProvider(env.EMAIL, env.CLOUDFLARE_EMAIL_SENDER ?? 'noreply@example.com')
+  }
+  if (env.RESEND_API_KEY) {
+    registry.resend = () =>
+      new ResendMailProvider(env.RESEND_API_KEY ?? '', 'SaaS Template <noreply@example.com>')
+  }
+  return registry
 }
 
 /**

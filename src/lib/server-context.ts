@@ -9,12 +9,14 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { KVCacheProvider } from '@/cache/provider/kv'
+import type { MailProvider } from '@/mail/types'
 import type { R2StorageProvider } from '@/storage/provider/r2'
 
 interface ServerContext {
   env: Env
   cacheProvider: KVCacheProvider
   storageProvider: R2StorageProvider
+  mailProviderRegistry?: Record<string, (() => MailProvider) | undefined>
 }
 
 const als = new AsyncLocalStorage<ServerContext>()
