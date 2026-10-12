@@ -38,17 +38,22 @@ pnpm add -D @cloudflare/vitest-pool-workers miniflare
 **Step 1.2: 写入 `vitest.config.ts`（Vitest 4 用 `projects` 字段替代已弃用的 `workspace`）**
 
 ```ts
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
-import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
-  plugins: [tsconfigPaths()],
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   test: {
     globals: true,
     projects: ['./vitest.workers.config.ts'],
   },
 });
 ```
+
+> **注意**：`vite-tsconfig-paths` 已在 Task 13 移除（Vite 8 内置 `resolve.tsconfigPaths`）。此处沿用
+> 现有 `vitest.config.ts` 的显式 `resolve.alias` 写法，勿再引入该插件。
 
 > 注意：Vitest 4.x 起 `workspace` 顶层字段已 deprecated；多配置用根 `vitest.config.ts` 的 `test.projects` 数组。`vitest.workers.config.ts` 通过相对路径被引用。
 
@@ -57,11 +62,13 @@ export default defineConfig({
 **Step 1.3: 扩展根 `vitest.config.ts`（unit + component）**
 
 ```ts
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
-import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
-  plugins: [tsconfigPaths()],
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   test: {
     environment: 'jsdom',
     globals: true,

@@ -502,7 +502,6 @@ git commit -m "feat(env): 引入 publicEnv/serverEnv 两层 Zod 校验"
     "tailwindcss": "TBD-locked",
     "typescript": "TBD-locked",
     "vite": "TBD-locked",
-    "vite-tsconfig-paths": "TBD-locked",
     "vitest": "TBD-locked",
     "tsx": "TBD-locked",
     "wrangler": "TBD-locked"
@@ -606,19 +605,22 @@ import { defineConfig } from 'vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import { cloudflare } from '@cloudflare/vite-plugin';
 import viteReact from '@vitejs/plugin-react';
-import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
+  resolve: {
+    tsconfigPaths: true,   // Vite 8 内置，读取 tsconfig.json 的 paths
+  },
   plugins: [
     cloudflare({ viteEnvironment: { name: 'ssr' } }),
     tanstackStart(),
     viteReact(),
-    tsconfigPaths(),
   ],
 });
 ```
 
-> 顺序说明（@tanstack/react-start 1.x 官方约定）：`cloudflare` 必须在最前以注入 `cloudflare:env` 等虚拟模块；`tanstackStart` 在中；`viteReact` 提供 Start dev 所需的 `/@react-refresh`；`tsconfigPaths` 在后处理路径别名。Task 8 追加 Tailwind 时插在 `tanstackStart` 之后、`viteReact` 之前。
+> 顺序说明（@tanstack/react-start 1.x 官方约定）：`cloudflare` 必须在最前以注入 `cloudflare:env` 等虚拟模块；`tanstackStart` 在中；`viteReact` 提供 Start dev 所需的 `/@react-refresh`。Task 8 追加 Tailwind 时插在 `tanstackStart` 之后、`viteReact` 之前。
+
+> **别名**：Vite 8 已内置 `resolve.tsconfigPaths`（读取 `tsconfig.json` 的 `paths`），**无需** `vite-tsconfig-paths` 插件。Task 13 已据此移除该依赖。
 
 > **注意**：`tanstackStart({ target: 'cloudflare-module' })` 在 1.168.61 中**不存在**该选项。
 
@@ -789,15 +791,16 @@ import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import { cloudflare } from '@cloudflare/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
 import viteReact from '@vitejs/plugin-react';
-import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
+  resolve: {
+    tsconfigPaths: true,   // Vite 8 内置
+  },
   plugins: [
     cloudflare({ viteEnvironment: { name: 'ssr' } }),  // 必须最先
     tanstackStart(),
     tailwindcss(),
     viteReact(),                                        // Start dev 依赖 /@react-refresh，必需
-    tsconfigPaths(),
   ],
 });
 ```
