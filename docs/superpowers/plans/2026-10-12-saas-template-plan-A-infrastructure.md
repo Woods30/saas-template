@@ -12,7 +12,7 @@
 
 - 包管理：**pnpm**。任何命令前缀使用 `pnpm run <script>` 或 `pnpm <cmd>`。
 - TypeScript：**strict**，`tsconfig.json` 启用 `strict: true`、`noUncheckedIndexedAccess: true`。
-- Node：≥ 20.18（TanStack Start 与 Vite 7+ 要求）。
+- Node：≥ 22.12.0（`vitest@5` 排除 Node 20，`wrangler` 要求 ≥22，`@tanstack/react-start` 要求 ≥22.12.0；`engine-strict=true` 下低于此值安装失败）。
 - 所有依赖版本以**最新稳定版**为准。生成代码前通过 context7 拉取精确版本；如不可达，使用 npm registry 兜底。
 - Lint/Format：**Biome**（仅 Biome；不引入 ESLint / Prettier）。
 - CSS：Tailwind v4，CSS-first config；shadcn/ui CLI 自动生成组件。
@@ -33,7 +33,7 @@ saas-template/
 ├── README.md                                   # 新建（中文）
 ├── CONTRIBUTING.md                             # 新建（中文）
 ├── LICENSE                                     # 新建（MIT）
-├── EditorConfig                                # 新建
+├── .editorconfig                               # 新建
 ├── biome.json                                  # 新建
 ├── content-collections.ts                      # 占位（Sub-Plan C 详细化）
 ├── drizzle.config.ts                            # 占位（Sub-Plan B 详细化）
@@ -50,11 +50,12 @@ saas-template/
 ├── .gitignore                                  # 新建
 ├── public/
 │   └── manifest.json                           # 占位（Sub-Plan C）
+├── messages/                                   # 新建（Paraglide 消息源）
+│   ├── zh.json
+│   └── en.json
 ├── project.inlang/                             # 新建
 │   ├── settings.json
-│   └── messages/
-│       ├── zh.json
-│       └── en.json
+│   └── paraglide.config.ts
 ├── src/
 │   ├── env/                                    # 新建
 │   │   ├── public.ts
@@ -76,9 +77,8 @@ saas-template/
 │   ├── routes/
 │   │   ├── __root.tsx
 │   │   └── index.tsx                           # 最小 hello
-│   ├── styles/
-│   │   └── globals.css
-│   └── worker.ts                               # CF Worker 入口
+│   └── styles/
+│       └── globals.css
 ├── tests/
 │   └── unit/
 │       └── env.test.ts                         # env 校验测试
@@ -127,7 +127,7 @@ engine-strict=true
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20.18"
+    "node": ">=22.12.0"
   },
   "scripts": {}
 }
@@ -173,17 +173,20 @@ git commit -m "chore: 初始化 pnpm 与 gitignore"
     "allowImportingTsExtensions": false,
     "verbatimModuleSyntax": true,
     "noEmit": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
       "content-collections": ["./.content-collections/generated"]
     },
-    "types": ["vite/client"]
+    "types": ["vite/client", "node"]
   },
-  "include": ["src", "tests", "vite.config.ts", "scripts"],
+  "include": ["src", "tests", "vite.config.ts", "vitest.config.ts", "scripts"],
   "exclude": ["node_modules", "dist", ".wrangler", ".content-collections"]
 }
 ```
+
+> **注意**：TypeScript 7 已**移除** `baseUrl`，保留会报 `TS5102`。`paths` 自 TS 4.4 起相对
+> `tsconfig.json` 解析，无需 `baseUrl`。`types` 需含 `node`（脚本使用 `node:fs` 等），`include` 需含
+> `vitest.config.ts`。
 
 **Step 2.2: Commit**
 
@@ -203,16 +206,18 @@ git commit -m "chore: 启用 TypeScript strict + path alias"
 
 ```json
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "ignore": [
-      "node_modules",
-      "dist",
-      ".wrangler",
-      ".content-collections",
-      "src/locale/paraglide",
-      "pnpm-lock.yaml"
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/.wrangler",
+      "!**/.content-collections",
+      "!**/src/locale/paraglide",
+      "!**/pnpm-lock.yaml",
+      "!**/routeTree.gen.ts"
     ]
   },
   "formatter": {
@@ -229,10 +234,13 @@ git commit -m "chore: 启用 TypeScript strict + path alias"
       "trailingCommas": "all"
     }
   },
+  "css": {
+    "parser": { "tailwindDirectives": true }
+  },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "suspicious": {
         "noExplicitAny": "warn"
       },
@@ -245,11 +253,15 @@ git commit -m "chore: 启用 TypeScript strict + path alias"
 }
 ```
 
+> **Biome 2.x 与 1.x 的差异**：`files.ignore` 已移除，改为 `files.includes` 并用 `!` 前缀表示否定；
+> linter 预设由 `"recommended": true` 改为 `"preset": "recommended"`。`css.parser.tailwindDirectives`
+> 必须开启，否则 Biome 在 `globals.css` 的 `@theme` 处报 parse 错误。
+
 **Step 3.2: 安装 Biome（待 Task 6 安装所有 dev 依赖）**
 
 暂不执行；占位标记。
 
-**Step 3.3: 写入 `EditorConfig`**
+**Step 3.3: 写入 `.editorconfig`**
 
 ```ini
 root = true
@@ -269,7 +281,7 @@ trim_trailing_whitespace = false
 **Step 3.4: Commit**
 
 ```bash
-git add biome.json EditorConfig
+git add biome.json .editorconfig
 git commit -m "chore: 配置 Biome + EditorConfig"
 ```
 
@@ -290,12 +302,12 @@ git commit -m "chore: 配置 Biome + EditorConfig"
 **Step 4.2: 写入 `vitest.config.ts`**
 
 ```ts
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
-import path from 'node:path';
 
 export default defineConfig({
   resolve: {
-    alias: { '@': path.resolve(__dirname, './src') },
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   test: {
     environment: 'node',
@@ -305,13 +317,16 @@ export default defineConfig({
 });
 ```
 
+> **注意**：`package.json` 为 `"type": "module"`，ESM 下 `__dirname` 不存在（会抛 `ReferenceError`），
+> 必须改用 `fileURLToPath(new URL(...))`。
+
 **Step 4.3: 写入 `src/env/public.ts`**
 
 ```ts
 import { z } from 'zod';
 
 const schema = z.object({
-  VITE_BASE_URL: z.string().url().default('http://localhost:3000'),
+  VITE_BASE_URL: z.url().default('http://localhost:3000'),
   VITE_PAYMENT_PROVIDER: z.enum(['stripe']).optional(),
   VITE_STRIPE_PRICE_PRO_MONTHLY: z.string().optional(),
   VITE_STRIPE_PRICE_PRO_YEARLY: z.string().optional(),
@@ -348,8 +363,8 @@ const schema = z.object({
   RESEND_AUDIENCE_ID: z.string().optional(),
   BEEHIIV_API_KEY: z.string().optional(),
   BEEHIIV_PUBLICATION_ID: z.string().optional(),
-  DISCORD_WEBHOOK_URL: z.string().url().optional(),
-  FEISHU_WEBHOOK_URL: z.string().url().optional(),
+  DISCORD_WEBHOOK_URL: z.url().optional(),
+  FEISHU_WEBHOOK_URL: z.url().optional(),
   TURNSTILE_SECRET_KEY: z.string().optional(),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });
@@ -445,20 +460,22 @@ git commit -m "feat(env): 引入 publicEnv/serverEnv 两层 Zod 校验"
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20.18"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "dev": "vite dev --port 3000",
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "pnpm run check:env:prod && pnpm run build && pnpm run check:client-bundle && wrangler deploy",
-    "check": "biome check . && tsc --noEmit && pnpm run check:env && pnpm run check:locale",
+    "check": "pnpm run locale:compile && biome check . && tsc --noEmit && pnpm run check:env && pnpm run locale:check",
     "check:env": "tsx scripts/check-env.ts",
     "check:env:prod": "tsx scripts/check-env-prod.ts",
     "check:client-bundle": "tsx scripts/check-client-bundle.ts",
-    "check:locale": "paraglide-js compile --project ./project.inlang --outdir ./src/locale/paraglide && tsx scripts/check-locale.ts",
-    "locale:sort": "ts-node scripts/locale-sort.ts",
-    "typecheck": "tsc --noEmit",
+    "check:locale": "pnpm run locale:compile && pnpm run locale:check",
+    "locale:check": "tsx scripts/check-locale.ts",
+    "locale:compile": "paraglide-js compile --project ./project.inlang",
+    "locale:sort": "tsx scripts/locale-sort.ts",
+    "typecheck": "pnpm run locale:compile && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "biome format --write .",
@@ -520,24 +537,28 @@ git commit -m "chore: 草拟 package.json scripts 与依赖占位"
 - `@inlang/paraglide-js`
 - `typescript`、`vite`、`vitest`、`wrangler`、`tsx`
 
-将 `"latest"` 替换为实际版本号（例如 `"^1.121.3"`），示例：
+将 `"latest"` 替换为 registry 实际解析出的版本号。下方为实施时锁定的实际版本（`pnpm view` 核实）：
 
 ```json
-"@tanstack/react-start": "^1.121.3",
-"@tanstack/react-router": "^1.121.3",
-"@tanstack/react-query": "^5.62.0",
-"react": "^19.0.0",
-"react-dom": "^19.0.0",
-"zod": "^3.24.0",
-"@biomejs/biome": "^1.9.4",
+"@tanstack/react-start": "^1.168.61",
+"@tanstack/react-router": "^1.170.42",
+"@tanstack/react-query": "^5.104.2",
+"react": "^19.3.0",
+"react-dom": "^19.3.0",
+"zod": "^4.6.6",
+"@biomejs/biome": "^2.5.15",
 "@cloudflare/vite-plugin": "^1.0.0",
-"@inlang/paraglide-js": "^2.0.0",
-"typescript": "^5.7.0",
-"vite": "^6.0.0",
-"vitest": "^2.1.0",
-"wrangler": "^3.90.0",
+"@inlang/paraglide-js": "^2.27.0",
+"typescript": "^7.0.2",
+"vite": "^8.3.4",
+"vitest": "^5.0.3",
+"wrangler": "^4.149.0",
 "tsx": "^4.19.0"
 ```
+
+> **注意**：`zod@4` 中 `z.string().url()` 已弃用，改用 `z.url()`。`typescript@7` 移除 `baseUrl`
+> （见 Task 2）。`vitest@5` 的 `defineConfig` 从 `vitest/config` 导入。`pnpm` 11+ 默认
+> `minimumReleaseAge` 为 1440 分钟，宽松模式会把不成熟的选择持久化到 `minimumReleaseAgeExclude`。
 
 **Step 6.2: 安装**
 
@@ -569,11 +590,13 @@ git commit -m "chore: 锁定依赖精确版本"
 **Files:**
 - Create: `vite.config.ts`
 - Create: `wrangler.jsonc`
-- Create: `src/worker.ts`
 - Create: `src/router.tsx`（TanStack Start 必需）
 - Create: `src/routes/__root.tsx`
 - Create: `src/routes/index.tsx`
 - Create: `src/styles/globals.css`
+
+> **不创建 `src/worker.ts`**：`@tanstack/react-start@1.168.61` 的 `createStartHandler()` 无参调用是类型错误。
+> 框架默认 server-entry 由 `wrangler.jsonc` 的 `main` 直接指向包导出即可（见 Step 7.2）。
 
 **Step 7.1: 写入 `vite.config.ts`**
 
@@ -581,20 +604,22 @@ git commit -m "chore: 锁定依赖精确版本"
 import { defineConfig } from 'vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import { cloudflare } from '@cloudflare/vite-plugin';
+import viteReact from '@vitejs/plugin-react';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
   plugins: [
     cloudflare({ viteEnvironment: { name: 'ssr' } }),
-    tanstackStart({ target: 'cloudflare-module' }),
+    tanstackStart(),
+    viteReact(),
     tsconfigPaths(),
   ],
 });
 ```
 
-> 顺序说明（@tanstack/react-start 1.x 官方约定）：`cloudflare` 必须在最前以注入 `cloudflare:env` 等虚拟模块；`tanstackStart` 在中；`tsconfigPaths` 在后处理路径别名。Task 8 追加 Tailwind 时同理插在 `tanstackStart` 之后。
+> 顺序说明（@tanstack/react-start 1.x 官方约定）：`cloudflare` 必须在最前以注入 `cloudflare:env` 等虚拟模块；`tanstackStart` 在中；`viteReact` 提供 Start dev 所需的 `/@react-refresh`；`tsconfigPaths` 在后处理路径别名。Task 8 追加 Tailwind 时插在 `tanstackStart` 之后、`viteReact` 之前。
 
-> 注：`vite-tsconfig-paths` 是新的间接依赖，Task 6 已通过 `pnpm install` 解析；如未自动加入，手动 `pnpm add -D vite-tsconfig-paths`。
+> **注意**：`tanstackStart({ target: 'cloudflare-module' })` 在 1.168.61 中**不存在**该选项。
 
 **Step 7.2: 写入 `wrangler.jsonc`**
 
@@ -604,7 +629,7 @@ export default defineConfig({
   "name": "saas-template",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "./src/worker.ts",
+  "main": "@tanstack/react-start/server-entry",
   "vars": {
     "NODE_ENV": "production"
   },
@@ -614,35 +639,38 @@ export default defineConfig({
 
 > DB/CACHE/BUCKET/EMAIL/AI bindings 在 Sub-Plan B/C 添加。
 
-**Step 7.3: 写入 `src/worker.ts`**
+> **前向变更**：Task 9 接入 Paraglide 时，因需用 `paraglideMiddleware` 包装 Start 处理器，
+> 会新增 `src/server.ts` 并将本文件的 `main` 改为 `"src/server.ts"`。此处先用框架默认
+> server-entry，Task 9 再切换。
 
-```ts
-import { createStartHandler } from '@tanstack/react-start/server';
-
-export default createStartHandler();
-```
-
-**Step 7.4: 写入 `src/router.tsx`**
+**Step 7.3: 写入 `src/router.tsx`**
 
 ```tsx
-import { createRouter as createTanstackRouter } from '@tanstack/react-router';
+import { createRouter } from '@tanstack/react-router';
 import { routeTree } from './routeTree.gen';
 
-export function createRouter() {
-  return createTanstackRouter({ routeTree });
+export function getRouter() {
+  return createRouter({ routeTree });
 }
 
 declare module '@tanstack/react-router' {
   interface Register {
-    router: ReturnType<typeof createRouter>;
+    router: ReturnType<typeof getRouter>;
   }
 }
 ```
 
-**Step 7.5: 写入 `src/routes/__root.tsx`**
+> **导出名必须是 `getRouter`**，Start 1.168.61 按此名发现路由；`createRouter` 是 Router 包自身的构造器。
+
+**Step 7.4: 写入 `src/routes/__root.tsx`**
 
 ```tsx
-import { Outlet, createRootRouteWithContext } from '@tanstack/react-router';
+import {
+  HeadContent,
+  Outlet,
+  Scripts,
+  createRootRouteWithContext,
+} from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -654,15 +682,32 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: 'description', content: '基于 TanStack Start + Cloudflare Workers 的 SaaS 起步模板' },
     ],
   }),
+  shellComponent: RootDocument,
   component: RootLayout,
 });
+
+// shellComponent 是必需文档外壳：Start 不会自动注入 <html>/<head>/<body>，
+// 缺少它 SSR 会输出无 <html> 的片段。
+function RootDocument({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="zh-CN">
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        {children}
+        <Scripts />
+      </body>
+    </html>
+  );
+}
 
 function RootLayout() {
   return <Outlet />;
 }
 ```
 
-**Step 7.6: 写入 `src/routes/index.tsx`**
+**Step 7.5: 写入 `src/routes/index.tsx`**
 
 ```tsx
 import { createFileRoute } from '@tanstack/react-router';
@@ -681,7 +726,7 @@ function HomePage() {
 }
 ```
 
-**Step 7.7: 写入 `src/styles/globals.css`（Tailwind v4 占位）**
+**Step 7.6: 写入 `src/styles/globals.css`（Tailwind v4 占位）**
 
 ```css
 @import 'tailwindcss';
@@ -704,18 +749,19 @@ body {
 }
 ```
 
-**Step 7.8: 启动 dev server 验证**
+**Step 7.7: 启动 dev server 验证**
 
 ```bash
-pnpm dev
+pnpm exec vite dev --port 3010
 ```
 
-预期：浏览器访问 `http://localhost:3000` 显示 "SaaS Template" 标题与提示文字。
+预期：浏览器访问 `http://localhost:3010` 显示 "SaaS Template" 标题与提示文字，且 SSR HTML 含
+`<html lang="zh-CN">`。验证后停止自己启动的服务。
 
-**Step 7.9: Commit**
+**Step 7.8: Commit**
 
 ```bash
-git add vite.config.ts wrangler.jsonc src/worker.ts src/router.tsx src/routes src/styles
+git add vite.config.ts wrangler.jsonc src/router.tsx src/routes src/styles
 git commit -m "feat(scaffold): 集成 Vite + TanStack Start + Cloudflare"
 ```
 
@@ -741,71 +787,98 @@ import { defineConfig } from 'vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import { cloudflare } from '@cloudflare/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
+import viteReact from '@vitejs/plugin-react';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
   plugins: [
-    cloudflare({ viteEnvironment: { name: 'ssr' } }),
-    tanstackStart({ target: 'cloudflare-module' }),
+    cloudflare({ viteEnvironment: { name: 'ssr' } }),  // 必须最先
+    tanstackStart(),
     tailwindcss(),
+    viteReact(),                                        // Start dev 依赖 /@react-refresh，必需
     tsconfigPaths(),
   ],
 });
 ```
 
+> **注意**：`tanstackStart({ target: 'cloudflare-module' })` 在 `@tanstack/react-start@1.168.61` 中**不存在**
+> 该选项。`@vitejs/plugin-react` 必须保留，否则 `pnpm dev` 因缺 `/@react-refresh` provider 失败。
+
 **Step 8.3: 更新 `src/styles/globals.css` 引入 shadcn token（最小版）**
+
+必须采用 shadcn v4 的**两层约定**：`@theme inline` 只做 `--color-x: var(--x)` 映射，裸变量定义在
+`:root`，深色在媒体查询内以普通 `:root` 覆盖取值。**不得**把 `@theme` 嵌进媒体查询——Tailwind v4
+要求 theme 变量定义在顶层，嵌套会静默失效（浅深色值合并，页面恒为深色）。`@theme` 之外的裸
+变量是组件（如 `bg-secondary`、`focus-visible:ring-ring`）真正引用的来源，缺一即该类不生成。
 
 ```css
 @import 'tailwindcss';
 
-@theme {
-  --color-background: #ffffff;
-  --color-foreground: #0a0a0a;
-  --color-primary: #0070f3;
-  --color-primary-foreground: #ffffff;
-  --color-muted: #f4f4f5;
-  --color-muted-foreground: #71717a;
-  --color-border: #e4e4e7;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  /* 其余组件用到的 secondary / accent / destructive / input 等同样补齐 */
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --primary: #0070f3;
+  --primary-foreground: #ffffff;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --border: #e4e4e7;
+  --ring: #0a0a0a;
   --radius: 0.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
-  @theme {
-    --color-background: #0a0a0a;
-    --color-foreground: #ededed;
-    --color-primary: #3291ff;
-    --color-primary-foreground: #0a0a0a;
-    --color-muted: #27272a;
-    --color-muted-foreground: #a1a1aa;
-    --color-border: #27272a;
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --primary: #3291ff;
+    --primary-foreground: #0a0a0a;
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa;
+    --border: #27272a;
+    --ring: #ededed;
   }
 }
 
 body {
-  background: var(--color-background);
-  color: var(--color-foreground);
+  background: var(--background);
+  color: var(--foreground);
 }
 ```
 
-**Step 8.4: 初始化 shadcn CLI**
+**Step 8.4: 生成 shadcn 配置**
 
-```bash
-pnpm dlx shadcn@latest init
-```
-
-交互中：
-- Style: **New York**（默认）
-- Base color: **Neutral**
-- CSS variables: **Yes**
-- React Server Components: **No**
+`shadcn@latest init` 为交互式，无法无人值守；改为手写 `components.json`（`style: "base-nova"`、
+`baseColor: "neutral"`、`cssVariables: true`、`rsc: false`、`tsx: true`、`iconLibrary: "tabler"`、
+`tailwind.css` 指向 `src/styles/globals.css`、aliases 走 `@/*`），随后只跑非交互的 `add`。
+用 `pnpm dlx shadcn@latest info` 确认配置被识别（framework `tanstack-start`、tailwindVersion `v4`）。
 
 **Step 8.5: 添加按钮组件作为验证**
 
 ```bash
-pnpm dlx shadcn@latest add button
+pnpm dlx shadcn@latest add button -y
 ```
 
-预期：`src/components/ui/button.tsx` 创建。
+预期：`src/components/ui/button.tsx` 创建。注意 shadcn 4.21.4 默认 primitive 已是 **Base UI**
+（`@base-ui/react`），不再生成 `src/lib/utils.ts`——组件 `import { cn } from "cn"` 直接依赖 npm 包 `cn`。
+registry 元数据未声明 `class-variance-authority`，需手动 `pnpm add class-variance-authority`。
+`biome.json` 需加 `css.parser.tailwindDirectives: true`，否则 `@theme` 处报 parse 错误。
 
 **Step 8.6: 在 `src/routes/index.tsx` 引入按钮验证**
 
@@ -827,15 +900,16 @@ function HomePage() {
 }
 ```
 
-**Step 7.8: dev server 验证**
+**Step 8.7: dev server 验证**
 
 ```bash
-pnpm dev
+pnpm exec vite dev --port 3010
 ```
 
-预期：首页显示蓝色按钮，Tailwind 类生效。
+预期：首页显示蓝色按钮，Tailwind 类生效。`dev` 脚本已硬编码 `--port 3000`，端口被占用时须显式
+指定空闲端口。验证后停止自己启动的服务。
 
-**Step 7.9: Commit**
+**Step 8.8: Commit**
 
 ```bash
 git add vite.config.ts src/styles components.json src/components/ui
@@ -848,8 +922,9 @@ git commit -m "feat(ui): 接入 Tailwind v4 + shadcn/ui CLI"
 
 **Files:**
 - Create: `project.inlang/settings.json`
-- Create: `project.inlang/messages/zh.json`
-- Create: `project.inlang/messages/en.json`
+- Create: `project.inlang/paraglide.config.ts`
+- Create: `messages/zh.json`
+- Create: `messages/en.json`
 - Create: `src/locale/middleware.ts`
 - Create: `src/lib/locale.ts`
 - Create: `scripts/locale-sort.ts`
@@ -862,11 +937,20 @@ git commit -m "feat(ui): 接入 Tailwind v4 + shadcn/ui CLI"
 {
   "$schema": "https://inlang.com/schema/project-settings",
   "baseLocale": "zh",
-  "locales": ["zh", "en"]
+  "locales": ["zh", "en"],
+  "modules": ["./node_modules/@inlang/plugin-message-format/dist/index.js"],
+  "plugin.inlang.messageFormat": {
+    "pathPattern": "./messages/{locale}.json"
+  }
 }
 ```
 
-**Step 9.2: 写入 `project.inlang/messages/zh.json`**
+> **路径注意**：`pathPattern` 相对 `project.inlang/` 的**父目录**（即仓库根）解析。`@inlang/sdk` 的
+> `absolutePathFromProject` 先对 project 路径取 `dirname`，再 resolve `pathPattern`。因此消息文件位于
+> 仓库根 `messages/`，而非 `project.inlang/messages/`；写成后者会**静默编译出 0 条消息**且不报错。
+> 必须配置 `plugin.inlang.messageFormat`，否则 CLI 不会读取任何消息文件。
+
+**Step 9.2: 写入 `messages/zh.json`**
 
 ```json
 {
@@ -881,7 +965,7 @@ git commit -m "feat(ui): 接入 Tailwind v4 + shadcn/ui CLI"
 }
 ```
 
-**Step 9.3: 写入 `project.inlang/messages/en.json`**
+**Step 9.3: 写入 `messages/en.json`**
 
 ```json
 {
@@ -901,10 +985,14 @@ git commit -m "feat(ui): 接入 Tailwind v4 + shadcn/ui CLI"
 在 `scripts` 中加入：
 
 ```json
-"locale:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/locale/paraglide",
+"locale:compile": "paraglide-js compile --project ./project.inlang",
 "locale:sort": "tsx scripts/locale-sort.ts",
 "locale:check": "tsx scripts/check-locale.ts"
 ```
+
+`outdir`、`strategy`、`cookieName` 等编译选项集中于 `project.inlang/paraglide.config.ts`，CLI 与 Vite 插件
+共用同一份配置，避免两处策略漂移、互相覆写。`typecheck` 与 `check` 需前置 `pnpm run locale:compile`，
+使全新 checkout 无需手工编译即可通过类型检查（生成目录已 gitignore）。
 
 **Step 9.5: 编译 Paraglide**
 
@@ -984,7 +1072,7 @@ export function LocaleSwitcher({ value }: Props) {
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const dir = 'project.inlang/messages';
+const dir = 'messages';
 for (const file of readdirSync(dir)) {
   const path = join(dir, file);
   const data = JSON.parse(readFileSync(path, 'utf-8')) as Record<string, string>;
@@ -1003,7 +1091,7 @@ for (const file of readdirSync(dir)) {
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const dir = 'project.inlang/messages';
+const dir = 'messages';
 const files = readdirSync(dir).filter((f) => f.endsWith('.json'));
 const allKeys = new Map<string, Set<string>>();
 
@@ -1079,7 +1167,7 @@ pnpm dev
 **Step 9.13: Commit**
 
 ```bash
-git add project.inlang src/lib/locale.ts src/locale src/components/layout scripts/locale-sort.ts scripts/check-locale.ts package.json
+git add project.inlang messages src/lib/locale.ts src/locale src/components/layout scripts/locale-sort.ts scripts/check-locale.ts package.json
 git commit -m "feat(i18n): 接入 Paraglide JS（Inlang）双 zh/en"
 ```
 
@@ -1096,10 +1184,15 @@ git commit -m "feat(i18n): 接入 Paraglide JS（Inlang）双 zh/en"
 **Step 10.1: 写入 `src/lib/utils.ts`**
 
 ```ts
-export function cn(...classes: Array<string | false | null | undefined>): string {
-  return classes.filter(Boolean).join(' ');
-}
+// shadcn 4.x 的组件统一从 npm 包 `cn` 导入（clsx + tailwind-merge 的合并替代品），
+// 不再生成此文件。这里只做 re-export，保持 `@/lib/utils` 的既有约定，
+// 切勿另写朴素的 join 实现，也不要重复引入 clsx / tailwind-merge。
+export { cn } from 'cn';
 ```
+
+> **注意**：Task 8 起 `src/components/ui/*` 直接 `import { cn } from 'cn'`，本文件仅为约定
+> 路径提供 re-export。若确认无消费方，可省去该文件；但**不要**用 `classes.filter(Boolean).join(' ')`
+> 之类的实现替代，它不处理 Tailwind 类冲突合并。
 
 **Step 10.2: 写入 `src/lib/urls.ts`**
 
@@ -1324,7 +1417,7 @@ MIT。
 
 ## 多语言
 
-- `project.inlang/messages/zh.json` 为源（中文优先）。
+- `messages/zh.json` 为源（中文优先）。
 - 新增键必须在两个 locale 文件中同时存在。
 - 修改前运行 `pnpm locale:sort` 与 `pnpm locale:check`。
 

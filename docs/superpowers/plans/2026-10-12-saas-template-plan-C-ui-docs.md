@@ -6,7 +6,7 @@
 
 **Architecture:** 营销页面（首页/特性/价格/关于/联系/法务）由 marketing layout 包裹，blocks 来自 `src/components/blocks/marketing/`，每个 block 独立可组合。Docs/Blog/Changelog/Legal 通过 Content Collections 在仓库根目录 `content/` 下管理，使用文件名后缀约定（`*.zh.md` / `*.en.md`）。`Paraglide JS` 处理 URL 中的可选 locale 前缀。
 
-**Tech Stack:** @content-collections/core, @content-collections/tanstack-start, vite-plugin-svgr, lucide-react, web-push.
+**Tech Stack:** @content-collections/core, @content-collections/vite, vite-plugin-svgr, @tabler/icons-react, web-push.
 
 ## Global Constraints（继承自 Sub-Plan A/B）
 
@@ -29,7 +29,7 @@
 **Step 1.1: 安装**
 
 ```bash
-pnpm add @content-collections/core @content-collections/vite vite-plugin-svgr lucide-react
+pnpm add @content-collections/core @content-collections/vite vite-plugin-svgr @tabler/icons-react
 pnpm add -D @content-collections/cli
 ```
 
@@ -38,7 +38,7 @@ pnpm add -D @content-collections/cli
 **Step 1.2: 确认版本**
 
 ```bash
-pnpm ls @content-collections/core @content-collections/tanstack-start lucide-react
+pnpm ls @content-collections/core @content-collections/vite @tabler/icons-react
 ```
 
 记录实际版本。后续任务遇到 API 差异以官方文档为准。
