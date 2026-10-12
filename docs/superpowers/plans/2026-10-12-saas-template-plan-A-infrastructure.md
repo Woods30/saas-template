@@ -237,7 +237,7 @@ git commit -m "chore: 启用 TypeScript strict + path alias"
         "noExplicitAny": "warn"
       },
       "style": {
-        "useImportType": "error",
+        "useImportType": "warn",
         "useNamingConvention": "off"
       }
     }
@@ -466,25 +466,28 @@ git commit -m "feat(env): 引入 publicEnv/serverEnv 两层 Zod 校验"
     "lint:fix": "biome check --write ."
   },
   "dependencies": {
-    "@tanstack/react-router": "latest",
-    "@tanstack/react-start": "latest",
-    "@tanstack/react-query": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "zod": "latest"
+    "@tanstack/react-router": "TBD-locked",
+    "@tanstack/react-start": "TBD-locked",
+    "@tanstack/react-query": "TBD-locked",
+    "react": "TBD-locked",
+    "react-dom": "TBD-locked",
+    "zod": "TBD-locked"
   },
   "devDependencies": {
-    "@biomejs/biome": "latest",
-    "@cloudflare/vite-plugin": "latest",
-    "@inlang/paraglide-js": "latest",
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "typescript": "latest",
-    "vite": "latest",
-    "vitest": "latest",
-    "tsx": "latest",
-    "wrangler": "latest"
+    "@biomejs/biome": "TBD-locked",
+    "@cloudflare/vite-plugin": "TBD-locked",
+    "@inlang/paraglide-js": "TBD-locked",
+    "@tailwindcss/vite": "TBD-locked",
+    "@types/node": "TBD-locked",
+    "@types/react": "TBD-locked",
+    "@types/react-dom": "TBD-locked",
+    "tailwindcss": "TBD-locked",
+    "typescript": "TBD-locked",
+    "vite": "TBD-locked",
+    "vite-tsconfig-paths": "TBD-locked",
+    "vitest": "TBD-locked",
+    "tsx": "TBD-locked",
+    "wrangler": "TBD-locked"
   }
 }
 ```
@@ -582,12 +585,14 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
   plugins: [
-    tsconfigPaths(),
-    tanstackStart({ target: 'cloudflare-module' }),
     cloudflare({ viteEnvironment: { name: 'ssr' } }),
+    tanstackStart({ target: 'cloudflare-module' }),
+    tsconfigPaths(),
   ],
 });
 ```
+
+> 顺序说明（@tanstack/react-start 1.x 官方约定）：`cloudflare` 必须在最前以注入 `cloudflare:env` 等虚拟模块；`tanstackStart` 在中；`tsconfigPaths` 在后处理路径别名。Task 8 追加 Tailwind 时同理插在 `tanstackStart` 之后。
 
 > 注：`vite-tsconfig-paths` 是新的间接依赖，Task 6 已通过 `pnpm install` 解析；如未自动加入，手动 `pnpm add -D vite-tsconfig-paths`。
 
@@ -740,10 +745,10 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
   plugins: [
-    tsconfigPaths(),
+    cloudflare({ viteEnvironment: { name: 'ssr' } }),
     tanstackStart({ target: 'cloudflare-module' }),
     tailwindcss(),
-    cloudflare({ viteEnvironment: { name: 'ssr' } }),
+    tsconfigPaths(),
   ],
 });
 ```
@@ -1573,3 +1578,22 @@ git commit -m "chore: Sub-Plan A 收尾（格式化与文档同步）" --allow-e
 - [ ] 所有任务独立 commit，无 WIP
 
 进入 Sub-Plan B 之前，确保以上所有项就位。
+
+---
+
+## Not in Scope（Sub-Plan A 显式不做）
+
+按 writing-plans 规范，本 sub-plan 明确**不**包含以下内容；它们在其他 sub-plan 或后续版本：
+
+- **业务模块**：认证、支付、邮件、订阅、文件存储、通知、联系表单、管理后台（→ Sub-Plan B）。
+- **前端营销页面与文档站**：8 个 marketing blocks、Content Collections、Paraglide 文案使用、SEO 端点、PWA manifest、Analytics Provider（→ Sub-Plan C）。
+- **测试套件**：集成测试、E2E、CI 流水线、覆盖率阈值（→ Sub-Plan D）。
+- **多币种 / 试用周期 / 折扣码**（→ Sub-Plan B 之后另立 plan）。
+- **D1 schema 表设计**：除 env 解析外不写业务表（→ Sub-Plan B Task 4）。
+- **Service Worker**：spec §17 YAGNI 显式排除；仅在 Sub-Plan C 维护 PWA manifest。
+- **`pages/`，`app/`，Next.js 风格目录**：本项目仅 TanStack Start `src/routes/`。
+- **i18n 切换走 URL 前缀**：spec 决策表第 6 项；本期 `getServerLocale` 留作占位（已在 Task 9 注释中说明），URL 前缀化留待 v0.2。
+- **PWA push 通知**（spec §17 显式排除）。
+- **管理后台 / RBAC**（→ Sub-Plan B Task 11）。
+- **AI Gateway / LLM 调用**（spec §3 提点；本期仅预留 schema 占位）。
+- **Tailwind dark mode 完整主题切换 UI**：仅在 `globals.css` 提供 CSS 变量骨架。
