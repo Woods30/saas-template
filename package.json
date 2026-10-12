@@ -35,6 +35,8 @@
     "@aws-sdk/s3-request-presigner": "^3.1149.0",
     "@base-ui/react": "^1.9.0",
     "@better-auth/drizzle-adapter": "^1.7.7",
+    "@content-collections/core": "^0.15.3",
+    "@content-collections/vite": "^0.3.1",
     "@inquirer/prompts": "^8.7.3",
     "@react-email/components": "^1.0.12",
     "@react-email/render": "^2.1.0",
@@ -53,6 +55,7 @@
     "react-email": "^6.11.1",
     "resend": "^6.32.1",
     "stripe": "^23.0.0",
+    "vite-plugin-svgr": "^5.2.0",
     "zod": "^4.6.6"
   },
   "devDependencies": {
@@ -60,6 +63,7 @@
     "@cloudflare/vite-plugin": "^1.63.1",
     "@cloudflare/vitest-pool-workers": "^0.23.0",
     "@cloudflare/workers-types": "^5.20261011.1",
+    "@content-collections/cli": "^0.1.9",
     "@inlang/paraglide-js": "^2.27.0",
     "@inlang/plugin-message-format": "4.5.2",
     "@tailwindcss/vite": "^4.3.3",
