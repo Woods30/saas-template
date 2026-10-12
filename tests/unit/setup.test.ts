@@ -51,7 +51,7 @@ describe('readEnv', () => {
 describe('writeEnv', () => {
   it('输出按 key 排序的 .env 格式', () => {
     writeEnv({ BETTER_AUTH_SECRET: 'abc', STRIPE_SECRET_KEY: 'xyz' })
-    const written = vi.mocked(writeFileSync).mock.calls[0]![1] as string
+    const written = vi.mocked(writeFileSync).mock.calls[0]?.[1] as string
     const lines = written.trim().split('\n')
     expect(lines[0]).toBe('BETTER_AUTH_SECRET=abc')
     expect(lines[1]).toBe('STRIPE_SECRET_KEY=xyz')
@@ -65,7 +65,7 @@ describe('writeEnv', () => {
     const env = readEnv()
     writeEnv(env)
 
-    const written = vi.mocked(writeFileSync).mock.calls[0]![1] as string
+    const written = vi.mocked(writeFileSync).mock.calls[0]?.[1] as string
     expect(written).toContain('BETTER_AUTH_SECRET=roundtrip_value')
     expect(written).toContain('STRIPE_SECRET_KEY=sk_test')
   })

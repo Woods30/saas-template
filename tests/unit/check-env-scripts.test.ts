@@ -326,10 +326,22 @@ describe('check-client-bundle.ts（bundle 扫描）', () => {
   it('覆盖 schema 中全部 secret 字段（含 CLOUDFLARE_API_TOKEN）', () => {
     const dir = makeWorkspace()
     writeBundleFile(dir, 'index.html', '<!doctype html><html></html>\n')
-    writeBundleFile(dir, 'assets/leak.js', 'CLOUDFLARE_API_TOKEN\n')
+    writeBundleFile(dir, 'assets/leak.js', 'const CLOUDFLARE_API_TOKEN = "literal-leaked-value"\n')
     const result = runScript(dir, checkBundle)
     expect(result.code).toBe(1)
     expect(result.stderr).toContain('CLOUDFLARE_API_TOKEN')
+  })
+
+  it('better-auth env Proxy 模式（get KEY(){return s(KEY)}）不视为泄露', () => {
+    const dir = makeWorkspace()
+    writeBundleFile(dir, 'index.html', '<!doctype html><html></html>\n')
+    writeBundleFile(
+      dir,
+      'assets/proxy.js',
+      `Object.freeze({get BETTER_AUTH_SECRET(){return s("BETTER_AUTH_SECRET")}})\n`,
+    )
+    const result = runScript(dir, checkBundle)
+    expect(result.code).toBe(0)
   })
 })
 

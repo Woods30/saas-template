@@ -15,16 +15,21 @@ export function readEnv(): Record<string, string> {
   const result: Record<string, string> = {}
   for (const line of raw.split('\n')) {
     const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/)
-    if (m) result[m[1]!] = m[2]!
+    if (m) {
+      const key = m[1]
+      const value = m[2]
+      if (key !== undefined && value !== undefined) {
+        result[key] = value
+      }
+    }
   }
   return result
 }
 
 export function writeEnv(env: Record<string, string>) {
-  const content =
-    Object.entries(env)
-      .map(([k, v]) => `${k}=${v}`)
-      .join('\n') + '\n'
+  const content = `${Object.entries(env)
+    .map(([k, v]) => `${k}=${v}`)
+    .join('\n')}\n`
   writeFileSync('.env', content)
   console.log('✅ .env 已更新')
 }
@@ -182,7 +187,7 @@ async function main() {
   wrangler.r2_buckets = [{ binding: 'BUCKET', bucket_name: r2Name }]
   wrangler.kv_namespaces = [{ binding: 'CACHE', id: kvId }]
 
-  writeFileSync('wrangler.jsonc', JSON.stringify(wrangler, null, 2) + '\n')
+  writeFileSync('wrangler.jsonc', `${JSON.stringify(wrangler, null, 2)}\n`)
   console.log('✅ wrangler.jsonc 已更新')
 
   // 11. 迁移（本地 D1）
