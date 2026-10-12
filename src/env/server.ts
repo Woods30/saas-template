@@ -14,6 +14,7 @@ const schema = z.object({
   RESEND_AUDIENCE_ID: z.string().optional(),
   BEEHIIV_API_KEY: z.string().optional(),
   BEEHIIV_PUBLICATION_ID: z.string().optional(),
+  BEEHIIV_SEND_WELCOME_EMAIL: z.enum(['true', 'false']).default('false').optional(),
   DISCORD_WEBHOOK_URL: z.url().optional(),
   FEISHU_WEBHOOK_URL: z.url().optional(),
   TURNSTILE_SECRET_KEY: z.string().optional(),

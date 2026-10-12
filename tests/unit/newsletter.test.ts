@@ -4,11 +4,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // Mock server-context ALS
 // ---------------------------------------------------------------------------
 const mockNewsletterProviderRegistry: Record<string, (() => object) | undefined> = {}
+const mockCacheProvider = {
+  get: vi.fn<() => Promise<unknown>>(),
+  set: vi.fn<() => Promise<void>>(),
+  delete: vi.fn<() => Promise<void>>(),
+  deleteByPrefix: vi.fn<() => Promise<void>>(),
+}
 
 vi.mock('@/lib/server-context', () => ({
   getServerContext: () => ({
     env: {},
     newsletterProviderRegistry: mockNewsletterProviderRegistry,
+    cacheProvider: mockCacheProvider,
   }),
   als: {
     getStore: () => ({
@@ -21,7 +28,7 @@ vi.mock('@/lib/server-context', () => ({
 // Mock cache
 // ---------------------------------------------------------------------------
 vi.mock('@/cache', () => ({
-  createCacheKey: (prefix: string, key: string) => `${prefix}:${key}`,
+  createCacheKey: (prefix: string, ...parts: string[]) => `${prefix}:${parts.join(':')}`,
   deleteCache: vi.fn().mockResolvedValue(undefined),
   getOrSetCache: vi
     .fn()
@@ -58,6 +65,7 @@ vi.mock('resend', () => ({
 import {
   BeehiivNewsletterProvider,
   buildNewsletterProviderRegistry,
+  checkRateLimit,
   checkStatus,
   ResendNewsletterProvider,
   subscribe,
@@ -156,12 +164,48 @@ describe('ResendNewsletterProvider', () => {
 })
 
 // ---------------------------------------------------------------------------
-// BeehiivNewsletterProvider — basic sanity
+// BeehiivNewsletterProvider
 // ---------------------------------------------------------------------------
 describe('BeehiivNewsletterProvider', () => {
   it('getProviderName returns beehiiv', () => {
     const provider = new BeehiivNewsletterProvider('key', 'pub-1')
     expect(provider.getProviderName()).toBe('beehiiv')
+  })
+
+  it('subscribe sends send_welcome_email: false by default', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const provider = new BeehiivNewsletterProvider('key', 'pub-1')
+    await provider.subscribe({ email: 'test@example.com' })
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/subscriptions'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ email: 'test@example.com', send_welcome_email: false }),
+      }),
+    )
+
+    vi.unstubAllGlobals()
+  })
+
+  it('subscribe sends send_welcome_email: true when enabled in constructor', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const provider = new BeehiivNewsletterProvider('key', 'pub-1', true)
+    await provider.subscribe({ email: 'test@example.com' })
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/subscriptions'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ email: 'test@example.com', send_welcome_email: true }),
+      }),
+    )
+
+    vi.unstubAllGlobals()
   })
 })
 
@@ -202,6 +246,50 @@ describe('buildNewsletterProviderRegistry', () => {
     const provider = factory()
     expect(provider.getProviderName()).toBe('beehiiv')
   })
+
+  it('beehiiv factory receives sendWelcomeEmail: false by default', () => {
+    const registry = buildNewsletterProviderRegistry({
+      BEEHIIV_API_KEY: 'key-1',
+      BEEHIIV_PUBLICATION_ID: 'pub-1',
+    } as never)
+    const factory = registry.beehiiv
+    if (!factory) return
+
+    // Mock fetch to inspect the subscribe call
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const provider = factory() as BeehiivNewsletterProvider
+    provider.subscribe({ email: 'test@example.com' })
+
+    const call = mockFetch.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(call[1].body as string) as { send_welcome_email: boolean }
+    expect(body.send_welcome_email).toBe(false)
+
+    vi.unstubAllGlobals()
+  })
+
+  it('beehiiv factory receives sendWelcomeEmail: true when env is "true"', () => {
+    const registry = buildNewsletterProviderRegistry({
+      BEEHIIV_API_KEY: 'key-1',
+      BEEHIIV_PUBLICATION_ID: 'pub-1',
+      BEEHIIV_SEND_WELCOME_EMAIL: 'true',
+    } as never)
+    const factory = registry.beehiiv
+    if (!factory) return
+
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const provider = factory() as BeehiivNewsletterProvider
+    provider.subscribe({ email: 'test@example.com' })
+
+    const call = mockFetch.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(call[1].body as string) as { send_welcome_email: boolean }
+    expect(body.send_welcome_email).toBe(true)
+
+    vi.unstubAllGlobals()
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -213,6 +301,8 @@ describe('subscribe / unsubscribe / checkStatus', () => {
     for (const key of Object.keys(mockNewsletterProviderRegistry)) {
       delete mockNewsletterProviderRegistry[key]
     }
+    mockCacheProvider.get.mockResolvedValue(null)
+    mockCacheProvider.set.mockResolvedValue(undefined)
   })
 
   it('subscribe uses provider and deletes cache', async () => {
@@ -266,5 +356,52 @@ describe('subscribe / unsubscribe / checkStatus', () => {
     await expect(subscribe('resend' as never, { email: 'test@example.com' })).rejects.toThrow(
       'Newsletter provider 未注册',
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// checkRateLimit
+// ---------------------------------------------------------------------------
+describe('checkRateLimit', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCacheProvider.get.mockResolvedValue(null)
+    mockCacheProvider.set.mockResolvedValue(undefined)
+  })
+
+  it('allows first request and stores count 1', async () => {
+    mockCacheProvider.get.mockResolvedValue(null)
+    const result = await checkRateLimit('1.2.3.4', 'subscribe')
+    expect(result).toBe(true)
+    expect(mockCacheProvider.set).toHaveBeenCalledWith(
+      'newsletter:ratelimit:1.2.3.4:subscribe',
+      { count: 1 },
+      60,
+    )
+  })
+
+  it('allows up to 5 requests, blocks 6th', async () => {
+    let callCount = 0
+    mockCacheProvider.get.mockImplementation(async () => {
+      callCount++
+      return { count: callCount }
+    })
+
+    // 1-5 should be allowed
+    for (let i = 1; i <= 5; i++) {
+      const allowed = await checkRateLimit('1.2.3.4', 'subscribe')
+      expect(allowed).toBe(true)
+    }
+
+    // 6th should be blocked
+    const allowed = await checkRateLimit('1.2.3.4', 'subscribe')
+    expect(allowed).toBe(false)
+  })
+
+  it('returns true when cache provider is unavailable (fail open)', async () => {
+    // When cache returns null (no entry), no rate limit is applied — this is the fail-open path
+    mockCacheProvider.get.mockResolvedValue(null)
+    const result = await checkRateLimit('1.2.3.4', 'subscribe')
+    expect(result).toBe(true)
   })
 })

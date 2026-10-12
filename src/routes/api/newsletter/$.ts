@@ -1,7 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
-import { getServerContext } from '@/lib/server-context'
-import { checkStatus, subscribe, unsubscribe } from '@/newsletter'
+import { checkRateLimit, subscribe, unsubscribe } from '@/newsletter'
 
 const subscribeBodySchema = z.object({
   email: z.string().min(3).max(320),
@@ -11,13 +10,22 @@ const unsubscribeBodySchema = z.object({
   email: z.string().min(3).max(320),
 })
 
-const statusQuerySchema = z.object({
-  email: z.string().min(3).max(320),
-})
+function getClientIp(request: Request): string {
+  return (
+    request.headers.get('cf-connecting-ip') ?? request.headers.get('x-forwarded-for') ?? 'unknown'
+  )
+}
 
-function jsonError(status: number, message: string) {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
+function jsonRateLimited() {
+  return new Response(JSON.stringify({ error: 'Too many requests' }), {
+    status: 429,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+function jsonOk() {
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
     headers: { 'content-type': 'application/json' },
   })
 }
@@ -26,52 +34,43 @@ export const Route = createFileRoute('/api/newsletter/$')({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const env = getServerContext().env
-        if (!env.RESEND_API_KEY || !env.RESEND_AUDIENCE_ID) {
-          return jsonError(503, 'Newsletter not configured')
+        const ip = getClientIp(request)
+        if (!(await checkRateLimit(ip, 'subscribe'))) {
+          return jsonRateLimited()
         }
+
         const body = await request.json().catch(() => null)
         const parsed = subscribeBodySchema.safeParse(body)
-        if (!parsed.success) return jsonError(400, 'Invalid body')
-        const ok = await subscribe('resend', { email: parsed.data.email })
-        return ok
-          ? new Response(JSON.stringify({ ok: true }), {
-              status: 200,
-              headers: { 'content-type': 'application/json' },
-            })
-          : jsonError(502, 'Subscribe failed')
+        if (!parsed.success) return jsonOk()
+
+        try {
+          await subscribe('resend', { email: parsed.data.email })
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          console.warn(`[newsletter] subscribe failed: ${msg.split('\n')[0]}`)
+        }
+
+        return jsonOk()
       },
 
       DELETE: async ({ request }) => {
-        const env = getServerContext().env
-        if (!env.RESEND_API_KEY || !env.RESEND_AUDIENCE_ID) {
-          return jsonError(503, 'Newsletter not configured')
+        const ip = getClientIp(request)
+        if (!(await checkRateLimit(ip, 'unsubscribe'))) {
+          return jsonRateLimited()
         }
+
         const body = await request.json().catch(() => null)
         const parsed = unsubscribeBodySchema.safeParse(body)
-        if (!parsed.success) return jsonError(400, 'Invalid body')
-        const ok = await unsubscribe('resend', { email: parsed.data.email })
-        return ok
-          ? new Response(JSON.stringify({ ok: true }), {
-              status: 200,
-              headers: { 'content-type': 'application/json' },
-            })
-          : jsonError(502, 'Unsubscribe failed')
-      },
+        if (!parsed.success) return jsonOk()
 
-      GET: async ({ request }) => {
-        const env = getServerContext().env
-        if (!env.RESEND_API_KEY || !env.RESEND_AUDIENCE_ID) {
-          return jsonError(503, 'Newsletter not configured')
+        try {
+          await unsubscribe('resend', { email: parsed.data.email })
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          console.warn(`[newsletter] unsubscribe failed: ${msg.split('\n')[0]}`)
         }
-        const url = new URL(request.url)
-        const parsed = statusQuerySchema.safeParse({ email: url.searchParams.get('email') })
-        if (!parsed.success) return jsonError(400, 'Invalid email')
-        const subscribed = await checkStatus('resend', { email: parsed.data.email })
-        return new Response(JSON.stringify({ subscribed }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        })
+
+        return jsonOk()
       },
     },
   },

@@ -13,10 +13,12 @@ import type {
 export class BeehiivNewsletterProvider implements NewsletterProvider {
   private readonly apiKey: string
   private readonly publicationId: string
+  private readonly sendWelcomeEmail: boolean
 
-  constructor(apiKey: string, publicationId: string) {
+  constructor(apiKey: string, publicationId: string, sendWelcomeEmail = false) {
     this.apiKey = apiKey
     this.publicationId = publicationId
+    this.sendWelcomeEmail = sendWelcomeEmail
   }
 
   getProviderName(): string {
@@ -37,7 +39,7 @@ export class BeehiivNewsletterProvider implements NewsletterProvider {
         {
           method: 'POST',
           headers: this.headers(),
-          body: JSON.stringify({ email, send_welcome_email: true }),
+          body: JSON.stringify({ email, send_welcome_email: this.sendWelcomeEmail }),
         },
       )
       return res.ok

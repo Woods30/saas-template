@@ -31,6 +31,7 @@ export function buildNewsletterProviderRegistry(
             new BeehiivNewsletterProvider(
               env.BEEHIIV_API_KEY ?? '',
               env.BEEHIIV_PUBLICATION_ID ?? '',
+              env.BEEHIIV_SEND_WELCOME_EMAIL === 'true',
             )
         : undefined,
   }
@@ -67,6 +68,46 @@ export async function checkStatus(
     ttlSeconds: CACHE_TTL.newsletterStatus,
     fetcher: () => get(name).checkSubscribeStatus(params),
   })
+}
+
+const RATE_LIMIT_WINDOW_SECONDS = 60
+const RATE_LIMIT_MAX = 5
+
+interface RateLimitEntry {
+  count: number
+}
+
+async function getCacheProvider() {
+  const { cacheProvider } = getServerContext()
+  return cacheProvider
+}
+
+/**
+ * Check if the given IP/action pair exceeds rate limit.
+ * Returns true if allowed, false if rate-limited.
+ */
+export async function checkRateLimit(
+  ip: string,
+  action: 'subscribe' | 'unsubscribe',
+): Promise<boolean> {
+  const cacheProvider = await getCacheProvider()
+  const key = createCacheKey('newsletter:ratelimit', ip, action)
+
+  if (!cacheProvider) {
+    // No cache available — allow the request (fail open)
+    return true
+  }
+
+  const cached = await cacheProvider.get<RateLimitEntry>(key)
+  if (cached !== null) {
+    if (cached.count > RATE_LIMIT_MAX) return false
+    cached.count++
+    await cacheProvider.set(key, cached, RATE_LIMIT_WINDOW_SECONDS)
+    return true
+  }
+
+  await cacheProvider.set(key, { count: 1 }, RATE_LIMIT_WINDOW_SECONDS)
+  return true
 }
 
 export { BeehiivNewsletterProvider } from './provider/beehiiv'

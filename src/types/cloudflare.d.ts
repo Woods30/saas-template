@@ -19,4 +19,5 @@ interface Env {
   RESEND_AUDIENCE_ID?: string
   BEEHIIV_API_KEY?: string
   BEEHIIV_PUBLICATION_ID?: string
+  BEEHIIV_SEND_WELCOME_EMAIL?: string
 }
