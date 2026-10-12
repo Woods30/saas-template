@@ -140,9 +140,9 @@ describe('deleteFile', () => {
   it('调用 provider.delete 删除指定 key', async () => {
     mockDeleteFile.mockResolvedValueOnce(undefined)
 
-    await deleteFile('uploads/user1/123-file.png')
+    await deleteFile('uploads/user1/123-file.png', true)
 
-    expect(mockDeleteFile).toHaveBeenCalledWith('uploads/user1/123-file.png')
+    expect(mockDeleteFile).toHaveBeenCalledWith('uploads/user1/123-file.png', true)
   })
 })
 

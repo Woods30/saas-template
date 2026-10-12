@@ -34,12 +34,15 @@ export async function uploadFile(
   return getStorageProvider().uploadFile(file, filename, contentType, options ?? {})
 }
 
-export async function deleteFile(key: string): Promise<void> {
-  return getStorageProvider().deleteFile(key)
+export async function deleteFile(key: string, authorized?: boolean): Promise<void> {
+  return getStorageProvider().deleteFile(key, authorized)
 }
 
-export async function downloadFile(key: string): Promise<ReadableStream | null> {
-  return getStorageProvider().downloadFile(key)
+export async function downloadFile(
+  key: string,
+  authorized?: boolean,
+): Promise<ReadableStream | null> {
+  return getStorageProvider().downloadFile(key, authorized)
 }
 
 export async function getFileInfo(key: string): Promise<FileInfo | null> {
