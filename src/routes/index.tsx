@@ -1,8 +1,18 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
+import { websiteConfig } from '@/config/website'
+import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/')({
+  // 站点标题与 description 取自 `websiteConfig`（真实文案，非占位），
+  // canonical 与 OG 由 `seo()` 依据解析后的 VITE_BASE_URL 生成。
+  head: () =>
+    seo('/', {
+      title: websiteConfig.metadata.name,
+      description: websiteConfig.metadata.description,
+      type: 'website',
+    }),
   component: HomePage,
 })
 
