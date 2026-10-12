@@ -19,6 +19,13 @@ export const websiteConfig = {
       logoDark: '/logo-dark.png',
     },
   },
+  // mail 与 notification 由各业务模块自行读取，不在 features 中开关。
+  mail: {
+    supportEmail: '' as string,
+  },
+  notification: {
+    enable: false as boolean,
+  },
   features: {
     enableFileUpload: false,
     enableApiKeys: false,
