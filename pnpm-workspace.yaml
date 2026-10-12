@@ -11,3 +11,5 @@ minimumReleaseAgeExclude:
   - '@tanstack/query-core@5.104.2'
   - '@tanstack/react-query@5.104.2'
   - zod@4.6.6
+  - '@inlang/plugin-message-format@4.5.2'
+  - '@inlang/sdk@4.0.2'

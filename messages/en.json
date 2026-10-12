@@ -1,0 +1,10 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "nav_dashboard": "Dashboard",
+  "nav_docs": "Docs",
+  "nav_home": "Home",
+  "nav_pricing": "Pricing",
+  "site_description": "A SaaS starter built on TanStack Start and Cloudflare Workers",
+  "site_name": "SaaS Template",
+  "site_title": "SaaS Starter"
+}

@@ -1,4 +1,5 @@
 import { cloudflare } from '@cloudflare/vite-plugin'
+import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import viteReact from '@vitejs/plugin-react'
@@ -10,6 +11,10 @@ export default defineConfig({
     // cloudflare 必须最先注册：它注入 `cloudflare:env` 等虚拟模块并接管 ssr environment。
     cloudflare({ viteEnvironment: { name: 'ssr' } }),
     tanstackStart(),
+    // Paraglide：编译 `project.inlang` 到 `src/locale/paraglide`，dev/build 时自动重建。
+    // 编译选项（outdir/strategy 等）来自 `project.inlang/paraglide.config.ts`，与 CLI
+    // 共享同一份配置，避免两侧策略不一致而互相覆写。
+    paraglideVitePlugin({ project: './project.inlang' }),
     // Tailwind v4 官方推荐置于 tanstackStart 之后，负责编译 `@import 'tailwindcss'`。
     tailwindcss(),
     // TanStack Start 的 React dev 模式依赖 /@react-refresh（见 start-plugin-core 的

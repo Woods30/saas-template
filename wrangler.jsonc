@@ -3,9 +3,10 @@
   "name": "saas-template",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
-  // `main` 必须指向框架提供的 server entry：TanStack Start 的默认 server entry 已包含
-  // `createStartHandler(defaultStreamHandler)`。手写 worker 入口会绕过框架契约。
-  "main": "@tanstack/react-start/server-entry",
+  // `main` 指向自定义 server entry：它用 Paraglide 的 `paraglideMiddleware` 包住
+  // `createStartHandler(defaultStreamHandler)`，为每个请求写入语言上下文（见 src/server.ts）。
+  // TanStack Start 构建时也会探测 `src/server.ts` 并使用它，二者保持一致。
+  "main": "src/server.ts",
   "vars": {
     "NODE_ENV": "production"
   },
