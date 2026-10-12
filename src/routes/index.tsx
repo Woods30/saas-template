@@ -1,16 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
-import { websiteConfig } from '@/config/website'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/')({
-  // 站点标题与 description 取自 `websiteConfig`（真实文案，非占位），
+  // 标题与 description 在 `head()` 内按请求调用 `m.*()`，随语言变化（`head()` 是
+  // 每请求调用的函数，不像模块顶层那样会被冻结为单一语言）；
   // canonical 与 OG 由 `seo()` 依据解析后的 VITE_BASE_URL 生成。
   head: () =>
     seo('/', {
-      title: websiteConfig.metadata.name,
-      description: websiteConfig.metadata.description,
+      title: m.site_name(),
+      description: m.site_description(),
       type: 'website',
     }),
   component: HomePage,

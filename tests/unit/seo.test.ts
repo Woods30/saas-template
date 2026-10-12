@@ -149,6 +149,15 @@ describe('seo()', () => {
     })
   })
 
+  it('协议相对 image（// 开头）按当前协议补全为绝对 URL', async () => {
+    const { seoModule } = await loadModules(CUSTOM_BASE_URL)
+    const head = seoModule.seo('/', { title: '有图', image: '//cdn.example.com/og.png' })
+    expect(head.meta).toContainEqual({
+      property: 'og:image',
+      content: 'https://cdn.example.com/og.png',
+    })
+  })
+
   it('type 缺省为 website，可显式指定 article', async () => {
     const { seoModule } = await loadModules(CUSTOM_BASE_URL)
     expect(seoModule.seo('/', { title: 'a' }).meta).toContainEqual({
@@ -168,14 +177,18 @@ describe('websiteConfig', () => {
     expect(website.websiteConfig.baseUrl).toBe(CUSTOM_BASE_URL)
   })
 
-  it('集中声明站点文案与图片路径，无占位省略号', async () => {
+  it('只承载语言无关值：名称与图片路径', async () => {
     const { website } = await loadModules(CUSTOM_BASE_URL)
     const { metadata } = website.websiteConfig
     expect(metadata.name).toBe('SaaS Template')
-    expect(metadata.title.length).toBeGreaterThan(0)
-    expect(metadata.description.length).toBeGreaterThan(0)
-    expect(metadata.description).not.toContain('...')
     expect(metadata.images.ogImage).toBe('/og.png')
+  })
+
+  it('不保留语言相关的 title / description（随语言变化的文案由 m.*() 输出）', async () => {
+    const { website } = await loadModules(CUSTOM_BASE_URL)
+    const { metadata } = website.websiteConfig
+    expect('title' in metadata).toBe(false)
+    expect('description' in metadata).toBe(false)
   })
 
   it('features 为显式布尔开关，i18n 默认开启', async () => {
