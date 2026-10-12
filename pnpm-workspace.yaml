@@ -3,7 +3,7 @@ allowBuilds:
   workerd: true
 # minimumReleaseAgeExclude：豁免 pnpm 的「最小发布年龄」门禁。
 # pnpm 11 起 minimumReleaseAge 默认 1440 分钟（1 天），拒绝安装近期刚发布的版本，
-# 用于防范被投毒或撤回的 release 被立即拉入。以下三项是解析时命中的当前最新稳定版，
+# 用于防范被投毒或撤回的 release 被立即拉入。以下各项是解析时命中的当前最新稳定版，
 # 由 pnpm 在 loose 模式下自动写入本文件；保留它们是有意为之：
 # zod 为运行时依赖，@tanstack/query-core 与 @tanstack/react-query 为 TanStack 包，
 # 豁免后解析集才能停留在当前主版本上。删除条目可能导致解析失败或版本回退。

@@ -31,25 +31,40 @@ export function parseLocale(value: string | undefined): Locale | undefined {
 }
 
 /**
- * 从 `Cookie` 头解析语言。未知值、残缺 cookie 或非法百分号编码都返回
- * `undefined`，交由后续策略回退。
+ * 从 `Cookie` 头中按名取出 cookie 原始值（**不做**百分号解码）。
+ * 缺失、无 `=` 或未命中都返回 `undefined`；值首尾空白会被裁剪。
+ *
+ * 这是 cookie 解析的唯一实现：`readLocaleCookie` 与 server entry 的持久化比较
+ * 都经由此函数，避免出现「一处解码、一处不解码」导致的不一致。
  */
-export function readLocaleCookie(cookieHeader: string | null | undefined): Locale | undefined {
+export function readCookieValue(
+  cookieHeader: string | null | undefined,
+  name: string,
+): string | undefined {
   if (!cookieHeader) return undefined
   for (const part of cookieHeader.split(';')) {
     const separator = part.indexOf('=')
     if (separator === -1) continue
-    if (part.slice(0, separator).trim() !== LOCALE_COOKIE_NAME) continue
-    const raw = part.slice(separator + 1).trim()
-    let decoded = raw
-    try {
-      decoded = decodeURIComponent(raw)
-    } catch {
-      // 非法百分号编码：保留原值，parseLocale 会把它判为未知语言。
-    }
-    return parseLocale(decoded)
+    if (part.slice(0, separator).trim() !== name) continue
+    return part.slice(separator + 1).trim()
   }
   return undefined
+}
+
+/**
+ * 从 `Cookie` 头解析语言。未知值、残缺 cookie 或非法百分号编码都返回
+ * `undefined`，交由后续策略回退。百分号解码只发生在这里。
+ */
+export function readLocaleCookie(cookieHeader: string | null | undefined): Locale | undefined {
+  const raw = readCookieValue(cookieHeader, LOCALE_COOKIE_NAME)
+  if (raw === undefined) return undefined
+  let decoded = raw
+  try {
+    decoded = decodeURIComponent(raw)
+  } catch {
+    // 非法百分号编码：保留原值，parseLocale 会把它判为未知语言。
+  }
+  return parseLocale(decoded)
 }
 
 interface LanguageRange {

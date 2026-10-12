@@ -10,7 +10,7 @@
  */
 
 import { createStartHandler, defaultStreamHandler } from '@tanstack/react-start/server'
-import { LOCALE_COOKIE_NAME } from './lib/locale'
+import { LOCALE_COOKIE_NAME, readLocaleCookie } from './lib/locale'
 import { registerServerLocaleStrategy } from './locale/middleware'
 import { paraglideMiddleware } from './locale/paraglide/server.js'
 
@@ -41,7 +41,9 @@ export default {
  * 一致；后续请求也直接命中 cookie。
  */
 function persistLocaleCookie(response: Response, request: Request, locale: string): Response {
-  if (readCookie(request.headers.get('cookie'), LOCALE_COOKIE_NAME) === locale) {
+  // 与 `readLocaleCookie` 共用同一解析（含百分号解码），保证对同一 cookie 的
+  // 「比较」与「解析」得出一致结论，避免编码值时每个请求都重复下发 Set-Cookie。
+  if (readLocaleCookie(request.headers.get('cookie')) === locale) {
     return response
   }
   const headers = new Headers(response.headers)
@@ -54,15 +56,4 @@ function persistLocaleCookie(response: Response, request: Request, locale: strin
     statusText: response.statusText,
     headers,
   })
-}
-
-function readCookie(cookieHeader: string | null, name: string): string | undefined {
-  if (!cookieHeader) return undefined
-  for (const part of cookieHeader.split(';')) {
-    const separator = part.indexOf('=')
-    if (separator === -1) continue
-    if (part.slice(0, separator).trim() !== name) continue
-    return part.slice(separator + 1).trim()
-  }
-  return undefined
 }

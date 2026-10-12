@@ -5,6 +5,7 @@ import {
   LOCALE_COOKIE_NAME,
   parseAcceptLanguage,
   parseLocale,
+  readCookieValue,
   readLocaleCookie,
   resolveLocale,
 } from '@/lib/locale'
@@ -42,6 +43,39 @@ describe('readLocaleCookie', () => {
     expect(readLocaleCookie(`${LOCALE_COOKIE_NAME}`)).toBeUndefined()
     expect(readLocaleCookie('')).toBeUndefined()
     expect(readLocaleCookie(undefined)).toBeUndefined()
+  })
+})
+
+describe('readCookieValue', () => {
+  it('返回 cookie 原始值，不做百分号解码', () => {
+    expect(readCookieValue(`${LOCALE_COOKIE_NAME}=%65%6E`, LOCALE_COOKIE_NAME)).toBe('%65%6E')
+    expect(readCookieValue(`${LOCALE_COOKIE_NAME}=en`, LOCALE_COOKIE_NAME)).toBe('en')
+  })
+
+  it('在多个 cookie 中按名精确匹配，值首尾空白被裁剪', () => {
+    expect(
+      readCookieValue(`foo=bar; ${LOCALE_COOKIE_NAME} = en ; baz=qux`, LOCALE_COOKIE_NAME),
+    ).toBe('en')
+  })
+
+  it('缺失、无等号或未命中均返回 undefined', () => {
+    expect(readCookieValue(null, LOCALE_COOKIE_NAME)).toBeUndefined()
+    expect(readCookieValue('', LOCALE_COOKIE_NAME)).toBeUndefined()
+    expect(readCookieValue(LOCALE_COOKIE_NAME, LOCALE_COOKIE_NAME)).toBeUndefined()
+    expect(readCookieValue('other=en', LOCALE_COOKIE_NAME)).toBeUndefined()
+  })
+})
+
+describe('百分号编码 cookie 的解析与比较一致性（回归）', () => {
+  // 回归点：readLocaleCookie 会解码后解析，而持久化比较若直接取原始值，
+  // `%65%6E`（即 en）会与 en 不等，导致每个请求都重复下发 Set-Cookie。
+  it('原始值不同于解析结果，故比较必须基于解码后的解析值', () => {
+    const header = `${LOCALE_COOKIE_NAME}=%65%6E`
+    expect(readCookieValue(header, LOCALE_COOKIE_NAME)).toBe('%65%6E')
+    expect(readLocaleCookie(header)).toBe('en')
+    // persistLocaleCookie 以 readLocaleCookie 的结果与会话 locale 比较，故对同一 cookie
+    // 解析与比较得出一致结论（都视作 en），不再重复下发。
+    expect(readLocaleCookie(header)).toBe(resolveLocale(requestWith({ cookie: header })))
   })
 })
 

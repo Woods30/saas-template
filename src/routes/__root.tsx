@@ -3,7 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher'
-import { htmlLang, type Locale } from '@/lib/locale'
+import { htmlLang } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 import globalsCss from '../styles/globals.css?url'
@@ -27,7 +27,7 @@ function RootDocument({ children }: { children: ReactNode }) {
   // `getLocale()` 在 SSR 阶段读取 Paraglide 的 AsyncLocalStorage，其值由
   // `src/server.ts` 的 paraglideMiddleware 按请求写入；客户端 hydration 复用同一
   // 解析结果，因此不会出现 lang 与内容不一致。
-  const locale = getLocale() as Locale
+  const locale = getLocale()
 
   return (
     <html lang={htmlLang(locale)}>
@@ -44,7 +44,7 @@ function RootDocument({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext()
-  const locale = getLocale() as Locale
+  const locale = getLocale()
 
   return (
     <QueryClientProvider client={queryClient}>
