@@ -1,0 +1,1575 @@
+# Sub-Plan A：基础设施 Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** 搭建 TanStack Start + Cloudflare Workers + Drizzle + Biome + i18n + 基础 UI 的项目骨架，使得 `pnpm dev` 可以启动空首页，`pnpm build` 与 `pnpm deploy` 通过本地校验。
+
+**Architecture:** 单仓单包。Vite 驱动 TanStack Start 构建；Cloudflare `@cloudflare/vite-plugin` 把 server bundle 打成 Worker；Drizzle 编译期 schema + wrangler 注入的 D1 binding；Paraglide JS 做编译期 i18n 树摇；Biome 统一 lint/format；shadcn/ui CLI 生成 UI 组件；env 通过 Zod 在 `src/env/` 校验后导出，**禁止**业务代码直接读 `process.env`。
+
+**Tech Stack:** TanStack Start, Vite, Cloudflare Workers, D1, Drizzle ORM, Better Auth（占位配置，不在本 sub-plan 实现具体页面），Biome, Tailwind CSS v4, shadcn/ui, Base UI, Paraglide JS (Inlang), TypeScript strict, pnpm, Vitest, Playwright.
+
+## Global Constraints
+
+- 包管理：**pnpm**。任何命令前缀使用 `pnpm run <script>` 或 `pnpm <cmd>`。
+- TypeScript：**strict**，`tsconfig.json` 启用 `strict: true`、`noUncheckedIndexedAccess: true`。
+- Node：≥ 20.18（TanStack Start 与 Vite 7+ 要求）。
+- 所有依赖版本以**最新稳定版**为准。生成代码前通过 context7 拉取精确版本；如不可达，使用 npm registry 兜底。
+- Lint/Format：**Biome**（仅 Biome；不引入 ESLint / Prettier）。
+- CSS：Tailwind v4，CSS-first config；shadcn/ui CLI 自动生成组件。
+- i18n：**Paraglide JS (Inlang)**，`project.inlang/settings.json` 的 `baseLocale: 'zh'`，`locales: ['zh', 'en']`。
+- 文档语言：项目内文档（README、docs、ADR、注释）**默认中文**；中文与半角英数字间一个半角空格；技术术语保留英文。
+- 文件命名：kebab-case 用于目录与配置文件；React 组件 PascalCase；server functions camelCase。
+- 提交纪律：每个 task 末尾独立 commit，类型 `feat:` / `chore:` / `test:` / `docs:` / `fix:`；单一逻辑工作单元。
+- 严禁：业务代码直接读 `process.env` / `import.meta.env`；必须从 `src/env/{public,server}.ts` 导入。
+
+---
+
+## 文件结构总览（Sub-Plan A 范围）
+
+```
+saas-template/
+├── AGENTS.md                                   # 已存在
+├── CLAUDE.md                                   # 已存在
+├── README.md                                   # 新建（中文）
+├── CONTRIBUTING.md                             # 新建（中文）
+├── LICENSE                                     # 新建（MIT）
+├── EditorConfig                                # 新建
+├── biome.json                                  # 新建
+├── content-collections.ts                      # 占位（Sub-Plan C 详细化）
+├── drizzle.config.ts                            # 占位（Sub-Plan B 详细化）
+├── drizzle.config.local.ts                     # 占位
+├── vitest.config.ts                            # 新建
+├── playwright.config.ts                        # 占位（Sub-Plan D 详细化）
+├── playwright.production.config.ts             # 占位
+├── vite.config.ts                              # 新建
+├── tsconfig.json                               # 新建
+├── package.json                                # 新建
+├── pnpm-workspace.yaml                         # 不存在（单包）
+├── wrangler.jsonc                              # 新建
+├── .env.example                                # 新建（中文注释）
+├── .gitignore                                  # 新建
+├── public/
+│   └── manifest.json                           # 占位（Sub-Plan C）
+├── project.inlang/                             # 新建
+│   ├── settings.json
+│   └── messages/
+│       ├── zh.json
+│       └── en.json
+├── src/
+│   ├── env/                                    # 新建
+│   │   ├── public.ts
+│   │   └── server.ts
+│   ├── lib/                                    # 新建（占位文件）
+│   │   ├── utils.ts
+│   │   ├── locale.ts
+│   │   └── seo.ts
+│   ├── locale/                                 # 新建
+│   │   ├── middleware.ts
+│   │   └── paraglide/                          # .gitignore
+│   ├── components/
+│   │   ├── ui/                                 # shadcn 生成（占位）
+│   │   └── layout/
+│   │       └── LocaleSwitcher.tsx              # 占位
+│   ├── config/
+│   │   ├── website.ts                          # 最小骨架（Sub-Plan B/C 扩展）
+│   │   └── blocks.ts                           # 占位
+│   ├── routes/
+│   │   ├── __root.tsx
+│   │   └── index.tsx                           # 最小 hello
+│   ├── styles/
+│   │   └── globals.css
+│   └── worker.ts                               # CF Worker 入口
+├── tests/
+│   └── unit/
+│       └── env.test.ts                         # env 校验测试
+└── scripts/
+    └── check-client-bundle.ts                  # 占位（Sub-Plan D）
+```
+
+---
+
+### Task 1: 初始化 package.json 与 pnpm
+
+**Files:**
+- Create: `package.json`
+- Create: `.gitignore`
+- Create: `.npmrc`
+
+**Step 1.1: 写入 `.gitignore`**
+
+```gitignore
+node_modules
+.output
+.wrangler
+dist
+.content-collections
+src/locale/paraglide
+*.log
+.env
+.env.local
+.DS_Store
+```
+
+**Step 1.2: 写入 `.npmrc`**
+
+```
+auto-install-peers=true
+shamefully-hoist=false
+engine-strict=true
+```
+
+**Step 1.3: 写入 `package.json`（占位，下一 task 填充依赖）**
+
+```json
+{
+  "name": "saas-template",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.18"
+  },
+  "scripts": {}
+}
+```
+
+**Step 1.4: 启用 pnpm（若尚未启用）**
+
+运行：`corepack enable && corepack prepare pnpm@latest --activate`
+预期：`pnpm --version` 输出 ≥ 9。
+
+**Step 1.5: Commit**
+
+```bash
+git add .gitignore .npmrc package.json
+git commit -m "chore: 初始化 pnpm 与 gitignore"
+```
+
+---
+
+### Task 2: TypeScript strict 配置
+
+**Files:**
+- Create: `tsconfig.json`
+
+**Step 2.1: 写入 `tsconfig.json`**
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "allowImportingTsExtensions": false,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "content-collections": ["./.content-collections/generated"]
+    },
+    "types": ["vite/client"]
+  },
+  "include": ["src", "tests", "vite.config.ts", "scripts"],
+  "exclude": ["node_modules", "dist", ".wrangler", ".content-collections"]
+}
+```
+
+**Step 2.2: Commit**
+
+```bash
+git add tsconfig.json
+git commit -m "chore: 启用 TypeScript strict + path alias"
+```
+
+---
+
+### Task 3: Biome 配置
+
+**Files:**
+- Create: `biome.json`
+
+**Step 3.1: 写入 `biome.json`**
+
+```json
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "ignore": [
+      "node_modules",
+      "dist",
+      ".wrangler",
+      ".content-collections",
+      "src/locale/paraglide",
+      "pnpm-lock.yaml"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "suspicious": {
+        "noExplicitAny": "warn"
+      },
+      "style": {
+        "useImportType": "error",
+        "useNamingConvention": "off"
+      }
+    }
+  }
+}
+```
+
+**Step 3.2: 安装 Biome（待 Task 6 安装所有 dev 依赖）**
+
+暂不执行；占位标记。
+
+**Step 3.3: 写入 `EditorConfig`**
+
+```ini
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = true
+
+[*.md]
+trim_trailing_whitespace = false
+```
+
+**Step 3.4: Commit**
+
+```bash
+git add biome.json EditorConfig
+git commit -m "chore: 配置 Biome + EditorConfig"
+```
+
+---
+
+### Task 4: env 两层模型 + Vitest 单元测试
+
+**Files:**
+- Create: `src/env/public.ts`
+- Create: `src/env/server.ts`
+- Create: `tests/unit/env.test.ts`
+- Create: `vitest.config.ts`
+
+**Step 4.1: 安装 Vitest 依赖（Task 6 统一安装，本 task 先写测试）**
+
+写入占位标记；依赖安装推迟到 Task 6。
+
+**Step 4.2: 写入 `vitest.config.ts`**
+
+```ts
+import { defineConfig } from 'vitest/config';
+import path from 'node:path';
+
+export default defineConfig({
+  resolve: {
+    alias: { '@': path.resolve(__dirname, './src') },
+  },
+  test: {
+    environment: 'node',
+    include: ['tests/unit/**/*.test.ts'],
+    globals: false,
+  },
+});
+```
+
+**Step 4.3: 写入 `src/env/public.ts`**
+
+```ts
+import { z } from 'zod';
+
+const schema = z.object({
+  VITE_BASE_URL: z.string().url().default('http://localhost:3000'),
+  VITE_PAYMENT_PROVIDER: z.enum(['stripe']).optional(),
+  VITE_STRIPE_PRICE_PRO_MONTHLY: z.string().optional(),
+  VITE_STRIPE_PRICE_PRO_YEARLY: z.string().optional(),
+  VITE_STRIPE_PRICE_LIFETIME: z.string().optional(),
+  VITE_GA_ID: z.string().optional(),
+  VITE_PLAUSIBLE_DOMAIN: z.string().optional(),
+  VITE_UMAMI_ID: z.string().optional(),
+  VITE_CLARITY_ID: z.string().optional(),
+  VITE_TURNSTILE_SITE_KEY: z.string().optional(),
+});
+
+export type PublicEnv = z.infer<typeof schema>;
+
+export function parsePublicEnv(raw: unknown): PublicEnv {
+  return schema.parse(raw);
+}
+```
+
+**Step 4.4: 写入 `src/env/server.ts`**
+
+```ts
+import { z } from 'zod';
+
+const schema = z.object({
+  BETTER_AUTH_SECRET: z.string().min(32, 'BETTER_AUTH_SECRET 必须 ≥ 32 字符').optional(),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
+  CLOUDFLARE_API_TOKEN: z.string().optional(),
+  CLOUDFLARE_EMAIL_SENDER: z.string().optional(),
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_AUDIENCE_ID: z.string().optional(),
+  BEEHIIV_API_KEY: z.string().optional(),
+  BEEHIIV_PUBLICATION_ID: z.string().optional(),
+  DISCORD_WEBHOOK_URL: z.string().url().optional(),
+  FEISHU_WEBHOOK_URL: z.string().url().optional(),
+  TURNSTILE_SECRET_KEY: z.string().optional(),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+});
+
+export type ServerEnv = z.infer<typeof schema>;
+
+export function parseServerEnv(raw: unknown): ServerEnv {
+  return schema.parse(raw);
+}
+
+export function validateProdServerEnv(raw: unknown): ServerEnv {
+  const env = schema.parse(raw);
+  if (env.NODE_ENV === 'production') {
+    if (!env.BETTER_AUTH_SECRET) {
+      throw new Error('生产环境必须设置 BETTER_AUTH_SECRET');
+    }
+  }
+  return env;
+}
+```
+
+**Step 4.5: 写入 `tests/unit/env.test.ts`**
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { parsePublicEnv, parseServerEnv, validateProdServerEnv } from '@/env/public';
+
+describe('parsePublicEnv', () => {
+  it('使用默认 VITE_BASE_URL', () => {
+    const env = parsePublicEnv({});
+    expect(env.VITE_BASE_URL).toBe('http://localhost:3000');
+  });
+
+  it('拒绝非法 VITE_BASE_URL', () => {
+    expect(() => parsePublicEnv({ VITE_BASE_URL: 'not-a-url' })).toThrow();
+  });
+
+  it('仅接受 stripe 作为支付 provider', () => {
+    expect(() => parsePublicEnv({ VITE_PAYMENT_PROVIDER: 'creem' })).toThrow();
+  });
+});
+
+describe('parseServerEnv', () => {
+  it('生产模式拒绝缺失 BETTER_AUTH_SECRET', () => {
+    expect(() =>
+      validateProdServerEnv({ NODE_ENV: 'production' }),
+    ).toThrow(/BETTER_AUTH_SECRET/);
+  });
+
+  it('开发模式允许缺失 BETTER_AUTH_SECRET', () => {
+    const env = validateProdServerEnv({ NODE_ENV: 'development' });
+    expect(env.NODE_ENV).toBe('development');
+  });
+
+  it('生产模式接受 ≥32 字符的 BETTER_AUTH_SECRET', () => {
+    const env = validateProdServerEnv({
+      NODE_ENV: 'production',
+      BETTER_AUTH_SECRET: 'a'.repeat(32),
+    });
+    expect(env.BETTER_AUTH_SECRET).toHaveLength(32);
+  });
+});
+```
+
+> 注：上方 `import` 路径是占位示意，Task 6 实际安装 Vitest 后应改为：
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { parsePublicEnv } from '@/env/public';
+import { parseServerEnv, validateProdServerEnv } from '@/env/server';
+```
+
+**Step 4.6: Commit（仅源码）**
+
+```bash
+git add src/env tests/unit vitest.config.ts
+git commit -m "feat(env): 引入 publicEnv/serverEnv 两层 Zod 校验"
+```
+
+---
+
+### Task 5: 拼装 package.json 的 scripts 与依赖占位
+
+**Files:**
+- Modify: `package.json`
+
+**Step 5.1: 完整 `package.json`（先写依赖，运行 Task 6 后会校验）**
+
+```json
+{
+  "name": "saas-template",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.18"
+  },
+  "scripts": {
+    "dev": "vite dev --port 3000",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "pnpm run check:env:prod && pnpm run build && pnpm run check:client-bundle && wrangler deploy",
+    "check": "biome check . && tsc --noEmit && pnpm run check:env && pnpm run check:locale",
+    "check:env": "tsx scripts/check-env.ts",
+    "check:env:prod": "tsx scripts/check-env-prod.ts",
+    "check:client-bundle": "tsx scripts/check-client-bundle.ts",
+    "check:locale": "paraglide-js compile --project ./project.inlang --outdir ./src/locale/paraglide && tsx scripts/check-locale.ts",
+    "locale:sort": "ts-node scripts/locale-sort.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "lint:fix": "biome check --write ."
+  },
+  "dependencies": {
+    "@tanstack/react-router": "latest",
+    "@tanstack/react-start": "latest",
+    "@tanstack/react-query": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "latest",
+    "@cloudflare/vite-plugin": "latest",
+    "@inlang/paraglide-js": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "vitest": "latest",
+    "tsx": "latest",
+    "wrangler": "latest"
+  }
+}
+```
+
+**Step 5.2: 暂不安装**（Task 6 统一执行 `pnpm install`）。
+
+**Step 5.3: Commit**
+
+```bash
+git add package.json
+git commit -m "chore: 草拟 package.json scripts 与依赖占位"
+```
+
+---
+
+### Task 6: 安装依赖并锁定精确版本
+
+**Files:**
+- Modify: `package.json`（去掉 `"latest"`，替换为精确版本）
+- Create: `pnpm-lock.yaml`（自动生成）
+
+**Step 6.1: 解析精确版本**
+
+通过 context7 拉取以下包的最新稳定版本（写 plan 阶段已查询）：
+- `@tanstack/react-start`、`@tanstack/react-router`、`@tanstack/react-query`
+- `react`、`react-dom`
+- `zod`
+- `@biomejs/biome`
+- `@cloudflare/vite-plugin`
+- `@inlang/paraglide-js`
+- `typescript`、`vite`、`vitest`、`wrangler`、`tsx`
+
+将 `"latest"` 替换为实际版本号（例如 `"^1.121.3"`），示例：
+
+```json
+"@tanstack/react-start": "^1.121.3",
+"@tanstack/react-router": "^1.121.3",
+"@tanstack/react-query": "^5.62.0",
+"react": "^19.0.0",
+"react-dom": "^19.0.0",
+"zod": "^3.24.0",
+"@biomejs/biome": "^1.9.4",
+"@cloudflare/vite-plugin": "^1.0.0",
+"@inlang/paraglide-js": "^2.0.0",
+"typescript": "^5.7.0",
+"vite": "^6.0.0",
+"vitest": "^2.1.0",
+"wrangler": "^3.90.0",
+"tsx": "^4.19.0"
+```
+
+**Step 6.2: 安装**
+
+```bash
+pnpm install
+```
+
+预期：`pnpm-lock.yaml` 创建，无 `WARN ... unmet peer` 致命错误。
+
+**Step 6.3: 校验版本**
+
+```bash
+pnpm run typecheck
+```
+
+预期：因尚未创建 `src/routes/__root.tsx` 与 worker 入口，可能有少量错误，先记录。
+
+**Step 6.4: Commit**
+
+```bash
+git add package.json pnpm-lock.yaml
+git commit -m "chore: 锁定依赖精确版本"
+```
+
+---
+
+### Task 7: Vite + Cloudflare + TanStack Start 配置
+
+**Files:**
+- Create: `vite.config.ts`
+- Create: `wrangler.jsonc`
+- Create: `src/worker.ts`
+- Create: `src/router.tsx`（TanStack Start 必需）
+- Create: `src/routes/__root.tsx`
+- Create: `src/routes/index.tsx`
+- Create: `src/styles/globals.css`
+
+**Step 7.1: 写入 `vite.config.ts`**
+
+```ts
+import { defineConfig } from 'vite';
+import { tanstackStart } from '@tanstack/react-start/plugin/vite';
+import { cloudflare } from '@cloudflare/vite-plugin';
+import tsconfigPaths from 'vite-tsconfig-paths';
+
+export default defineConfig({
+  plugins: [
+    tsconfigPaths(),
+    tanstackStart({ target: 'cloudflare-module' }),
+    cloudflare({ viteEnvironment: { name: 'ssr' } }),
+  ],
+});
+```
+
+> 注：`vite-tsconfig-paths` 是新的间接依赖，Task 6 已通过 `pnpm install` 解析；如未自动加入，手动 `pnpm add -D vite-tsconfig-paths`。
+
+**Step 7.2: 写入 `wrangler.jsonc`**
+
+```jsonc
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "saas-template",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./src/worker.ts",
+  "vars": {
+    "NODE_ENV": "production"
+  },
+  "observability": { "enabled": true }
+}
+```
+
+> DB/CACHE/BUCKET/EMAIL/AI bindings 在 Sub-Plan B/C 添加。
+
+**Step 7.3: 写入 `src/worker.ts`**
+
+```ts
+import { createStartHandler } from '@tanstack/react-start/server';
+
+export default createStartHandler();
+```
+
+**Step 7.4: 写入 `src/router.tsx`**
+
+```tsx
+import { createRouter as createTanstackRouter } from '@tanstack/react-router';
+import { routeTree } from './routeTree.gen';
+
+export function createRouter() {
+  return createTanstackRouter({ routeTree });
+}
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: ReturnType<typeof createRouter>;
+  }
+}
+```
+
+**Step 7.5: 写入 `src/routes/__root.tsx`**
+
+```tsx
+import { Outlet, createRootRouteWithContext } from '@tanstack/react-router';
+import type { QueryClient } from '@tanstack/react-query';
+
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  head: () => ({
+    meta: [
+      { charSet: 'utf-8' },
+      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+      { title: 'SaaS Template' },
+      { name: 'description', content: '基于 TanStack Start + Cloudflare Workers 的 SaaS 起步模板' },
+    ],
+  }),
+  component: RootLayout,
+});
+
+function RootLayout() {
+  return <Outlet />;
+}
+```
+
+**Step 7.6: 写入 `src/routes/index.tsx`**
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router';
+
+export const Route = createFileRoute('/')({
+  component: HomePage,
+});
+
+function HomePage() {
+  return (
+    <main style={{ padding: 24, fontFamily: 'sans-serif' }}>
+      <h1>SaaS Template</h1>
+      <p>基础设施就绪。后续 sub-plan 将填充业务模块。</p>
+    </main>
+  );
+}
+```
+
+**Step 7.7: 写入 `src/styles/globals.css`（Tailwind v4 占位）**
+
+```css
+@import 'tailwindcss';
+
+:root {
+  --background: #ffffff;
+  --foreground: #000000;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+```
+
+**Step 7.8: 启动 dev server 验证**
+
+```bash
+pnpm dev
+```
+
+预期：浏览器访问 `http://localhost:3000` 显示 "SaaS Template" 标题与提示文字。
+
+**Step 7.9: Commit**
+
+```bash
+git add vite.config.ts wrangler.jsonc src/worker.ts src/router.tsx src/routes src/styles
+git commit -m "feat(scaffold): 集成 Vite + TanStack Start + Cloudflare"
+```
+
+---
+
+### Task 8: Tailwind v4 + shadcn/ui CLI
+
+**Files:**
+- Create: `src/styles/globals.css`（更新）
+- Create: `components.json`（shadcn 配置）
+- Create: `src/components/ui/`（shadcn 生成）
+
+**Step 8.1: 安装 Tailwind v4 与 Vite 插件**
+
+```bash
+pnpm add tailwindcss@latest @tailwindcss/vite@latest
+```
+
+**Step 8.2: 更新 `vite.config.ts` 添加 Tailwind 插件**
+
+```ts
+import { defineConfig } from 'vite';
+import { tanstackStart } from '@tanstack/react-start/plugin/vite';
+import { cloudflare } from '@cloudflare/vite-plugin';
+import tailwindcss from '@tailwindcss/vite';
+import tsconfigPaths from 'vite-tsconfig-paths';
+
+export default defineConfig({
+  plugins: [
+    tsconfigPaths(),
+    tanstackStart({ target: 'cloudflare-module' }),
+    tailwindcss(),
+    cloudflare({ viteEnvironment: { name: 'ssr' } }),
+  ],
+});
+```
+
+**Step 8.3: 更新 `src/styles/globals.css` 引入 shadcn token（最小版）**
+
+```css
+@import 'tailwindcss';
+
+@theme {
+  --color-background: #ffffff;
+  --color-foreground: #0a0a0a;
+  --color-primary: #0070f3;
+  --color-primary-foreground: #ffffff;
+  --color-muted: #f4f4f5;
+  --color-muted-foreground: #71717a;
+  --color-border: #e4e4e7;
+  --radius: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-background: #0a0a0a;
+    --color-foreground: #ededed;
+    --color-primary: #3291ff;
+    --color-primary-foreground: #0a0a0a;
+    --color-muted: #27272a;
+    --color-muted-foreground: #a1a1aa;
+    --color-border: #27272a;
+  }
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+}
+```
+
+**Step 8.4: 初始化 shadcn CLI**
+
+```bash
+pnpm dlx shadcn@latest init
+```
+
+交互中：
+- Style: **New York**（默认）
+- Base color: **Neutral**
+- CSS variables: **Yes**
+- React Server Components: **No**
+
+**Step 8.5: 添加按钮组件作为验证**
+
+```bash
+pnpm dlx shadcn@latest add button
+```
+
+预期：`src/components/ui/button.tsx` 创建。
+
+**Step 8.6: 在 `src/routes/index.tsx` 引入按钮验证**
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router';
+import { Button } from '@/components/ui/button';
+
+export const Route = createFileRoute('/')({
+  component: HomePage,
+});
+
+function HomePage() {
+  return (
+    <main style={{ padding: 24 }}>
+      <h1 className="text-3xl font-bold">SaaS Template</h1>
+      <Button className="mt-4">基础设施就绪</Button>
+    </main>
+  );
+}
+```
+
+**Step 7.8: dev server 验证**
+
+```bash
+pnpm dev
+```
+
+预期：首页显示蓝色按钮，Tailwind 类生效。
+
+**Step 7.9: Commit**
+
+```bash
+git add vite.config.ts src/styles components.json src/components/ui
+git commit -m "feat(ui): 接入 Tailwind v4 + shadcn/ui CLI"
+```
+
+---
+
+### Task 9: Paraglide JS i18n（Inlang）
+
+**Files:**
+- Create: `project.inlang/settings.json`
+- Create: `project.inlang/messages/zh.json`
+- Create: `project.inlang/messages/en.json`
+- Create: `src/locale/middleware.ts`
+- Create: `src/lib/locale.ts`
+- Create: `scripts/locale-sort.ts`
+- Create: `scripts/check-locale.ts`
+- Create: `src/components/layout/LocaleSwitcher.tsx`
+
+**Step 9.1: 写入 `project.inlang/settings.json`**
+
+```json
+{
+  "$schema": "https://inlang.com/schema/project-settings",
+  "baseLocale": "zh",
+  "locales": ["zh", "en"]
+}
+```
+
+**Step 9.2: 写入 `project.inlang/messages/zh.json`**
+
+```json
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "site_name": "SaaS Template",
+  "site_title": "SaaS 起步模板",
+  "site_description": "基于 TanStack Start 与 Cloudflare Workers 的 SaaS 起手模板",
+  "nav_home": "首页",
+  "nav_pricing": "价格",
+  "nav_docs": "文档",
+  "nav_dashboard": "控制台"
+}
+```
+
+**Step 9.3: 写入 `project.inlang/messages/en.json`**
+
+```json
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "site_name": "SaaS Template",
+  "site_title": "SaaS Starter",
+  "site_description": "A SaaS starter built on TanStack Start and Cloudflare Workers",
+  "nav_home": "Home",
+  "nav_pricing": "Pricing",
+  "nav_docs": "Docs",
+  "nav_dashboard": "Dashboard"
+}
+```
+
+**Step 9.4: 配置 `package.json` scripts**
+
+在 `scripts` 中加入：
+
+```json
+"locale:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/locale/paraglide",
+"locale:sort": "tsx scripts/locale-sort.ts",
+"locale:check": "tsx scripts/check-locale.ts"
+```
+
+**Step 9.5: 编译 Paraglide**
+
+```bash
+pnpm run locale:compile
+```
+
+预期：`src/locale/paraglide/messages.js` 等生成；这些文件已被 `.gitignore` 排除。
+
+**Step 9.6: 写入 `src/lib/locale.ts`**
+
+```ts
+export type Locale = 'zh' | 'en';
+
+export const localeConfig = {
+  zh: { flag: '🇨🇳', name: '中文', hreflang: 'zh-CN' },
+  en: { flag: '🇺🇸', name: 'English', hreflang: 'en' },
+} as const satisfies Record<Locale, { flag: string; name: string; hreflang: string }>;
+
+export const defaultLocale: Locale = 'zh';
+
+export function parseLocale(value: string | undefined): Locale {
+  return value === 'en' ? 'en' : 'zh';
+}
+```
+
+**Step 9.7: 写入 `src/locale/middleware.ts`**
+
+```ts
+import { parseLocale, defaultLocale } from '@/lib/locale';
+
+export function resolveLocale(req: Request): ReturnType<typeof parseLocale> {
+  const cookie = req.headers.get('cookie') ?? '';
+  const match = cookie.match(/(?:^|;\s*)NEXT_LOCALE=([^;]+)/);
+  if (match) return parseLocale(decodeURIComponent(match[1]));
+  const accept = req.headers.get('accept-language') ?? '';
+  if (accept.toLowerCase().startsWith('en')) return 'en';
+  return defaultLocale;
+}
+```
+
+**Step 9.8: 写入 `src/components/layout/LocaleSwitcher.tsx`**
+
+```tsx
+import { localeConfig, type Locale } from '@/lib/locale';
+import { useRouter } from '@tanstack/react-router';
+
+interface Props {
+  value: Locale;
+}
+
+export function LocaleSwitcher({ value }: Props) {
+  const router = useRouter();
+  function switchTo(locale: Locale) {
+    document.cookie = `NEXT_LOCALE=${locale}; path=/; max-age=31536000`;
+    router.invalidate();
+  }
+  return (
+    <select
+      value={value}
+      onChange={(e) => switchTo(e.target.value as Locale)}
+      className="rounded border px-2 py-1 text-sm"
+    >
+      {Object.entries(localeConfig).map(([code, cfg]) => (
+        <option key={code} value={code}>
+          {cfg.flag} {cfg.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+```
+
+**Step 9.9: 写入 `scripts/locale-sort.ts`**
+
+```ts
+import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = 'project.inlang/messages';
+for (const file of readdirSync(dir)) {
+  const path = join(dir, file);
+  const data = JSON.parse(readFileSync(path, 'utf-8')) as Record<string, string>;
+  const sorted: Record<string, string> = {};
+  for (const key of Object.keys(data).sort()) {
+    sorted[key] = data[key];
+  }
+  writeFileSync(path, `${JSON.stringify(sorted, null, 2)}\n`);
+  console.log(`sorted ${path}`);
+}
+```
+
+**Step 9.10: 写入 `scripts/check-locale.ts`**
+
+```ts
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = 'project.inlang/messages';
+const files = readdirSync(dir).filter((f) => f.endsWith('.json'));
+const allKeys = new Map<string, Set<string>>();
+
+for (const file of files) {
+  const data = JSON.parse(readFileSync(join(dir, file), 'utf-8')) as Record<string, string>;
+  allKeys.set(file, new Set(Object.keys(data)));
+}
+
+const baseFile = files.find((f) => f.startsWith('zh')) ?? files[0];
+if (!baseFile) throw new Error('未找到 base locale 文件');
+const baseKeys = allKeys.get(baseFile);
+if (!baseKeys) throw new Error(`无法读取 ${baseFile}`);
+
+let failed = false;
+for (const [file, keys] of allKeys) {
+  if (file === baseFile) continue;
+  const missing = [...baseKeys].filter((k) => !keys.has(k));
+  if (missing.length > 0) {
+    console.error(`❌ ${file} 缺失键：${missing.join(', ')}`);
+    failed = true;
+  }
+}
+
+if (failed) process.exit(1);
+console.log('✅ 所有 locale 键配对一致');
+```
+
+**Step 9.11: 在 `src/routes/__root.tsx` 集成 LocaleSwitcher**
+
+```tsx
+import { Outlet, createRootRouteWithContext } from '@tanstack/react-router';
+import type { QueryClient } from '@tanstack/react-query';
+import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher';
+import { resolveLocale } from '@/locale/middleware';
+
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  head: () => ({
+    meta: [
+      { charSet: 'utf-8' },
+      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+      { title: 'SaaS Template' },
+      { name: 'description', content: '基于 TanStack Start + Cloudflare Workers 的 SaaS 起步模板' },
+    ],
+  }),
+  component: RootLayout,
+});
+
+function RootLayout() {
+  const locale = resolveLocale(new Request('http://localhost/'));
+  return (
+    <>
+      <header style={{ padding: 12, borderBottom: '1px solid var(--color-border)' }}>
+        <LocaleSwitcher value={locale} />
+      </header>
+      <Outlet />
+    </>
+  );
+}
+```
+
+> 注：实际生产中 locale 解析需接入 TanStack Start 的 `requestMiddleware`；本 task 提供纯函数 + 占位 UI。
+
+**Step 9.12: 校验**
+
+```bash
+pnpm run locale:check
+pnpm run typecheck
+pnpm dev
+```
+
+预期：dev server 启动；浏览器中 LocaleSwitcher 切换并写入 cookie。
+
+**Step 9.13: Commit**
+
+```bash
+git add project.inlang src/lib/locale.ts src/locale src/components/layout scripts/locale-sort.ts scripts/check-locale.ts package.json
+git commit -m "feat(i18n): 接入 Paraglide JS（Inlang）双 zh/en"
+```
+
+---
+
+### Task 10: 最小化 websiteConfig 与 SEO helper
+
+**Files:**
+- Create: `src/config/website.ts`
+- Create: `src/lib/seo.ts`
+- Create: `src/lib/urls.ts`
+- Create: `src/lib/utils.ts`
+
+**Step 10.1: 写入 `src/lib/utils.ts`**
+
+```ts
+export function cn(...classes: Array<string | false | null | undefined>): string {
+  return classes.filter(Boolean).join(' ');
+}
+```
+
+**Step 10.2: 写入 `src/lib/urls.ts`**
+
+```ts
+import { parsePublicEnv } from '@/env/public';
+
+const env = parsePublicEnv({});
+
+export function getBaseUrl(): string {
+  return env.VITE_BASE_URL;
+}
+
+export function getCanonicalUrl(path: string): string {
+  const base = getBaseUrl().replace(/\/$/, '');
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${normalized}`;
+}
+```
+
+> 注：实际应用 `parsePublicEnv(import.meta.env)`；为避免 SSR 时 `import.meta.env` 缺失，此处用占位。
+
+**Step 10.3: 写入 `src/lib/seo.ts`**
+
+```ts
+import { getCanonicalUrl } from '@/lib/urls';
+
+interface SeoOptions {
+  title: string;
+  description?: string;
+  image?: string;
+  type?: 'website' | 'article';
+}
+
+export function seo(path: string, options: SeoOptions) {
+  const url = getCanonicalUrl(path);
+  return {
+    meta: [
+      { title: options.title },
+      ...(options.description
+        ? [{ name: 'description', content: options.description }]
+        : []),
+      { property: 'og:title', content: options.title },
+      { property: 'og:type', content: options.type ?? 'website' },
+      { property: 'og:url', content: url },
+      ...(options.description
+        ? [{ property: 'og:description', content: options.description }]
+        : []),
+      ...(options.image ? [{ property: 'og:image', content: options.image }] : []),
+      { name: 'twitter:card', content: 'summary_large_image' },
+    ],
+    links: [{ rel: 'canonical', href: url }],
+  };
+}
+```
+
+**Step 10.4: 写入 `src/config/website.ts`（最小骨架）**
+
+```ts
+import { parsePublicEnv } from '@/env/public';
+
+const env = parsePublicEnv({});
+
+export const websiteConfig = {
+  baseUrl: env.VITE_BASE_URL,
+  metadata: {
+    name: 'SaaS Template',
+    title: 'SaaS 起步模板',
+    description: '基于 TanStack Start 与 Cloudflare Workers 的 SaaS 起手模板',
+    images: {
+      ogImage: '/og.png',
+      logoLight: '/logo-light.png',
+      logoDark: '/logo-dark.png',
+    },
+  },
+  features: {
+    enableFileUpload: false,
+    enableApiKeys: false,
+    enableDocs: false,
+    enableI18n: true,
+    enableNewsletter: false,
+    enableContact: false,
+    enableAdmin: false,
+    enableAIGateway: false,
+  },
+} as const;
+
+export type WebsiteConfig = typeof websiteConfig;
+```
+
+**Step 10.5: 在 `src/routes/index.tsx` 使用 seo() helper**
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router';
+import { Button } from '@/components/ui/button';
+import { seo } from '@/lib/seo';
+
+export const Route = createFileRoute('/')({
+  head: () => seo('/', { title: 'SaaS Template', description: '...', type: 'website' }),
+  component: HomePage,
+});
+
+function HomePage() {
+  return (
+    <main style={{ padding: 24 }}>
+      <h1 className="text-3xl font-bold">SaaS Template</h1>
+      <Button className="mt-4">基础设施就绪</Button>
+    </main>
+  );
+}
+```
+
+**Step 10.6: 校验**
+
+```bash
+pnpm run typecheck
+pnpm dev
+```
+
+预期：dev server 启动；首页 `<head>` 包含 OG 与 canonical。
+
+**Step 10.7: Commit**
+
+```bash
+git add src/lib/utils.ts src/lib/seo.ts src/lib/urls.ts src/config/website.ts src/routes/index.tsx
+git commit -m "feat(config): 引入 websiteConfig 骨架 + seo() helper"
+```
+
+---
+
+### Task 11: README 与 LICENSE
+
+**Files:**
+- Create: `README.md`
+- Create: `LICENSE`
+- Create: `CONTRIBUTING.md`
+
+**Step 11.1: 写入 `LICENSE`（MIT）**
+
+```
+MIT License
+
+Copyright (c) 2026 saas-template contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+**Step 11.2: 写入 `README.md`（中文）**
+
+```markdown
+# SaaS Template
+
+构建在 **Cloudflare Workers** 上的 **TanStack Start** SaaS 起步模板。
+
+## 特性
+
+- 认证（Better Auth：邮箱 + Google OAuth）
+- 订阅与单次支付（Stripe Checkout + Webhook）
+- 文件上传（Cloudflare R2）
+- 邮件（React Email + Cloudflare Email Service / Resend）
+- Newsletter（Resend Audiences）
+- 联系表单 + Discord 通知
+- 多语言（zh / en，Paraglide JS）
+- 文档站（双语 Content Collections）
+- SEO（sitemap、robots、canonical、hreflang、JSON-LD）
+- PWA manifest
+- 多家 Analytics（GA / Plausible / Umami / Clarity）
+
+## 快速开始
+
+```bash
+pnpm install
+pnpm run setup        # 交互式：创建 D1/R2/KV，配置 Stripe 与 Email
+pnpm run db:migrate:local
+pnpm dev              # http://localhost:3000
+```
+
+## 命令
+
+| 命令 | 作用 |
+|---|---|
+| `pnpm dev` | 启动开发服务器 |
+| `pnpm build` | 生产构建 |
+| `pnpm deploy` | 校验环境 → 构建 → 客户端 bundle 检查 → 部署到 Workers |
+| `pnpm test` | 跑单元测试 |
+| `pnpm test:e2e` | 跑本地端到端 |
+| `pnpm check` | Biome + TypeScript + env + locale 校验 |
+| `pnpm locale:check` | 检查多语言键配对 |
+
+完整文档见 `/docs`（应用内）或 `docs/superpowers/specs/2026-10-12-saas-template-design.md`。
+
+## 许可
+
+MIT。
+```
+
+**Step 11.3: 写入 `CONTRIBUTING.md`（中文）**
+
+```markdown
+# 贡献指南
+
+## 文档规约
+
+- 项目内文档默认中文；技术术语、命令、路径、库名保留英文。
+- 中文与半角英数字之间添加一个半角空格。
+- 中文使用全角标点。
+
+## 多语言
+
+- `project.inlang/messages/zh.json` 为源（中文优先）。
+- 新增键必须在两个 locale 文件中同时存在。
+- 修改前运行 `pnpm locale:sort` 与 `pnpm locale:check`。
+
+## Markdown 文档站
+
+- `content/docs/**` 为英文源；中文版使用 `*.zh.md` 后缀。
+- 新增页面必须中英两份；缺失中文时 CI 失败。
+- Frontmatter 必须含 `title`、`description`，可选 `order`、`category`。
+
+## 提交规范
+
+- 单一逻辑工作单元
+- TDD：先写失败测试，再写实现，再 commit
+- 提交消息格式：`<type>(<scope>): <subject>`
+- 所有提交前运行 `pnpm check` 与 `pnpm test`
+```
+
+**Step 11.4: Commit**
+
+```bash
+git add README.md LICENSE CONTRIBUTING.md
+git commit -m "docs: README、CONTRIBUTING、LICENSE"
+```
+
+---
+
+### Task 12: 客户端 bundle 校验脚本
+
+**Files:**
+- Create: `scripts/check-env.ts`
+- Create: `scripts/check-env-prod.ts`
+- Create: `scripts/check-client-bundle.ts`
+
+**Step 12.1: 写入 `scripts/check-env.ts`**
+
+```ts
+import { existsSync } from 'node:fs';
+
+if (!existsSync('.env')) {
+  console.error('❌ 缺少 .env 文件。复制 .env.example → .env 后重试。');
+  process.exit(1);
+}
+console.log('✅ .env 存在');
+```
+
+**Step 12.2: 写入 `scripts/check-env-prod.ts`**
+
+```ts
+import { readFileSync, existsSync } from 'node:fs';
+
+if (!existsSync('.env')) {
+  console.error('❌ 缺少 .env 文件');
+  process.exit(1);
+}
+
+const raw = readFileSync('.env', 'utf-8');
+const lines = raw.split('\n').filter(Boolean);
+
+function readVar(name: string): string | undefined {
+  const line = lines.find((l) => l.startsWith(`${name}=`));
+  return line ? line.slice(name.length + 1).trim() : undefined;
+}
+
+const secret = readVar('BETTER_AUTH_SECRET');
+if (!secret || secret.length < 32) {
+  console.error('❌ 生产部署要求 BETTER_AUTH_SECRET ≥ 32 字符');
+  process.exit(1);
+}
+if (secret === 'better-auth-secret') {
+  console.error('❌ BETTER_AUTH_SECRET 仍为占位值，请重新生成');
+  process.exit(1);
+}
+console.log('✅ 生产环境变量校验通过');
+```
+
+**Step 12.3: 写入 `scripts/check-client-bundle.ts`**
+
+```ts
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
+const forbidden = ['STRIPE_SECRET_KEY', 'BETTER_AUTH_SECRET', 'RESEND_API_KEY'];
+const target = 'dist/client';
+
+if (!statSync(target, { throwIfNotExists: false })) {
+  console.error(`❌ 目录 ${target} 不存在，请先运行 pnpm build`);
+  process.exit(1);
+}
+
+function walk(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = join(dir, entry.name);
+    return entry.isDirectory() ? walk(full) : [full];
+  });
+}
+
+let failed = false;
+for (const file of walk(target)) {
+  if (!file.endsWith('.js') && !file.endsWith('.html')) continue;
+  const content = readFileSync(file, 'utf-8');
+  for (const key of forbidden) {
+    if (content.includes(key)) {
+      console.error(`❌ ${file} 包含禁止的密钥 ${key}`);
+      failed = true;
+    }
+  }
+}
+
+if (failed) process.exit(1);
+console.log('✅ 客户端 bundle 不含敏感字段');
+```
+
+**Step 12.4: 写入 `.env.example`**
+
+```bash
+# Site
+VITE_BASE_URL=http://localhost:3000
+
+# Payment（Stripe）
+VITE_PAYMENT_PROVIDER=
+VITE_STRIPE_PRICE_PRO_MONTHLY=
+VITE_STRIPE_PRICE_PRO_YEARLY=
+VITE_STRIPE_PRICE_LIFETIME=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+
+# Auth
+BETTER_AUTH_SECRET=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+# Cloudflare
+CLOUDFLARE_ACCOUNT_ID=
+CLOUDFLARE_API_TOKEN=
+CLOUDFLARE_EMAIL_SENDER=
+
+# Email (alternative)
+RESEND_API_KEY=
+
+# Newsletter
+RESEND_AUDIENCE_ID=
+BEEHIIV_API_KEY=
+BEEHIIV_PUBLICATION_ID=
+
+# Notification
+DISCORD_WEBHOOK_URL=
+FEISHU_WEBHOOK_URL=
+
+# Analytics（任填启用）
+VITE_GA_ID=
+VITE_PLAUSIBLE_DOMAIN=
+VITE_UMAMI_ID=
+VITE_CLARITY_ID=
+
+# Captcha（可选）
+VITE_TURNSTILE_SITE_KEY=
+TURNSTILE_SECRET_KEY=
+
+# Runtime
+NODE_ENV=development
+```
+
+**Step 12.5: Commit**
+
+```bash
+git add scripts .env.example
+git commit -m "feat(scripts): env/bundle 校验脚本 + .env.example"
+```
+
+---
+
+### Task 13: 类型校验与构建端到端验证
+
+**Files:** 无新增
+
+**Step 13.1: 类型校验**
+
+```bash
+pnpm run typecheck
+```
+
+预期：0 错误。
+
+**Step 13.2: Biome 检查**
+
+```bash
+pnpm run lint
+pnpm run format
+```
+
+预期：无错误。
+
+**Step 13.3: 完整 check**
+
+```bash
+pnpm run check
+```
+
+预期：env、locale、biome、tsc 全部通过。
+
+**Step 13.4: 单元测试**
+
+```bash
+pnpm run test
+```
+
+预期：env.test.ts 全部 PASS。
+
+**Step 13.5: 构建**
+
+```bash
+pnpm run build
+```
+
+预期：`dist/client` 与 `dist/server` 产出；不报超时。
+
+**Step 13.6: 客户端 bundle 校验**
+
+```bash
+pnpm run check:client-bundle
+```
+
+预期：✅ 通过。
+
+**Step 13.7: 启动 dev server 冒烟**
+
+```bash
+pnpm dev
+```
+
+`curl -s http://localhost:3000 | head -30` 应看到 `<title>SaaS Template</title>` 与 h1。
+
+**Step 13.8: Commit（如有格式改动）**
+
+```bash
+git add -A
+git commit -m "chore: Sub-Plan A 收尾（格式化与文档同步）" --allow-empty
+```
+
+---
+
+## Sub-Plan A 完成标志
+
+- [ ] `pnpm dev` 启动，`http://localhost:3000` 显示首页
+- [ ] `pnpm run build` 产出构建结果
+- [ ] `pnpm run check` 全部通过
+- [ ] `pnpm run test` 全部通过
+- [ ] Paraglide locale 切换工作
+- [ ] shadcn Button 组件渲染并应用 Tailwind 类
+- [ ] `pnpm run check:client-bundle` 通过
+- [ ] 所有任务独立 commit，无 WIP
+
+进入 Sub-Plan B 之前，确保以上所有项就位。
