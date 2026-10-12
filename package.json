@@ -24,7 +24,10 @@
     "test:watch": "pnpm run locale:compile && vitest",
     "format": "biome format --write .",
     "lint": "biome lint .",
-    "lint:fix": "biome check --write ."
+    "lint:fix": "biome check --write .",
+    "db:generate": "drizzle-kit generate --config=drizzle.config.local.ts",
+    "db:studio:local": "drizzle-kit studio --config=drizzle.config.local.ts",
+    "db:studio:remote": "drizzle-kit studio --config=drizzle.config.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1149.0",
@@ -55,6 +58,7 @@
     "@biomejs/biome": "^2.5.15",
     "@cloudflare/vite-plugin": "^1.63.1",
     "@cloudflare/vitest-pool-workers": "^0.23.0",
+    "@cloudflare/workers-types": "^5.20261011.1",
     "@inlang/paraglide-js": "^2.27.0",
     "@inlang/plugin-message-format": "4.5.2",
     "@tailwindcss/vite": "^4.3.3",

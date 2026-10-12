@@ -10,7 +10,8 @@
       "!**/.content-collections",
       "!**/src/locale/paraglide",
       "!**/routeTree.gen.ts",
-      "!**/pnpm-lock.yaml"
+      "!**/pnpm-lock.yaml",
+      "!**/src/db/migrations"
     ]
   },
   "formatter": {
