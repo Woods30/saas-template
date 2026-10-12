@@ -27,7 +27,8 @@
     "lint:fix": "biome check --write .",
     "db:generate": "drizzle-kit generate --config=drizzle.config.local.ts",
     "db:studio:local": "drizzle-kit studio --config=drizzle.config.local.ts",
-    "db:studio:remote": "drizzle-kit studio --config=drizzle.config.ts"
+    "db:studio:remote": "drizzle-kit studio --config=drizzle.config.ts",
+    "setup": "tsx scripts/setup.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1149.0",
