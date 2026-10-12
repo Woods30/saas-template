@@ -6,5 +6,46 @@
   "engines": {
     "node": ">=20.18"
   },
-  "scripts": {}
+  "scripts": {
+    "dev": "vite dev --port 3000",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "pnpm run check:env:prod && pnpm run build && pnpm run check:client-bundle && wrangler deploy",
+    "check": "biome check . && tsc --noEmit && pnpm run check:env && pnpm run check:locale",
+    "check:env": "tsx scripts/check-env.ts",
+    "check:env:prod": "tsx scripts/check-env-prod.ts",
+    "check:client-bundle": "tsx scripts/check-client-bundle.ts",
+    "check:locale": "paraglide-js compile --project ./project.inlang --outdir ./src/locale/paraglide && tsx scripts/check-locale.ts",
+    "locale:sort": "tsx scripts/locale-sort.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "lint:fix": "biome check --write ."
+  },
+  "dependencies": {
+    "@tanstack/react-router": "TBD-locked",
+    "@tanstack/react-start": "TBD-locked",
+    "@tanstack/react-query": "TBD-locked",
+    "react": "TBD-locked",
+    "react-dom": "TBD-locked",
+    "zod": "TBD-locked"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "TBD-locked",
+    "@cloudflare/vite-plugin": "TBD-locked",
+    "@inlang/paraglide-js": "TBD-locked",
+    "@tailwindcss/vite": "TBD-locked",
+    "@types/node": "TBD-locked",
+    "@types/react": "TBD-locked",
+    "@types/react-dom": "TBD-locked",
+    "tailwindcss": "TBD-locked",
+    "typescript": "TBD-locked",
+    "vite": "TBD-locked",
+    "vite-tsconfig-paths": "TBD-locked",
+    "vitest": "TBD-locked",
+    "tsx": "TBD-locked",
+    "wrangler": "TBD-locked"
+  }
 }
