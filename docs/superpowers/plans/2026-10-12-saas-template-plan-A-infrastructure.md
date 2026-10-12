@@ -1619,14 +1619,13 @@ pnpm run typecheck
 
 预期：0 错误。
 
-**Step 13.2: Biome 检查**
+**Step 13.2: Biome 检查（非写入模式）**
 
 ```bash
-pnpm run lint
-pnpm run format
+pnpm exec biome check .
 ```
 
-预期：无错误。
+预期：无错误。勿用 `pnpm run format`（写入模式）作为验证；如需格式化，与行为修复分开提交。
 
 **Step 13.3: 完整 check**
 
@@ -1634,7 +1633,7 @@ pnpm run format
 pnpm run check
 ```
 
-预期：env、locale、biome、tsc 全部通过。
+预期：locale 编译、biome、tsc、env、locale 全部通过。
 
 **Step 13.4: 单元测试**
 
@@ -1642,7 +1641,7 @@ pnpm run check
 pnpm run test
 ```
 
-预期：env.test.ts 全部 PASS。
+预期：全部 PASS（记录实际条数）。
 
 **Step 13.5: 构建**
 
@@ -1663,16 +1662,20 @@ pnpm run check:client-bundle
 **Step 13.7: 启动 dev server 冒烟**
 
 ```bash
-pnpm dev
+pnpm exec vite dev --port 3010
 ```
 
-`curl -s http://localhost:3000 | head -30` 应看到 `<title>SaaS Template</title>` 与 h1。
+用 curl 或浏览器确认 `<title>`、h1、canonical / OG 标签、语言切换与刷新保持、无 hydration/console 错误。
+端口 3000 被占用时用空闲端口，勿触碰其他项目的服务。
 
-**Step 13.8: Commit（如有格式改动）**
+**Step 13.8: Commit（仅当有实际改动）**
+
+仅在确实有格式或文档改动时提交，且只 `git add` 自己改动的具体文件——
+**不得** `git add -A`（会把用户未跟踪文件纳入），**不得** `--allow-empty`。
 
 ```bash
-git add -A
-git commit -m "chore: Sub-Plan A 收尾（格式化与文档同步）" --allow-empty
+git add <你实际改动的文件>
+git commit -m "chore: Sub-Plan A 收尾（格式化与文档同步）"
 ```
 
 ---
