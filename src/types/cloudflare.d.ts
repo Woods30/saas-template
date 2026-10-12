@@ -20,4 +20,6 @@ interface Env {
   BEEHIIV_API_KEY?: string
   BEEHIIV_PUBLICATION_ID?: string
   BEEHIIV_SEND_WELCOME_EMAIL?: string
+  DISCORD_WEBHOOK_URL?: string
+  FEISHU_WEBHOOK_URL?: string
 }
