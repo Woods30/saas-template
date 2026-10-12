@@ -17,6 +17,11 @@ import { Route as ApiEmailSplatRouteImport } from './routes/api/email/$'
 import { Route as ApiNewsletterSplatRouteImport } from './routes/api/newsletter/$'
 import { Route as ApiPaymentSplatRouteImport } from './routes/api/payment/$'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api/webhooks/stripe'
+import { Route as Char123LocaleChar125AuthErrorRouteImport } from './routes/{-$locale}/auth/error'
+import { Route as Char123LocaleChar125AuthForgotPasswordRouteImport } from './routes/{-$locale}/auth/forgot-password'
+import { Route as Char123LocaleChar125AuthLoginRouteImport } from './routes/{-$locale}/auth/login'
+import { Route as Char123LocaleChar125AuthRegisterRouteImport } from './routes/{-$locale}/auth/register'
+import { Route as Char123LocaleChar125AuthResetPasswordRouteImport } from './routes/{-$locale}/auth/reset-password'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -59,6 +64,36 @@ const ApiWebhooksStripeRoute = ApiWebhooksStripeRouteImport.update({
   path: '/api/webhooks/stripe',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Char123LocaleChar125AuthErrorRoute =
+  Char123LocaleChar125AuthErrorRouteImport.update({
+    id: '/{-$locale}/auth/error',
+    path: '/{-$locale}/auth/error',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char123LocaleChar125AuthForgotPasswordRoute =
+  Char123LocaleChar125AuthForgotPasswordRouteImport.update({
+    id: '/{-$locale}/auth/forgot-password',
+    path: '/{-$locale}/auth/forgot-password',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char123LocaleChar125AuthLoginRoute =
+  Char123LocaleChar125AuthLoginRouteImport.update({
+    id: '/{-$locale}/auth/login',
+    path: '/{-$locale}/auth/login',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char123LocaleChar125AuthRegisterRoute =
+  Char123LocaleChar125AuthRegisterRouteImport.update({
+    id: '/{-$locale}/auth/register',
+    path: '/{-$locale}/auth/register',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char123LocaleChar125AuthResetPasswordRoute =
+  Char123LocaleChar125AuthResetPasswordRouteImport.update({
+    id: '/{-$locale}/auth/reset-password',
+    path: '/{-$locale}/auth/reset-password',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -69,6 +104,11 @@ export interface FileRoutesByFullPath {
   '/api/newsletter/$': typeof ApiNewsletterSplatRoute
   '/api/payment/$': typeof ApiPaymentSplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/{-$locale}/auth/error': typeof Char123LocaleChar125AuthErrorRoute
+  '/{-$locale}/auth/forgot-password': typeof Char123LocaleChar125AuthForgotPasswordRoute
+  '/{-$locale}/auth/login': typeof Char123LocaleChar125AuthLoginRoute
+  '/{-$locale}/auth/register': typeof Char123LocaleChar125AuthRegisterRoute
+  '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -79,6 +119,11 @@ export interface FileRoutesByTo {
   '/api/newsletter/$': typeof ApiNewsletterSplatRoute
   '/api/payment/$': typeof ApiPaymentSplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/{-$locale}/auth/error': typeof Char123LocaleChar125AuthErrorRoute
+  '/{-$locale}/auth/forgot-password': typeof Char123LocaleChar125AuthForgotPasswordRoute
+  '/{-$locale}/auth/login': typeof Char123LocaleChar125AuthLoginRoute
+  '/{-$locale}/auth/register': typeof Char123LocaleChar125AuthRegisterRoute
+  '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -90,6 +135,11 @@ export interface FileRoutesById {
   '/api/newsletter/$': typeof ApiNewsletterSplatRoute
   '/api/payment/$': typeof ApiPaymentSplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/{-$locale}/auth/error': typeof Char123LocaleChar125AuthErrorRoute
+  '/{-$locale}/auth/forgot-password': typeof Char123LocaleChar125AuthForgotPasswordRoute
+  '/{-$locale}/auth/login': typeof Char123LocaleChar125AuthLoginRoute
+  '/{-$locale}/auth/register': typeof Char123LocaleChar125AuthRegisterRoute
+  '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -102,6 +152,11 @@ export interface FileRouteTypes {
     | '/api/newsletter/$'
     | '/api/payment/$'
     | '/api/webhooks/stripe'
+    | '/{-$locale}/auth/error'
+    | '/{-$locale}/auth/forgot-password'
+    | '/{-$locale}/auth/login'
+    | '/{-$locale}/auth/register'
+    | '/{-$locale}/auth/reset-password'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -112,6 +167,11 @@ export interface FileRouteTypes {
     | '/api/newsletter/$'
     | '/api/payment/$'
     | '/api/webhooks/stripe'
+    | '/{-$locale}/auth/error'
+    | '/{-$locale}/auth/forgot-password'
+    | '/{-$locale}/auth/login'
+    | '/{-$locale}/auth/register'
+    | '/{-$locale}/auth/reset-password'
   id:
     | '__root__'
     | '/'
@@ -122,6 +182,11 @@ export interface FileRouteTypes {
     | '/api/newsletter/$'
     | '/api/payment/$'
     | '/api/webhooks/stripe'
+    | '/{-$locale}/auth/error'
+    | '/{-$locale}/auth/forgot-password'
+    | '/{-$locale}/auth/login'
+    | '/{-$locale}/auth/register'
+    | '/{-$locale}/auth/reset-password'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -133,6 +198,11 @@ export interface RootRouteChildren {
   ApiNewsletterSplatRoute: typeof ApiNewsletterSplatRoute
   ApiPaymentSplatRoute: typeof ApiPaymentSplatRoute
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
+  Char123LocaleChar125AuthErrorRoute: typeof Char123LocaleChar125AuthErrorRoute
+  Char123LocaleChar125AuthForgotPasswordRoute: typeof Char123LocaleChar125AuthForgotPasswordRoute
+  Char123LocaleChar125AuthLoginRoute: typeof Char123LocaleChar125AuthLoginRoute
+  Char123LocaleChar125AuthRegisterRoute: typeof Char123LocaleChar125AuthRegisterRoute
+  Char123LocaleChar125AuthResetPasswordRoute: typeof Char123LocaleChar125AuthResetPasswordRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -193,6 +263,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWebhooksStripeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/{-$locale}/auth/error': {
+      id: '/{-$locale}/auth/error'
+      path: '/{-$locale}/auth/error'
+      fullPath: '/{-$locale}/auth/error'
+      preLoaderRoute: typeof Char123LocaleChar125AuthErrorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/{-$locale}/auth/forgot-password': {
+      id: '/{-$locale}/auth/forgot-password'
+      path: '/{-$locale}/auth/forgot-password'
+      fullPath: '/{-$locale}/auth/forgot-password'
+      preLoaderRoute: typeof Char123LocaleChar125AuthForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/{-$locale}/auth/login': {
+      id: '/{-$locale}/auth/login'
+      path: '/{-$locale}/auth/login'
+      fullPath: '/{-$locale}/auth/login'
+      preLoaderRoute: typeof Char123LocaleChar125AuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/{-$locale}/auth/register': {
+      id: '/{-$locale}/auth/register'
+      path: '/{-$locale}/auth/register'
+      fullPath: '/{-$locale}/auth/register'
+      preLoaderRoute: typeof Char123LocaleChar125AuthRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/{-$locale}/auth/reset-password': {
+      id: '/{-$locale}/auth/reset-password'
+      path: '/{-$locale}/auth/reset-password'
+      fullPath: '/{-$locale}/auth/reset-password'
+      preLoaderRoute: typeof Char123LocaleChar125AuthResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -205,6 +310,13 @@ const rootRouteChildren: RootRouteChildren = {
   ApiNewsletterSplatRoute: ApiNewsletterSplatRoute,
   ApiPaymentSplatRoute: ApiPaymentSplatRoute,
   ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
+  Char123LocaleChar125AuthErrorRoute: Char123LocaleChar125AuthErrorRoute,
+  Char123LocaleChar125AuthForgotPasswordRoute:
+    Char123LocaleChar125AuthForgotPasswordRoute,
+  Char123LocaleChar125AuthLoginRoute: Char123LocaleChar125AuthLoginRoute,
+  Char123LocaleChar125AuthRegisterRoute: Char123LocaleChar125AuthRegisterRoute,
+  Char123LocaleChar125AuthResetPasswordRoute:
+    Char123LocaleChar125AuthResetPasswordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
