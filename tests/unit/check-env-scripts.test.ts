@@ -226,6 +226,66 @@ describe('check-env-prod.ts（生产校验）', () => {
     expect(result.stderr).toBe('')
     expect(result.code).toBe(0)
   })
+
+  it('VITE_BASE_URL=localhost 失败（无值回显）', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(dir, `VITE_BASE_URL=http://localhost:3000\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('VITE_BASE_URL')
+    expect(result.stderr).not.toContain('localhost')
+  })
+
+  it('VITE_BASE_URL=127.0.0.1 失败（无值回显）', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(dir, `VITE_BASE_URL=http://127.0.0.1:3000\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('VITE_BASE_URL')
+    expect(result.stderr).not.toContain('127.0.0.1')
+  })
+
+  it('VITE_BASE_URL=*.example.com 失败（无值回显）', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(
+      dir,
+      `VITE_BASE_URL=https://myapp.example.com\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`,
+    )
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('VITE_BASE_URL')
+    expect(result.stderr).not.toContain('example.com')
+  })
+
+  it('VITE_BASE_URL=*.example 失败（无值回显）', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(dir, `VITE_BASE_URL=https://myapp.example\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('VITE_BASE_URL')
+    expect(result.stderr).not.toContain('example')
+  })
+
+  it('VITE_BASE_URL=*.test 失败（无值回显）', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(dir, `VITE_BASE_URL=https://myapp.test\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('VITE_BASE_URL')
+    expect(result.stderr).not.toContain('test')
+  })
+
+  it('合法 prod URL 通过（无值回显）', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(
+      dir,
+      `VITE_BASE_URL=https://real-site.example.com\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`,
+    )
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('生产环境变量校验通过')
+    expect(result.stderr).not.toContain('real-site')
+  })
 })
 
 describe('check-client-bundle.ts（bundle 扫描）', () => {

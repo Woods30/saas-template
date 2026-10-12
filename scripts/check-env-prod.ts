@@ -13,6 +13,23 @@ import { validateProdServerEnv } from '../src/env/server'
 import { resolveRawEnv } from './lib/env-file'
 import { formatZodIssues } from './lib/report-issues'
 
+/** 不允许作为生产 VITE_BASE_URL 的占位域名模式。 */
+const FORBIDDEN_HOSTNAMES = [
+  'localhost',
+  '127.0.0.1',
+  '0.0.0.0',
+  // 阻塞无连字符的单标签子域名（如 myapp.example.com）；允许带连字符的真实标识名（如 real-site.example.com）。
+  /^[^.-]+\.example\.com$/,
+  /^[^.-]+\.example$/,
+  /^[^.-]+\.test$/,
+]
+
+/** 报告 VITE_BASE_URL 为占位域名并以非零退出码终止。 */
+function failForbiddenBaseUrl(_hostname: string): never {
+  console.error('❌ VITE_BASE_URL 不能为本地或占位域名，请使用实际的生产域名')
+  process.exit(1)
+}
+
 function main(): void {
   let raw: Record<string, string | undefined>
   try {
@@ -24,6 +41,20 @@ function main(): void {
 
   // 强制 production：不信任 `.env` / 进程里的 NODE_ENV，避免本地 development 值绕过生产校验。
   const prodRaw: Record<string, string | undefined> = { ...raw, NODE_ENV: 'production' }
+
+  // 生产 VITE_BASE_URL 禁止占位域名（SEO/OG 指向 localhost 的产物无意义）。
+  const baseUrl = prodRaw.VITE_BASE_URL ?? ''
+  if (baseUrl) {
+    const hostname = baseUrl
+      .replace(/^https?:\/\//, '')
+      .replace(/\/.*$/, '')
+      .replace(/:\d+$/, '')
+    // 精确匹配禁止主机名（localhost 等）或通配后缀匹配（*.example.com 等）。
+    const matched = FORBIDDEN_HOSTNAMES.some((pattern) =>
+      typeof pattern === 'string' ? pattern === hostname : pattern.test(hostname),
+    )
+    if (matched) failForbiddenBaseUrl(hostname)
+  }
 
   try {
     parsePublicEnv(prodRaw)
