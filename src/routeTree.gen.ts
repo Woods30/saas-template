@@ -10,33 +10,103 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as Char123LocaleChar125ContactRouteImport } from './routes/{-$locale}/contact'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiContactSplatRouteImport } from './routes/api/contact/$'
+import { Route as ApiEmailSplatRouteImport } from './routes/api/email/$'
+import { Route as ApiNewsletterSplatRouteImport } from './routes/api/newsletter/$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Char123LocaleChar125ContactRoute =
+  Char123LocaleChar125ContactRouteImport.update({
+    id: '/{-$locale}/contact',
+    path: '/{-$locale}/contact',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiContactSplatRoute = ApiContactSplatRouteImport.update({
+  id: '/api/contact/$',
+  path: '/api/contact/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiEmailSplatRoute = ApiEmailSplatRouteImport.update({
+  id: '/api/email/$',
+  path: '/api/email/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiNewsletterSplatRoute = ApiNewsletterSplatRouteImport.update({
+  id: '/api/newsletter/$',
+  path: '/api/newsletter/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/{-$locale}/contact': typeof Char123LocaleChar125ContactRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/contact/$': typeof ApiContactSplatRoute
+  '/api/email/$': typeof ApiEmailSplatRoute
+  '/api/newsletter/$': typeof ApiNewsletterSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/{-$locale}/contact': typeof Char123LocaleChar125ContactRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/contact/$': typeof ApiContactSplatRoute
+  '/api/email/$': typeof ApiEmailSplatRoute
+  '/api/newsletter/$': typeof ApiNewsletterSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/{-$locale}/contact': typeof Char123LocaleChar125ContactRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/contact/$': typeof ApiContactSplatRoute
+  '/api/email/$': typeof ApiEmailSplatRoute
+  '/api/newsletter/$': typeof ApiNewsletterSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/{-$locale}/contact'
+    | '/api/auth/$'
+    | '/api/contact/$'
+    | '/api/email/$'
+    | '/api/newsletter/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/{-$locale}/contact'
+    | '/api/auth/$'
+    | '/api/contact/$'
+    | '/api/email/$'
+    | '/api/newsletter/$'
+  id:
+    | '__root__'
+    | '/'
+    | '/{-$locale}/contact'
+    | '/api/auth/$'
+    | '/api/contact/$'
+    | '/api/email/$'
+    | '/api/newsletter/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  Char123LocaleChar125ContactRoute: typeof Char123LocaleChar125ContactRoute
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiContactSplatRoute: typeof ApiContactSplatRoute
+  ApiEmailSplatRoute: typeof ApiEmailSplatRoute
+  ApiNewsletterSplatRoute: typeof ApiNewsletterSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +118,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/{-$locale}/contact': {
+      id: '/{-$locale}/contact'
+      path: '/{-$locale}/contact'
+      fullPath: '/{-$locale}/contact'
+      preLoaderRoute: typeof Char123LocaleChar125ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/contact/$': {
+      id: '/api/contact/$'
+      path: '/api/contact/$'
+      fullPath: '/api/contact/$'
+      preLoaderRoute: typeof ApiContactSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/email/$': {
+      id: '/api/email/$'
+      path: '/api/email/$'
+      fullPath: '/api/email/$'
+      preLoaderRoute: typeof ApiEmailSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/newsletter/$': {
+      id: '/api/newsletter/$'
+      path: '/api/newsletter/$'
+      fullPath: '/api/newsletter/$'
+      preLoaderRoute: typeof ApiNewsletterSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  Char123LocaleChar125ContactRoute: Char123LocaleChar125ContactRoute,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiContactSplatRoute: ApiContactSplatRoute,
+  ApiEmailSplatRoute: ApiEmailSplatRoute,
+  ApiNewsletterSplatRoute: ApiNewsletterSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

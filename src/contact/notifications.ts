@@ -17,17 +17,27 @@ export async function deliverContactNotification(input: ContactInput): Promise<v
     to: supportEmail,
     template: 'contactMessage',
     locale: 'zh',
-    context: input as unknown as Record<string, unknown>,
+    context: {
+      fromName: input.name,
+      fromEmail: input.fromEmail,
+      subject: input.subject,
+      message: input.message,
+    },
   })
   if (!mailResult.ok) {
     console.warn(`[contact] 邮件通知失败: ${mailResult.error?.split('\n')[0] ?? 'unknown'}`)
   }
 
   // 2. Discord 通知（仅当 enable；失败不阻塞）
+  // Discord embed title limited to 200 chars, description to 1000 chars.
   if (websiteConfig.notification?.enable) {
+    const truncatedSubject =
+      input.subject.length > 200 ? `${input.subject.slice(0, 197)}...` : input.subject
+    const truncatedMessage =
+      input.message.length > 1000 ? `${input.message.slice(0, 997)}...` : input.message
     const ok = await notify('discord', {
-      title: `新的联系消息：${input.subject}`,
-      message: input.message,
+      title: `新的联系消息：${truncatedSubject}`,
+      message: truncatedMessage,
       meta: { from: `${input.name} <${input.fromEmail}>` },
     })
     if (!ok) {

@@ -1,5 +1,6 @@
 // Env is a global interface declared in src/types/cloudflare.d.ts — no import needed
 import { CACHE_TTL, createCacheKey, deleteCache, getOrSetCache } from '@/cache'
+import { checkRateLimit as sharedCheckRateLimit } from '@/lib/rate-limit'
 import { getServerContext } from '@/lib/server-context'
 import { BeehiivNewsletterProvider } from './provider/beehiiv'
 import { ResendNewsletterProvider } from './provider/resend'
@@ -70,55 +71,20 @@ export async function checkStatus(
   })
 }
 
-const RATE_LIMIT_WINDOW_SECONDS = 60
-const RATE_LIMIT_MAX = 5
-const RATE_LIMIT_MAX_UNKNOWN = 1
+const NEWSLETTER_RATE_LIMIT_WINDOW_SECONDS = 60
+const NEWSLETTER_RATE_LIMIT_MAX = 5
 
-async function getCacheProvider() {
-  const { cacheProvider } = getServerContext()
-  return cacheProvider
-}
-
-/**
- * Check if the given IP/action pair exceeds rate limit.
- * Returns true if allowed, false if rate-limited.
- *
- * Uses a list-of-timestamps approach: stores an array of request timestamps
- * within the TTL window. This avoids read-modify-write races on a counter.
- *
- * Security notes:
- * - cf-connecting-ip is trusted; x-forwarded-for is not used (spoofable).
- * - When cache is unavailable, fails closed (denies the request).
- * - Unknown IPs get a stricter limit (1/min) to mitigate spoofing attempts.
- */
 export async function checkRateLimit(
   ip: string,
   action: 'subscribe' | 'unsubscribe',
 ): Promise<boolean> {
-  const cacheProvider = await getCacheProvider()
-  const key = createCacheKey('newsletter:ratelimit', ip, action)
-
-  // Fail closed — deny when cache is unavailable
-  if (!cacheProvider) {
-    return false
-  }
-
-  const isUnknown = ip === 'unknown'
-  const maxRequests = isUnknown ? RATE_LIMIT_MAX_UNKNOWN : RATE_LIMIT_MAX
-
-  const raw = await cacheProvider.get<number[]>(key)
-  const now = Date.now()
-  // Timestamps strictly within the window
-  const windowMs = RATE_LIMIT_WINDOW_SECONDS * 1000
-  const timestamps: number[] = raw !== null ? raw.filter((t) => now - t < windowMs) : []
-
-  if (timestamps.length >= maxRequests) {
-    return false
-  }
-
-  timestamps.push(now)
-  await cacheProvider.set(key, timestamps, RATE_LIMIT_WINDOW_SECONDS)
-  return true
+  return sharedCheckRateLimit({
+    ip,
+    action,
+    limit: NEWSLETTER_RATE_LIMIT_MAX,
+    windowSeconds: NEWSLETTER_RATE_LIMIT_WINDOW_SECONDS,
+    prefix: 'newsletter:ratelimit',
+  })
 }
 
 export { BeehiivNewsletterProvider } from './provider/beehiiv'

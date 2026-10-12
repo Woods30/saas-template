@@ -117,7 +117,7 @@ describe('deliverContactNotification', () => {
     vi.clearAllMocks()
   })
 
-  it('calls sendMail with contactMessage template', async () => {
+  it('calls sendMail with contactMessage template and correct fromName mapping', async () => {
     mockSendTemplate.mockResolvedValue({ ok: true })
 
     await deliverContactNotification(validInput)
@@ -127,7 +127,12 @@ describe('deliverContactNotification', () => {
       expect.objectContaining({
         template: 'contactMessage',
         locale: 'zh',
-        context: validInput,
+        context: {
+          fromName: validInput.name,
+          fromEmail: validInput.fromEmail,
+          subject: validInput.subject,
+          message: validInput.message,
+        },
       }),
     )
   })
@@ -238,5 +243,101 @@ describe('deliverContactNotification', () => {
 
     // Should not throw even when notify returns false
     await expect(reimportedDeliverMixed(validInput)).resolves.toBeUndefined()
+  })
+
+  it('notify receives truncated message when over 1000 chars', async () => {
+    mockSendTemplate.mockResolvedValue({ ok: true })
+    mockNotify.mockResolvedValue(true)
+
+    vi.resetModules()
+    vi.doMock('@/config/website', () => ({
+      websiteConfig: {
+        mail: { supportEmail: 'support@example.com' },
+        notification: { enable: true },
+      },
+    }))
+    vi.doMock('@/lib/server-context', () => ({
+      getServerContext: () => ({
+        env: {},
+        mailProviderRegistry: mockMailProviderRegistry,
+        notificationProviderRegistry: mockNotificationProviderRegistry,
+      }),
+      als: {
+        getStore: () => ({
+          mailProviderRegistry: mockMailProviderRegistry,
+          notificationProviderRegistry: mockNotificationProviderRegistry,
+        }),
+      },
+    }))
+    vi.doMock('@/mail', () => ({
+      sendMail: (...args: unknown[]) => mockSendTemplate(...args),
+    }))
+    vi.doMock('@/notification', () => ({
+      notify: (...args: unknown[]) => mockNotify(...args),
+    }))
+
+    const { deliverContactNotification: reimportedDeliver } = await import(
+      '@/contact/notifications'
+    )
+
+    mockNotificationProviderRegistry.discord = () => ({ send: async () => true })
+
+    const longMessage = 'a'.repeat(1001)
+    await reimportedDeliver({ ...validInput, message: longMessage })
+
+    expect(mockNotify).toHaveBeenCalledWith(
+      'discord',
+      expect.objectContaining({
+        message: `${'a'.repeat(997)}...`,
+      }),
+    )
+  })
+
+  it('notify receives truncated subject when over 200 chars', async () => {
+    mockSendTemplate.mockResolvedValue({ ok: true })
+    mockNotify.mockResolvedValue(true)
+
+    vi.resetModules()
+    vi.doMock('@/config/website', () => ({
+      websiteConfig: {
+        mail: { supportEmail: 'support@example.com' },
+        notification: { enable: true },
+      },
+    }))
+    vi.doMock('@/lib/server-context', () => ({
+      getServerContext: () => ({
+        env: {},
+        mailProviderRegistry: mockMailProviderRegistry,
+        notificationProviderRegistry: mockNotificationProviderRegistry,
+      }),
+      als: {
+        getStore: () => ({
+          mailProviderRegistry: mockMailProviderRegistry,
+          notificationProviderRegistry: mockNotificationProviderRegistry,
+        }),
+      },
+    }))
+    vi.doMock('@/mail', () => ({
+      sendMail: (...args: unknown[]) => mockSendTemplate(...args),
+    }))
+    vi.doMock('@/notification', () => ({
+      notify: (...args: unknown[]) => mockNotify(...args),
+    }))
+
+    const { deliverContactNotification: reimportedDeliver } = await import(
+      '@/contact/notifications'
+    )
+
+    mockNotificationProviderRegistry.discord = () => ({ send: async () => true })
+
+    const longSubject = 'b'.repeat(201)
+    await reimportedDeliver({ ...validInput, subject: longSubject })
+
+    expect(mockNotify).toHaveBeenCalledWith(
+      'discord',
+      expect.objectContaining({
+        title: `新的联系消息：${'b'.repeat(197)}...`,
+      }),
+    )
   })
 })

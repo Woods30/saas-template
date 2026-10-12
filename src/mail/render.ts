@@ -39,7 +39,7 @@ const actionUrlSchema = z
         return (
           parsed.protocol === 'https:' &&
           ALLOWED_HOST_SUFFIXES.some(
-            (suffix) => parsed.hostname === suffix || parsed.hostname.endsWith('.' + suffix),
+            (suffix) => parsed.hostname === suffix || parsed.hostname.endsWith(`.${suffix}`),
           )
         )
       } catch {

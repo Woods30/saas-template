@@ -1,6 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
-import { submitContact } from '@/api/contact'
 
 export const Route = createFileRoute('/{-$locale}/contact')({
   component: ContactPage,
@@ -27,16 +26,26 @@ function ContactForm() {
     setErrorMsg('')
     const form = new FormData(e.currentTarget)
     try {
-      await submitContact({
-        data: {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
           name: String(form.get('name') ?? ''),
           fromEmail: String(form.get('email') ?? ''),
           subject: String(form.get('subject') ?? ''),
           message: String(form.get('message') ?? ''),
-        },
+        }),
       })
-      setStatus('success')
-      e.currentTarget.reset()
+      if (res.ok) {
+        setStatus('success')
+        e.currentTarget.reset()
+      } else if (res.status === 429) {
+        setStatus('error')
+        setErrorMsg('请求过于频繁，请稍后再试。')
+      } else {
+        setStatus('error')
+        setErrorMsg('提交失败')
+      }
     } catch (err) {
       setStatus('error')
       setErrorMsg(err instanceof Error ? (err.message.split('\n')[0] ?? '提交失败') : '提交失败')
