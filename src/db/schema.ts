@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 // Better Auth 自动生成的表（与 better-auth CLI 输出一致）
 export const users = sqliteTable('users', {
@@ -29,23 +29,32 @@ export const sessions = sqliteTable('sessions', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 })
 
-export const accounts = sqliteTable('accounts', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  providerId: text('provider_id').notNull(),
-  accountId: text('account_id').notNull(),
-  password: text('password'),
-  accessToken: text('access_token'),
-  refreshToken: text('refresh_token'),
-  idToken: text('id_token'),
-  accessTokenExpiresAt: integer('access_token_expires_at', { mode: 'timestamp' }),
-  refreshTokenExpiresAt: integer('refresh_token_expires_at', { mode: 'timestamp' }),
-  scope: text('scope'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-})
+export const accounts = sqliteTable(
+  'accounts',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    providerId: text('provider_id').notNull(),
+    accountId: text('account_id').notNull(),
+    password: text('password'),
+    accessToken: text('access_token'),
+    refreshToken: text('refresh_token'),
+    idToken: text('id_token'),
+    accessTokenExpiresAt: integer('access_token_expires_at', { mode: 'timestamp' }),
+    refreshTokenExpiresAt: integer('refresh_token_expires_at', { mode: 'timestamp' }),
+    scope: text('scope'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    providerAccountUnique: uniqueIndex('accounts_provider_account_unique').on(
+      table.providerId,
+      table.accountId,
+    ),
+  }),
+)
 
 export const verifications = sqliteTable('verifications', {
   id: text('id').primaryKey(),
@@ -105,18 +114,24 @@ export const files = sqliteTable('files', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 })
 
-export const apiKeys = sqliteTable('api_keys', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  name: text('name').notNull(),
-  hashedKey: text('hashed_key').notNull(),
-  prefix: text('prefix').notNull(),
-  lastUsedAt: integer('last_used_at', { mode: 'timestamp' }),
-  expiresAt: integer('expires_at', { mode: 'timestamp' }),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-})
+export const apiKeys = sqliteTable(
+  'api_keys',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    hashedKey: text('hashed_key').notNull(),
+    prefix: text('prefix').notNull(),
+    lastUsedAt: integer('last_used_at', { mode: 'timestamp' }),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    hashedKeyUnique: uniqueIndex('api_keys_hashed_key_unique').on(table.hashedKey),
+  }),
+)
 
 export const newsletterSubscriptions = sqliteTable('newsletter_subscriptions', {
   id: text('id').primaryKey(),
