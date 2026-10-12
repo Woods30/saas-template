@@ -20,6 +20,7 @@ import { CloudflareEmailProvider } from './mail'
 import { ResendMailProvider } from './mail/provider/resend'
 import { buildNewsletterProviderRegistry } from './newsletter'
 import { buildNotificationProviderRegistry } from './notification'
+import { buildPaymentProviderRegistry } from './payment'
 import { R2StorageProvider } from './storage/provider/r2'
 
 // 模块加载期注册自定义策略，早于任何请求进入 paraglideMiddleware。
@@ -40,6 +41,7 @@ export default {
         mailProviderRegistry: buildMailProviderRegistry(env),
         newsletterProviderRegistry: buildNewsletterProviderRegistry(env),
         notificationProviderRegistry: buildNotificationProviderRegistry(env),
+        paymentProviderRegistry: buildPaymentProviderRegistry(env),
       },
       async () => {
         // 不使用 URL 前缀策略，中间件不会改写 URL；原样把 request 交给框架处理。

@@ -26,6 +26,9 @@ export const websiteConfig = {
   notification: {
     enable: false as boolean,
   },
+  payment: {
+    provider: 'stripe' as const,
+  },
   features: {
     enableFileUpload: false,
     enableApiKeys: false,

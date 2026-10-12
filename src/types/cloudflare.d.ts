@@ -22,4 +22,6 @@ interface Env {
   BEEHIIV_SEND_WELCOME_EMAIL?: string
   DISCORD_WEBHOOK_URL?: string
   FEISHU_WEBHOOK_URL?: string
+  STRIPE_SECRET_KEY?: string
+  STRIPE_WEBHOOK_SECRET?: string
 }

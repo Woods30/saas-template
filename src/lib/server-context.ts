@@ -14,6 +14,8 @@ import type { NewsletterProviderName } from '@/newsletter'
 import type { NewsletterProvider } from '@/newsletter/types'
 import type { NotificationChannel } from '@/notification'
 import type { NotificationProvider } from '@/notification/types'
+import type { PaymentProviderName } from '@/payment'
+import type { PaymentProvider } from '@/payment/types'
 import type { R2StorageProvider } from '@/storage/provider/r2'
 
 interface ServerContext {
@@ -23,6 +25,7 @@ interface ServerContext {
   mailProviderRegistry?: Record<string, (() => MailProvider) | undefined>
   newsletterProviderRegistry?: Partial<Record<NewsletterProviderName, () => NewsletterProvider>>
   notificationProviderRegistry?: Partial<Record<NotificationChannel, () => NotificationProvider>>
+  paymentProviderRegistry?: Partial<Record<PaymentProviderName, () => PaymentProvider>>
 }
 
 const als = new AsyncLocalStorage<ServerContext>()
@@ -42,6 +45,7 @@ export function getServerContext(): ServerContext {
       storageProvider: undefined as unknown as R2StorageProvider,
       newsletterProviderRegistry: undefined,
       notificationProviderRegistry: undefined,
+      paymentProviderRegistry: undefined,
     }
   }
   return ctx
