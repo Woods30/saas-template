@@ -47,8 +47,9 @@
   env 校验、locale 脚本与单元测试。
 - **尚未实现**：认证、支付 / 订阅、文件存储、邮件、Newsletter、联系表单、管理后台、
   文档站、营销页面、PWA、Analytics、E2E、CI。
-- **Node 下限**：`package.json` 的 `engines.node` 为 `>=22.12.0`（受 `vitest@5`、`wrangler`
-  与 `@tanstack/react-start` 约束）。
+- **Node 下限**：`package.json` 的 `engines.node` 为 `^22.12.0 || ^24.0.0 || >=26.0.0`（`vitest@5`
+  排除奇数大版本 23 / 25，故为精确 union 而非简单 `>=`；`wrangler` 要求 ≥22、
+  `@tanstack/react-start` 要求 ≥22.12.0）。
 
 ## 决策日志索引
 

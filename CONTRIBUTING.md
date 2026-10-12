@@ -4,7 +4,8 @@
 
 ## 环境准备
 
-- **Node.js ≥ 22.12.0**（见 `package.json` 的 `engines`；建议使用偶数 LTS，如 22 / 24）
+- **Node.js** `^22.12.0 || ^24.0.0 || >=26.0.0`（见 `package.json` 的 `engines`；`vitest@5` 排除
+  奇数大版本 23 / 25，建议使用偶数 LTS，如 22 / 24）
 - **pnpm**（当前验证版本 pnpm 12.4.2；`pnpm-workspace.yaml` 为 pnpm 11+ 格式）
 
 ```bash

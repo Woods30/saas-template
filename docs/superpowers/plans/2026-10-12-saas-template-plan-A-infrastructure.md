@@ -12,7 +12,7 @@
 
 - 包管理：**pnpm**。任何命令前缀使用 `pnpm run <script>` 或 `pnpm <cmd>`。
 - TypeScript：**strict**，`tsconfig.json` 启用 `strict: true`、`noUncheckedIndexedAccess: true`。
-- Node：≥ 22.12.0（`vitest@5` 排除 Node 20，`wrangler` 要求 ≥22，`@tanstack/react-start` 要求 ≥22.12.0；`engine-strict=true` 下低于此值安装失败）。
+- Node：`^22.12.0 || ^24.0.0 || >=26.0.0`（`vitest@5` 的 engines 完全排除 Node 20 及奇数大版本 23 / 25，故为精确 union；`wrangler` 要求 ≥22，`@tanstack/react-start` 要求 ≥22.12.0；`engine-strict=true` 下不满足者安装失败）。
 - 所有依赖版本以**最新稳定版**为准。生成代码前通过 context7 拉取精确版本；如不可达，使用 npm registry 兜底。
 - Lint/Format：**Biome**（仅 Biome；不引入 ESLint / Prettier）。
 - CSS：Tailwind v4，CSS-first config；shadcn/ui CLI 自动生成组件。
@@ -127,7 +127,7 @@ engine-strict=true
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22.12.0"
+    "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
   },
   "scripts": {}
 }
@@ -461,7 +461,7 @@ git commit -m "feat(env): 引入 publicEnv/serverEnv 两层 Zod 校验"
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22.12.0"
+    "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
   },
   "scripts": {
     "dev": "vite dev --port 3000",
@@ -1435,8 +1435,8 @@ MIT。
 
 > **注意**：README 只能描述**当前已实现**的能力，未实现的模块须明确列为后续计划。命令表必须
 > 从 `package.json` 的 `scripts` 实际提取——`setup` / `db:migrate:local` / `test:e2e` 等属后续
-> sub-plan，当前不存在，**不得**写入。Node 下限见 `package.json` 的 `engines`（≥ 22.12.0），建议
-> 使用偶数 LTS（22 / 24）。
+> sub-plan，当前不存在，**不得**写入。Node 下限见 `package.json` 的 `engines`（`^22.12.0 ||
+> ^24.0.0 || >=26.0.0`），建议使用偶数 LTS（22 / 24）。
 
 **Step 11.3: 写入 `CONTRIBUTING.md`（中文）**
 

@@ -31,7 +31,7 @@
 
 前置要求：
 
-- **Node.js ≥ 22.12.0**（`package.json` 的 `engines`，受 `vitest@5`、`wrangler` 与 `@tanstack/react-start` 约束；建议使用偶数 LTS，如 22 / 24）
+- **Node.js** `^22.12.0 || ^24.0.0 || >=26.0.0`（`package.json` 的 `engines`，受 `vitest@5` 约束排除奇数大版本 23 / 25，故非简单 `>=`；`wrangler` 要求 ≥22、`@tanstack/react-start` 要求 ≥22.12.0；建议使用偶数 LTS，如 22 / 24）
 - **pnpm**（仓库用 pnpm 开发与验证，当前验证版本为 pnpm 12.4.2；`pnpm-workspace.yaml` 为 pnpm 11+ 的配置格式）
 
 ```bash
