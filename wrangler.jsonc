@@ -10,5 +10,26 @@
   "vars": {
     "NODE_ENV": "production"
   },
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // D1 数据库（auth + 业务表）；REPLACE_ME 由 `pnpm run setup` 替换。
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "saas-template-db",
+      "database_id": "REPLACE_ME",
+      "migrations_dir": "./src/db/migrations"
+    }
+  ],
+  // R2 对象存储（用户上传文件）。
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "saas-template-uploads" }],
+  // KV 命名空间（cache + newsletter status + rate limit）。
+  "kv_namespaces": [{ "binding": "CACHE", "id": "REPLACE_ME" }],
+  // Cloudflare Email Service binding（事务邮件）。
+  // REPLACE_ME 必须是 DNS MX 记录指向的地址。
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "destination_address": "REPLACE_ME"
+    }
+  ]
 }
