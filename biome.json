@@ -43,6 +43,9 @@
       "style": {
         "useImportType": "warn",
         "useNamingConvention": "off"
+      },
+      "a11y": {
+        "noLabelWithoutControl": "off"
       }
     }
   }

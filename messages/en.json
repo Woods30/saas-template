@@ -6,5 +6,34 @@
   "nav_pricing": "Pricing",
   "site_description": "A SaaS starter built on TanStack Start and Cloudflare Workers",
   "site_name": "SaaS Template",
-  "site_title": "SaaS Starter"
+  "site_title": "SaaS Starter",
+
+  "auth_login_title": "Sign in",
+  "auth_login_email_label": "Email",
+  "auth_login_password_label": "Password",
+  "auth_login_submit": "Sign in",
+  "auth_login_to_register": "Don't have an account? Register now",
+  "auth_login_to_forgot": "Forgot password?",
+
+  "auth_register_title": "Create account",
+  "auth_register_name_label": "Name",
+  "auth_register_email_label": "Email",
+  "auth_register_password_label": "Password (≥ 8 characters)",
+  "auth_register_submit": "Create account",
+  "auth_register_to_login": "Already have an account? Sign in",
+
+  "auth_forgot_title": "Reset password",
+  "auth_forgot_email_label": "Email",
+  "auth_forgot_submit": "Send reset link",
+  "auth_forgot_to_login": "Back to sign in",
+  "auth_forgot_success": "If an account with that email exists, a reset link has been sent.",
+
+  "auth_reset_title": "Set new password",
+  "auth_reset_password_label": "New password (≥ 8 characters)",
+  "auth_reset_submit": "Submit",
+  "auth_reset_success": "Password has been reset. Please sign in.",
+
+  "auth_error_title": "Authentication error",
+  "auth_error_message": "This link may have expired or is invalid.",
+  "auth_error_back": "Back to sign in"
 }

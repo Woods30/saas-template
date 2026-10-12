@@ -6,5 +6,34 @@
   "nav_pricing": "价格",
   "site_description": "基于 TanStack Start 与 Cloudflare Workers 的 SaaS 起手模板",
   "site_name": "SaaS Template",
-  "site_title": "SaaS 起步模板"
+  "site_title": "SaaS 起步模板",
+
+  "auth_login_title": "登录",
+  "auth_login_email_label": "邮箱",
+  "auth_login_password_label": "密码",
+  "auth_login_submit": "登录",
+  "auth_login_to_register": "还没有账号？立即注册",
+  "auth_login_to_forgot": "忘记密码？",
+
+  "auth_register_title": "注册",
+  "auth_register_name_label": "昵称",
+  "auth_register_email_label": "邮箱",
+  "auth_register_password_label": "密码（≥ 8 字符）",
+  "auth_register_submit": "注册",
+  "auth_register_to_login": "已有账号？立即登录",
+
+  "auth_forgot_title": "找回密码",
+  "auth_forgot_email_label": "邮箱",
+  "auth_forgot_submit": "发送重置链接",
+  "auth_forgot_to_login": "返回登录",
+  "auth_forgot_success": "如果邮箱存在，重置链接已发送。",
+
+  "auth_reset_title": "重置密码",
+  "auth_reset_password_label": "新密码（≥ 8 字符）",
+  "auth_reset_submit": "提交",
+  "auth_reset_success": "密码已重置，请登录。",
+
+  "auth_error_title": "认证出错",
+  "auth_error_message": "链接可能已过期或无效。",
+  "auth_error_back": "返回登录"
 }
