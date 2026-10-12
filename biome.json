@@ -9,6 +9,7 @@
       "!**/.wrangler",
       "!**/.content-collections",
       "!**/src/locale/paraglide",
+      "!**/routeTree.gen.ts",
       "!**/pnpm-lock.yaml"
     ]
   },

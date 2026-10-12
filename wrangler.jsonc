@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "saas-template",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // `main` 必须指向框架提供的 server entry：TanStack Start 的默认 server entry 已包含
+  // `createStartHandler(defaultStreamHandler)`。手写 worker 入口会绕过框架契约。
+  "main": "@tanstack/react-start/server-entry",
+  "vars": {
+    "NODE_ENV": "production"
+  },
+  "observability": { "enabled": true }
+}
