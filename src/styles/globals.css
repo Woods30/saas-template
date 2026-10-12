@@ -5,6 +5,13 @@
   --color-foreground: #0a0a0a;
   --color-primary: #0070f3;
   --color-primary-foreground: #ffffff;
+  --color-destructive: #b91c1c;
+  --color-secondary: #f4f4f5;
+  --color-secondary-foreground: #0a0a0a;
+  --color-accent: #e4e4e7;
+  --color-accent-foreground: #0a0a0a;
+  --color-ring: #0a0a0a;
+  --color-input: #71717a;
   --color-muted: #f4f4f5;
   --color-muted-foreground: #71717a;
   --color-border: #e4e4e7;
@@ -23,6 +30,13 @@
     --color-foreground: #ededed;
     --color-primary: #3291ff;
     --color-primary-foreground: #0a0a0a;
+    --color-destructive: #ef4444;
+    --color-secondary: #27272a;
+    --color-secondary-foreground: #ededed;
+    --color-accent: #3f3f46;
+    --color-accent-foreground: #ededed;
+    --color-ring: #ededed;
+    --color-input: #71717a;
     --color-muted: #27272a;
     --color-muted-foreground: #a1a1aa;
     --color-border: #27272a;
