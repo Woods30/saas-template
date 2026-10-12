@@ -17,6 +17,7 @@ const schema = z.object({
   DISCORD_WEBHOOK_URL: z.url().optional(),
   FEISHU_WEBHOOK_URL: z.url().optional(),
   TURNSTILE_SECRET_KEY: z.string().optional(),
+  ADMIN_EMAILS: z.string().optional(),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 })
 

@@ -15,13 +15,15 @@ import { resolveRawEnv } from './lib/env-file'
 import { formatZodIssues } from './lib/report-issues'
 
 function main(): void {
-  let raw: Record<string, string | undefined>
-  try {
-    raw = resolveRawEnv()
-  } catch {
-    console.error('❌ 未找到 .env。复制模板后重试：cp .env.example .env')
-    process.exit(1)
-  }
+  // Try to resolve .env; if it doesn't exist, exit immediately.
+  const raw = (() => {
+    try {
+      return resolveRawEnv()
+    } catch {
+      console.error('❌ 未找到 .env。复制模板后重试：cp .env.example .env')
+      process.exit(1)
+    }
+  })()
 
   try {
     parsePublicEnv(raw)

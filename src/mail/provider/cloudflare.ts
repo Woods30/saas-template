@@ -40,7 +40,9 @@ export class CloudflareEmailProvider implements MailProvider {
       const result = await this.binding.send(message)
       return { ok: true, id: result.messageId }
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      // Redact sensitive fields before logging — never expose html, to, subject, context.
+      const safeError = err instanceof Error ? err.message.split('\n')[0] : String(err)
+      return { ok: false, error: safeError }
     }
   }
 }

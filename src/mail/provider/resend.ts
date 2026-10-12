@@ -24,7 +24,11 @@ export class ResendMailProvider implements MailProvider {
       subject,
       html,
     })
-    if (error) return { ok: false, error: error.message }
+    if (error) {
+      // Resend SDK errors may include the full payload — redact to first line only.
+      const safeError = error.message.split('\n')[0]
+      return { ok: false, error: safeError }
+    }
     return { ok: true, id: data?.id }
   }
 }
