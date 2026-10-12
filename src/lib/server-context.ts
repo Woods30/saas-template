@@ -10,6 +10,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { KVCacheProvider } from '@/cache/provider/kv'
 import type { MailProvider } from '@/mail/types'
+import type { NewsletterProviderName } from '@/newsletter'
+import type { NewsletterProvider } from '@/newsletter/types'
 import type { R2StorageProvider } from '@/storage/provider/r2'
 
 interface ServerContext {
@@ -17,6 +19,7 @@ interface ServerContext {
   cacheProvider: KVCacheProvider
   storageProvider: R2StorageProvider
   mailProviderRegistry?: Record<string, (() => MailProvider) | undefined>
+  newsletterProviderRegistry?: Partial<Record<NewsletterProviderName, () => NewsletterProvider>>
 }
 
 const als = new AsyncLocalStorage<ServerContext>()
@@ -34,6 +37,7 @@ export function getServerContext(): ServerContext {
       env: undefined as unknown as Env,
       cacheProvider: undefined as unknown as KVCacheProvider,
       storageProvider: undefined as unknown as R2StorageProvider,
+      newsletterProviderRegistry: undefined,
     }
   }
   return ctx

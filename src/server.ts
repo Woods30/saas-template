@@ -18,6 +18,7 @@ import { registerServerLocaleStrategy } from './locale/middleware'
 import { paraglideMiddleware } from './locale/paraglide/server.js'
 import { CloudflareEmailProvider } from './mail'
 import { ResendMailProvider } from './mail/provider/resend'
+import { buildNewsletterProviderRegistry } from './newsletter'
 import { R2StorageProvider } from './storage/provider/r2'
 
 // 模块加载期注册自定义策略，早于任何请求进入 paraglideMiddleware。
@@ -36,6 +37,7 @@ export default {
         cacheProvider: new KVCacheProvider(env.CACHE as KVNamespace),
         storageProvider: new R2StorageProvider(env.BUCKET as unknown as R2Bucket),
         mailProviderRegistry: buildMailProviderRegistry(env),
+        newsletterProviderRegistry: buildNewsletterProviderRegistry(env),
       },
       async () => {
         // 不使用 URL 前缀策略，中间件不会改写 URL；原样把 request 交给框架处理。

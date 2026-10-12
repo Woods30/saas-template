@@ -16,4 +16,7 @@ interface Env {
   EMAIL: SendEmail
   CLOUDFLARE_EMAIL_SENDER?: string
   RESEND_API_KEY?: string
+  RESEND_AUDIENCE_ID?: string
+  BEEHIIV_API_KEY?: string
+  BEEHIIV_PUBLICATION_ID?: string
 }
