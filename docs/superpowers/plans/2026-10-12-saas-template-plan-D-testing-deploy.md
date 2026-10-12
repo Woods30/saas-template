@@ -35,13 +35,26 @@
 pnpm add -D @cloudflare/vitest-pool-workers miniflare
 ```
 
-**Step 1.2: 写入 `vitest.workspace.ts`**
+**Step 1.2: 写入 `vitest.config.ts`（Vitest 4 用 `projects` 字段替代已弃用的 `workspace`）**
 
 ```ts
-export default ['vitest.config.ts', 'vitest.workers.config.ts'];
+import { defineConfig } from 'vitest/config';
+import tsconfigPaths from 'vite-tsconfig-paths';
+
+export default defineConfig({
+  plugins: [tsconfigPaths()],
+  test: {
+    globals: true,
+    projects: ['./vitest.workers.config.ts'],
+  },
+});
 ```
 
-**Step 1.3: 写入 `vitest.config.ts`（unit + component）**
+> 注意：Vitest 4.x 起 `workspace` 顶层字段已 deprecated；多配置用根 `vitest.config.ts` 的 `test.projects` 数组。`vitest.workers.config.ts` 通过相对路径被引用。
+
+> 备选：保留 `vitest.workspace.ts` 但使用 `vitest.config.ts` 显式 `test.projects` 加载。CI 跑 `pnpm test` 时只命中根 config，集成池通过 `pnpm test:workers` 单独跑。
+
+**Step 1.3: 扩展根 `vitest.config.ts`（unit + component）**
 
 ```ts
 import { defineConfig } from 'vitest/config';
@@ -58,39 +71,44 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html', 'json', 'lcov'],
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/**/*.{types,schemas,test}.ts', 'src/**/__tests__/**'],
+      // 纯导出/类型文件不算入阈值：blocks 索引、env schema、paraglide 生成
+      exclude: [
+        'src/**/index.ts',
+        'src/**/*.types.ts',
+        'src/**/*.schemas.ts',
+        'src/locale/paraglide/**',
+        'src/**/__tests__/**',
+      ],
       thresholds: {
         lines: 80,
         functions: 80,
         branches: 75,
         statements: 80,
+        perFile: false,
       },
     },
+    projects: ['./vitest.workers.config.ts'],
   },
 });
 ```
 
-**Step 1.4: 写入 `vitest.workers.config.ts`（integration）**
+**Step 1.4: 写入 `vitest.workers.config.ts`（integration pool）**
 
 ```ts
 import { defineWorkersConfig } from '@cloudflare/vitest-pool-workers/config';
 
 export default defineWorkersConfig({
   test: {
+    name: 'workers',
     poolOptions: {
       workers: {
         wrangler: { configPath: './wrangler.jsonc' },
         miniflare: {
           compatibilityDate: '2026-10-01',
           compatibilityFlags: ['nodejs_compat'],
-          bindings: {
-            DB: 'saas-template-db',
-            CACHE: 'saas-template-cache',
-            BUCKET: 'saas-template-uploads',
-          },
-          d1Databases: { DB: 'saas-template-db' },
-          kvNamespaces: { CACHE: 'saas-template-cache' },
-          r2Buckets: { BUCKET: 'saas-template-uploads' },
+          d1Databases: ['DB'],
+          kvNamespaces: ['CACHE'],
+          r2Buckets: ['BUCKET'],
         },
       },
     },
@@ -98,6 +116,8 @@ export default defineWorkersConfig({
   },
 });
 ```
+
+> 注意：`bindings: { ... }` 在 1.x 后期已合并到顶层 `d1Databases` / `kvNamespaces` / `r2Buckets` 数组（绑定名列表）。原 plan 写法会触发 deprecation warning。
 
 **Step 1.5: 写入 `tests/setup.ts`**
 
@@ -219,50 +239,45 @@ git commit -m "test(env): 双层 env 解析单元测试"
 
 ```tsx
 import { render, type RenderOptions } from '@testing-library/react';
-import { RouterProvider, createRouter, createMemoryHistory } from '@tanstack/react-router';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import type { ReactElement } from 'react';
 
+/**
+ * Block 测试用最小 router；不依赖 TanStack Router（避免整套 routeTree.gen 编译）。
+ * blocks 是 props-driven 纯展示组件，路由上下文只用 `useLocation` / `useNavigate`
+ * 的回退实现足够。
+ */
 export function renderWithRouter(ui: ReactElement, options?: RenderOptions) {
-  const router = createRouter({
-    routeTree: createMemoryHistory().subscribe(() => {}) as never,
-    history: createMemoryHistory(),
-  });
+  const router = createMemoryRouter([{ path: '*', element: ui }]);
   return render(<RouterProvider router={router} />, options);
 }
-```
-
-> 简化为：`render(ui)` 即可；blocks 不需要 router。
-
-```tsx
-import { render } from '@testing-library/react';
 
 export function renderBlock(ui: ReactElement) {
   return render(ui);
 }
 ```
 
+> 注意：原 plan 写 `react-router-dom@^7`（React Router 的），与项目用的 TanStack Router 是两套独立库；选 `react-router-dom@^7` 作为 **测试工具** 隔离，业务代码仍用 `@tanstack/react-router`。
+
 **Step 3.2: 写入 `tests/unit/blocks-render.test.tsx`**
 
 ```tsx
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { Hero, Features, Stats, Faq, Testimonials, NewsletterCta, Cta } from '@/blocks/marketing';
-import { MemoryRouter } from 'react-router-dom';
+import { Hero, Features, Stats, Faq, Testimonials, NewsletterCta, Cta, Pricing } from '@/components/blocks/marketing';
 
-function withRouter(node: React.ReactNode) {
-  return <MemoryRouter>{node}</MemoryRouter>;
-}
-
+// blocks 是 props-driven 纯展示，不需要 router context。
+// Pricing block 的 `renderCta` 用 React Fragment 模拟。
 describe('Hero block', () => {
   it('渲染标题与 CTA', () => {
-    render(withRouter(
+    render(
       <Hero
         title="Hello"
         primaryCta={{ label: 'Go', href: '/dashboard' }}
         secondaryCta={{ label: 'More', href: '/pricing' }}
       />,
-    ));
-    expect(screen.getByText('Hello')).toBeInTheDocument();
+    );
+    expect(screen.getByRole('heading', { name: 'Hello' })).toBeInTheDocument();
     expect(screen.getByText('Go')).toBeInTheDocument();
     expect(screen.getByText('More')).toBeInTheDocument();
   });
@@ -270,7 +285,7 @@ describe('Hero block', () => {
 
 describe('Features block', () => {
   it('渲染所有 item', () => {
-    render(withRouter(
+    render(
       <Features
         title="Features"
         items={[
@@ -278,7 +293,7 @@ describe('Features block', () => {
           { title: 'B', description: 'b' },
         ]}
       />,
-    ));
+    );
     expect(screen.getByText('A')).toBeInTheDocument();
     expect(screen.getByText('B')).toBeInTheDocument();
   });
@@ -286,9 +301,7 @@ describe('Features block', () => {
 
 describe('Stats block', () => {
   it('渲染数值与标签', () => {
-    render(withRouter(
-      <Stats items={[{ value: '10', label: 'users' }]} />,
-    ));
+    render(<Stats items={[{ value: '10', label: 'users' }]} />);
     expect(screen.getByText('10')).toBeInTheDocument();
     expect(screen.getByText('users')).toBeInTheDocument();
   });
@@ -296,9 +309,7 @@ describe('Stats block', () => {
 
 describe('Faq block', () => {
   it('渲染问题与答案', () => {
-    render(withRouter(
-      <Faq items={[{ question: 'Q?', answer: 'A.' }]} />,
-    ));
+    render(<Faq items={[{ question: 'Q?', answer: 'A.' }]} />);
     expect(screen.getByText('Q?')).toBeInTheDocument();
     expect(screen.getByText('A.')).toBeInTheDocument();
   });
@@ -306,9 +317,7 @@ describe('Faq block', () => {
 
 describe('Testimonials block', () => {
   it('渲染引用与作者', () => {
-    render(withRouter(
-      <Testimonials items={[{ quote: 'great', author: 'Alice' }]} />,
-    ));
+    render(<Testimonials items={[{ quote: 'great', author: 'Alice' }]} />);
     expect(screen.getByText(/great/)).toBeInTheDocument();
     expect(screen.getByText(/Alice/)).toBeInTheDocument();
   });
@@ -316,21 +325,33 @@ describe('Testimonials block', () => {
 
 describe('NewsletterCta block', () => {
   it('渲染输入框与按钮', () => {
-    render(withRouter(
-      <NewsletterCta title="Subscribe" endpoint="resend" />,
-    ));
-    expect(screen.getByText('Subscribe')).toBeInTheDocument();
+    render(<NewsletterCta title="Subscribe" endpoint="resend" />);
+    expect(screen.getByRole('heading', { name: 'Subscribe' })).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/you@example.com/i)).toBeInTheDocument();
   });
 });
 
 describe('Cta block', () => {
   it('渲染标题与按钮', () => {
-    render(withRouter(
-      <Cta title="Go" primaryCta={{ label: 'Click', href: '/x' }} />,
-    ));
-    expect(screen.getByText('Go')).toBeInTheDocument();
+    render(<Cta title="Go" primaryCta={{ label: 'Click', href: '/x' }} />);
+    expect(screen.getByRole('heading', { name: 'Go' })).toBeInTheDocument();
     expect(screen.getByText('Click')).toBeInTheDocument();
+  });
+});
+
+describe('Pricing block', () => {
+  it('渲染所有 plan 与 feature', () => {
+    render(
+      <Pricing
+        plans={[
+          { id: 'free', name: 'Free', prices: [], features: ['A'], cta: { label: '免费', href: '/signup' } },
+          { id: 'pro', name: 'Pro', prices: [{ amount: 990, currency: 'USD', interval: 'month' }], features: ['B', 'C'], cta: { label: '订阅', href: '/checkout' }, highlighted: true, badge: '推荐' },
+        ]}
+      />,
+    );
+    expect(screen.getByText('Free')).toBeInTheDocument();
+    expect(screen.getByText('Pro')).toBeInTheDocument();
+    expect(screen.getByText('推荐')).toBeInTheDocument();
   });
 });
 ```
@@ -733,27 +754,84 @@ git commit -m "test(newsletter): Resend 成功分支"
 **Files:**
 - Create: `tests/workers/payment.test.ts`
 
-**Step 11.1: 注入 stripe 事件 fixture**
+**Step 11.1: 注入 stripe 事件 fixture + 真实签名**
 
 ```ts
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, beforeAll } from 'vitest';
 import { StripePaymentProvider } from '@/payment/provider/stripe';
+import Stripe from 'stripe';
 
-const event = {
-  id: 'evt_test',
-  type: 'checkout.session.completed',
-  data: { object: { id: 'cs_test', customer: 'cus_test', subscription: 'sub_test', metadata: { userId: 'u1' } } },
-};
+const SECRET = 'whsec_test_secret_for_unit';
+
+async function signPayload(payload: string): Promise<string> {
+  // 用 Stripe 自身的 SDK 在测试中签名，避免手算 HMAC 飘移
+  const stripe = new Stripe('sk_test_dummy', { apiVersion: '2025-09-30.clover' as Stripe.LatestApiVersion });
+  return stripe.webhooks.generateTestHeaderString({
+    payload,
+    secret: SECRET,
+    timestamp: Math.floor(Date.now() / 1000),
+  });
+}
+
+function buildEvent(overrides: Partial<Stripe.Event> = {}): Stripe.Event {
+  return {
+    id: overrides.id ?? 'evt_test_1',
+    object: 'event',
+    api_version: '2025-09-30.clover',
+    created: Math.floor(Date.now() / 1000),
+    type: 'checkout.session.completed',
+    livemode: false,
+    pending_webhooks: 1,
+    request: { id: null, idempotency_key: null },
+    data: {
+      object: {
+        id: 'cs_test_1',
+        object: 'checkout.session',
+        customer: 'cus_test',
+        subscription: 'sub_test_1',
+        metadata: { userId: 'u1' },
+      } as Stripe.Checkout.Session,
+    },
+  } as Stripe.Event;
+}
 
 describe('StripePaymentProvider', () => {
-  it('verifyWebhook 失败时返回 false', () => {
-    const provider = new StripePaymentProvider('sk_test', 'whsec_test');
-    expect(provider.verifyWebhook('{}', 'bad-signature')).toBe(false);
+  it('verifyWebhook 失败时返回 false（坏签名）', async () => {
+    const provider = new StripePaymentProvider('sk_test_dummy', SECRET);
+    expect(await provider.verifyWebhook('{}', 'bad-signature')).toBe(false);
   });
 
-  it('parseWebhookEvent 抛错当签名错误', () => {
-    const provider = new StripePaymentProvider('sk_test', 'whsec_test');
-    expect(() => provider.parseWebhookEvent('{}', 'bad-signature')).toThrow();
+  it('parseWebhookEvent 抛错当签名错误', async () => {
+    const provider = new StripePaymentProvider('sk_test_dummy', SECRET);
+    await expect(provider.parseWebhookEvent('{}', 'bad-signature')).rejects.toThrow();
+  });
+
+  it('verifyWebhook 正确签名返回 true', async () => {
+    const provider = new StripePaymentProvider('sk_test_dummy', SECRET);
+    const payload = JSON.stringify(buildEvent());
+    const sig = await signPayload(payload);
+    expect(await provider.verifyWebhook(payload, sig)).toBe(true);
+  });
+
+  it('parseWebhookEvent 成功解析事件', async () => {
+    const provider = new StripePaymentProvider('sk_test_dummy', SECRET);
+    const payload = JSON.stringify(buildEvent());
+    const sig = await signPayload(payload);
+    const event = await provider.parseWebhookEvent(payload, sig);
+    expect(event.id).toBe('evt_test_1');
+    expect(event.type).toBe('checkout.session.completed');
+  });
+
+  it('重投：相同 payload + 新 timestamp 解析两次都成功（幂等性由 webhook_events 表保证）', async () => {
+    const provider = new StripePaymentProvider('sk_test_dummy', SECRET);
+    const payload = JSON.stringify(buildEvent());
+    const sig1 = await signPayload(payload);
+    // 模拟 Stripe 重投：更新 timestamp，重新签名
+    await new Promise((r) => setTimeout(r, 1100)); // 跨过 1s tolerance 检查
+    const sig2 = await signPayload(payload);
+    const e1 = await provider.parseWebhookEvent(payload, sig1);
+    const e2 = await provider.parseWebhookEvent(payload, sig2);
+    expect(e1.id).toBe(e2.id);
   });
 });
 ```
@@ -1044,55 +1122,77 @@ git commit -m "test(e2e): 注册/登录/未授权重定向"
 **Step 15.1: 写入 `e2e/fixtures/auth.ts`**
 
 ```ts
-import { test as base, type Page } from '@playwright/test';
+import { test as base, type Page, expect } from '@playwright/test';
 
+/**
+ * E2E 已登录 fixture — 真正创建 Better Auth session cookie。
+ *
+ * 流程：
+ * 1. 调用 dev-only `/api/test/session`：在 D1 users + sessions 两张表插入行，
+ *    返回 session token。
+ * 2. 用 token + userId 在浏览器 context 中设置 Better Auth 默认 cookie
+ *    `better-auth.session_token`。
+ * 3. 后续 page.goto 即视为已登录。
+ */
 export const test = base.extend<{ authedPage: Page }>({
-  authedPage: async ({ page, request }, use) => {
-    // 通过 API 创建 session（假设后端提供 /api/test/login）
-    const res = await request.post('/api/test/login', { data: { email: 'e2e@example.com' } });
+  authedPage: async ({ page, baseURL }, use) => {
+    const res = await page.request.post('/api/test/session', { data: { email: `e2e-${Date.now()}@example.com` } });
     expect(res.ok()).toBeTruthy();
-    const cookies = res.headers()['set-cookie'];
-    if (cookies) {
-      const parsed = cookies.split(/,(?=\s*\w+=)/).map((c) => c.split(';')[0]);
-      await page.context().addCookies(parsed.map((c) => {
-        const [name, value] = c.split('=');
-        return { name, value, domain: 'localhost', path: '/' };
-      }));
-    }
+    const { sessionToken, userId } = (await res.json()) as { sessionToken: string; userId: string };
+    const host = new URL(baseURL ?? 'http://localhost:3000').host;
+    await page.context().addCookies([
+      {
+        name: 'better-auth.session_token',
+        value: sessionToken,
+        domain: host,
+        path: '/',
+        httpOnly: true,
+        sameSite: 'Lax',
+      },
+    ]);
     await use(page);
   },
 });
 ```
 
-> `/api/test/login` 路由由 dev 模式提供，仅在 `NODE_ENV !== 'production'` 注册。
+**Step 15.2: 创建 dev-only session 路由（写 users + sessions）**
 
-**Step 15.2: 创建 dev-only login 路由**
-
-Create: `src/routes/api/test/login.ts`
+Create: `src/routes/api/test/session.ts`
 
 ```ts
 import { createFileRoute } from '@tanstack/react-router';
-import { authClient } from '@/auth/client';
+import { getAuth } from '@/auth/auth';
 
-export const Route = createFileRoute('/api/test/login')({
+export const Route = createFileRoute('/api/test/session')({
   server: {
     handlers: {
       POST: async ({ request, context }) => {
-        if (process.env.NODE_ENV === 'production') {
+        // 仅在非生产暴露
+        if (context.cloudflare.env.NODE_ENV === 'production') {
           return new Response('forbidden', { status: 403 });
         }
-        const env = (context as { cloudflare: { env: Env } }).cloudflare.env;
-        // 简易 mock：在 D1 中插入测试用户
-        const { createDb, schema } = await import('@/db');
-        const db = createDb(env.DB);
+        const env = context.cloudflare.env as Env;
+        const auth = getAuth(env);
         const { email } = (await request.json()) as { email: string };
-        await db.insert(schema.users).values({ id: `test_${Date.now()}`, email, emailVerified: true }).onConflictDoNothing();
-        return Response.json({ ok: true });
+
+        // 1. 通过 Better Auth admin API 找/建 user
+        // 2. 创建 session（30 天有效期）
+        const newUser = await auth.api.signUpEmail({
+          body: { email, password: 'e2e-test-password', name: 'E2E' },
+          asResponse: false,
+        });
+        const session = await auth.api.createSession({ body: { userId: newUser.user.id } });
+        return Response.json({
+          sessionToken: session.token,
+          userId: newUser.user.id,
+        });
       },
     },
   },
 });
 ```
+
+> 关键修正：原 plan 只 `db.insert(users)` 不创建 session，导致后续 `authClient.getSession()` 拿不到登录态；dashboard / 任何受保护路由都会 302 到 `/auth/login`。新写法走 Better Auth 自己的 `signUpEmail` + `createSession`，确保 cookie 校验通过。
 
 **Step 15.3: 写入 `e2e/payment.spec.ts`**
 
@@ -1101,15 +1201,17 @@ import { test, expect } from './fixtures/auth';
 
 test('start checkout for pro plan', async ({ authedPage }) => {
   await authedPage.goto('/pricing');
-  await authedPage.getByRole('button', { name: '订阅' }).first().click();
-  // 期望跳转至 Stripe Checkout
-  await authedPage.waitForURL(/checkout\.stripe\.com/, { timeout: 15000 }).catch(() => {});
-  expect(authedPage.url()).toMatch(/stripe\.com|pricing/);
+  const subscribeBtn = authedPage.getByRole('button', { name: '订阅' }).first();
+  await subscribeBtn.click();
+
+  // 真实断言：必须跳到 stripe.com（或子域）
+  // 不再吞错；任何 catch 都是测试失败。
+  await authedPage.waitForURL(/^https:\/\/checkout\.stripe\.com\//, { timeout: 20_000 });
+  expect(authedPage.url()).toMatch(/^https:\/\/checkout\.stripe\.com\//);
 });
 ```
 
-> 在没有真实 Stripe key 的环境下，会回退到 `window.location.href` 抛错或停留在 pricing。
-> 本 test 验证至少能触发 action 而不报 500。
+> 修正：移除 `waitForURL(...).catch(() => {})` 吞错，移除 `| pricing` 这种 OR 兜底 — 当 Stripe key 缺失 / env 未配置时，测试必须 fail，让 CI 暴露问题。
 
 **Step 14.4: 运行**
 
@@ -1184,6 +1286,8 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     needs: build
+    env:
+      E2E_BASE_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -1194,34 +1298,36 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm run content:build
       - run: pnpm run build
+      # 启动 dev server；playwright.config.ts 的 webServer.command 接管生命周期
+      - name: Start server
+        run: pnpm run dev --port 3000 &
+        env:
+          CI: true
+      - name: Wait for server
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://localhost:3000/ > /dev/null; then
+              echo "Server ready"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Server failed to start"; exit 1
       - run: pnpm run test:e2e
         env:
           CI: true
-          E2E_NO_SERVER: 1
-          E2E_BASE_URL: http://localhost:3000
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-report
           path: playwright-report/
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: test-results/
 ```
 
-> E2E 步骤使用 `E2E_NO_SERVER=1` 期望外部已有 server；可在 CI 中额外启动一个 step：
->
-> ```yaml
->       - name: Start server
->         run: |
->           pnpm run preview &
->           sleep 5
-> ```
-> 或在 `playwright.config.ts` 中允许 `webServer` 在 CI 模式启动。视实际环境调整。
-
-**Step 16.2: 提交**
-
-```bash
-git add .github/workflows/ci.yml
-git commit -m "ci: lint/typecheck/test/build/e2e 流水线"
-```
+> 关键修正：原 plan 设 `E2E_NO_SERVER: 1` 但 CI 没有任何 step 启动 server，导致每次都因 `ECONNREFUSED` 失败。新增 `Start server` + `Wait for server` 两步，让 server 真正在 job 内运行；Playwright 复用它跑测试。超时由 wait loop 30s 兜底。
 
 ---
 
@@ -1320,29 +1426,36 @@ export async function rateLimit(ip: string, bucket: string): Promise<{ allowed: 
 }
 ```
 
-**Step 17.5: 写入 `src/routes/api/_middleware.ts`**
+**Step 17.5: 写入 `src/middleware/register.ts`（通过 `requestMiddleware` 挂全局中间件）**
 
 ```ts
-import { createFileRoute } from '@tanstack/react-router';
-import { applyCors } from '@/middleware/cors';
-import { rateLimit } from '@/middleware/rate-limit';
+import { createMiddleware } from '@tanstack/react-start/server';
+import { applyCors } from './cors';
+import { rateLimit } from './rate-limit';
 
-export const Route = createFileRoute('/api/_middleware')({
-  server: {
-    handlers: {
-      POST: async ({ request }) => {
-        const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
-        const result = await rateLimit(ip, 'api');
-        if (!result.allowed) return new Response('Too Many Requests', { status: 429 });
-        const res = await fetch(request);
-        return applyCors(request, res as Response);
-      },
-    },
-  },
+/**
+ * 全局中间件：每个 request 都走一遍。
+ * - CORS 头叠加
+ * - rate-limit 命中 429
+ *
+ * 挂载点：在 `src/router.tsx` 顶部 `import './middleware/register';`
+ * TanStack Start 1.x 用 `createMiddleware()` 注册；handler 返回 `server.next()` 续传。
+ */
+export const globalMiddleware = createMiddleware().server(async ({ request, next }) => {
+  const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
+  const rl = await rateLimit(ip, 'api');
+  if (!rl.allowed) {
+    return new Response('Too Many Requests', {
+      status: 429,
+      headers: { 'Retry-After': '60' },
+    });
+  }
+  const res = await next();
+  return applyCors(request, res);
 });
 ```
 
-> 实际 TanStack Start 的 middleware 写法以 1.x 文档为准；本 task 给出骨架。
+> 关键修正：原 plan 写 `createFileRoute('/api/_middleware')` + `server.handlers.POST`，这不是 TanStack Start 的 middleware 约定——没有 `fetch(request)` 续传语义，中间件不会作用于其它路由。正确做法是用 `createMiddleware()` 挂在 `router.tsx` 全局。
 
 **Step 17.6: 单元测试（csp）**
 
@@ -1379,23 +1492,34 @@ git commit -m "feat(security): CSP / CORS / Rate Limit 中间件"
 **Step 18.1: 写入 `src/components/LazyBoundary.tsx`**
 
 ```tsx
-import { Component, Suspense, type ComponentType } from 'react';
+import { Component, Suspense, lazy as reactLazy, type ComponentType, type ReactNode } from 'react';
 
-interface State { hasError: boolean }
-export class ErrorBoundary extends Component<{ fallback: React.ReactNode; children: React.ReactNode }, State> {
-  state: State = { hasError: false };
-  static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(error: Error) { console.error(error); }
+interface ErrorBoundaryProps { fallback: ReactNode; children: ReactNode }
+interface ErrorBoundaryState { hasError: boolean }
+
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false };
+  static getDerivedStateFromError(): ErrorBoundaryState { return { hasError: true }; }
+  componentDidCatch(error: Error) { console.error('[lazy]', error); }
   render() { return this.state.hasError ? this.props.fallback : this.props.children; }
 }
 
-export function lazyWithBoundary(lazy: () => Promise<{ default: ComponentType }>, fallback: React.ReactNode = null) {
-  const C = lazy;
-  return () => (
+/**
+ * 把动态 import 包成带错误边界 + Suspense 的懒加载组件。
+ * 用法：`const Dashboard = lazyWithBoundary(() => import('./routes/dashboard/layout'));`
+ */
+export function lazyWithBoundary<T extends ComponentType<unknown>>(
+  loader: () => Promise<{ default: T }>,
+  fallback: ReactNode = null,
+): ComponentType {
+  const Lazy = reactLazy(loader);
+  const Wrapped: ComponentType = () => (
     <ErrorBoundary fallback={<p>加载失败</p>}>
-      <Suspense fallback={fallback}><C /></Suspense>
+      <Suspense fallback={fallback}><Lazy /></Suspense>
     </ErrorBoundary>
   );
+  Wrapped.displayName = 'LazyWithBoundary';
+  return Wrapped;
 }
 ```
 
@@ -1557,7 +1681,7 @@ MIT
 - `src/contact` - 联系表单 + 投递
 - `src/admin` - 管理后台
 - `src/dashboard` - 用户面板
-- `src/blocks/marketing` - 营销 blocks
+- `src/components/blocks/marketing` - 营销 blocks（spec §4 对齐）
 - `src/db` - Drizzle schema + D1 client
 - `src/config/website` - 站点配置
 - `content/` - Content Collections（docs / blog / changelog / legal）
@@ -1710,3 +1834,23 @@ git commit -m "chore: Sub-Plan D 收尾（lint + 测试 + 构建 + e2e）" --all
 - [ ] 覆盖率 ≥ 80% 关键模块
 
 完成 Sub-Plan D 后，整个 SaaS 模板实施完成。
+
+---
+
+## Not in Scope（Sub-Plan D 显式不做）
+
+按 writing-plans 规范，本 sub-plan 明确**不**包含：
+
+- **业务实现**：所有 `src/<feature>/` 模块（→ Sub-Plan B）。
+- **前端 UI / 文档站 / PWA manifest / Analytics 实际接入**（→ Sub-Plan C）。
+- **Visual regression / Chromatic / Loki**：本期 E2E 仅行为断言；视觉对比由 v0.2 引入。
+- **a11y 自动化（@axe-core/playwright）**：v0.2 引入。
+- **Web Vitals 上报到 GA / Plausible**：Sub-Plan C 完成接入；本 plan 不做实时上报。
+- **Load testing / k6 / 压测**：本期 E2E 仅 smoke；性能基线由 v0.2 用 Lighthouse CI。
+- **D1 PITR / R2 lifecycle policy**：运维配置由 v0.2 操作手册覆盖。
+- **Secret 轮换流程 / 自动密钥续期**：v0.2 引入 wrangler secret rotate 脚本。
+- **多 Cloudflare 账号 / 多 region 灰度**：本期单 account + staging/production 双 env。
+- **A/B test 框架**：v0.2 引入 GrowthBook。
+- **i18n URL 前缀化 E2E**：spec 决策表第 6 项延后；本期 locale 切走 cookie + URL 软切换。
+- **浏览器兼容矩阵**：仅 Chromium；Firefox / WebKit v0.2。
+- **staging 环境的完整 migration 与 smoke**：CI 仅在 production 之前跑一次；staging 手工验证。
