@@ -11,9 +11,7 @@ const unsubscribeBodySchema = z.object({
 })
 
 function getClientIp(request: Request): string {
-  return (
-    request.headers.get('cf-connecting-ip') ?? request.headers.get('x-forwarded-for') ?? 'unknown'
-  )
+  return request.headers.get('cf-connecting-ip') ?? 'unknown'
 }
 
 function jsonRateLimited() {

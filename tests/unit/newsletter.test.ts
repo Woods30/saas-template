@@ -1,22 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // ---------------------------------------------------------------------------
-// Mock server-context ALS
+// Mock server-context ALS — hoisted so the factory always sees the live object
 // ---------------------------------------------------------------------------
-const mockNewsletterProviderRegistry: Record<string, (() => object) | undefined> = {}
-const mockCacheProvider = {
-  get: vi.fn<() => Promise<unknown>>(),
-  set: vi.fn<() => Promise<void>>(),
-  delete: vi.fn<() => Promise<void>>(),
-  deleteByPrefix: vi.fn<() => Promise<void>>(),
-}
-
-vi.mock('@/lib/server-context', () => ({
-  getServerContext: () => ({
+const { mockServerContext, mockCacheProvider, mockNewsletterProviderRegistry } = vi.hoisted(() => {
+  const mockNewsletterProviderRegistry: Record<string, (() => object) | undefined> = {}
+  const mockCacheProvider = {
+    get: vi.fn<() => Promise<unknown>>(),
+    set: vi.fn<(key: string, value: unknown, ttl: number) => Promise<void>>(),
+    delete: vi.fn<() => Promise<void>>(),
+    deleteByPrefix: vi.fn<() => Promise<void>>(),
+  }
+  const mockServerContext: {
+    env: Record<string, unknown>
+    newsletterProviderRegistry: typeof mockNewsletterProviderRegistry
+    cacheProvider: object | null
+  } = {
     env: {},
     newsletterProviderRegistry: mockNewsletterProviderRegistry,
     cacheProvider: mockCacheProvider,
-  }),
+  }
+  return { mockServerContext, mockCacheProvider, mockNewsletterProviderRegistry }
+})
+
+vi.mock('@/lib/server-context', () => ({
+  getServerContext: () => mockServerContext,
   als: {
     getStore: () => ({
       newsletterProviderRegistry: mockNewsletterProviderRegistry,
@@ -369,39 +377,97 @@ describe('checkRateLimit', () => {
     mockCacheProvider.set.mockResolvedValue(undefined)
   })
 
-  it('allows first request and stores count 1', async () => {
+  it('allows first request and stores timestamps array', async () => {
     mockCacheProvider.get.mockResolvedValue(null)
+    const before = Date.now()
     const result = await checkRateLimit('1.2.3.4', 'subscribe')
     expect(result).toBe(true)
-    expect(mockCacheProvider.set).toHaveBeenCalledWith(
-      'newsletter:ratelimit:1.2.3.4:subscribe',
-      { count: 1 },
-      60,
-    )
+    const setCall = mockCacheProvider.set.mock.calls[0] as unknown as [string, number[], number]
+    expect(setCall[0]).toBe('newsletter:ratelimit:1.2.3.4:subscribe')
+    expect(setCall[1]).toBeInstanceOf(Array)
+    expect(setCall[1].length).toBe(1)
+    expect(typeof setCall[1][0]).toBe('number')
+    expect(setCall[2]).toBe(60)
+    const after = Date.now()
+    expect(setCall[1][0]).toBeGreaterThanOrEqual(before)
+    expect(setCall[1][0]).toBeLessThanOrEqual(after)
   })
 
   it('allows up to 5 requests, blocks 6th', async () => {
-    let callCount = 0
-    mockCacheProvider.get.mockImplementation(async () => {
-      callCount++
-      return { count: callCount }
+    // Simulate persistent KV: set updates the value that get returns
+    let storedTimestamps: number[] = []
+    mockCacheProvider.get.mockImplementation(async () => storedTimestamps)
+    mockCacheProvider.set.mockImplementation(async (_key: string, val: unknown) => {
+      storedTimestamps = val as number[]
     })
 
-    // 1-5 should be allowed
+    // 1st-5th requests should be allowed
     for (let i = 1; i <= 5; i++) {
       const allowed = await checkRateLimit('1.2.3.4', 'subscribe')
       expect(allowed).toBe(true)
     }
 
-    // 6th should be blocked
+    // 6th request should be blocked
     const allowed = await checkRateLimit('1.2.3.4', 'subscribe')
     expect(allowed).toBe(false)
   })
 
-  it('returns true when cache provider is unavailable (fail open)', async () => {
-    // When cache returns null (no entry), no rate limit is applied — this is the fail-open path
-    mockCacheProvider.get.mockResolvedValue(null)
+  it('resets after window expires', async () => {
+    // Simulate KV with timestamps that are all >60s old — filtered out
+    let storedTimestamps: number[] = Array.from(
+      { length: 5 },
+      (_, i) => Date.now() - 70000 - i * 1000,
+    )
+    mockCacheProvider.get.mockImplementation(async () => storedTimestamps)
+    mockCacheProvider.set.mockImplementation(async (_key: string, val: unknown) => {
+      storedTimestamps = val as number[]
+    })
+
+    // Should be allowed because old timestamps are filtered out
     const result = await checkRateLimit('1.2.3.4', 'subscribe')
     expect(result).toBe(true)
+    // New timestamp should be stored
+    const setCall = mockCacheProvider.set.mock.calls[0] as unknown as [string, number[], number]
+    expect(setCall[1].length).toBe(1)
+  })
+
+  it('denies when cache provider is unavailable (fail closed)', async () => {
+    // Fail closed: when cacheProvider is null, deny the request
+    const prev = mockServerContext.cacheProvider
+    mockServerContext.cacheProvider = null
+    const result = await checkRateLimit('1.2.3.4', 'subscribe')
+    expect(result).toBe(false)
+    mockServerContext.cacheProvider = prev // restore for other tests
+  })
+
+  it('applies stricter limit (1/min) for unknown IP', async () => {
+    // Unknown IP gets 1 request allowed; 2nd is blocked
+    let storedTimestamps: number[] = []
+    mockCacheProvider.get.mockImplementation(async () => storedTimestamps)
+    mockCacheProvider.set.mockImplementation(async (_key: string, val: unknown) => {
+      storedTimestamps = val as number[]
+    })
+
+    const first = await checkRateLimit('unknown', 'subscribe')
+    expect(first).toBe(true)
+
+    const second = await checkRateLimit('unknown', 'subscribe')
+    expect(second).toBe(false)
+  })
+
+  it('allows 5 requests for known IP in sequence', async () => {
+    // Verify 5 sequential calls for a known IP all pass
+    let storedTimestamps: number[] = []
+    mockCacheProvider.get.mockImplementation(async () => storedTimestamps)
+    mockCacheProvider.set.mockImplementation(async (_key: string, val: unknown) => {
+      storedTimestamps = val as number[]
+    })
+
+    for (let i = 0; i < 5; i++) {
+      const allowed = await checkRateLimit('5.6.7.8', 'subscribe')
+      expect(allowed).toBe(true)
+    }
+    const sixth = await checkRateLimit('5.6.7.8', 'subscribe')
+    expect(sixth).toBe(false)
   })
 })
