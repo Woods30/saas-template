@@ -9,7 +9,7 @@ describe('parsePublicEnv', () => {
   })
 
   it('拒绝非法 VITE_BASE_URL', () => {
-    expect(() => parsePublicEnv({ VITE_BASE_URL: 'not-a-url' })).toThrow()
+    expect(() => parsePublicEnv({ VITE_BASE_URL: 'not-a-url' })).toThrow(/url/i)
   })
 
   it('仅接受 stripe 作为支付 provider', () => {
