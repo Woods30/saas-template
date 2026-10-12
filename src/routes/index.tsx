@@ -23,9 +23,6 @@ function HomePage() {
       <p className="mt-2 text-muted-foreground">{m.site_description()}</p>
       <nav className="mt-6 flex gap-4 text-sm">
         <a href="/">{m.nav_home()}</a>
-        <a href="/pricing">{m.nav_pricing()}</a>
-        <a href="/docs">{m.nav_docs()}</a>
-        <a href="/dashboard">{m.nav_dashboard()}</a>
       </nav>
       <Button className="mt-6">{m.nav_dashboard()}</Button>
     </main>
