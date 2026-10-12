@@ -1362,26 +1362,25 @@ SOFTWARE.
 
 构建在 **Cloudflare Workers** 上的 **TanStack Start** SaaS 起步模板。
 
-## 特性
+## 已实现（Sub-Plan A）
 
-- 认证（Better Auth：邮箱 + Google OAuth）
-- 订阅与单次支付（Stripe Checkout + Webhook）
-- 文件上传（Cloudflare R2）
-- 邮件（React Email + Cloudflare Email Service / Resend）
-- Newsletter（Resend Audiences）
-- 联系表单 + Discord 通知
-- 多语言（zh / en，Paraglide JS）
-- 文档站（双语 Content Collections）
-- SEO（sitemap、robots、canonical、hreflang、JSON-LD）
-- PWA manifest
-- 多家 Analytics（GA / Plausible / Umami / Clarity）
+- TanStack Start + Cloudflare Workers 骨架（Vite 8、React 19、TypeScript 7 strict）
+- Tailwind v4 + shadcn/ui（Base UI 基座、Tabler 图标、两层主题变量）
+- 多语言（zh / en，Paraglide JS，SSR 与 hydration 一致）
+- 站点配置与 SEO helper（canonical / OG）
+- Biome 校验、Vitest 单元测试、env 校验与客户端 bundle 检查脚本
+
+## 后续计划
+
+- Sub-Plan B：认证、订阅与支付、文件存储、邮件、联系表单
+- Sub-Plan C：营销页面与文档站
+- Sub-Plan D：端到端测试与 CI
 
 ## 快速开始
 
 ```bash
 pnpm install
-pnpm run setup        # 交互式：创建 D1/R2/KV，配置 Stripe 与 Email
-pnpm run db:migrate:local
+cp .env.example .env
 pnpm dev              # http://localhost:3000
 ```
 
@@ -1393,16 +1392,20 @@ pnpm dev              # http://localhost:3000
 | `pnpm build` | 生产构建 |
 | `pnpm deploy` | 校验环境 → 构建 → 客户端 bundle 检查 → 部署到 Workers |
 | `pnpm test` | 跑单元测试 |
-| `pnpm test:e2e` | 跑本地端到端 |
-| `pnpm check` | Biome + TypeScript + env + locale 校验 |
-| `pnpm locale:check` | 检查多语言键配对 |
+| `pnpm typecheck` | 编译 locale 后跑 `tsc --noEmit` |
+| `pnpm check` | locale 编译 + Biome + TypeScript + env + locale 校验 |
 
-完整文档见 `/docs`（应用内）或 `docs/superpowers/specs/2026-10-12-saas-template-design.md`。
+完整文档见 `docs/superpowers/specs/2026-10-12-saas-template-design.md`。
 
 ## 许可
 
 MIT。
 ```
+
+> **注意**：README 只能描述**当前已实现**的能力，未实现的模块须明确列为后续计划。命令表必须
+> 从 `package.json` 的 `scripts` 实际提取——`setup` / `db:migrate:local` / `test:e2e` 等属后续
+> sub-plan，当前不存在，**不得**写入。Node 下限见 `package.json` 的 `engines`（≥ 22.12.0），建议
+> 使用偶数 LTS（22 / 24）。
 
 **Step 11.3: 写入 `CONTRIBUTING.md`（中文）**
 
@@ -1421,7 +1424,9 @@ MIT。
 - 新增键必须在两个 locale 文件中同时存在。
 - 修改前运行 `pnpm locale:sort` 与 `pnpm locale:check`。
 
-## Markdown 文档站
+## Markdown 文档站（Sub-Plan C）
+
+> 以下约定属后续 Sub-Plan C，当前仓库尚无 `content/docs/**`，先记录以备后续实现。
 
 - `content/docs/**` 为英文源；中文版使用 `*.zh.md` 后缀。
 - 新增页面必须中英两份；缺失中文时 CI 失败。
@@ -1432,7 +1437,8 @@ MIT。
 - 单一逻辑工作单元
 - TDD：先写失败测试，再写实现，再 commit
 - 提交消息格式：`<type>(<scope>): <subject>`
-- 所有提交前运行 `pnpm check` 与 `pnpm test`
+- 所有提交前运行 `pnpm check` 与 `pnpm test`（`pnpm check` 依赖 Task 12 交付的
+  `scripts/check-env.ts`，在该任务落地前会在 `check:env` 处失败）
 ```
 
 **Step 11.4: Commit**
@@ -1450,6 +1456,18 @@ git commit -m "docs: README、CONTRIBUTING、LICENSE"
 - Create: `scripts/check-env.ts`
 - Create: `scripts/check-env-prod.ts`
 - Create: `scripts/check-client-bundle.ts`
+
+> **下方代码为意图示意，实施须按以下修正**（详见 `task-12-context.md`）：
+> - `statSync(target, { throwIfNotExists: false })` —— Node 的正确选项名是 **`throwIfNoEntry: false`**，
+>   写成前者会抛 `TypeError`。且必须校验目录**非空**（含真实 js/html），否则空产物假通过。
+> - `check-env` 不能只验证 `.env` 存在；须复用 `src/env` 的 Zod schema 校验非法 URL/enum/secret，
+>   并处理 `.env.example` 中 optional 字段为空串的情况（空串应可直接复制为 `.env` 并通过开发检查）。
+> - 生产校验须强制 `NODE_ENV=production`，不信任 `.env` 中的 `NODE_ENV=development`。
+> - env 解析**禁止** `raw.split('=')`；用 `node:util` 的 `parseEnv` 或 Vite `loadEnv`，正确处理引用、
+>   注释、空白与「进程 env 覆盖 .env」的优先级。
+> - 诊断只显示变量名与错误原因，**不得**打印值、文件内容或 Zod 的原始输入。
+> - bundle 扫描应覆盖 schema 中**全部** secret 字段（至少 brief 三项），并递归扫描实际
+>   `dist/client`；不得把整个服务端 schema 导入客户端。
 
 **Step 12.1: 写入 `scripts/check-env.ts`**
 
@@ -1502,7 +1520,7 @@ import { join } from 'node:path';
 const forbidden = ['STRIPE_SECRET_KEY', 'BETTER_AUTH_SECRET', 'RESEND_API_KEY'];
 const target = 'dist/client';
 
-if (!statSync(target, { throwIfNotExists: false })) {
+if (!statSync(target, { throwIfNoEntry: false })) {
   console.error(`❌ 目录 ${target} 不存在，请先运行 pnpm build`);
   process.exit(1);
 }
