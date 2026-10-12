@@ -1,0 +1,10 @@
+node_modules
+.output
+.wrangler
+dist
+.content-collections
+src/locale/paraglide
+*.log
+.env
+.env.local
+.DS_Store
