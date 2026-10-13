@@ -59,6 +59,24 @@
   color-scheme: dark;
 }
 
+/*
+ * 自定义 `dark:` variant：Tailwind 内置的 dark: 只看系统 prefers-color-scheme，
+ * 与显式主题选择脱节——用户显式选深色而系统为浅色时，token 随 color-scheme 变暗，
+ * 但 dark: 工具类仍不生效（例如 ghost 按钮 hover 用满色 bg-muted 而非 bg-muted/50）。
+ * 这里改为按「有效主题」判定：data-theme="dark" 恒真、data-theme="light" 恒假，
+ * 仅 data-theme="system" 时才跟随系统偏好。选择器同时匹配 <html> 自身与其后代元素。
+ */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where([data-theme="system"], [data-theme="system"] *) {
+      @slot;
+    }
+  }
+}
+
 /* ---- 品牌 token：每个 token 用 light-dark(明, 暗) 一次声明 ---- */
 :root {
   --background: light-dark(oklch(0.9835 0.009 78.28), oklch(0.1717 0.0376 274.61));
