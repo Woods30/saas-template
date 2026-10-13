@@ -14,7 +14,7 @@ export default [
   },
   {
     "title": "隐私政策",
-    "locale": "en",
+    "locale": "zh",
     "content": "# 隐私政策\n\n我们尊重你的隐私。本政策说明…",
     "_meta": {
       "filePath": "privacy.zh.md",
@@ -38,7 +38,7 @@ export default [
   },
   {
     "title": "服务条款",
-    "locale": "en",
+    "locale": "zh",
     "content": "# 服务条款\n\n使用 SaaS Template 即代表你同意…",
     "_meta": {
       "filePath": "terms.zh.md",

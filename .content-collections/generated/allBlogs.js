@@ -21,7 +21,7 @@ export default [
     "description": "介绍 SaaS Template",
     "date": "2026-10-12T00:00:00.000Z",
     "published": true,
-    "locale": "en",
+    "locale": "zh",
     "tags": [],
     "content": "# 你好，世界\n\n这是 SaaS Template 博客的第一篇。",
     "_meta": {

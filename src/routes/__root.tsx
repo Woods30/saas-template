@@ -11,7 +11,6 @@ import {
 import type { ReactNode } from 'react'
 import { AnalyticsProvider } from '@/components/AnalyticsProvider'
 import { JsonLd } from '@/components/JsonLd'
-import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher'
 import { organizationJsonLd } from '@/lib/json-ld'
 import { htmlLang } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
@@ -62,15 +61,12 @@ function RootDocument({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext()
-  const locale = getLocale()
 
   return (
     <QueryClientProvider client={queryClient}>
       <AnalyticsProvider>
-        <header className="flex items-center justify-between border-b border-border px-6 py-3">
-          <span className="text-sm font-medium text-foreground">{m.site_title()}</span>
-          <LocaleSwitcher value={locale} />
-        </header>
+        {/* 顶部导航由各 layout 自行提供（如 `MarketingLayout` 的 Navbar），
+            root 不再渲染全局 header，避免与 layout 内的 Navbar 重复。 */}
         <Outlet />
       </AnalyticsProvider>
     </QueryClientProvider>

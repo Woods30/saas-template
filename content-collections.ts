@@ -1,5 +1,6 @@
 import { defineCollection, defineConfig } from '@content-collections/core'
 import { z } from 'zod'
+import { resolveContentLocale } from './src/lib/content-locale'
 
 const docs = defineCollection({
   name: 'docs',
@@ -12,10 +13,7 @@ const docs = defineCollection({
     order: z.number().default(0),
     content: z.string().optional(),
   }),
-  transform: (doc) => {
-    const lang = doc._meta.path.endsWith('.zh.md') ? 'zh' : 'en'
-    return { ...doc, locale: lang }
-  },
+  transform: (doc) => ({ ...doc, locale: resolveContentLocale(doc._meta.fileName) }),
 })
 
 const blog = defineCollection({
@@ -32,10 +30,7 @@ const blog = defineCollection({
     tags: z.array(z.string()).default([]),
     content: z.string().optional(),
   }),
-  transform: (doc) => {
-    const lang = doc._meta.path.endsWith('.zh.md') ? 'zh' : 'en'
-    return { ...doc, locale: lang }
-  },
+  transform: (doc) => ({ ...doc, locale: resolveContentLocale(doc._meta.fileName) }),
 })
 
 const changelog = defineCollection({
@@ -49,10 +44,7 @@ const changelog = defineCollection({
     locale: z.string().default('en'),
     content: z.string().optional(),
   }),
-  transform: (doc) => {
-    const lang = doc._meta.path.endsWith('.zh.md') ? 'zh' : 'en'
-    return { ...doc, locale: lang }
-  },
+  transform: (doc) => ({ ...doc, locale: resolveContentLocale(doc._meta.fileName) }),
 })
 
 const legal = defineCollection({
@@ -64,10 +56,7 @@ const legal = defineCollection({
     locale: z.string().default('en'),
     content: z.string().optional(),
   }),
-  transform: (doc) => {
-    const lang = doc._meta.path.endsWith('.zh.md') ? 'zh' : 'en'
-    return { ...doc, locale: lang }
-  },
+  transform: (doc) => ({ ...doc, locale: resolveContentLocale(doc._meta.fileName) }),
 })
 
 export default defineConfig({
