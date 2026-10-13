@@ -9,6 +9,7 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { KVCacheProvider } from '@/cache/provider/kv'
+import { defaultTheme, type Theme } from '@/lib/theme'
 import type { MailProvider } from '@/mail/types'
 import type { NewsletterProviderName } from '@/newsletter'
 import type { NewsletterProvider } from '@/newsletter/types'
@@ -34,6 +35,11 @@ interface ServerContext {
    * 阻止这些 inline 脚本并导致 `window.$_TSR` 缺失，进而 hydration 失败。
    */
   nonce: string
+  /**
+   * 请求主题（来自 `THEME` cookie，缺失为 `system`）。由 `src/server.ts` 在
+   * 请求入口写入；`__root.tsx` 据此输出 `<html data-theme>`，避免首屏闪烁。
+   */
+  theme: Theme
 }
 
 const als = new AsyncLocalStorage<ServerContext>()
@@ -56,6 +62,8 @@ export function getServerContext(): ServerContext {
       paymentProviderRegistry: undefined,
       // 客户端 / 测试环境无 per-request nonce；空串会被 CSP 拒绝但不会让代码崩
       nonce: '',
+      // 客户端 / 测试环境无 per-request 主题；回退为跟随系统。
+      theme: defaultTheme,
     }
   }
   return ctx

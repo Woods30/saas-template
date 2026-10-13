@@ -13,6 +13,7 @@ import { AnalyticsProvider } from '@/components/AnalyticsProvider'
 import { JsonLd } from '@/components/JsonLd'
 import { organizationJsonLd } from '@/lib/json-ld'
 import { htmlLang } from '@/lib/locale'
+import { getTheme } from '@/lib/theme'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 import globalsCss from '../styles/globals.css?url'
@@ -22,7 +23,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { name: 'theme-color', content: '#0070f3' },
+      { name: 'theme-color', content: '#FDF9F3', media: '(prefers-color-scheme: light)' },
+      { name: 'theme-color', content: '#0B0E20', media: '(prefers-color-scheme: dark)' },
       { title: m.site_name() },
       { name: 'description', content: m.site_description() },
     ],
@@ -45,8 +47,12 @@ function RootDocument({ children }: { children: ReactNode }) {
   // 解析结果，因此不会出现 lang 与内容不一致。
   const locale = getLocale()
 
+  // 与 `getLocale()` 同理：SSR 读 ALS（请求 cookie），客户端读 `THEME` cookie，
+  // 两侧对同一 cookie 得出同一值，故 `data-theme` 不会在 hydration 时变化。
+  const theme = getTheme()
+
   return (
-    <html lang={htmlLang(locale)}>
+    <html lang={htmlLang(locale)} data-theme={theme}>
       <head>
         <HeadContent />
       </head>
