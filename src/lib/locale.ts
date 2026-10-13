@@ -133,3 +133,34 @@ export function compareMessageKeys(
     extra: [...candidateKeys].filter((key) => !baseKeys.has(key)).sort(),
   }
 }
+
+/**
+ * 从 pathname 提取显式 locale 前缀（`/en/x` → `en`）；无前缀或未知前缀返回 `undefined`。
+ * 仅识别完整的第一段，避免 `/english` 被误判为 `en`。
+ */
+export function localeFromPathname(pathname: string): Locale | undefined {
+  const [, first] = pathname.split('/')
+  return parseLocale(first)
+}
+
+/**
+ * 剥离开头的已知 locale 前缀，返回裸路径。
+ * `/en` → `/`；`/en/pricing` → `/pricing`；`/pricing` → `/pricing`；`/fr/x` → `/fr/x`。
+ */
+export function stripLocalePrefix(pathname: string): string {
+  const segments = pathname.split('/')
+  if (segments.length >= 2 && parseLocale(segments[1])) {
+    const rest = `/${segments.slice(2).join('/')}`
+    return rest === '/' ? '/' : rest.replace(/\/$/, '')
+  }
+  return pathname || '/'
+}
+
+/**
+ * 把 pathname 的 locale 前缀替换为 `next`，用于语言切换时导航到真实 URL。
+ * 未知前缀不会被剥离，只在新前缀后保留原路径（避免丢路径）。
+ */
+export function swapLocale(pathname: string, next: Locale): string {
+  const bare = stripLocalePrefix(pathname)
+  return bare === '/' ? `/${next}` : `/${next}${bare}`
+}

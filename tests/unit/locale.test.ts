@@ -161,3 +161,47 @@ describe('compareMessageKeys', () => {
     expect(result.extra).toEqual(['nav_home'])
   })
 })
+
+import { localeFromPathname, stripLocalePrefix, swapLocale } from '@/lib/locale'
+
+describe('localeFromPathname', () => {
+  it('提取显式 locale 前缀', () => {
+    expect(localeFromPathname('/en')).toBe('en')
+    expect(localeFromPathname('/zh/pricing')).toBe('zh')
+  })
+
+  it('无前缀或未知前缀返回 undefined', () => {
+    expect(localeFromPathname('/')).toBeUndefined()
+    expect(localeFromPathname('/pricing')).toBeUndefined()
+    expect(localeFromPathname('/fr/x')).toBeUndefined()
+  })
+})
+
+describe('stripLocalePrefix', () => {
+  it('剥离已知前缀并保留其余路径', () => {
+    expect(stripLocalePrefix('/zh')).toBe('/')
+    expect(stripLocalePrefix('/en/pricing')).toBe('/pricing')
+  })
+
+  it('无已知前缀时原样返回', () => {
+    expect(stripLocalePrefix('/')).toBe('/')
+    expect(stripLocalePrefix('/pricing')).toBe('/pricing')
+    expect(stripLocalePrefix('/fr/x')).toBe('/fr/x')
+  })
+})
+
+describe('swapLocale', () => {
+  it('替换已有前缀', () => {
+    expect(swapLocale('/zh/pricing', 'en')).toBe('/en/pricing')
+    expect(swapLocale('/en', 'zh')).toBe('/zh')
+  })
+
+  it('无前缀时补上，根路径得到纯前缀', () => {
+    expect(swapLocale('/', 'en')).toBe('/en')
+    expect(swapLocale('/pricing', 'en')).toBe('/en/pricing')
+  })
+
+  it('未知前缀不剥离，仅前置新前缀', () => {
+    expect(swapLocale('/fr/x', 'en')).toBe('/en/fr/x')
+  })
+})

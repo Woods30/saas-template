@@ -1,6 +1,11 @@
-import type { ChangeEvent } from 'react'
-import { LOCALES, type Locale, localeConfig } from '@/lib/locale'
-import { setLocale } from '@/locale/paraglide/runtime.js'
+import { Menu } from '@base-ui/react/menu'
+import { IconCheck, IconLanguage } from '@tabler/icons-react'
+import { LocaleFlag } from '@/components/icons/LocaleFlags'
+import { Button } from '@/components/ui/button'
+import { LOCALE_COOKIE_NAME, LOCALES, type Locale, localeConfig, swapLocale } from '@/lib/locale'
+import { m } from '@/locale/paraglide/messages.js'
+
+const LOCALE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
 
 interface LocaleSwitcherProps {
   /** 当前 locale，由服务端与客户端解析结果一致地传入。 */
@@ -8,31 +13,42 @@ interface LocaleSwitcherProps {
 }
 
 /**
- * 语言切换下拉框。
+ * 图标式语言切换。
  *
- * 复用 Paraglide 的 `setLocale`：它会按编译期策略写入 `NEXT_LOCALE` cookie（见
- * `project.inlang/paraglide.config.ts` 的 `cookieName`）并触发整页重载，使服务端按
- * 新 cookie 重新渲染——locale 变更必须走文档导航，SSR 与 hydration 才会保持一致。
+ * 选择后导航到**真实 URL 前缀**（`/zh/pricing` ↔ `/en/pricing`），并同步写
+ * `NEXT_LOCALE` cookie，使无前缀的 `/` 也能记住选择。用整页导航而非客户端路由，
+ * 与既有「locale 变更必须走文档导航」的约束一致，保证 SSR 与 hydration 一致。
  */
 export function LocaleSwitcher({ value }: LocaleSwitcherProps) {
-  function handleChange(event: ChangeEvent<HTMLSelectElement>) {
-    const next = event.target.value as Locale
+  function select(next: Locale) {
     if (next === value) return
-    void setLocale(next)
+    document.cookie = `${LOCALE_COOKIE_NAME}=${next}; Path=/; Max-Age=${LOCALE_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`
+    const { pathname, search, hash } = window.location
+    window.location.assign(`${swapLocale(pathname, next)}${search}${hash}`)
   }
 
   return (
-    <select
-      aria-label="切换语言"
-      value={value}
-      onChange={handleChange}
-      className="rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
-    >
-      {LOCALES.map((locale) => (
-        <option key={locale} value={locale}>
-          {localeConfig[locale].name}
-        </option>
-      ))}
-    </select>
+    <Menu.Root>
+      <Menu.Trigger render={<Button variant="ghost" size="icon" aria-label={m.locale_label()} />}>
+        <IconLanguage aria-hidden />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner align="end" sideOffset={8}>
+          <Menu.Popup className="min-w-36 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
+            {LOCALES.map((locale) => (
+              <Menu.Item
+                key={locale}
+                onClick={() => select(locale)}
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-muted"
+              >
+                <LocaleFlag locale={locale} />
+                <span className="flex-1">{localeConfig[locale].name}</span>
+                {locale === value && <IconCheck className="size-4" aria-hidden />}
+              </Menu.Item>
+            ))}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
   )
 }

@@ -16,3 +16,12 @@ if (typeof window !== 'undefined') {
     })),
   });
 }
+
+// Base UI Menu 依赖 ResizeObserver；jsdom 未实现，补一个空实现避免组件测试报错。
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver
+}

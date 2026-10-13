@@ -150,5 +150,6 @@
   "theme_label": "Toggle theme",
   "theme_light": "Light",
   "theme_dark": "Dark",
-  "theme_system": "System"
+  "theme_system": "System",
+  "locale_label": "Change language"
 }

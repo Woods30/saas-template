@@ -150,5 +150,6 @@
   "theme_label": "切换主题",
   "theme_light": "浅色",
   "theme_dark": "深色",
-  "theme_system": "跟随系统"
+  "theme_system": "跟随系统",
+  "locale_label": "切换语言"
 }
