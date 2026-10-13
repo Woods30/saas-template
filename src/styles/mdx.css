@@ -1,0 +1,27 @@
+.mdx {
+  @apply max-w-3xl leading-7;
+}
+.mdx h1 {
+  @apply mt-8 mb-4 text-3xl font-bold;
+}
+.mdx h2 {
+  @apply mt-8 mb-3 text-2xl font-semibold;
+}
+.mdx h3 {
+  @apply mt-6 mb-2 text-xl font-semibold;
+}
+.mdx p {
+  @apply mb-4;
+}
+.mdx code {
+  @apply rounded bg-muted px-1 py-0.5 text-sm;
+}
+.mdx pre {
+  @apply mb-4 overflow-auto rounded bg-zinc-900 p-4 text-zinc-100;
+}
+.mdx pre code {
+  @apply bg-transparent p-0 text-sm;
+}
+.mdx strong {
+  @apply font-semibold;
+}
