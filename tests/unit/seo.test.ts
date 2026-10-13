@@ -208,8 +208,8 @@ describe('websiteConfig', () => {
   it('只承载语言无关值：名称与图片路径', async () => {
     const { website } = await loadModules(CUSTOM_BASE_URL)
     const { metadata } = website.websiteConfig
-    expect(metadata.name).toBe('SaaS Template')
-    expect(metadata.images.ogImage).toBe('/og.png')
+    expect(metadata.name).toBe('Jerbix')
+    expect(metadata.images.ogImage).toBe('/logo.png')
   })
 
   it('不保留语言相关的 title / description（随语言变化的文案由 m.*() 输出）', async () => {
