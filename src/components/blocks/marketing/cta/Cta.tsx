@@ -1,5 +1,4 @@
 import { Link } from '@tanstack/react-router'
-import { Button } from '@/components/ui/button'
 import type { CtaProps } from './types'
 
 export function Cta({ title, description, primaryCta, secondaryCta }: CtaProps) {
@@ -9,17 +8,19 @@ export function Cta({ title, description, primaryCta, secondaryCta }: CtaProps) 
         <h2 className="text-3xl font-bold">{title}</h2>
         {description && <p className="mt-2 opacity-90">{description}</p>}
         <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-          <Button asChild variant="secondary">
-            <Link to={primaryCta.href}>{primaryCta.label}</Link>
-          </Button>
+          <Link
+            to={primaryCta.href}
+            className="rounded bg-secondary px-4 py-2 text-secondary-foreground"
+          >
+            {primaryCta.label}
+          </Link>
           {secondaryCta && (
-            <Button
-              asChild
-              variant="outline"
-              className="border-primary-foreground text-primary-foreground"
+            <Link
+              to={secondaryCta.href}
+              className="rounded border border-primary-foreground px-4 py-2 text-primary-foreground"
             >
-              <Link to={secondaryCta.href}>{secondaryCta.label}</Link>
-            </Button>
+              {secondaryCta.label}
+            </Link>
           )}
         </div>
       </div>

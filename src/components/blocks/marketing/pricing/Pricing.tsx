@@ -1,14 +1,11 @@
 import { Link } from '@tanstack/react-router'
-import { Button } from '@/components/ui/button'
 import type { PricingProps } from './types'
 
 export function Pricing({ title, subtitle, plans, renderCta }: PricingProps) {
   return (
     <section className="mx-auto max-w-6xl px-6 py-20">
       {title && <h2 className="text-center text-3xl font-bold">{title}</h2>}
-      {subtitle && (
-        <p className="mt-2 text-center text-muted-foreground">{subtitle}</p>
-      )}
+      {subtitle && <p className="mt-2 text-center text-muted-foreground">{subtitle}</p>}
       <div className="mt-10 grid gap-6 md:grid-cols-3">
         {plans.map((plan) => (
           <div
@@ -28,6 +25,7 @@ export function Pricing({ title, subtitle, plans, renderCta }: PricingProps) {
             )}
             <div className="mt-4 space-y-1">
               {plan.prices.map((p, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: static ordered list
                 <p key={i} className="text-2xl font-bold">
                   {(p.amount / 100).toLocaleString('en-US', {
                     style: 'currency',
@@ -44,6 +42,7 @@ export function Pricing({ title, subtitle, plans, renderCta }: PricingProps) {
             </div>
             <ul className="mt-4 flex-1 space-y-2 text-sm">
               {plan.features.map((f, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: static ordered list
                 <li key={i} className="flex gap-2">
                   <span aria-hidden>✓</span>
                   {f}
@@ -54,9 +53,12 @@ export function Pricing({ title, subtitle, plans, renderCta }: PricingProps) {
               {renderCta ? (
                 renderCta(plan)
               ) : (
-                <Button asChild className="w-full">
-                  <Link to={plan.cta.href}>{plan.cta.label}</Link>
-                </Button>
+                <Link
+                  to={plan.cta.href}
+                  className="rounded bg-primary px-4 py-2 text-center text-primary-foreground"
+                >
+                  {plan.cta.label}
+                </Link>
               )}
             </div>
           </div>

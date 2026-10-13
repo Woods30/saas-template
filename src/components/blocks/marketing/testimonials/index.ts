@@ -1,2 +1,2 @@
 export { Testimonials } from './Testimonials'
-export type { TestimonialsProps, Testimonial } from './types'
+export type { Testimonial, TestimonialsProps } from './types'

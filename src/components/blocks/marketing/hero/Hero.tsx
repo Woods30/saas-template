@@ -1,4 +1,3 @@
-import { Button } from '@/components/ui/button'
 import { Link } from '@tanstack/react-router'
 import type { HeroProps } from './types'
 
@@ -14,14 +13,20 @@ export function Hero(props: HeroProps) {
       {(props.primaryCta || props.secondaryCta) && (
         <div className={`mt-8 flex gap-3 ${align === 'center' ? 'justify-center' : ''}`}>
           {props.primaryCta && (
-            <Button asChild>
-              <Link to={props.primaryCta.href}>{props.primaryCta.label}</Link>
-            </Button>
+            <Link
+              to={props.primaryCta.href}
+              className="rounded bg-primary px-4 py-2 text-primary-foreground"
+            >
+              {props.primaryCta.label}
+            </Link>
           )}
           {props.secondaryCta && (
-            <Button asChild variant="outline">
-              <Link to={props.secondaryCta.href}>{props.secondaryCta.label}</Link>
-            </Button>
+            <Link
+              to={props.secondaryCta.href}
+              className="rounded border border-border px-4 py-2 text-foreground"
+            >
+              {props.secondaryCta.label}
+            </Link>
           )}
         </div>
       )}

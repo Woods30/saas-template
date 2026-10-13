@@ -1,2 +1,2 @@
 export { Pricing } from './Pricing'
-export type { PricingProps, PricingPlan } from './types'
+export type { PricingPlan, PricingProps } from './types'

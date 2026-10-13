@@ -18,12 +18,11 @@ export const blocks = {
 
 export type BlockName = keyof typeof blocks
 
-export { Cta, Faq, Features, Hero, NewsletterCta, Stats, Testimonials }
-
-export type { HeroProps } from './hero'
-export type { FeaturesProps, FeatureItem } from './features'
-export type { StatsProps, StatItem } from './stats'
-export type { FaqProps, FaqItem } from './faq'
-export type { TestimonialsProps, Testimonial } from './testimonials'
-export type { NewsletterCtaProps } from './newsletter-cta'
 export type { CtaProps } from './cta'
+export type { FaqItem, FaqProps } from './faq'
+export type { FeatureItem, FeaturesProps } from './features'
+export type { HeroProps } from './hero'
+export type { NewsletterCtaProps } from './newsletter-cta'
+export type { StatItem, StatsProps } from './stats'
+export type { Testimonial, TestimonialsProps } from './testimonials'
+export { Cta, Faq, Features, Hero, NewsletterCta, Stats, Testimonials }

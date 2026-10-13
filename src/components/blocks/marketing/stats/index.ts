@@ -1,2 +1,2 @@
 export { Stats } from './Stats'
-export type { StatsProps, StatItem } from './types'
+export type { StatItem, StatsProps } from './types'

@@ -1,2 +1,2 @@
 export { Features } from './Features'
-export type { FeaturesProps, FeatureItem } from './types'
+export type { FeatureItem, FeaturesProps } from './types'
