@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveContentLocale } from '@/lib/content-locale'
+import { contentSlug, resolveContentLocale } from '@/lib/content-locale'
 
 describe('resolveContentLocale', () => {
   it('.zh.md 文件识别为 zh', () => {
@@ -25,5 +25,28 @@ describe('resolveContentLocale', () => {
   it('其他 locale 后缀（未支持）一律回落到 en', () => {
     expect(resolveContentLocale('hello.ja.md')).toBe('en')
     expect(resolveContentLocale('hello.fr.md')).toBe('en')
+  })
+})
+
+describe('contentSlug', () => {
+  it('剥掉 .md 扩展名', () => {
+    expect(contentSlug('getting-started.md')).toBe('getting-started')
+  })
+
+  it('剥掉 .zh.md 后缀，得到与语言无关的 slug', () => {
+    expect(contentSlug('getting-started.zh.md')).toBe('getting-started')
+  })
+
+  it('中英同名文件产生相同 slug（切换语言不 404 的关键）', () => {
+    expect(contentSlug('getting-started.md')).toBe(contentSlug('getting-started.zh.md'))
+  })
+
+  it('不再产生泄漏语言的 slug（历史 bug 回归守卫）', () => {
+    // 旧实现用 _meta.path 会得到 "getting-started.zh"，本函数必须避免。
+    expect(contentSlug('getting-started.zh.md')).not.toBe('getting-started.zh')
+  })
+
+  it('多段路径保留（只剥末尾扩展名与 locale）', () => {
+    expect(contentSlug('guide/install.zh.md')).toBe('guide/install')
   })
 })

@@ -1,20 +1,21 @@
 import { Link } from '@tanstack/react-router'
-import { allDocs } from 'content-collections'
-import { getLocale } from '@/locale/paraglide/runtime.js'
+import type { DocEntry } from '@/lib/docs'
 
-export function DocsSidebar() {
-  const locale = getLocale()
-  const items = allDocs.filter((d) => d.locale === locale).sort((a, b) => a.order - b.order)
+/**
+ * 文档侧边栏导航。条目由父级 `DocsLayout` 按当前语言解析后传入，
+ * 本组件保持纯展示，不自行读取 locale。
+ */
+export function DocsSidebar({ docs }: { docs: DocEntry[] }) {
   return (
-    <nav className="w-56 border-r border-border p-4 text-sm">
-      <ul className="space-y-2">
-        {items.map((d) => (
-          <li key={d._meta.path}>
+    <nav className="text-sm">
+      <ul className="space-y-1">
+        {docs.map((d) => (
+          <li key={d.slug}>
             <Link
-              to="/{-$locale}/marketing/docs/$slug"
-              params={{ slug: d._meta.path }}
-              activeProps={{ className: 'font-semibold' }}
-              className="hover:underline"
+              to="/{-$locale}/docs/$slug"
+              params={{ slug: d.slug }}
+              activeProps={{ className: 'bg-muted font-semibold text-foreground' }}
+              className="block rounded-md px-3 py-1.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
             >
               {d.title}
             </Link>

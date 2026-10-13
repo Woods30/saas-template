@@ -8,7 +8,9 @@ import '@/styles/mdx.css'
  * 不支持：图片、链接、列表、表格、HTML（v0.2 升级到 @mdx-js/rollup 后开启）。
  */
 export function Mdx({ source }: { source: string }) {
-  const blocks = useMemo(() => parseBlocks(source), [source])
+  // 正文开头的 `# 标题` 与 frontmatter 的 `title` 重复（调用方都已用
+  // frontmatter 标题渲染页面 `<h1>`），丢弃首个 h1 块避免页面出现两个标题。
+  const blocks = useMemo(() => stripLeadingHeading(parseBlocks(source)), [source])
   return (
     <div className="mdx prose max-w-3xl">
       {blocks.map((b, idx) => {
@@ -31,6 +33,14 @@ export function Mdx({ source }: { source: string }) {
 interface Block {
   kind: 'h1' | 'h2' | 'h3' | 'code' | 'p'
   text: string
+}
+
+/**
+ * 丢弃正文开头的 `# 标题` 块（若存在）。所有调用方已用 frontmatter 的
+ * `title` 渲染页面标题，正文里重复的 h1 会造成页面上出现两个 `<h1>`。
+ */
+function stripLeadingHeading(blocks: Block[]): Block[] {
+  return blocks[0]?.kind === 'h1' ? blocks.slice(1) : blocks
 }
 
 function parseBlocks(source: string): Block[] {

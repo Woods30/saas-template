@@ -7,11 +7,11 @@ export default [
     "order": 1,
     "content": "# Getting Started\n\nWelcome to SaaS Template. Follow these steps to ship your first paid product.",
     "_meta": {
-      "filePath": "index.md",
-      "fileName": "index.md",
+      "filePath": "getting-started.md",
+      "fileName": "getting-started.md",
       "directory": ".",
       "extension": "md",
-      "path": "index"
+      "path": "getting-started"
     }
   },
   {
@@ -21,11 +21,11 @@ export default [
     "order": 1,
     "content": "# 快速开始\n\n欢迎使用 SaaS Template。跟随以下步骤发布你的第一个付费产品。",
     "_meta": {
-      "filePath": "index.zh.md",
-      "fileName": "index.zh.md",
+      "filePath": "getting-started.zh.md",
+      "fileName": "getting-started.zh.md",
       "directory": ".",
       "extension": "md",
-      "path": "index.zh"
+      "path": "getting-started.zh"
     }
   }
 ]

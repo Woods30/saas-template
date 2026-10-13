@@ -37,7 +37,7 @@ export function Navbar() {
           {m.nav_blog()}
         </Link>
         <Link
-          to="/{-$locale}/marketing/docs"
+          to="/{-$locale}/docs"
           className="text-muted-foreground hover:text-foreground"
           activeProps={{ className: 'font-semibold text-foreground' }}
           preload="intent"
