@@ -11,7 +11,7 @@ test('home page hydrates without React warnings or pageerror', async ({ page }) 
     consoleMessages.push(`[pageerror] ${err.message}`)
   })
 
-  await page.goto('/zh/marketing')
+  await page.goto('/zh')
   await page.waitForLoadState('networkidle')
   // Allow any deferred hydration mismatches to surface
   await page.waitForTimeout(800)

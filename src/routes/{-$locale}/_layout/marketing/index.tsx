@@ -1,24 +1,10 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { Cta, Features, Hero, Stats, Testimonials } from '@/components/blocks/marketing'
-import { homeBlocks } from '@/config/blocks'
-import { seo } from '@/lib/seo'
-import { m } from '@/locale/paraglide/messages.js'
-import { getLocale } from '@/locale/paraglide/runtime.js'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
+// `/marketing` 作为 `/` 的别名保留（避免既有深链断裂），统一重定向到 landing 单页，
+// 使同一内容只有一个 URL，canonical 均指向 `/`。
 export const Route = createFileRoute('/{-$locale}/_layout/marketing/')({
-  head: () =>
-    seo('/', { title: m.site_name(), description: m.site_description(), locale: getLocale() }),
-  component: HomePage,
+  beforeLoad: () => {
+    throw redirect({ to: '/{-$locale}' })
+  },
+  component: () => null,
 })
-
-function HomePage() {
-  return (
-    <>
-      <Hero {...homeBlocks.Hero} />
-      <Stats {...homeBlocks.Stats} />
-      <Features {...homeBlocks.Features} />
-      <Testimonials {...homeBlocks.Testimonials} />
-      <Cta {...homeBlocks.Cta} />
-    </>
-  )
-}

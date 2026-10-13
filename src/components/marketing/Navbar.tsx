@@ -9,22 +9,23 @@ export function Navbar() {
   const locale = getLocale()
   return (
     <nav className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-background/80 px-6 backdrop-blur">
-      <Link to="/{-$locale}" className="text-lg font-bold hover:opacity-80">
-        {websiteConfig.metadata.name}
+      <Link to="/{-$locale}" className="flex items-center gap-2 text-lg font-bold hover:opacity-80">
+        <img src="/icon-jerboa.svg" alt="" className="h-7 w-7" />
+        <span>{websiteConfig.metadata.name}</span>
       </Link>
       <div className="flex items-center gap-6 text-sm">
         <Link
-          to="/{-$locale}/marketing/features"
+          to="/{-$locale}"
+          hash="features"
           className="text-muted-foreground hover:text-foreground"
-          activeProps={{ className: 'font-semibold text-foreground' }}
           preload="intent"
         >
           {m.nav_features()}
         </Link>
         <Link
-          to="/{-$locale}/pricing"
+          to="/{-$locale}"
+          hash="pricing"
           className="text-muted-foreground hover:text-foreground"
-          activeProps={{ className: 'font-semibold text-foreground' }}
           preload="intent"
         >
           {m.nav_pricing()}

@@ -14,6 +14,8 @@ export const homeBlocks = {
     description: m.home_hero_description(),
     primaryCta: { label: m.home_hero_primary_cta(), href: '/auth/register' },
     secondaryCta: { label: m.home_hero_secondary_cta(), href: '/pricing' },
+    image: { src: '/mascot.png', alt: '' },
+    imageClassName: 'mx-auto mt-10 h-48 w-auto',
     align: 'center' as const,
   } satisfies HeroProps,
   Stats: {
