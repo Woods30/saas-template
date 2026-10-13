@@ -1,3 +1,5 @@
+@reference "./globals.css";
+
 .mdx {
   @apply max-w-3xl leading-7;
 }
