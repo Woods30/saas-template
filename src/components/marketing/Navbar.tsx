@@ -15,31 +15,43 @@ export function Navbar() {
         <Link
           to="/{-$locale}/marketing/features"
           className="text-muted-foreground hover:text-foreground"
+          activeProps={{ className: 'font-semibold text-foreground' }}
         >
           {m.nav_features()}
         </Link>
-        <Link to="/{-$locale}/pricing" className="text-muted-foreground hover:text-foreground">
+        <Link
+          to="/{-$locale}/pricing"
+          className="text-muted-foreground hover:text-foreground"
+          activeProps={{ className: 'font-semibold text-foreground' }}
+        >
           {m.nav_pricing()}
         </Link>
         <Link
           to="/{-$locale}/marketing/blog"
           className="text-muted-foreground hover:text-foreground"
+          activeProps={{ className: 'font-semibold text-foreground' }}
         >
           {m.nav_blog()}
         </Link>
         <Link
           to="/{-$locale}/marketing/docs"
           className="text-muted-foreground hover:text-foreground"
+          activeProps={{ className: 'font-semibold text-foreground' }}
         >
           {m.nav_docs()}
         </Link>
         <Link
           to="/{-$locale}/marketing/changelog"
           className="text-muted-foreground hover:text-foreground"
+          activeProps={{ className: 'font-semibold text-foreground' }}
         >
           {m.nav_changelog()}
         </Link>
-        <Link to="/{-$locale}/contact" className="text-muted-foreground hover:text-foreground">
+        <Link
+          to="/{-$locale}/contact"
+          className="text-muted-foreground hover:text-foreground"
+          activeProps={{ className: 'font-semibold text-foreground' }}
+        >
           {m.nav_contact()}
         </Link>
         <LocaleSwitcher value={locale} />
