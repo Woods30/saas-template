@@ -24,6 +24,7 @@ export function Hero(props: HeroProps) {
             <Link
               to={props.secondaryCta.href}
               className="rounded border border-border px-4 py-2 text-foreground"
+              preload="render"
             >
               {props.secondaryCta.label}
             </Link>
@@ -35,6 +36,9 @@ export function Hero(props: HeroProps) {
           src={props.image.src}
           alt={props.image.alt}
           className="mt-10 rounded-lg border shadow-sm"
+          decoding="async"
+          width={800}
+          height={450}
         />
       )}
     </section>

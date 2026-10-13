@@ -16,6 +16,7 @@ export function Navbar() {
           to="/{-$locale}/marketing/features"
           className="text-muted-foreground hover:text-foreground"
           activeProps={{ className: 'font-semibold text-foreground' }}
+          preload="intent"
         >
           {m.nav_features()}
         </Link>
@@ -23,6 +24,7 @@ export function Navbar() {
           to="/{-$locale}/pricing"
           className="text-muted-foreground hover:text-foreground"
           activeProps={{ className: 'font-semibold text-foreground' }}
+          preload="intent"
         >
           {m.nav_pricing()}
         </Link>
@@ -30,6 +32,7 @@ export function Navbar() {
           to="/{-$locale}/marketing/blog"
           className="text-muted-foreground hover:text-foreground"
           activeProps={{ className: 'font-semibold text-foreground' }}
+          preload="intent"
         >
           {m.nav_blog()}
         </Link>
@@ -37,6 +40,7 @@ export function Navbar() {
           to="/{-$locale}/marketing/docs"
           className="text-muted-foreground hover:text-foreground"
           activeProps={{ className: 'font-semibold text-foreground' }}
+          preload="intent"
         >
           {m.nav_docs()}
         </Link>
@@ -44,6 +48,7 @@ export function Navbar() {
           to="/{-$locale}/marketing/changelog"
           className="text-muted-foreground hover:text-foreground"
           activeProps={{ className: 'font-semibold text-foreground' }}
+          preload="intent"
         >
           {m.nav_changelog()}
         </Link>
