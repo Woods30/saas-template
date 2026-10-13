@@ -1,19 +1,19 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { allBlogs, allChangelogs, allDocs } from 'content-collections'
+import { allBlogs, allDocs } from 'content-collections'
 import { LOCALES } from '@/lib/locale'
 import { getBaseUrl } from '@/lib/urls'
 
 const STATIC_PATHS = [
   '/',
-  '/features',
   '/pricing',
-  '/about',
   '/contact',
-  '/blog',
-  '/docs',
-  '/changelog',
-  '/legal/terms',
-  '/legal/privacy',
+  '/marketing/features',
+  '/marketing/about',
+  '/marketing/blog',
+  '/marketing/docs',
+  '/marketing/changelog',
+  '/marketing/legal/terms',
+  '/marketing/legal/privacy',
 ] as const
 
 export const Route = createFileRoute('/sitemap.xml')({
@@ -39,9 +39,6 @@ export const Route = createFileRoute('/sitemap.xml')({
           }
           for (const d of allDocs.filter((d) => d.locale === l)) {
             urls.push({ loc: `${base}/${l}/docs/${d._meta.path}`, alternates: '' })
-          }
-          for (const c of allChangelogs.filter((c) => c.locale === l)) {
-            urls.push({ loc: `${base}/${l}/changelog#${c._meta.path}`, alternates: '' })
           }
         }
         const xml = `<?xml version="1.0" encoding="UTF-8"?>
