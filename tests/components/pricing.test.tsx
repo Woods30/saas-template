@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import React from 'react'
+import type React from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { Pricing } from '@/components/blocks/marketing/pricing/Pricing'
 import type { PricingPlan } from '@/components/blocks/marketing/pricing/types'
@@ -28,33 +28,42 @@ function formatPrice(amount: number, currency: string): string {
 // ---------------------------------------------------------------------------
 // pricingPlans config shape
 // ---------------------------------------------------------------------------
+/** 按 id 取 plan；缺失即抛错，避免测试内散落非空断言。 */
+function requirePlan(id: string): PricingPlan {
+  const plan = pricingPlans.find((p) => p.id === id)
+  if (!plan) throw new Error(`未找到 plan: ${id}`)
+  return plan
+}
+
 describe('pricingPlans config', () => {
   it('有 3 个 plan: free, pro_monthly, lifetime', () => {
     expect(pricingPlans.map((p) => p.id).sort()).toEqual(['free', 'lifetime', 'pro_monthly'])
   })
 
   it('free 方案无价格', () => {
-    const free = pricingPlans.find((p) => p.id === 'free')!
+    const free = requirePlan('free')
     expect(free.prices).toHaveLength(0)
     expect(free.features.length).toBeGreaterThan(0)
     expect(free.cta.label).toBeTruthy()
   })
 
   it('pro_monthly 方案价格为 $19.00/月', () => {
-    const pro = pricingPlans.find((p) => p.id === 'pro_monthly')!
+    const pro = requirePlan('pro_monthly')
+    const [proPrice] = pro.prices
     expect(pro.prices).toHaveLength(1)
-    expect(pro.prices[0].amount).toBe(1900)
-    expect(pro.prices[0].currency).toBe('USD')
-    expect(pro.prices[0].interval).toBe('month')
+    expect(proPrice?.amount).toBe(1900)
+    expect(proPrice?.currency).toBe('USD')
+    expect(proPrice?.interval).toBe('month')
     expect(pro.highlighted).toBe(true)
     expect(pro.badge).toBeTruthy()
   })
 
   it('lifetime 方案价格为 $299.00 一次性', () => {
-    const lifetime = pricingPlans.find((p) => p.id === 'lifetime')!
+    const lifetime = requirePlan('lifetime')
+    const [lifetimePrice] = lifetime.prices
     expect(lifetime.prices).toHaveLength(1)
-    expect(lifetime.prices[0].amount).toBe(29900)
-    expect(lifetime.prices[0].interval).toBe('one_time')
+    expect(lifetimePrice?.amount).toBe(29900)
+    expect(lifetimePrice?.interval).toBe('one_time')
   })
 
   it('每个 plan 都有 required fields', () => {
@@ -147,7 +156,7 @@ describe('Pricing block render', () => {
   })
 
   it('自定义 renderCta 覆盖默认 CTA 渲染', () => {
-    const customCta = vi.fn().mockReturnValue(<button>Custom CTA</button>)
+    const customCta = vi.fn().mockReturnValue(<button type="button">Custom CTA</button>)
     render(<Pricing plans={fixture} renderCta={customCta} />)
     expect(customCta).toHaveBeenCalledWith(fixture[0])
     expect(customCta).toHaveBeenCalledWith(fixture[1])

@@ -13,6 +13,13 @@ const THEME_ICON = {
   system: IconDeviceDesktop,
 } as const satisfies Record<Theme, unknown>
 
+/** 当前主题 → 点击后切换到的下一个主题的标签（用于 aria-label / title）。 */
+const NEXT_THEME_LABEL = {
+  light: m.theme_dark,
+  dark: m.theme_system,
+  system: m.theme_light,
+} as const satisfies Record<Theme, () => string>
+
 /**
  * 图标式主题切换按钮，循环 light → dark → system。
  *
@@ -29,12 +36,14 @@ export function ThemeToggle() {
     document.cookie = `${THEME_COOKIE_NAME}=${next}; Path=/; Max-Age=${THEME_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`
   }
 
+  const label = `${m.theme_label()}: ${NEXT_THEME_LABEL[theme]()}`
+
   return (
     <Button
       variant="ghost"
       size="icon"
-      aria-label={m.theme_label()}
-      title={m.theme_label()}
+      aria-label={label}
+      title={label}
       onClick={() => apply(nextTheme(theme))}
     >
       <Icon aria-hidden />

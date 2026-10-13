@@ -10,14 +10,10 @@ import { UmamiAnalyticsProvider } from '@/lib/analytics/umami'
 describe('Analytics providers', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
-    // @ts-ignore — jsdom 环境允许直接删除 window 属性
-    delete (window as Record<string, unknown>)['gtag']
-    // @ts-ignore
-    delete (window as Record<string, unknown>)['plausible']
-    // @ts-ignore
-    delete (window as Record<string, unknown>)['umami']
-    // @ts-ignore
-    delete (window as Record<string, unknown>)['clarity']
+    // jsdom 环境允许直接删除 window 上的全局注入属性
+    for (const key of ['gtag', 'plausible', 'umami', 'clarity']) {
+      Reflect.deleteProperty(window, key)
+    }
   })
 
   // ---------------------------------------------------------------------------
