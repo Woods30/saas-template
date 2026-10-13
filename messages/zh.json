@@ -1,11 +1,7 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
-  "nav_dashboard": "控制台",
-  "nav_docs": "文档",
-  "nav_home": "首页",
-  "nav_pricing": "价格",
-  "site_description": "基于 TanStack Start 与 Cloudflare Workers 的 SaaS 起手模板",
   "site_name": "SaaS Template",
+  "site_description": "基于 TanStack Start 与 Cloudflare Workers 的 SaaS 起手模板",
   "site_title": "SaaS 起步模板",
 
   "auth_login_title": "登录",
@@ -35,5 +31,148 @@
 
   "auth_error_title": "认证出错",
   "auth_error_message": "链接可能已过期或无效。",
-  "auth_error_back": "返回登录"
+  "auth_error_back": "返回登录",
+
+  "nav_dashboard": "控制台",
+  "nav_docs": "文档",
+  "nav_home": "首页",
+  "nav_pricing": "价格",
+  "nav_features": "特性",
+  "nav_blog": "博客",
+  "nav_changelog": "更新日志",
+  "nav_contact": "联系",
+  "nav_login": "登录",
+  "footer_rights": "保留所有权利",
+  "footer_terms": "服务条款",
+  "footer_privacy": "隐私政策",
+  "footer_changelog": "更新日志",
+
+  "newsletter_subscribe": "订阅",
+  "newsletter_success": "已订阅",
+  "newsletter_error": "订阅失败",
+
+  "home_hero_title": "快速构建你的 SaaS 产品",
+  "home_hero_subtitle": "现代化全栈模板，开箱即用",
+  "home_hero_description": "基于 TanStack Start + Cloudflare Workers，端到端类型安全，支持多语言，全球低延迟部署。",
+  "home_hero_primary_cta": "立即开始",
+  "home_hero_secondary_cta": "了解更多",
+
+  "home_stats_modules": "模块",
+  "home_stats_latency": "延迟",
+  "home_stats_cold_start": "冷启动",
+  "home_stats_free_tier": "免费用量",
+
+  "home_features_title": "内置全部核心模块",
+  "home_features_edge_title": "边缘部署",
+  "home_features_edge_description": "部署到全球 200+ 边缘节点，延迟低于 100ms，无需服务器管理。",
+  "home_features_payment_title": "支付集成",
+  "home_features_payment_description": "Stripe 无缝集成，支持订阅、一次性支付、退款全流程。",
+  "home_features_auth_title": "身份认证",
+  "home_features_auth_description": "完整认证系统，支持邮箱密码登录、第三方 OAuth 及多因素认证。",
+  "home_features_storage_title": "文件存储",
+  "home_features_storage_description": "集成 Cloudflare R2 / S3 兼容存储，零运维成本。",
+  "home_features_email_title": "邮件发送",
+  "home_features_email_description": "基于 Resend 的事务邮件，支持模板化管理与送达追踪。",
+  "home_features_i18n_title": "多语言",
+  "home_features_i18n_description": "内置 Paraglide JS 多语言方案，0 行代码实现语言切换。",
+
+  "home_testimonials_title": "用户怎么说",
+  "home_testimonial_1_quote": "三天上线 MVP，之前想都不敢想。",
+  "home_testimonial_1_author": "张明，全栈工程师",
+  "home_testimonial_2_quote": "边缘部署的体验太丝滑了，客户都惊讶。",
+  "home_testimonial_2_author": "李娜，创业公司 CTO",
+  "home_testimonial_3_quote": "类型安全的模板，代码即文档，团队协作效率翻倍。",
+  "home_testimonial_3_author": "王强，技术负责人",
+
+  "home_cta_title": "准备好开始了吗？",
+  "home_cta_description": "免费开始，无需信用卡。",
+  "home_cta_primary": "立即注册",
+
+  "features_hero_title": "所有你需要的功能模块",
+  "features_hero_subtitle": "按需启用，拒绝过度工程",
+  "features_section_title": "核心模块",
+
+  "feature_auth_title": "身份认证",
+  "feature_auth_description": "邮箱密码、社交登录（Google/GitHub）、Magic Link、会话管理与刷新令牌。",
+  "feature_payment_title": "支付系统",
+  "feature_payment_description": "Stripe Checkout、订阅管理、定价页面、优惠券与用量计费。",
+  "feature_storage_title": "文件存储",
+  "feature_storage_description": "Cloudflare R2 / S3 兼容存储，预签名 URL、直传、CDN 分发。",
+  "feature_email_title": "邮件发送",
+  "feature_email_description": "Resend 集成，事务邮件、批量邮件、退订管理。",
+  "feature_newsletter_title": "订阅通讯",
+  "feature_newsletter_description": "一键订阅管理，支持 Growth / RevOps 工具同步。",
+  "feature_notification_title": "推送通知",
+  "feature_notification_description": "邮件、推送（Web Push）、In-App 通知，支持 SendGrid / OneSignal。",
+
+  "features_faq_title": "常见问题",
+  "features_faq_q1": "可以不使用某些模块吗？",
+  "features_faq_a1": "当然。每个模块独立运作，可以按需禁用或替换。",
+  "features_faq_q2": "支持哪些数据库？",
+  "features_faq_a2": "开箱支持 PostgreSQL（via Drizzle ORM），也兼容 MySQL、SQLite。",
+
+  "features_cta_title": "想亲自试试？",
+  "features_cta_primary": "查看定价",
+
+  "features_page_title": "功能特性",
+  "features_page_description": "了解 SaaS Template 内置的所有核心模块与能力。",
+
+  "about_hero_title": "关于 SaaS Template",
+  "about_hero_subtitle": "让开发者专注于产品，而非基础设施",
+  "about_stat_modules": "内置模块",
+  "about_stat_providers": "第三方集成",
+  "about_stat_i18n": "语言支持",
+
+  "about_cta_title": "想参与贡献？",
+  "about_cta_primary": "查看 GitHub",
+
+  "about_page_title": "关于我们",
+  "about_page_description": "了解 SaaS Template 的愿景与团队。",
+
+  "pricing_hero_title": "简单透明的定价",
+  "pricing_hero_subtitle": "按需选择，无隐藏费用",
+
+  "pricing_cta_title": "有问题想要咨询？",
+  "pricing_cta_primary": "联系我们",
+
+  "pricing_page_title": "定价",
+  "pricing_page_description": "选择最适合你的方案，所有方案均包含 14 天免费试用。",
+
+  "pricing_free_name": "免费版",
+  "pricing_free_description": "适合个人项目和原型验证",
+  "pricing_free_feature_1": "最多 3 个用户",
+  "pricing_free_feature_2": "社区支持",
+  "pricing_free_cta": "免费开始",
+
+  "pricing_pro_name": "专业版",
+  "pricing_pro_description": "适合成长中的 SaaS 产品",
+  "pricing_pro_feature_1": "无限用户",
+  "pricing_pro_feature_2": "优先邮件支持",
+  "pricing_pro_feature_3": "所有核心模块",
+  "pricing_pro_cta": "选择专业版",
+  "pricing_recommended": "推荐",
+  "pricing_per_month": "每月",
+
+  "pricing_lifetime_name": "终身版",
+  "pricing_lifetime_description": "一次付费，终身使用",
+  "pricing_lifetime_feature_1": "专业版全部功能",
+  "pricing_lifetime_feature_2": "优先实时支持",
+  "pricing_lifetime_cta": "选择终身版",
+  "pricing_one_time": "一次性",
+
+  "blog_page_title": "博客",
+  "blog_page_description": "了解 SaaS Template 的最新动态与产品更新",
+  "changelog_page_title": "更新日志",
+  "changelog_page_description": "SaaS Template 的版本历史与功能更新",
+
+  "contact_page_title": "联系我们",
+  "contact_page_description": "有任何问题或建议？联系我们，我们会尽快回复。",
+
+  "crumb_home": "首页",
+  "crumb_docs": "文档",
+  "crumb_blog": "博客",
+
+  "error_404_description": "页面不存在",
+  "error_404_back": "返回首页",
+  "error_500_description": "服务器开了个小差"
 }

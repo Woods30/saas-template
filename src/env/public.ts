@@ -9,7 +9,9 @@ const schema = z.object({
   VITE_STRIPE_PRICE_LIFETIME: z.string().optional(),
   VITE_GA_ID: z.string().optional(),
   VITE_PLAUSIBLE_DOMAIN: z.string().optional(),
+  VITE_UMAMI_WEBSITE_ID: z.string().optional(),
   VITE_UMAMI_ID: z.string().optional(),
+  VITE_CLARITY_PROJECT_ID: z.string().optional(),
   VITE_CLARITY_ID: z.string().optional(),
   VITE_TURNSTILE_SITE_KEY: z.string().optional(),
 })

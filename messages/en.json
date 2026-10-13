@@ -1,11 +1,7 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
-  "nav_dashboard": "Dashboard",
-  "nav_docs": "Docs",
-  "nav_home": "Home",
-  "nav_pricing": "Pricing",
-  "site_description": "A SaaS starter built on TanStack Start and Cloudflare Workers",
   "site_name": "SaaS Template",
+  "site_description": "A SaaS starter built on TanStack Start and Cloudflare Workers",
   "site_title": "SaaS Starter",
 
   "auth_login_title": "Sign in",
@@ -35,5 +31,148 @@
 
   "auth_error_title": "Authentication error",
   "auth_error_message": "This link may have expired or is invalid.",
-  "auth_error_back": "Back to sign in"
+  "auth_error_back": "Back to sign in",
+
+  "nav_dashboard": "Dashboard",
+  "nav_docs": "Docs",
+  "nav_home": "Home",
+  "nav_pricing": "Pricing",
+  "nav_features": "Features",
+  "nav_blog": "Blog",
+  "nav_changelog": "Changelog",
+  "nav_contact": "Contact",
+  "nav_login": "Sign in",
+  "footer_rights": "All rights reserved",
+  "footer_terms": "Terms of Service",
+  "footer_privacy": "Privacy Policy",
+  "footer_changelog": "Changelog",
+
+  "newsletter_subscribe": "Subscribe",
+  "newsletter_success": "Subscribed!",
+  "newsletter_error": "Subscription failed",
+
+  "home_hero_title": "Ship your SaaS product faster",
+  "home_hero_subtitle": "Modern full-stack template, ready to go",
+  "home_hero_description": "Built on TanStack Start + Cloudflare Workers, end-to-end type safety, multi-language support, global low-latency deployment.",
+  "home_hero_primary_cta": "Get started",
+  "home_hero_secondary_cta": "Learn more",
+
+  "home_stats_modules": "Modules",
+  "home_stats_latency": "Latency",
+  "home_stats_cold_start": "Cold Start",
+  "home_stats_free_tier": "Free Tier",
+
+  "home_features_title": "All core modules built in",
+  "home_features_edge_title": "Edge Deployment",
+  "home_features_edge_description": "Deploy to 200+ edge locations worldwide, latency under 100ms, no server management.",
+  "home_features_payment_title": "Payments",
+  "home_features_payment_description": "Seamless Stripe integration, subscriptions, one-time payments, and refunds.",
+  "home_features_auth_title": "Authentication",
+  "home_features_auth_description": "Full auth system with email/password, OAuth, Magic Links, and MFA support.",
+  "home_features_storage_title": "File Storage",
+  "home_features_storage_description": "Cloudflare R2 / S3-compatible storage, zero ops overhead.",
+  "home_features_email_title": "Email",
+  "home_features_email_description": "Resend-powered transactional email with template management and delivery tracking.",
+  "home_features_i18n_title": "Internationalization",
+  "home_features_i18n_description": "Built-in Paraglide JS i18n — language switching in 0 lines of code.",
+
+  "home_testimonials_title": "What users say",
+  "home_testimonial_1_quote": "Launched our MVP in three days. Honestly didn't think it was possible.",
+  "home_testimonial_1_author": "Zhang Ming, Full-stack Engineer",
+  "home_testimonial_2_quote": "Edge deployment is so smooth — our customers couldn't believe it.",
+  "home_testimonial_2_author": "Li Na, Startup CTO",
+  "home_testimonial_3_quote": "Type-safe template, code as docs. Team collaboration doubled in efficiency.",
+  "home_testimonial_3_author": "Wang Qiang, Tech Lead",
+
+  "home_cta_title": "Ready to get started?",
+  "home_cta_description": "Start free, no credit card required.",
+  "home_cta_primary": "Create account",
+
+  "features_hero_title": "Every module you need",
+  "features_hero_subtitle": "Opt in, skip the over-engineering",
+  "features_section_title": "Core Modules",
+
+  "feature_auth_title": "Authentication",
+  "feature_auth_description": "Email/password, social login (Google/GitHub), Magic Links, session management, and refresh tokens.",
+  "feature_payment_title": "Payments",
+  "feature_payment_description": "Stripe Checkout, subscription management, pricing pages, coupons, and usage-based billing.",
+  "feature_storage_title": "File Storage",
+  "feature_storage_description": "Cloudflare R2 / S3-compatible storage, presigned URLs, direct upload, CDN delivery.",
+  "feature_email_title": "Email",
+  "feature_email_description": "Resend integration for transactional and bulk email with unsubscribe management.",
+  "feature_newsletter_title": "Newsletter",
+  "feature_newsletter_description": "One-click subscription management, synced with Growth and RevOps tools.",
+  "feature_notification_title": "Notifications",
+  "feature_notification_description": "Email, Web Push, and In-App notifications via SendGrid / OneSignal.",
+
+  "features_faq_title": "FAQ",
+  "features_faq_q1": "Can I skip certain modules?",
+  "features_faq_a1": "Absolutely. Every module is independent — disable or replace what you don't need.",
+  "features_faq_q2": "Which databases are supported?",
+  "features_faq_a2": "Out-of-the-box PostgreSQL via Drizzle ORM, also compatible with MySQL and SQLite.",
+
+  "features_cta_title": "Want to try it yourself?",
+  "features_cta_primary": "See pricing",
+
+  "features_page_title": "Features",
+  "features_page_description": "Explore all core modules and capabilities built into SaaS Template.",
+
+  "about_hero_title": "About SaaS Template",
+  "about_hero_subtitle": "So developers can focus on the product, not the infrastructure",
+  "about_stat_modules": "Built-in Modules",
+  "about_stat_providers": "Third-party Integrations",
+  "about_stat_i18n": "Languages Supported",
+
+  "about_cta_title": "Want to contribute?",
+  "about_cta_primary": "View on GitHub",
+
+  "about_page_title": "About Us",
+  "about_page_description": "Learn about the vision and team behind SaaS Template.",
+
+  "pricing_hero_title": "Simple, transparent pricing",
+  "pricing_hero_subtitle": "Choose what you need, no hidden fees",
+
+  "pricing_cta_title": "Have questions?",
+  "pricing_cta_primary": "Contact us",
+
+  "pricing_page_title": "Pricing",
+  "pricing_page_description": "Choose the plan that fits you best. All plans include a 14-day free trial.",
+
+  "pricing_free_name": "Free",
+  "pricing_free_description": "For personal projects and prototyping",
+  "pricing_free_feature_1": "Up to 3 users",
+  "pricing_free_feature_2": "Community support",
+  "pricing_free_cta": "Start free",
+
+  "pricing_pro_name": "Pro",
+  "pricing_pro_description": "For growing SaaS products",
+  "pricing_pro_feature_1": "Unlimited users",
+  "pricing_pro_feature_2": "Priority email support",
+  "pricing_pro_feature_3": "All core modules",
+  "pricing_pro_cta": "Choose Pro",
+  "pricing_recommended": "Recommended",
+  "pricing_per_month": "/ month",
+
+  "pricing_lifetime_name": "Lifetime",
+  "pricing_lifetime_description": "Pay once, use forever",
+  "pricing_lifetime_feature_1": "All Pro features",
+  "pricing_lifetime_feature_2": "Priority live support",
+  "pricing_lifetime_cta": "Choose Lifetime",
+  "pricing_one_time": "one-time",
+
+  "blog_page_title": "Blog",
+  "blog_page_description": "Latest news and product updates from SaaS Template",
+  "changelog_page_title": "Changelog",
+  "changelog_page_description": "Version history and feature updates for SaaS Template",
+
+  "contact_page_title": "Contact Us",
+  "contact_page_description": "Have a question or suggestion? Get in touch and we'll get back to you soon.",
+
+  "crumb_home": "Home",
+  "crumb_docs": "Docs",
+  "crumb_blog": "Blog",
+
+  "error_404_description": "Page not found",
+  "error_404_back": "Back to home",
+  "error_500_description": "Something went wrong"
 }
