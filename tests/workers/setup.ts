@@ -1,4 +1,3 @@
-import { applyD1Migrations } from '@cloudflare/vitest-pool-workers';
 import { afterAll, beforeAll } from 'vitest';
 
 export function setupTestD1(env: Env) {
