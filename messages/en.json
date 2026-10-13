@@ -158,5 +158,10 @@
   "pricing_lifetime_feature_1": "All Pro features",
   "pricing_lifetime_feature_2": "Priority live support",
   "pricing_lifetime_cta": "Choose Lifetime",
-  "pricing_one_time": "one-time"
+  "pricing_one_time": "one-time",
+
+  "blog_page_title": "Blog",
+  "blog_page_description": "Latest news and product updates from SaaS Template",
+  "changelog_page_title": "Changelog",
+  "changelog_page_description": "Version history and feature updates for SaaS Template"
 }

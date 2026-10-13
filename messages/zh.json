@@ -158,5 +158,10 @@
   "pricing_lifetime_feature_1": "专业版全部功能",
   "pricing_lifetime_feature_2": "优先实时支持",
   "pricing_lifetime_cta": "选择终身版",
-  "pricing_one_time": "一次性"
+  "pricing_one_time": "一次性",
+
+  "blog_page_title": "博客",
+  "blog_page_description": "了解 SaaS Template 的最新动态与产品更新",
+  "changelog_page_title": "更新日志",
+  "changelog_page_description": "SaaS Template 的版本历史与功能更新"
 }
