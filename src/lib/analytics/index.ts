@@ -60,6 +60,7 @@ function injectScript(src: string, attrs: Record<string, string> = {}) {
   const s = document.createElement('script')
   s.src = src
   s.async = true
+  s.defer = true
   for (const [k, v] of Object.entries(attrs)) s.setAttribute(k, v)
   document.head.appendChild(s)
 }
