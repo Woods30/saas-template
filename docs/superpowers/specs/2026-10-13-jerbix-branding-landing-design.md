@@ -197,10 +197,10 @@ sticky Navbar 的 `h-16`，避免锚点落点被遮挡）。
 - `src/lib/server-context.ts`：`ServerContext` 增加 `theme` 字段。
 - `src/routes/__root.tsx`：`<html data-theme={theme}>`（`theme` 为 `light` / `dark` / `system`）。
 - `src/styles/globals.css`：
-  - `:root` 定义浅色 token；
-  - `:root[data-theme='dark']` 定义深色 token；
-  - `@media (prefers-color-scheme: dark) { :root[data-theme='system'] { ...深色 token... } }`
-    （`system` 由媒体查询决定；显式 `light` / `dark` 不受系统影响）。
+  - `:root` 设 `color-scheme: light dark`（跟随系统）；`:root[data-theme='light'|'dark']`
+    分别覆盖为 `color-scheme: light|dark`（显式选择）；
+  - 每个 token 用 `light-dark(明, 暗)` 一次声明两值，由 `color-scheme` 决定取值——
+    不存在重复的深色声明块，`system` 天然跟随系统，无需媒体查询。
 - 新增 `src/components/theme/ThemeToggle.tsx`：
   - Tabler `IconSun` / `IconMoon` / `IconDeviceDesktop`，用既有 `Button`（`variant="ghost"`,
     `size="icon"`）包裹，`aria-label` 描述当前与下一个状态；

@@ -390,9 +390,10 @@ import { getTheme } from '@/lib/theme'
  * 若缺少裸层，组件里 var(--secondary) 之类会解析为空。
  *
  * 明暗由 `<html data-theme>` 驱动：
- *   - data-theme="light" / "dark"：用户显式选择；
- *   - data-theme="system"：由 @media (prefers-color-scheme: dark) 决定。
- * Tailwind v4 要求 @theme 只能定义在顶层，故明暗覆盖写成普通 :root 规则。
+ *   - data-theme="light" / "dark"：用户显式选择（改写 color-scheme）；
+ *   - data-theme="system"：跟随系统 prefers-color-scheme（color-scheme: light dark）。
+ * 每个 token 用 `light-dark(明, 暗)` 一次声明两值，由 color-scheme 决定取哪一个，
+ * 因此不存在重复的明暗声明块。`light-dark()` 自 2024 起为现代浏览器基线特性。
  *
  * 配色取自 Jerbix 品牌（主紫、海军蓝、暖橙、奶油底），取值均通过 WCAG AA 对比度校验。
  */
@@ -429,73 +430,39 @@ import { getTheme } from '@/lib/theme'
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* ---- 浅色（默认，也用于 data-theme="light"）---- */
+/* ---- 明暗选择：改写 color-scheme，light-dark() 据此取值 ---- */
+/* 默认跟随系统；显式选择时覆盖。 */
 :root {
-  --background: oklch(0.9835 0.0090 78.28);
-  --foreground: oklch(0.2120 0.0513 274.59);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2120 0.0513 274.59);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2120 0.0513 274.59);
-  --primary: oklch(0.5114 0.2532 282.17);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.9510 0.0194 302.21);
-  --secondary-foreground: oklch(0.2120 0.0513 274.59);
-  --muted: oklch(0.9510 0.0194 302.21);
-  --muted-foreground: oklch(0.4916 0.0437 276.49);
-  --accent: oklch(0.7241 0.1543 53.26);
-  --accent-foreground: oklch(0.2120 0.0513 274.59);
-  --destructive: oklch(0.5527 0.2100 27.00);
-  --border: oklch(0.9208 0.0195 302.19);
-  --input: oklch(0.9208 0.0195 302.19);
-  --ring: oklch(0.5114 0.2532 282.17);
-  --radius: 0.75rem;
+  color-scheme: light dark;
 }
-
-/* ---- 深色 token（显式 data-theme="dark"）---- */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
 :root[data-theme="dark"] {
-  --background: oklch(0.1717 0.0376 274.61);
-  --foreground: oklch(0.9421 0.0162 293.74);
-  --card: oklch(0.2220 0.0545 274.95);
-  --card-foreground: oklch(0.9421 0.0162 293.74);
-  --popover: oklch(0.2220 0.0545 274.95);
-  --popover-foreground: oklch(0.9421 0.0162 293.74);
-  --primary: oklch(0.6345 0.2104 288.92);
-  --primary-foreground: oklch(0.1717 0.0376 274.61);
-  --secondary: oklch(0.2604 0.0583 274.71);
-  --secondary-foreground: oklch(0.9421 0.0162 293.74);
-  --muted: oklch(0.2604 0.0583 274.71);
-  --muted-foreground: oklch(0.7253 0.0359 289.14);
-  --accent: oklch(0.7837 0.1587 72.99);
-  --accent-foreground: oklch(0.1717 0.0376 274.61);
-  --destructive: oklch(0.6400 0.1900 25.00);
-  --border: oklch(0.2962 0.0587 274.24);
-  --input: oklch(0.2962 0.0587 274.24);
-  --ring: oklch(0.6345 0.2104 288.92);
+  color-scheme: dark;
 }
 
-/* ---- 跟随系统（data-theme="system"）：深色 token 与上面保持一致 ---- */
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="system"] {
-    --background: oklch(0.1717 0.0376 274.61);
-    --foreground: oklch(0.9421 0.0162 293.74);
-    --card: oklch(0.2220 0.0545 274.95);
-    --card-foreground: oklch(0.9421 0.0162 293.74);
-    --popover: oklch(0.2220 0.0545 274.95);
-    --popover-foreground: oklch(0.9421 0.0162 293.74);
-    --primary: oklch(0.6345 0.2104 288.92);
-    --primary-foreground: oklch(0.1717 0.0376 274.61);
-    --secondary: oklch(0.2604 0.0583 274.71);
-    --secondary-foreground: oklch(0.9421 0.0162 293.74);
-    --muted: oklch(0.2604 0.0583 274.71);
-    --muted-foreground: oklch(0.7253 0.0359 289.14);
-    --accent: oklch(0.7837 0.1587 72.99);
-    --accent-foreground: oklch(0.1717 0.0376 274.61);
-    --destructive: oklch(0.6400 0.1900 25.00);
-    --border: oklch(0.2962 0.0587 274.24);
-    --input: oklch(0.2962 0.0587 274.24);
-    --ring: oklch(0.6345 0.2104 288.92);
-  }
+/* ---- 品牌 token：每个 token 用 light-dark(明, 暗) 一次声明 ---- */
+:root {
+  --background: light-dark(oklch(0.9835 0.0090 78.28), oklch(0.1717 0.0376 274.61));
+  --foreground: light-dark(oklch(0.2120 0.0513 274.59), oklch(0.9421 0.0162 293.74));
+  --card: light-dark(oklch(1 0 0), oklch(0.2220 0.0545 274.95));
+  --card-foreground: light-dark(oklch(0.2120 0.0513 274.59), oklch(0.9421 0.0162 293.74));
+  --popover: light-dark(oklch(1 0 0), oklch(0.2220 0.0545 274.95));
+  --popover-foreground: light-dark(oklch(0.2120 0.0513 274.59), oklch(0.9421 0.0162 293.74));
+  --primary: light-dark(oklch(0.5114 0.2532 282.17), oklch(0.6345 0.2104 288.92));
+  --primary-foreground: light-dark(oklch(1 0 0), oklch(0.1717 0.0376 274.61));
+  --secondary: light-dark(oklch(0.9510 0.0194 302.21), oklch(0.2604 0.0583 274.71));
+  --secondary-foreground: light-dark(oklch(0.2120 0.0513 274.59), oklch(0.9421 0.0162 293.74));
+  --muted: light-dark(oklch(0.9510 0.0194 302.21), oklch(0.2604 0.0583 274.71));
+  --muted-foreground: light-dark(oklch(0.4916 0.0437 276.49), oklch(0.7253 0.0359 289.14));
+  --accent: light-dark(oklch(0.7241 0.1543 53.26), oklch(0.7837 0.1587 72.99));
+  --accent-foreground: light-dark(oklch(0.2120 0.0513 274.59), oklch(0.1717 0.0376 274.61));
+  --destructive: light-dark(oklch(0.5527 0.2100 27.00), oklch(0.6400 0.1900 25.00));
+  --border: light-dark(oklch(0.9208 0.0195 302.19), oklch(0.2962 0.0587 274.24));
+  --input: light-dark(oklch(0.9208 0.0195 302.19), oklch(0.2962 0.0587 274.24));
+  --ring: light-dark(oklch(0.5114 0.2532 282.17), oklch(0.6345 0.2104 288.92));
+  --radius: 0.75rem;
 }
 
 /* 锚点平滑滚动；用户偏好减少动效时关闭。 */
@@ -1384,7 +1351,7 @@ git commit -m "fix: 收口品牌化与 landing 变更的校验问题"
 ## 备注与已知取舍
 
 - **Navbar logo 用图标 + 文字**：水平 logo 的字标是深海军蓝，深色主题下不可见，故 Navbar 用彩色 jerboa 图标；水平 logo 保留给 OG 图。
-- **深色 token 重复一次**：`:root[data-theme="dark"]` 与 `@media(dark){ :root[data-theme="system"] }` 各写一份，这是 shadcn 的惯例写法（CSS 无法跨媒体查询复用一段声明块）。
+- **明暗用 `light-dark()` 单次声明**：每个 token 一行 `light-dark(明, 暗)`，由 `color-scheme` 决定取值；`system` 天然跟随系统，无需媒体查询，也不存在重复的深色声明块。浏览器基线支持自 2024 起。
 - **主题 cookie 仅由客户端写入**：服务端只读取，不下发，故 `applySecurityHeaders` 无需改动。
 - **`resolveLocale` 优先级变化**：URL 前缀成为最高优先级；既有测试使用无前缀 URL，不受影响。
 - **`{-$locale}` 可选前缀保持**：`/` 与 `/en` 共存；`/` 由 cookie / `Accept-Language` 决定语言。
