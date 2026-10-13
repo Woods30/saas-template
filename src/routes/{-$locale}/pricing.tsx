@@ -4,12 +4,14 @@ import { Pricing as PricingBlock } from '@/components/blocks/marketing/pricing'
 import { pricingBlocks, pricingPlans } from '@/config/blocks'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
+import { getLocale } from '@/locale/paraglide/runtime.js'
 
 export const Route = createFileRoute('/{-$locale}/pricing')({
   head: () =>
     seo('/pricing', {
       title: m.pricing_page_title(),
       description: m.pricing_page_description(),
+      locale: getLocale(),
     }),
   component: PricingPage,
 })

@@ -10,6 +10,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/marketing/changelog/')
     seo('/changelog', {
       title: m.changelog_page_title(),
       description: m.changelog_page_description(),
+      locale: getLocale(),
     }),
   component: ChangelogPage,
 })

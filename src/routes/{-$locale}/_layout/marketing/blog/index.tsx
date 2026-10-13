@@ -6,7 +6,12 @@ import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/marketing/blog/')({
-  head: () => seo('/blog', { title: m.blog_page_title(), description: m.blog_page_description() }),
+  head: () =>
+    seo('/blog', {
+      title: m.blog_page_title(),
+      description: m.blog_page_description(),
+      locale: getLocale(),
+    }),
   component: BlogIndex,
 })
 

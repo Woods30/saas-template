@@ -19,7 +19,11 @@ export const Route = createFileRoute('/{-$locale}/_layout/marketing/legal/$slug'
   },
   loader: ({ context }) => ({ title: context.legal.title }),
   head: ({ loaderData }) =>
-    seo(`/legal/${loaderData?.title}`, { title: loaderData?.title ?? '', type: 'article' }),
+    seo(`/legal/${loaderData?.title}`, {
+      title: loaderData?.title ?? '',
+      type: 'article',
+      locale: getLocale(),
+    }),
   component: LegalPage,
 })
 

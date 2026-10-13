@@ -1,6 +1,8 @@
 import { createFileRoute, notFound } from '@tanstack/react-router'
 import { allBlogs } from 'content-collections'
+import { JsonLd } from '@/components/JsonLd'
 import { Mdx } from '@/components/mdx/Mdx'
+import { articleJsonLd } from '@/lib/json-ld'
 import { seo } from '@/lib/seo'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 
@@ -22,6 +24,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/marketing/blog/$slug')
       title: loaderData?.title ?? '',
       description: loaderData?.description,
       type: 'article',
+      locale: getLocale(),
     }),
   component: BlogPost,
 })
@@ -29,12 +32,22 @@ export const Route = createFileRoute('/{-$locale}/_layout/marketing/blog/$slug')
 function BlogPost() {
   const { post } = Route.useRouteContext()
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10">
-      <p className="text-sm text-muted-foreground">{new Date(post.date).toLocaleDateString()}</p>
-      <h1 className="mt-2 text-4xl font-bold">{post.title}</h1>
-      <p className="mt-2 text-lg text-muted-foreground">{post.description}</p>
-      <hr className="my-6 border-border" />
-      <Mdx source={post.content} />
-    </main>
+    <>
+      <JsonLd
+        data={articleJsonLd({
+          title: post.title,
+          description: post.description,
+          date: post.date,
+          path: `/blog/${post._meta.path}`,
+        })}
+      />
+      <main className="mx-auto max-w-3xl px-6 py-10">
+        <p className="text-sm text-muted-foreground">{new Date(post.date).toLocaleDateString()}</p>
+        <h1 className="mt-2 text-4xl font-bold">{post.title}</h1>
+        <p className="mt-2 text-lg text-muted-foreground">{post.description}</p>
+        <hr className="my-6 border-border" />
+        <Mdx source={post.content} />
+      </main>
+    </>
   )
 }

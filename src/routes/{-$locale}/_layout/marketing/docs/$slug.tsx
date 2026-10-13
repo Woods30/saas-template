@@ -26,6 +26,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/marketing/docs/$slug')
       title: loaderData.title,
       description: loaderData.description,
       type: 'article',
+      locale: getLocale(),
     })
   },
   component: DocPage,
