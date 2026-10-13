@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as Char123LocaleChar125IndexRouteImport } from './routes/{-$locale}/index'
 import { Route as Char123LocaleChar125ContactRouteImport } from './routes/{-$locale}/contact'
 import { Route as Char123LocaleChar125PricingRouteImport } from './routes/{-$locale}/pricing'
@@ -34,6 +36,16 @@ import { Route as Char123LocaleChar125LayoutMarketingDocsIndexRouteImport } from
 import { Route as Char123LocaleChar125LayoutMarketingDocsSlugRouteImport } from './routes/{-$locale}/_layout/marketing/docs/$slug'
 import { Route as Char123LocaleChar125LayoutMarketingLegalSlugRouteImport } from './routes/{-$locale}/_layout/marketing/legal/$slug'
 
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const Char123LocaleChar125IndexRoute =
   Char123LocaleChar125IndexRouteImport.update({
     id: '/{-$locale}/',
@@ -174,6 +186,8 @@ const Char123LocaleChar125LayoutMarketingLegalSlugRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/{-$locale}/contact': typeof Char123LocaleChar125ContactRoute
   '/{-$locale}/pricing': typeof Char123LocaleChar125PricingRoute
   '/{-$locale}/': typeof Char123LocaleChar125IndexRoute
@@ -200,6 +214,8 @@ export interface FileRoutesByFullPath {
   '/{-$locale}/marketing/docs/': typeof Char123LocaleChar125LayoutMarketingDocsIndexRoute
 }
 export interface FileRoutesByTo {
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/{-$locale}/contact': typeof Char123LocaleChar125ContactRoute
   '/{-$locale}/pricing': typeof Char123LocaleChar125PricingRoute
   '/{-$locale}': typeof Char123LocaleChar125IndexRoute
@@ -226,6 +242,8 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/{-$locale}/contact': typeof Char123LocaleChar125ContactRoute
   '/{-$locale}/pricing': typeof Char123LocaleChar125PricingRoute
   '/{-$locale}/': typeof Char123LocaleChar125IndexRoute
@@ -254,6 +272,8 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/{-$locale}/contact'
     | '/{-$locale}/pricing'
     | '/{-$locale}/'
@@ -280,6 +300,8 @@ export interface FileRouteTypes {
     | '/{-$locale}/marketing/docs/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/{-$locale}/contact'
     | '/{-$locale}/pricing'
     | '/{-$locale}'
@@ -305,6 +327,8 @@ export interface FileRouteTypes {
     | '/{-$locale}/marketing/docs'
   id:
     | '__root__'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/{-$locale}/contact'
     | '/{-$locale}/pricing'
     | '/{-$locale}/'
@@ -332,6 +356,8 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   Char123LocaleChar125ContactRoute: typeof Char123LocaleChar125ContactRoute
   Char123LocaleChar125PricingRoute: typeof Char123LocaleChar125PricingRoute
   Char123LocaleChar125IndexRoute: typeof Char123LocaleChar125IndexRoute
@@ -351,6 +377,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/{-$locale}/': {
       id: '/{-$locale}/'
       path: '/{-$locale}'
@@ -562,6 +602,8 @@ const Char123LocaleChar125LayoutMarketingRouteWithChildren =
   )
 
 const rootRouteChildren: RootRouteChildren = {
+  RobotsDottxtRoute: RobotsDottxtRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   Char123LocaleChar125ContactRoute: Char123LocaleChar125ContactRoute,
   Char123LocaleChar125PricingRoute: Char123LocaleChar125PricingRoute,
   Char123LocaleChar125IndexRoute: Char123LocaleChar125IndexRoute,
