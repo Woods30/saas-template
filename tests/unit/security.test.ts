@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCspHeader, generateNonce } from '@/lib/security'
+import { addNonceToInlineScripts, buildCspHeader, generateNonce } from '@/lib/security'
 
 describe('buildCspHeader', () => {
   it('包含 default-src self', () => {
@@ -75,5 +75,85 @@ describe('generateNonce', () => {
     const nonce = generateNonce()
     // URL-safe base64 uses - and _ instead of + and /
     expect(nonce).toMatch(/^[A-Za-z0-9_-]+$/)
+  })
+})
+
+/**
+ * `addNonceToInlineScripts` rewrites the response stream so every inline
+ * `<script>` tag carries the CSP nonce. These tests exercise the underlying
+ * tag-detection logic through a small in-process roundtrip.
+ */
+async function streamRewritten(response: Response, nonce: string): Promise<string> {
+  const out = addNonceToInlineScripts(response, nonce)
+  return await out.text()
+}
+
+describe('addNonceToInlineScripts', () => {
+  const nonce = 'abc-test-nonce'
+
+  it('对非 HTML 响应原样返回（不转译 JSON / 二进制）', async () => {
+    const original = new Response(JSON.stringify({ a: 1 }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const rewritten = addNonceToInlineScripts(original, nonce)
+    expect(rewritten).toBe(original)
+  })
+
+  it('为 inline <script> 标签补上 nonce', async () => {
+    const html = `<html><head><script>foo</script></head><body></body></html>`
+    const out = await streamRewritten(new Response(html, { headers: { 'Content-Type': 'text/html' } }), nonce)
+    expect(out).toContain(`<script nonce="${nonce}">foo</script>`)
+  })
+
+  it('为带其他属性的 inline <script> 标签补上 nonce（属性后追加）', async () => {
+    const html = `<html><head><script data-tsr-stream-part="">bootstrap</script></head></html>`
+    const out = await streamRewritten(new Response(html, { headers: { 'Content-Type': 'text/html' } }), nonce)
+    expect(out).toContain(`<script data-tsr-stream-part="" nonce="${nonce}">bootstrap</script>`)
+  })
+
+  it('已经有 nonce 的 script 标签不重复添加', async () => {
+    const html = `<script nonce="existing">x</script>`
+    const out = await streamRewritten(new Response(html, { headers: { 'Content-Type': 'text/html' } }), nonce)
+    expect(out).toContain('nonce="existing"')
+    expect(out).not.toContain(`nonce="${nonce}"`)
+  })
+
+  it('外部 <script src="…"> 标签不修改（已由 self 放行）', async () => {
+    const html = `<script src="/assets/index.js"></script>`
+    const out = await streamRewritten(new Response(html, { headers: { 'Content-Type': 'text/html' } }), nonce)
+    expect(out).toBe(html)
+  })
+
+  it('JSON-LD <script type="application/ld+json"> 视为 inline，补上 nonce', async () => {
+    // JSON-LD 标签是 inline 且会被浏览器作为脚本解析（虽为数据），保守起见补 nonce。
+    const html = `<script type="application/ld+json">{"@context":"x"}</script>`
+    const out = await streamRewritten(new Response(html, { headers: { 'Content-Type': 'text/html' } }), nonce)
+    expect(out).toContain(`nonce="${nonce}"`)
+  })
+
+  it('混合 inline / external / 已有 nonce 的脚本一次处理', async () => {
+    const html = [
+      '<!doctype html><html><head>',
+      '<script>inline1</script>',
+      '<script src="/a.js"></script>',
+      '<script nonce="x">already</script>',
+      '<script data-x>y</script>',
+      '</head></html>',
+    ].join('')
+    const out = await streamRewritten(new Response(html, { headers: { 'Content-Type': 'text/html' } }), nonce)
+    // inline 加 nonce
+    expect(out).toContain(`<script nonce="${nonce}">inline1</script>`)
+    // src 不变
+    expect(out).toContain('<script src="/a.js"></script>')
+    // 已有 nonce 不变
+    expect(out).toContain('<script nonce="x">already</script>')
+    // 属性后追加
+    expect(out).toContain(`<script data-x nonce="${nonce}">y</script>`)
+  })
+
+  it('空 body 不抛错', async () => {
+    const out = await streamRewritten(new Response('', { headers: { 'Content-Type': 'text/html' } }), nonce)
+    expect(out).toBe('')
   })
 })

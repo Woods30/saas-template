@@ -26,6 +26,14 @@ interface ServerContext {
   newsletterProviderRegistry?: Partial<Record<NewsletterProviderName, () => NewsletterProvider>>
   notificationProviderRegistry?: Partial<Record<NotificationChannel, () => NotificationProvider>>
   paymentProviderRegistry?: Partial<Record<PaymentProviderName, () => PaymentProvider>>
+  /**
+   * Per-request CSP nonce。`src/server.ts` 在每个请求入口生成，并通过 ALS
+   * 注入；`streamHandlerWithNonce` 读取后写入 `router.options.ssr.nonce`，
+   * 让 TanStack Router 的 `Asset` / `HydrationScriptsOwner` 把它展开到
+   * 所有 SSR 输出的 `<script>` 上。没有 nonce，CSP `script-src` 就会
+   * 阻止这些 inline 脚本并导致 `window.$_TSR` 缺失，进而 hydration 失败。
+   */
+  nonce: string
 }
 
 const als = new AsyncLocalStorage<ServerContext>()
@@ -46,6 +54,8 @@ export function getServerContext(): ServerContext {
       newsletterProviderRegistry: undefined,
       notificationProviderRegistry: undefined,
       paymentProviderRegistry: undefined,
+      // 客户端 / 测试环境无 per-request nonce；空串会被 CSP 拒绝但不会让代码崩
+      nonce: '',
     }
   }
   return ctx

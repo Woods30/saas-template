@@ -10,10 +10,15 @@
  */
 
 import type { KVNamespace, R2Bucket } from '@cloudflare/workers-types'
-import { createStartHandler, defaultStreamHandler } from '@tanstack/react-start/server'
+import type { AnyRouter } from '@tanstack/react-router'
+import {
+  createStartHandler,
+  defaultStreamHandler,
+  type HandlerCallback,
+} from '@tanstack/react-start/server'
 import { KVCacheProvider } from './cache/provider/kv'
 import { LOCALE_COOKIE_NAME, readLocaleCookie } from './lib/locale'
-import { als } from './lib/server-context'
+import { als, getServerContext } from './lib/server-context'
 import { registerServerLocaleStrategy } from './locale/middleware'
 import { paraglideMiddleware } from './locale/paraglide/server.js'
 import { CloudflareEmailProvider } from './mail'
@@ -22,18 +27,44 @@ import { buildNewsletterProviderRegistry } from './newsletter'
 import { buildNotificationProviderRegistry } from './notification'
 import { buildPaymentProviderRegistry } from './payment'
 import { R2StorageProvider } from './storage/provider/r2'
-import { buildCspHeader, generateNonce } from './lib/security'
+import { buildCspHeader, generateNonce, addNonceToInlineScripts } from './lib/security'
 
 // 模块加载期注册自定义策略，早于任何请求进入 paraglideMiddleware。
 registerServerLocaleStrategy()
 
-const fetch = createStartHandler(defaultStreamHandler)
+/**
+ * Wrap the default stream handler so the per-request CSP nonce reaches TanStack
+ * Router's `router.options.ssr.nonce`. Without this, the streaming bootstrap
+ * scripts emitted into the response body carry no `nonce` attribute and the
+ * browser's CSP blocks them — `window.$_TSR` is never populated and hydration
+ * fails with "Expected to find bootstrap data on window.$_TSR, but we did not."
+ *
+ * We read the nonce from the request-scoped ALS (populated by `als.run` below)
+ * because the handler callback only receives the router, request, and headers —
+ * not the outer `server.ts` closure.
+ *
+ * The result must preserve `SsrResponse` wrapping (not just `.response`) —
+ * the framework uses `isSsrResponse()` to detect streaming responses and call
+ * the cleanup `dispose()` once the request finishes.
+ */
+const streamHandlerWithNonce: HandlerCallback<AnyRouter> = async (ctx) => {
+  const { nonce } = getServerContext()
+  if (nonce) {
+    ctx.router.options.ssr = { ...ctx.router.options.ssr, nonce }
+  }
+  return defaultStreamHandler(ctx)
+}
+
+const fetch = createStartHandler(streamHandlerWithNonce)
 
 const LOCALE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // 将 env 存入 ALS，供 `src/lib/server-context.ts` 的 `getServerContext()` 使用。
+    // 每个请求生成新的 nonce，与 CSP header 同步；提前生成以便注入 ALS。
+    const nonce = generateNonce()
+    // 将 env 与 nonce 一起存入 ALS，供 `src/lib/server-context.ts` 的
+    // `getServerContext()` 与 `streamHandlerWithNonce` 各自读取。
     return als.run(
       {
         env,
@@ -43,10 +74,10 @@ export default {
         newsletterProviderRegistry: buildNewsletterProviderRegistry(env),
         notificationProviderRegistry: buildNotificationProviderRegistry(env),
         paymentProviderRegistry: buildPaymentProviderRegistry(env),
+        nonce,
       },
       async () => {
         // 不使用 URL 前缀策略，中间件不会改写 URL；原样把 request 交给框架处理。
-        const nonce = generateNonce()
         const response = await paraglideMiddleware(request, async ({ locale }) => {
           const result = await fetch(request)
           return applySecurityHeaders(result, request, locale, nonce)
@@ -94,7 +125,16 @@ function applySecurityHeaders(
   locale: string,
   nonce: string,
 ): Response {
-  const headers = new Headers(response.headers)
+  // Re-stream the response body so every inline `<script>` tag carries the
+  // per-request CSP nonce. `streamHandlerWithNonce` already passes the nonce
+  // into `router.options.ssr.nonce` for React-rendered scripts, but TanStack
+  // Router's streaming bootstrap (`<script data-tsr-stream-part>`) and the
+  // post-render cleanup `<script>` are serialized outside the React tree
+  // and therefore never see the nonce — they would otherwise be blocked by
+  // CSP and `window.$_TSR` would never be populated, breaking hydration.
+  const withNonce = addNonceToInlineScripts(response, nonce)
+
+  const headers = new Headers(withNonce.headers)
 
   // Always set CSP — nonce is regenerated per request so caching is safe.
   headers.set('Content-Security-Policy', buildCspHeader(nonce))
@@ -102,9 +142,9 @@ function applySecurityHeaders(
   // 与 `readLocaleCookie` 共用同一解析（含百分号解码），保证对同一 cookie 的
   // 「比较」与「解析」得出一致结论，避免编码值时每个请求都重复下发 Set-Cookie。
   if (readLocaleCookie(request.headers.get('cookie')) === locale) {
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
+    return new Response(withNonce.body, {
+      status: withNonce.status,
+      statusText: withNonce.statusText,
       headers,
     })
   }
@@ -115,9 +155,9 @@ function applySecurityHeaders(
     'Set-Cookie',
     `${LOCALE_COOKIE_NAME}=${locale}; Path=/; Max-Age=${LOCALE_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`,
   )
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
+  return new Response(withNonce.body, {
+    status: withNonce.status,
+    statusText: withNonce.statusText,
     headers,
   })
 }
