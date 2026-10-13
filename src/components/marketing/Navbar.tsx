@@ -8,7 +8,7 @@ export function Navbar() {
   const locale = getLocale()
   return (
     <nav className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-background/80 px-6 backdrop-blur">
-      <Link to="/" className="text-lg font-bold hover:opacity-80">
+      <Link to="/{-$locale}" className="text-lg font-bold hover:opacity-80">
         {websiteConfig.metadata.name}
       </Link>
       <div className="flex items-center gap-6 text-sm">

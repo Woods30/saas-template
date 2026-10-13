@@ -31,14 +31,12 @@ export function NewsletterCta({
             })
             if (!res.ok) {
               setStatus('error')
-              // @ts-expect-error newsletter_error key will be added in Task 14
               setError(m.newsletter_error())
               return
             }
             setStatus('success')
           } catch {
             setStatus('error')
-            // @ts-expect-error newsletter_error key will be added in Task 14
             setError(m.newsletter_error())
           }
         }}
@@ -51,19 +49,14 @@ export function NewsletterCta({
           className="sm:max-w-xs"
         />
         <Button type="submit" disabled={status === 'loading'}>
-          {/* @ts-expect-error newsletter_subscribe key will be added in Task 14 */}
           {m.newsletter_subscribe()}
         </Button>
       </form>
       {status === 'success' && (
-        <p className="mt-3 text-sm text-green-600">
-          {/* @ts-expect-error newsletter_success key will be added in Task 14 */}
-          {successMessage ?? m.newsletter_success()}
-        </p>
+        <p className="mt-3 text-sm text-green-600">{successMessage ?? m.newsletter_success()}</p>
       )}
       {status === 'error' && (
         <p className="mt-3 text-sm text-red-600">
-          {/* @ts-expect-error newsletter_error key will be added in Task 14 */}
           {m.newsletter_error()}: {error}
         </p>
       )}
