@@ -17,6 +17,7 @@ import {
   type HandlerCallback,
 } from '@tanstack/react-start/server'
 import { KVCacheProvider } from './cache/provider/kv'
+import { websiteConfig } from './config/website'
 import { LOCALE_COOKIE_NAME, readCookieValue, readLocaleCookie } from './lib/locale'
 import { addNonceToInlineScripts, buildCspHeader, generateNonce } from './lib/security'
 import { als, getServerContext } from './lib/server-context'
@@ -111,7 +112,10 @@ function buildMailProviderRegistry(
   }
   if (env.RESEND_API_KEY) {
     registry.resend = () =>
-      new ResendMailProvider(env.RESEND_API_KEY ?? '', 'SaaS Template <noreply@example.com>')
+      new ResendMailProvider(
+        env.RESEND_API_KEY ?? '',
+        `${websiteConfig.metadata.name} <noreply@example.com>`,
+      )
   }
   return registry
 }
