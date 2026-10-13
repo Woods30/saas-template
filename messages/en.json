@@ -146,5 +146,9 @@
   "error_404_back": "Back to home",
   "error_500_description": "Something went wrong",
   "docs_sidebar_title": "Documentation",
-  "docs_language_label": "Language"
+  "docs_language_label": "Language",
+  "theme_label": "Toggle theme",
+  "theme_light": "Light",
+  "theme_dark": "Dark",
+  "theme_system": "System"
 }

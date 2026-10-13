@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher'
+import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
@@ -59,6 +60,7 @@ export function Navbar() {
         >
           {m.nav_contact()}
         </Link>
+        <ThemeToggle />
         <LocaleSwitcher value={locale} />
         <Link
           to="/{-$locale}/auth/login"
