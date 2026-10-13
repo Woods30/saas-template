@@ -165,6 +165,9 @@
   "changelog_page_title": "Changelog",
   "changelog_page_description": "Version history and feature updates for SaaS Template",
 
+  "contact_page_title": "Contact Us",
+  "contact_page_description": "Have a question or suggestion? Get in touch and we'll get back to you soon.",
+
   "crumb_home": "Home",
   "crumb_docs": "Docs",
   "crumb_blog": "Blog",
