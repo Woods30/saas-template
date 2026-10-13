@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import React from 'react'
+import { describe, expect, it, vi } from 'vitest'
 import { Pricing } from '@/components/blocks/marketing/pricing/Pricing'
-import { pricingPlans } from '@/config/blocks/pricing'
 import type { PricingPlan } from '@/components/blocks/marketing/pricing/types'
+import { pricingPlans } from '@/config/blocks/pricing'
 
 // ---------------------------------------------------------------------------
 // Mock @tanstack/react-router — Pricing 组件依赖 <Link> 但测试无需路由上下文

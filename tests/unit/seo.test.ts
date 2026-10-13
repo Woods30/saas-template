@@ -193,9 +193,7 @@ describe('seo()', () => {
   it('不传 locale 时不输出 alternates', async () => {
     const { seoModule } = await loadModules(CUSTOM_BASE_URL)
     const head = seoModule.seo('/pricing', { title: '价格 · Acme' })
-    expect(
-      head.links.some((link) => 'rel' in link && link.rel === 'alternate'),
-    ).toBe(false)
+    expect(head.links.some((link) => 'rel' in link && link.rel === 'alternate')).toBe(false)
   })
 })
 

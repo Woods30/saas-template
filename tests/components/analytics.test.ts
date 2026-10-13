@@ -1,8 +1,8 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ClarityAnalyticsProvider } from '@/lib/analytics/clarity'
 import { GAAnalyticsProvider } from '@/lib/analytics/ga'
 import { PlausibleAnalyticsProvider } from '@/lib/analytics/plausible'
 import { UmamiAnalyticsProvider } from '@/lib/analytics/umami'
-import { ClarityAnalyticsProvider } from '@/lib/analytics/clarity'
 
 // ---------------------------------------------------------------------------
 // Analytics providers — 需要 jsdom 环境（window.gtag / window.plausible）

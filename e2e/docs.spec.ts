@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 /**
  * E2E: 文档站（docs）
@@ -19,17 +19,17 @@ test.describe('Docs', () => {
 
   test('同一 docs URL 在 zh / en 下都能打开（切换语言不 404）', async ({ page }) => {
     // zh：设置 cookie 后访问
-    await page.context().addCookies([
-      { name: 'NEXT_LOCALE', value: 'zh', url: 'http://localhost:3000' },
-    ])
+    await page
+      .context()
+      .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: 'http://localhost:3000' }])
     const zhRes = await page.goto('/docs/getting-started')
     expect(zhRes?.status()).toBe(200)
     await expect(page.getByRole('heading', { level: 1 })).toContainText('快速开始')
 
     // en：切换 cookie 后访问同一 URL，必须 200 且渲染英文
-    await page.context().addCookies([
-      { name: 'NEXT_LOCALE', value: 'en', url: 'http://localhost:3000' },
-    ])
+    await page
+      .context()
+      .addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: 'http://localhost:3000' }])
     const enRes = await page.goto('/docs/getting-started')
     expect(enRes?.status()).toBe(200)
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Getting Started')

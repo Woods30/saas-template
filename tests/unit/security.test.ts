@@ -102,26 +102,38 @@ describe('addNonceToInlineScripts', () => {
 
   it('为 inline <script> 标签补上 nonce', async () => {
     const html = `<html><head><script>foo</script></head><body></body></html>`
-    const out = await streamRewritten(new Response(html, { headers: { 'Content-Type': 'text/html' } }), nonce)
+    const out = await streamRewritten(
+      new Response(html, { headers: { 'Content-Type': 'text/html' } }),
+      nonce,
+    )
     expect(out).toContain(`<script nonce="${nonce}">foo</script>`)
   })
 
   it('为带其他属性的 inline <script> 标签补上 nonce（属性后追加）', async () => {
     const html = `<html><head><script data-tsr-stream-part="">bootstrap</script></head></html>`
-    const out = await streamRewritten(new Response(html, { headers: { 'Content-Type': 'text/html' } }), nonce)
+    const out = await streamRewritten(
+      new Response(html, { headers: { 'Content-Type': 'text/html' } }),
+      nonce,
+    )
     expect(out).toContain(`<script data-tsr-stream-part="" nonce="${nonce}">bootstrap</script>`)
   })
 
   it('已经有 nonce 的 script 标签不重复添加', async () => {
     const html = `<script nonce="existing">x</script>`
-    const out = await streamRewritten(new Response(html, { headers: { 'Content-Type': 'text/html' } }), nonce)
+    const out = await streamRewritten(
+      new Response(html, { headers: { 'Content-Type': 'text/html' } }),
+      nonce,
+    )
     expect(out).toContain('nonce="existing"')
     expect(out).not.toContain(`nonce="${nonce}"`)
   })
 
   it('外部 <script src="…"> 标签不修改（已由 self 放行）', async () => {
     const html = `<script src="/assets/index.js"></script>`
-    const out = await streamRewritten(new Response(html, { headers: { 'Content-Type': 'text/html' } }), nonce)
+    const out = await streamRewritten(
+      new Response(html, { headers: { 'Content-Type': 'text/html' } }),
+      nonce,
+    )
     expect(out).toBe(html)
   })
 
@@ -131,7 +143,10 @@ describe('addNonceToInlineScripts', () => {
     // hydration mismatch with the `JsonLd` component (which renders the tag
     // without a nonce attribute).
     const html = `<script type="application/ld+json">{"@context":"x"}</script>`
-    const out = await streamRewritten(new Response(html, { headers: { 'Content-Type': 'text/html' } }), nonce)
+    const out = await streamRewritten(
+      new Response(html, { headers: { 'Content-Type': 'text/html' } }),
+      nonce,
+    )
     expect(out).toBe(html)
   })
 
@@ -144,7 +159,10 @@ describe('addNonceToInlineScripts', () => {
       '<script data-x>y</script>',
       '</head></html>',
     ].join('')
-    const out = await streamRewritten(new Response(html, { headers: { 'Content-Type': 'text/html' } }), nonce)
+    const out = await streamRewritten(
+      new Response(html, { headers: { 'Content-Type': 'text/html' } }),
+      nonce,
+    )
     // inline 加 nonce
     expect(out).toContain(`<script nonce="${nonce}">inline1</script>`)
     // src 不变
@@ -156,7 +174,10 @@ describe('addNonceToInlineScripts', () => {
   })
 
   it('空 body 不抛错', async () => {
-    const out = await streamRewritten(new Response('', { headers: { 'Content-Type': 'text/html' } }), nonce)
+    const out = await streamRewritten(
+      new Response('', { headers: { 'Content-Type': 'text/html' } }),
+      nonce,
+    )
     expect(out).toBe('')
   })
 })

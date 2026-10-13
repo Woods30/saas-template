@@ -51,4 +51,3 @@ export function contentSlug(fileName: string): string {
   // Drop the markdown extension first, then any trailing locale segment.
   return fileName.replace(/\.md$/, '').replace(/\.(?:zh|en)$/, '')
 }
-

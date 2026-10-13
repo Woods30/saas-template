@@ -61,21 +61,21 @@
 
 /* ---- 品牌 token：每个 token 用 light-dark(明, 暗) 一次声明 ---- */
 :root {
-  --background: light-dark(oklch(0.9835 0.0090 78.28), oklch(0.1717 0.0376 274.61));
-  --foreground: light-dark(oklch(0.2120 0.0513 274.59), oklch(0.9421 0.0162 293.74));
-  --card: light-dark(oklch(1 0 0), oklch(0.2220 0.0545 274.95));
-  --card-foreground: light-dark(oklch(0.2120 0.0513 274.59), oklch(0.9421 0.0162 293.74));
-  --popover: light-dark(oklch(1 0 0), oklch(0.2220 0.0545 274.95));
-  --popover-foreground: light-dark(oklch(0.2120 0.0513 274.59), oklch(0.9421 0.0162 293.74));
+  --background: light-dark(oklch(0.9835 0.009 78.28), oklch(0.1717 0.0376 274.61));
+  --foreground: light-dark(oklch(0.212 0.0513 274.59), oklch(0.9421 0.0162 293.74));
+  --card: light-dark(oklch(1 0 0), oklch(0.222 0.0545 274.95));
+  --card-foreground: light-dark(oklch(0.212 0.0513 274.59), oklch(0.9421 0.0162 293.74));
+  --popover: light-dark(oklch(1 0 0), oklch(0.222 0.0545 274.95));
+  --popover-foreground: light-dark(oklch(0.212 0.0513 274.59), oklch(0.9421 0.0162 293.74));
   --primary: light-dark(oklch(0.5114 0.2532 282.17), oklch(0.6345 0.2104 288.92));
   --primary-foreground: light-dark(oklch(1 0 0), oklch(0.1717 0.0376 274.61));
-  --secondary: light-dark(oklch(0.9510 0.0194 302.21), oklch(0.2604 0.0583 274.71));
-  --secondary-foreground: light-dark(oklch(0.2120 0.0513 274.59), oklch(0.9421 0.0162 293.74));
-  --muted: light-dark(oklch(0.9510 0.0194 302.21), oklch(0.2604 0.0583 274.71));
+  --secondary: light-dark(oklch(0.951 0.0194 302.21), oklch(0.2604 0.0583 274.71));
+  --secondary-foreground: light-dark(oklch(0.212 0.0513 274.59), oklch(0.9421 0.0162 293.74));
+  --muted: light-dark(oklch(0.951 0.0194 302.21), oklch(0.2604 0.0583 274.71));
   --muted-foreground: light-dark(oklch(0.4916 0.0437 276.49), oklch(0.7253 0.0359 289.14));
   --accent: light-dark(oklch(0.7241 0.1543 53.26), oklch(0.7837 0.1587 72.99));
-  --accent-foreground: light-dark(oklch(0.2120 0.0513 274.59), oklch(0.1717 0.0376 274.61));
-  --destructive: light-dark(oklch(0.5527 0.2100 27.00), oklch(0.6400 0.1900 25.00));
+  --accent-foreground: light-dark(oklch(0.212 0.0513 274.59), oklch(0.1717 0.0376 274.61));
+  --destructive: light-dark(oklch(0.5527 0.21 27), oklch(0.64 0.19 25));
   --border: light-dark(oklch(0.9208 0.0195 302.19), oklch(0.2962 0.0587 274.24));
   --input: light-dark(oklch(0.9208 0.0195 302.19), oklch(0.2962 0.0587 274.24));
   --ring: light-dark(oklch(0.5114 0.2532 282.17), oklch(0.6345 0.2104 288.92));

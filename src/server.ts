@@ -18,6 +18,7 @@ import {
 } from '@tanstack/react-start/server'
 import { KVCacheProvider } from './cache/provider/kv'
 import { LOCALE_COOKIE_NAME, readCookieValue, readLocaleCookie } from './lib/locale'
+import { addNonceToInlineScripts, buildCspHeader, generateNonce } from './lib/security'
 import { als, getServerContext } from './lib/server-context'
 import { defaultTheme, parseTheme, setServerThemeGetter, THEME_COOKIE_NAME } from './lib/theme'
 import { registerServerLocaleStrategy } from './locale/middleware'
@@ -28,7 +29,6 @@ import { buildNewsletterProviderRegistry } from './newsletter'
 import { buildNotificationProviderRegistry } from './notification'
 import { buildPaymentProviderRegistry } from './payment'
 import { R2StorageProvider } from './storage/provider/r2'
-import { buildCspHeader, generateNonce, addNonceToInlineScripts } from './lib/security'
 
 // 模块加载期注册自定义策略，早于任何请求进入 paraglideMiddleware。
 registerServerLocaleStrategy()

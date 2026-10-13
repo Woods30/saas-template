@@ -1,5 +1,5 @@
-import { publicEnv } from '@/env/public'
 import { websiteConfig } from '@/config/website'
+import { publicEnv } from '@/env/public'
 
 /**
  * Known analytics & third-party origins allowed in CSP connect-src.
@@ -110,7 +110,11 @@ export function generateNonce(): string {
   // UUID v4 → strip dashes → base64url encode
   const uuid = crypto.randomUUID()
   const bytes = new Uint8Array(
-    uuid.split('-').join('').match(/.{2}/g)!.map((h) => parseInt(h, 16)),
+    uuid
+      .split('-')
+      .join('')
+      .match(/.{2}/g)!
+      .map((h) => parseInt(h, 16)),
   )
   return btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, '-')
