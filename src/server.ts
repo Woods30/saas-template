@@ -9,10 +9,19 @@
  * 注意 `wrangler.jsonc` 的 `main` 需要同步指向本文件。
  */
 
+import type { KVNamespace, R2Bucket } from '@cloudflare/workers-types'
 import { createStartHandler, defaultStreamHandler } from '@tanstack/react-start/server'
+import { KVCacheProvider } from './cache/provider/kv'
 import { LOCALE_COOKIE_NAME, readLocaleCookie } from './lib/locale'
+import { als } from './lib/server-context'
 import { registerServerLocaleStrategy } from './locale/middleware'
 import { paraglideMiddleware } from './locale/paraglide/server.js'
+import { CloudflareEmailProvider } from './mail'
+import { ResendMailProvider } from './mail/provider/resend'
+import { buildNewsletterProviderRegistry } from './newsletter'
+import { buildNotificationProviderRegistry } from './notification'
+import { buildPaymentProviderRegistry } from './payment'
+import { R2StorageProvider } from './storage/provider/r2'
 
 // 模块加载期注册自定义策略，早于任何请求进入 paraglideMiddleware。
 registerServerLocaleStrategy()
@@ -22,14 +31,47 @@ const fetch = createStartHandler(defaultStreamHandler)
 const LOCALE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
 
 export default {
-  async fetch(request: Request): Promise<Response> {
-    // 不使用 URL 前缀策略，中间件不会改写 URL；原样把 request 交给框架处理。
-    const response = await paraglideMiddleware(request, async ({ locale }) => {
-      const result = await fetch(request)
-      return persistLocaleCookie(result, request, locale)
-    })
-    return response
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // 将 env 存入 ALS，供 `src/lib/server-context.ts` 的 `getServerContext()` 使用。
+    return als.run(
+      {
+        env,
+        cacheProvider: new KVCacheProvider(env.CACHE as KVNamespace),
+        storageProvider: new R2StorageProvider(env.BUCKET as unknown as R2Bucket),
+        mailProviderRegistry: buildMailProviderRegistry(env),
+        newsletterProviderRegistry: buildNewsletterProviderRegistry(env),
+        notificationProviderRegistry: buildNotificationProviderRegistry(env),
+        paymentProviderRegistry: buildPaymentProviderRegistry(env),
+      },
+      async () => {
+        // 不使用 URL 前缀策略，中间件不会改写 URL；原样把 request 交给框架处理。
+        const response = await paraglideMiddleware(request, async ({ locale }) => {
+          const result = await fetch(request)
+          return persistLocaleCookie(result, request, locale)
+        })
+        return response
+      },
+    )
   },
+}
+
+/**
+ * Build per-request mail provider registry from env bindings.
+ * Returns a plain object (not a Map) matching the registry shape.
+ */
+function buildMailProviderRegistry(
+  env: Env,
+): Record<string, (() => import('./mail').MailProvider) | undefined> {
+  const registry: Record<string, (() => import('./mail').MailProvider) | undefined> = {}
+  if (env.EMAIL) {
+    registry.cloudflare = () =>
+      new CloudflareEmailProvider(env.EMAIL, env.CLOUDFLARE_EMAIL_SENDER ?? 'noreply@example.com')
+  }
+  if (env.RESEND_API_KEY) {
+    registry.resend = () =>
+      new ResendMailProvider(env.RESEND_API_KEY ?? '', 'SaaS Template <noreply@example.com>')
+  }
+  return registry
 }
 
 /**

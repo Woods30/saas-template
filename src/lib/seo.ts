@@ -1,3 +1,4 @@
+import { LOCALES, type Locale, localeConfig } from '@/lib/locale'
 import { getBaseUrl, getCanonicalUrl, normalizeLeadingSlash } from '@/lib/urls'
 
 interface SeoOptions {
@@ -5,6 +6,8 @@ interface SeoOptions {
   description?: string
   image?: string
   type?: 'website' | 'article'
+  /** 当前 locale，用于 hreflang alternates 输出；省略则不输出 alternate links。 */
+  locale?: Locale
 }
 
 /**
@@ -12,11 +15,19 @@ interface SeoOptions {
  *
  * - 可选字段（`description` / `image`）缺省时不输出对应标签，避免留下空占位；
  * - 相对 `image` 路径会补全为绝对 URL，绝对 URL 原样保留；
- * - `og:url` 与 canonical 同源，均取自 {@link getCanonicalUrl}。
+ * - `og:url` 与 canonical 同源，均取自 {@link getCanonicalUrl}；
+ * - 传入 `locale` 时自动为其他语言输出 hreflang alternate links。
  */
 export function seo(path: string, options: SeoOptions) {
   const url = getCanonicalUrl(path)
   const image = options.image ? toAbsoluteUrl(options.image) : undefined
+  const alternates = options.locale
+    ? LOCALES.filter((l) => l !== options.locale).map((l) => ({
+        rel: 'alternate' as const,
+        hreflang: localeConfig[l].hreflang,
+        href: `${getBaseUrl()}/${l}${path === '/' ? '' : path}`,
+      }))
+    : []
 
   return {
     meta: [
@@ -31,7 +42,7 @@ export function seo(path: string, options: SeoOptions) {
       ...(image ? [{ property: 'og:image', content: image }] : []),
       { name: 'twitter:card', content: 'summary_large_image' },
     ],
-    links: [{ rel: 'canonical', href: url }],
+    links: [{ rel: 'canonical', href: url }, ...alternates],
   }
 }
 

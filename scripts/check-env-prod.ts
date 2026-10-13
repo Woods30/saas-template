@@ -24,20 +24,16 @@ const FORBIDDEN_HOSTNAMES = [
   /^[^.-]+\.test$/,
 ]
 
-/** 报告 VITE_BASE_URL 为占位域名并以非零退出码终止。 */
-function failForbiddenBaseUrl(_hostname: string): never {
-  console.error('❌ VITE_BASE_URL 不能为本地或占位域名，请使用实际的生产域名')
-  process.exit(1)
-}
-
 function main(): void {
-  let raw: Record<string, string | undefined>
-  try {
-    raw = resolveRawEnv()
-  } catch {
-    console.error('❌ 未找到 .env。复制模板后重试：cp .env.example .env')
-    process.exit(1)
-  }
+  // Try to resolve .env; if it doesn't exist, exit immediately.
+  const raw = (() => {
+    try {
+      return resolveRawEnv()
+    } catch {
+      console.error('❌ 未找到 .env。复制模板后重试：cp .env.example .env')
+      process.exit(1)
+    }
+  })()
 
   // 强制 production：不信任 `.env` / 进程里的 NODE_ENV，避免本地 development 值绕过生产校验。
   const prodRaw: Record<string, string | undefined> = { ...raw, NODE_ENV: 'production' }
@@ -53,7 +49,10 @@ function main(): void {
     const matched = FORBIDDEN_HOSTNAMES.some((pattern) =>
       typeof pattern === 'string' ? pattern === hostname : pattern.test(hostname),
     )
-    if (matched) failForbiddenBaseUrl(hostname)
+    if (matched) {
+      console.error('❌ VITE_BASE_URL 不能为本地或占位域名，请使用实际的生产域名')
+      process.exit(1)
+    }
   }
 
   try {

@@ -14,9 +14,21 @@ const schema = z.object({
   RESEND_AUDIENCE_ID: z.string().optional(),
   BEEHIIV_API_KEY: z.string().optional(),
   BEEHIIV_PUBLICATION_ID: z.string().optional(),
-  DISCORD_WEBHOOK_URL: z.url().optional(),
-  FEISHU_WEBHOOK_URL: z.url().optional(),
+  BEEHIIV_SEND_WELCOME_EMAIL: z.enum(['true', 'false']).default('false').optional(),
+  DISCORD_WEBHOOK_URL: z
+    .url()
+    .refine((u) => u.startsWith('https://discord.com/api/webhooks/'), {
+      message: 'Discord webhook URL must start with https://discord.com/api/webhooks/',
+    })
+    .optional(),
+  FEISHU_WEBHOOK_URL: z
+    .url()
+    .refine((u) => u.startsWith('https://open.feishu.cn/open-apis/bot/v2/hook/'), {
+      message: 'Feishu webhook URL must start with https://open.feishu.cn/open-apis/bot/v2/hook/',
+    })
+    .optional(),
   TURNSTILE_SECRET_KEY: z.string().optional(),
+  ADMIN_EMAILS: z.string().optional(),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 })
 
