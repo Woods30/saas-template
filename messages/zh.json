@@ -163,5 +163,13 @@
   "blog_page_title": "博客",
   "blog_page_description": "了解 SaaS Template 的最新动态与产品更新",
   "changelog_page_title": "更新日志",
-  "changelog_page_description": "SaaS Template 的版本历史与功能更新"
+  "changelog_page_description": "SaaS Template 的版本历史与功能更新",
+
+  "crumb_home": "首页",
+  "crumb_docs": "文档",
+  "crumb_blog": "博客",
+
+  "error_404_description": "页面不存在",
+  "error_404_back": "返回首页",
+  "error_500_description": "服务器开了个小差"
 }

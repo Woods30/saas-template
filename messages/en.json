@@ -163,5 +163,13 @@
   "blog_page_title": "Blog",
   "blog_page_description": "Latest news and product updates from SaaS Template",
   "changelog_page_title": "Changelog",
-  "changelog_page_description": "Version history and feature updates for SaaS Template"
+  "changelog_page_description": "Version history and feature updates for SaaS Template",
+
+  "crumb_home": "Home",
+  "crumb_docs": "Docs",
+  "crumb_blog": "Blog",
+
+  "error_404_description": "Page not found",
+  "error_404_back": "Back to home",
+  "error_500_description": "Something went wrong"
 }
