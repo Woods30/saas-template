@@ -1,4 +1,5 @@
 import { cloudflare } from '@cloudflare/vite-plugin'
+import contentCollections from '@content-collections/vite'
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
@@ -24,5 +25,8 @@ export default defineConfig({
     // TanStack Start 的 React dev 模式依赖 /@react-refresh（见 start-plugin-core 的
     // createDevClientEntryPlugin），缺少本插件时 `vite dev` 会直接抛错。
     viteReact(),
+    // Content Collections：编译 `content/` 下 markdown 为 ESM 模块。
+    // 放在 viteReact 之后（tsconfigPaths 在 Vite 8 中通过 resolve.tsconfigPaths 内联，不占插件位）。
+    contentCollections(),
   ],
 })
