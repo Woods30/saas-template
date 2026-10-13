@@ -1,6 +1,6 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
-  "site_name": "SaaS Template",
+  "site_name": "Jerbix",
   "site_description": "基于 TanStack Start 与 Cloudflare Workers 的 SaaS 起手模板",
   "site_title": "SaaS 起步模板",
   "auth_login_title": "登录",
