@@ -237,6 +237,15 @@ function rewriteScriptTag(tag: string, nonce: string): string {
   if (/\bsrc\s*=/i.test(tag)) return tag
   // Already has a nonce — leave as-is.
   if (/\bnonce\s*=/i.test(tag)) return tag
+  // Non-executable script types (JSON-LD, application/json, etc.) are data,
+  // not JavaScript. CSP `script-src` does not block them, so adding a nonce
+  // would (a) be unnecessary and (b) create a server/client hydration mismatch
+  // because React's `JsonLd` component emits the tag without a nonce attribute.
+  // Only skip the JSON-family types — unknown / future types are left alone so
+  // the browser's CSP implementation remains the source of truth.
+  if (/\btype\s*=\s*["'](?:application\/(?:ld\+)?json|text\/plain)["']/i.test(tag)) {
+    return tag
+  }
 
   // Insert nonce before the closing `>`. `<script>` becomes `<script nonce="…">`.
   // `<script attr="x">` becomes `<script attr="x" nonce="…">`.

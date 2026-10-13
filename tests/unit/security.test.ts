@@ -125,11 +125,14 @@ describe('addNonceToInlineScripts', () => {
     expect(out).toBe(html)
   })
 
-  it('JSON-LD <script type="application/ld+json"> 视为 inline，补上 nonce', async () => {
-    // JSON-LD 标签是 inline 且会被浏览器作为脚本解析（虽为数据），保守起见补 nonce。
+  it('JSON-LD <script type="application/ld+json"> 不补 nonce（CSP 不需要）', async () => {
+    // JSON-LD is structured data, not executable JavaScript. CSP `script-src`
+    // does not block it, and adding a nonce would create a server/client
+    // hydration mismatch with the `JsonLd` component (which renders the tag
+    // without a nonce attribute).
     const html = `<script type="application/ld+json">{"@context":"x"}</script>`
     const out = await streamRewritten(new Response(html, { headers: { 'Content-Type': 'text/html' } }), nonce)
-    expect(out).toContain(`nonce="${nonce}"`)
+    expect(out).toBe(html)
   })
 
   it('混合 inline / external / 已有 nonce 的脚本一次处理', async () => {
