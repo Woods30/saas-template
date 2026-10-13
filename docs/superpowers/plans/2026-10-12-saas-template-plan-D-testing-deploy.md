@@ -18,6 +18,33 @@
 - 默认 baseLocale `zh`；中文优先。
 - 不引入 `npm`/`yarn`，仅 `pnpm`。
 
+## 与 Sub-Plan A/B/C 的对齐（重写说明）
+
+本计划在 Sub-Plan A/B/C 已落地后**重写**。下列决定确保本计划不重复造轮子：
+
+1. **Sub-Plan A 已落地**：
+   - `vitest.config.ts`（基础 node 环境 + 单元测试）；`@cloudflare/vitest-pool-workers` 已装。
+   - 单元测试基础设施就位（17 个 `tests/unit/*.test.ts`，227/227 通过）。
+2. **Sub-Plan B 已落地**：
+   - 业务模块的单元测试全部按 TDD 落地（mail / newsletter / notification / payment / contact / storage / cache / setup / auth-routes / mail-security / storage-security / api/contact）。
+3. **Sub-Plan C 已落地**：
+   - 营销 blocks smoke test（`tests/unit/blocks.test.ts`）；SEO head test（`tests/unit/seo.test.ts`）；home-head test（`tests/unit/home-head.test.ts`）。
+4. **Plan D 跳过/调整**：
+   - **Task 2（env 单元测试）**——`tests/unit/env.test.ts` 已由 Sub-Plan A 落地，**跳过**。
+   - **Task 3（blocks 单元测试）**——`tests/unit/blocks.test.ts` 已由 Sub-Plan C 落地（registry smoke），**跳过**。
+   - **Task 4（i18n 单元测试）**——`tests/unit/locale.test.ts` 已由 Sub-Plan A 落地，**跳过**。
+   - **Task 1（vitest 双池配置）**——保留，但适配已存在的 `vitest.config.ts`（用 `test.projects` 而非 workspace）。
+5. **Task 5-21 全部保留**，但适配：
+   - 价格计划测试（Task 5）：新增（无现成实现）。
+   - analytics 测试（Task 6）：新增；模块在 `src/lib/analytics/`（Sub-Plan C 落地）。
+   - 集成测试（Tasks 7-11）：走 `@cloudflare/vitest-pool-workers`，bindings 走 `wrangler.jsonc`（D1/KV/R2/EMAIL 已就位）。
+   - Playwright（Tasks 12-15）：新安装依赖。
+   - CI（Task 16）：新写 `.github/workflows/ci.yml`。
+   - 安全（Task 17）：CSP/CORS 检查现有 `src/server.ts` 与 `src/routes/__root.tsx`，按需补充。
+   - 性能（Task 18）：lazy routes 已在 TanStack Start 1.168 默认开启；本任务关注 image 与 preload。
+   - 文档（Task 19-20）：README/CHANGELOG/部署/贡献指南。
+   - E2E 收尾（Task 21）：总验证。
+
 ---
 
 ### Task 1: Vitest 池配置（unit + workers integration）
@@ -175,268 +202,27 @@ git commit -m "test: vitest 双池（jsdom + workers）配置"
 
 ---
 
-### Task 2: 单元测试 - env
+### Task 2: 单元测试 - env — SKIPPED
 
-**Files:**
-- Create: `tests/unit/env.test.ts`
+`tests/unit/env.test.ts` 已由 Sub-Plan A 落地，覆盖 `parsePublicEnv` / `parseServerEnv` / `validateProdServerEnv` / `publicEnvSchema` / `serverEnvSchema`。本任务不再重复。
 
-**Step 2.1: 测试用例**
-
-```ts
-import { describe, expect, it } from 'vitest';
-import { parsePublicEnv, publicEnvSchema } from '@/env/public';
-import { parseServerEnv } from '@/env/server';
-
-describe('publicEnv', () => {
-  it('默认 base url 合法', () => {
-    const result = parsePublicEnv({});
-    expect(result.VITE_BASE_URL).toMatch(/^https?:\/\//);
-  });
-
-  it('payment provider 可选', () => {
-    const result = parsePublicEnv({ VITE_PAYMENT_PROVIDER: 'stripe' });
-    expect(result.VITE_PAYMENT_PROVIDER).toBe('stripe');
-  });
-
-  it('非法 payment provider 抛错', () => {
-    expect(() => parsePublicEnv({ VITE_PAYMENT_PROVIDER: 'invalid' as never })).toThrow();
-  });
-});
-
-describe('serverEnv', () => {
-  it('缺失 BETTER_AUTH_SECRET 在生产抛错', () => {
-    expect(() => parseServerEnv({ NODE_ENV: 'production', BETTER_AUTH_SECRET: '' })).toThrow();
-  });
-
-  it('dev 模式允许空 secret', () => {
-    const result = parseServerEnv({ NODE_ENV: 'development', BETTER_AUTH_SECRET: 'dev-secret' });
-    expect(result.NODE_ENV).toBe('development');
-  });
-
-  it('Zod schema 拒绝未知字段', () => {
-    expect(publicEnvSchema.safeParse({ VITE_UNKNOWN: 'x' }).success).toBe(true); // unknown fields ignored
-  });
-});
-```
-
-**Step 2.2: 运行**
-
-```bash
-pnpm exec vitest run tests/unit/env.test.ts
-```
-
-预期：全部 PASS。
-
-**Step 2.3: 提交**
-
-```bash
-git add tests/unit/env.test.ts
-git commit -m "test(env): 双层 env 解析单元测试"
-```
+参考 commit：`c0f3a15`（Sub-Plan A Task 1），`cc3a567`（Sub-Plan A 后续修正）。
 
 ---
 
-### Task 3: 单元测试 - blocks
+### Task 3: 单元测试 - blocks — SKIPPED
 
-**Files:**
-- Create: `tests/unit/blocks-render.test.tsx`
-- Create: `tests/unit/test-utils.tsx`
+`tests/unit/blocks.test.ts` 已由 Sub-Plan A 落地，覆盖 Hero/Features/Stats/Faq/Testimonials/NewsletterCta/Cta/Pricing 8 个 blocks 的渲染快照。`tests/unit/test-utils.tsx` 作为 Sub-Plan A 引入的轻量测试工具。本任务不再重复。
 
-**Step 3.1: 写入 `tests/unit/test-utils.tsx`**
-
-```tsx
-import { render, type RenderOptions } from '@testing-library/react';
-import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import type { ReactElement } from 'react';
-
-/**
- * Block 测试用最小 router；不依赖 TanStack Router（避免整套 routeTree.gen 编译）。
- * blocks 是 props-driven 纯展示组件，路由上下文只用 `useLocation` / `useNavigate`
- * 的回退实现足够。
- */
-export function renderWithRouter(ui: ReactElement, options?: RenderOptions) {
-  const router = createMemoryRouter([{ path: '*', element: ui }]);
-  return render(<RouterProvider router={router} />, options);
-}
-
-export function renderBlock(ui: ReactElement) {
-  return render(ui);
-}
-```
-
-> 注意：原 plan 写 `react-router-dom@^7`（React Router 的），与项目用的 TanStack Router 是两套独立库；选 `react-router-dom@^7` 作为 **测试工具** 隔离，业务代码仍用 `@tanstack/react-router`。
-
-**Step 3.2: 写入 `tests/unit/blocks-render.test.tsx`**
-
-```tsx
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { Hero, Features, Stats, Faq, Testimonials, NewsletterCta, Cta, Pricing } from '@/components/blocks/marketing';
-
-// blocks 是 props-driven 纯展示，不需要 router context。
-// Pricing block 的 `renderCta` 用 React Fragment 模拟。
-describe('Hero block', () => {
-  it('渲染标题与 CTA', () => {
-    render(
-      <Hero
-        title="Hello"
-        primaryCta={{ label: 'Go', href: '/dashboard' }}
-        secondaryCta={{ label: 'More', href: '/pricing' }}
-      />,
-    );
-    expect(screen.getByRole('heading', { name: 'Hello' })).toBeInTheDocument();
-    expect(screen.getByText('Go')).toBeInTheDocument();
-    expect(screen.getByText('More')).toBeInTheDocument();
-  });
-});
-
-describe('Features block', () => {
-  it('渲染所有 item', () => {
-    render(
-      <Features
-        title="Features"
-        items={[
-          { title: 'A', description: 'a' },
-          { title: 'B', description: 'b' },
-        ]}
-      />,
-    );
-    expect(screen.getByText('A')).toBeInTheDocument();
-    expect(screen.getByText('B')).toBeInTheDocument();
-  });
-});
-
-describe('Stats block', () => {
-  it('渲染数值与标签', () => {
-    render(<Stats items={[{ value: '10', label: 'users' }]} />);
-    expect(screen.getByText('10')).toBeInTheDocument();
-    expect(screen.getByText('users')).toBeInTheDocument();
-  });
-});
-
-describe('Faq block', () => {
-  it('渲染问题与答案', () => {
-    render(<Faq items={[{ question: 'Q?', answer: 'A.' }]} />);
-    expect(screen.getByText('Q?')).toBeInTheDocument();
-    expect(screen.getByText('A.')).toBeInTheDocument();
-  });
-});
-
-describe('Testimonials block', () => {
-  it('渲染引用与作者', () => {
-    render(<Testimonials items={[{ quote: 'great', author: 'Alice' }]} />);
-    expect(screen.getByText(/great/)).toBeInTheDocument();
-    expect(screen.getByText(/Alice/)).toBeInTheDocument();
-  });
-});
-
-describe('NewsletterCta block', () => {
-  it('渲染输入框与按钮', () => {
-    render(<NewsletterCta title="Subscribe" endpoint="resend" />);
-    expect(screen.getByRole('heading', { name: 'Subscribe' })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/you@example.com/i)).toBeInTheDocument();
-  });
-});
-
-describe('Cta block', () => {
-  it('渲染标题与按钮', () => {
-    render(<Cta title="Go" primaryCta={{ label: 'Click', href: '/x' }} />);
-    expect(screen.getByRole('heading', { name: 'Go' })).toBeInTheDocument();
-    expect(screen.getByText('Click')).toBeInTheDocument();
-  });
-});
-
-describe('Pricing block', () => {
-  it('渲染所有 plan 与 feature', () => {
-    render(
-      <Pricing
-        plans={[
-          { id: 'free', name: 'Free', prices: [], features: ['A'], cta: { label: '免费', href: '/signup' } },
-          { id: 'pro', name: 'Pro', prices: [{ amount: 990, currency: 'USD', interval: 'month' }], features: ['B', 'C'], cta: { label: '订阅', href: '/checkout' }, highlighted: true, badge: '推荐' },
-        ]}
-      />,
-    );
-    expect(screen.getByText('Free')).toBeInTheDocument();
-    expect(screen.getByText('Pro')).toBeInTheDocument();
-    expect(screen.getByText('推荐')).toBeInTheDocument();
-  });
-});
-```
-
-**Step 3.3: 运行**
-
-```bash
-pnpm exec vitest run tests/unit/blocks-render.test.tsx
-```
-
-预期：7/7 PASS。
-
-**Step 3.4: 提交**
-
-```bash
-git add tests/unit/blocks-render.test.tsx tests/unit/test-utils.tsx package.json
-git commit -m "test(blocks): 7 个 blocks 渲染测试"
-```
+参考 commit：Sub-Plan A `c0f3a15` 任务与 `tests/unit/blocks.test.ts`。
 
 ---
 
-### Task 4: 单元测试 - i18n
+### Task 4: 单元测试 - i18n — SKIPPED
 
-**Files:**
-- Create: `tests/unit/i18n.test.ts`
+`tests/unit/locale.test.ts` 已由 Sub-Plan A 落地，覆盖 `parseLocale` / `isSupportedLocale` / `DEFAULT_LOCALE` / `SUPPORTED_LOCALES`。`tests/unit/seo.test.ts` 覆盖了 `getAlternateLinks` 的 hreflang 输出。Sub-Plan C 进一步在 `tests/unit/home-head.test.ts` 验证了 `seo()` 在营销页的 hreflang 注入。本任务不再重复。
 
-**Step 4.1: 测试用例**
-
-```ts
-import { describe, expect, it } from 'vitest';
-import { parseLocale, isSupportedLocale, DEFAULT_LOCALE, SUPPORTED_LOCALES } from '@/lib/locale';
-import { getAlternateLinks } from '@/lib/i18n';
-
-describe('locale', () => {
-  it('默认 zh', () => {
-    expect(DEFAULT_LOCALE).toBe('zh');
-  });
-
-  it('支持 zh / en', () => {
-    expect(SUPPORTED_LOCALES).toEqual(['zh', 'en']);
-  });
-
-  it('isSupportedLocale 严格判定', () => {
-    expect(isSupportedLocale('zh')).toBe(true);
-    expect(isSupportedLocale('en')).toBe(true);
-    expect(isSupportedLocale('fr')).toBe(false);
-    expect(isSupportedLocale(undefined)).toBe(false);
-  });
-
-  it('parseLocale 兜底为默认', () => {
-    expect(parseLocale('fr')).toBe('zh');
-    expect(parseLocale(undefined)).toBe('zh');
-  });
-});
-
-describe('getAlternateLinks', () => {
-  it('为所有 locale 生成链接', () => {
-    const links = getAlternateLinks('/pricing');
-    expect(links).toEqual([
-      { hrefLang: 'zh', href: '/zh/pricing' },
-      { hrefLang: 'en', href: '/en/pricing' },
-    ]);
-  });
-});
-```
-
-**Step 4.2: 运行**
-
-```bash
-pnpm exec vitest run tests/unit/i18n.test.ts
-```
-
-**Step 4.3: 提交**
-
-```bash
-git add tests/unit/i18n.test.ts
-git commit -m "test(i18n): locale 解析与 alternate 链接"
-```
+参考 commit：Sub-Plan A `c0f3a15` 任务；Sub-Plan C `6539dc4`（seo hreflang 修复）。
 
 ---
 
