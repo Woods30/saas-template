@@ -22,6 +22,7 @@
     "typecheck": "pnpm run locale:compile && tsc --noEmit",
     "test": "pnpm run locale:compile && vitest run",
     "test:watch": "pnpm run locale:compile && vitest",
+    "test:workers": "vitest run --config vitest.workers.config.ts --passWithNoTests",
     "format": "biome format --write .",
     "lint": "biome lint .",
     "lint:fix": "biome check --write .",
