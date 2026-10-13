@@ -11,17 +11,26 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as Char123LocaleChar125ContactRouteImport } from './routes/{-$locale}/contact'
+import { Route as Char123LocaleChar125PricingRouteImport } from './routes/{-$locale}/pricing'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiContactSplatRouteImport } from './routes/api/contact/$'
 import { Route as ApiEmailSplatRouteImport } from './routes/api/email/$'
 import { Route as ApiNewsletterSplatRouteImport } from './routes/api/newsletter/$'
 import { Route as ApiPaymentSplatRouteImport } from './routes/api/payment/$'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api/webhooks/stripe'
+import { Route as Char123LocaleChar125LayoutMarketingRouteImport } from './routes/{-$locale}/_layout/marketing'
 import { Route as Char123LocaleChar125AuthErrorRouteImport } from './routes/{-$locale}/auth/error'
 import { Route as Char123LocaleChar125AuthForgotPasswordRouteImport } from './routes/{-$locale}/auth/forgot-password'
 import { Route as Char123LocaleChar125AuthLoginRouteImport } from './routes/{-$locale}/auth/login'
 import { Route as Char123LocaleChar125AuthRegisterRouteImport } from './routes/{-$locale}/auth/register'
 import { Route as Char123LocaleChar125AuthResetPasswordRouteImport } from './routes/{-$locale}/auth/reset-password'
+import { Route as Char123LocaleChar125LayoutMarketingFeaturesRouteImport } from './routes/{-$locale}/_layout/marketing/features'
+import { Route as Char123LocaleChar125LayoutMarketingBlogIndexRouteImport } from './routes/{-$locale}/_layout/marketing/blog/index'
+import { Route as Char123LocaleChar125LayoutMarketingBlogSlugRouteImport } from './routes/{-$locale}/_layout/marketing/blog/$slug'
+import { Route as Char123LocaleChar125LayoutMarketingChangelogIndexRouteImport } from './routes/{-$locale}/_layout/marketing/changelog/index'
+import { Route as Char123LocaleChar125LayoutMarketingDocsIndexRouteImport } from './routes/{-$locale}/_layout/marketing/docs/index'
+import { Route as Char123LocaleChar125LayoutMarketingDocsSlugRouteImport } from './routes/{-$locale}/_layout/marketing/docs/$slug'
+import { Route as Char123LocaleChar125LayoutMarketingLegalSlugRouteImport } from './routes/{-$locale}/_layout/marketing/legal/$slug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -32,6 +41,12 @@ const Char123LocaleChar125ContactRoute =
   Char123LocaleChar125ContactRouteImport.update({
     id: '/{-$locale}/contact',
     path: '/{-$locale}/contact',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char123LocaleChar125PricingRoute =
+  Char123LocaleChar125PricingRouteImport.update({
+    id: '/{-$locale}/pricing',
+    path: '/{-$locale}/pricing',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
@@ -64,6 +79,12 @@ const ApiWebhooksStripeRoute = ApiWebhooksStripeRouteImport.update({
   path: '/api/webhooks/stripe',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Char123LocaleChar125LayoutMarketingRoute =
+  Char123LocaleChar125LayoutMarketingRouteImport.update({
+    id: '/{-$locale}/_layout/marketing',
+    path: '/{-$locale}/marketing',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const Char123LocaleChar125AuthErrorRoute =
   Char123LocaleChar125AuthErrorRouteImport.update({
     id: '/{-$locale}/auth/error',
@@ -94,110 +115,208 @@ const Char123LocaleChar125AuthResetPasswordRoute =
     path: '/{-$locale}/auth/reset-password',
     getParentRoute: () => rootRouteImport,
   } as any)
+const Char123LocaleChar125LayoutMarketingFeaturesRoute =
+  Char123LocaleChar125LayoutMarketingFeaturesRouteImport.update({
+    id: '/features',
+    path: '/features',
+    getParentRoute: () => Char123LocaleChar125LayoutMarketingRoute,
+  } as any)
+const Char123LocaleChar125LayoutMarketingBlogIndexRoute =
+  Char123LocaleChar125LayoutMarketingBlogIndexRouteImport.update({
+    id: '/blog/',
+    path: '/blog/',
+    getParentRoute: () => Char123LocaleChar125LayoutMarketingRoute,
+  } as any)
+const Char123LocaleChar125LayoutMarketingBlogSlugRoute =
+  Char123LocaleChar125LayoutMarketingBlogSlugRouteImport.update({
+    id: '/blog/$slug',
+    path: '/blog/$slug',
+    getParentRoute: () => Char123LocaleChar125LayoutMarketingRoute,
+  } as any)
+const Char123LocaleChar125LayoutMarketingChangelogIndexRoute =
+  Char123LocaleChar125LayoutMarketingChangelogIndexRouteImport.update({
+    id: '/changelog/',
+    path: '/changelog/',
+    getParentRoute: () => Char123LocaleChar125LayoutMarketingRoute,
+  } as any)
+const Char123LocaleChar125LayoutMarketingDocsIndexRoute =
+  Char123LocaleChar125LayoutMarketingDocsIndexRouteImport.update({
+    id: '/docs/',
+    path: '/docs/',
+    getParentRoute: () => Char123LocaleChar125LayoutMarketingRoute,
+  } as any)
+const Char123LocaleChar125LayoutMarketingDocsSlugRoute =
+  Char123LocaleChar125LayoutMarketingDocsSlugRouteImport.update({
+    id: '/docs/$slug',
+    path: '/docs/$slug',
+    getParentRoute: () => Char123LocaleChar125LayoutMarketingRoute,
+  } as any)
+const Char123LocaleChar125LayoutMarketingLegalSlugRoute =
+  Char123LocaleChar125LayoutMarketingLegalSlugRouteImport.update({
+    id: '/legal/$slug',
+    path: '/legal/$slug',
+    getParentRoute: () => Char123LocaleChar125LayoutMarketingRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/{-$locale}/contact': typeof Char123LocaleChar125ContactRoute
+  '/{-$locale}/pricing': typeof Char123LocaleChar125PricingRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/contact/$': typeof ApiContactSplatRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/newsletter/$': typeof ApiNewsletterSplatRoute
   '/api/payment/$': typeof ApiPaymentSplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/{-$locale}/marketing': typeof Char123LocaleChar125LayoutMarketingRouteWithChildren
   '/{-$locale}/auth/error': typeof Char123LocaleChar125AuthErrorRoute
   '/{-$locale}/auth/forgot-password': typeof Char123LocaleChar125AuthForgotPasswordRoute
   '/{-$locale}/auth/login': typeof Char123LocaleChar125AuthLoginRoute
   '/{-$locale}/auth/register': typeof Char123LocaleChar125AuthRegisterRoute
   '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
+  '/{-$locale}/marketing/features': typeof Char123LocaleChar125LayoutMarketingFeaturesRoute
+  '/{-$locale}/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
+  '/{-$locale}/marketing/docs/$slug': typeof Char123LocaleChar125LayoutMarketingDocsSlugRoute
+  '/{-$locale}/marketing/legal/$slug': typeof Char123LocaleChar125LayoutMarketingLegalSlugRoute
+  '/{-$locale}/marketing/blog/': typeof Char123LocaleChar125LayoutMarketingBlogIndexRoute
+  '/{-$locale}/marketing/changelog/': typeof Char123LocaleChar125LayoutMarketingChangelogIndexRoute
+  '/{-$locale}/marketing/docs/': typeof Char123LocaleChar125LayoutMarketingDocsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/{-$locale}/contact': typeof Char123LocaleChar125ContactRoute
+  '/{-$locale}/pricing': typeof Char123LocaleChar125PricingRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/contact/$': typeof ApiContactSplatRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/newsletter/$': typeof ApiNewsletterSplatRoute
   '/api/payment/$': typeof ApiPaymentSplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/{-$locale}/marketing': typeof Char123LocaleChar125LayoutMarketingRouteWithChildren
   '/{-$locale}/auth/error': typeof Char123LocaleChar125AuthErrorRoute
   '/{-$locale}/auth/forgot-password': typeof Char123LocaleChar125AuthForgotPasswordRoute
   '/{-$locale}/auth/login': typeof Char123LocaleChar125AuthLoginRoute
   '/{-$locale}/auth/register': typeof Char123LocaleChar125AuthRegisterRoute
   '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
+  '/{-$locale}/marketing/features': typeof Char123LocaleChar125LayoutMarketingFeaturesRoute
+  '/{-$locale}/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
+  '/{-$locale}/marketing/docs/$slug': typeof Char123LocaleChar125LayoutMarketingDocsSlugRoute
+  '/{-$locale}/marketing/legal/$slug': typeof Char123LocaleChar125LayoutMarketingLegalSlugRoute
+  '/{-$locale}/marketing/blog': typeof Char123LocaleChar125LayoutMarketingBlogIndexRoute
+  '/{-$locale}/marketing/changelog': typeof Char123LocaleChar125LayoutMarketingChangelogIndexRoute
+  '/{-$locale}/marketing/docs': typeof Char123LocaleChar125LayoutMarketingDocsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/{-$locale}/contact': typeof Char123LocaleChar125ContactRoute
+  '/{-$locale}/pricing': typeof Char123LocaleChar125PricingRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/contact/$': typeof ApiContactSplatRoute
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/newsletter/$': typeof ApiNewsletterSplatRoute
   '/api/payment/$': typeof ApiPaymentSplatRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/{-$locale}/_layout/marketing': typeof Char123LocaleChar125LayoutMarketingRouteWithChildren
   '/{-$locale}/auth/error': typeof Char123LocaleChar125AuthErrorRoute
   '/{-$locale}/auth/forgot-password': typeof Char123LocaleChar125AuthForgotPasswordRoute
   '/{-$locale}/auth/login': typeof Char123LocaleChar125AuthLoginRoute
   '/{-$locale}/auth/register': typeof Char123LocaleChar125AuthRegisterRoute
   '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
+  '/{-$locale}/_layout/marketing/features': typeof Char123LocaleChar125LayoutMarketingFeaturesRoute
+  '/{-$locale}/_layout/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
+  '/{-$locale}/_layout/marketing/docs/$slug': typeof Char123LocaleChar125LayoutMarketingDocsSlugRoute
+  '/{-$locale}/_layout/marketing/legal/$slug': typeof Char123LocaleChar125LayoutMarketingLegalSlugRoute
+  '/{-$locale}/_layout/marketing/blog/': typeof Char123LocaleChar125LayoutMarketingBlogIndexRoute
+  '/{-$locale}/_layout/marketing/changelog/': typeof Char123LocaleChar125LayoutMarketingChangelogIndexRoute
+  '/{-$locale}/_layout/marketing/docs/': typeof Char123LocaleChar125LayoutMarketingDocsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/{-$locale}/contact'
+    | '/{-$locale}/pricing'
     | '/api/auth/$'
     | '/api/contact/$'
     | '/api/email/$'
     | '/api/newsletter/$'
     | '/api/payment/$'
     | '/api/webhooks/stripe'
+    | '/{-$locale}/marketing'
     | '/{-$locale}/auth/error'
     | '/{-$locale}/auth/forgot-password'
     | '/{-$locale}/auth/login'
     | '/{-$locale}/auth/register'
     | '/{-$locale}/auth/reset-password'
+    | '/{-$locale}/marketing/features'
+    | '/{-$locale}/marketing/blog/$slug'
+    | '/{-$locale}/marketing/docs/$slug'
+    | '/{-$locale}/marketing/legal/$slug'
+    | '/{-$locale}/marketing/blog/'
+    | '/{-$locale}/marketing/changelog/'
+    | '/{-$locale}/marketing/docs/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/{-$locale}/contact'
+    | '/{-$locale}/pricing'
     | '/api/auth/$'
     | '/api/contact/$'
     | '/api/email/$'
     | '/api/newsletter/$'
     | '/api/payment/$'
     | '/api/webhooks/stripe'
+    | '/{-$locale}/marketing'
     | '/{-$locale}/auth/error'
     | '/{-$locale}/auth/forgot-password'
     | '/{-$locale}/auth/login'
     | '/{-$locale}/auth/register'
     | '/{-$locale}/auth/reset-password'
+    | '/{-$locale}/marketing/features'
+    | '/{-$locale}/marketing/blog/$slug'
+    | '/{-$locale}/marketing/docs/$slug'
+    | '/{-$locale}/marketing/legal/$slug'
+    | '/{-$locale}/marketing/blog'
+    | '/{-$locale}/marketing/changelog'
+    | '/{-$locale}/marketing/docs'
   id:
     | '__root__'
     | '/'
     | '/{-$locale}/contact'
+    | '/{-$locale}/pricing'
     | '/api/auth/$'
     | '/api/contact/$'
     | '/api/email/$'
     | '/api/newsletter/$'
     | '/api/payment/$'
     | '/api/webhooks/stripe'
+    | '/{-$locale}/_layout/marketing'
     | '/{-$locale}/auth/error'
     | '/{-$locale}/auth/forgot-password'
     | '/{-$locale}/auth/login'
     | '/{-$locale}/auth/register'
     | '/{-$locale}/auth/reset-password'
+    | '/{-$locale}/_layout/marketing/features'
+    | '/{-$locale}/_layout/marketing/blog/$slug'
+    | '/{-$locale}/_layout/marketing/docs/$slug'
+    | '/{-$locale}/_layout/marketing/legal/$slug'
+    | '/{-$locale}/_layout/marketing/blog/'
+    | '/{-$locale}/_layout/marketing/changelog/'
+    | '/{-$locale}/_layout/marketing/docs/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   Char123LocaleChar125ContactRoute: typeof Char123LocaleChar125ContactRoute
+  Char123LocaleChar125PricingRoute: typeof Char123LocaleChar125PricingRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiContactSplatRoute: typeof ApiContactSplatRoute
   ApiEmailSplatRoute: typeof ApiEmailSplatRoute
   ApiNewsletterSplatRoute: typeof ApiNewsletterSplatRoute
   ApiPaymentSplatRoute: typeof ApiPaymentSplatRoute
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
+  Char123LocaleChar125LayoutMarketingRoute: typeof Char123LocaleChar125LayoutMarketingRouteWithChildren
   Char123LocaleChar125AuthErrorRoute: typeof Char123LocaleChar125AuthErrorRoute
   Char123LocaleChar125AuthForgotPasswordRoute: typeof Char123LocaleChar125AuthForgotPasswordRoute
   Char123LocaleChar125AuthLoginRoute: typeof Char123LocaleChar125AuthLoginRoute
@@ -219,6 +338,13 @@ declare module '@tanstack/react-router' {
       path: '/{-$locale}/contact'
       fullPath: '/{-$locale}/contact'
       preLoaderRoute: typeof Char123LocaleChar125ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/{-$locale}/pricing': {
+      id: '/{-$locale}/pricing'
+      path: '/{-$locale}/pricing'
+      fullPath: '/{-$locale}/pricing'
+      preLoaderRoute: typeof Char123LocaleChar125PricingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
@@ -263,6 +389,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWebhooksStripeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/{-$locale}/_layout/marketing': {
+      id: '/{-$locale}/_layout/marketing'
+      path: '/{-$locale}/marketing'
+      fullPath: '/{-$locale}/marketing'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/{-$locale}/auth/error': {
       id: '/{-$locale}/auth/error'
       path: '/{-$locale}/auth/error'
@@ -298,18 +431,103 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char123LocaleChar125AuthResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/{-$locale}/_layout/marketing/features': {
+      id: '/{-$locale}/_layout/marketing/features'
+      path: '/features'
+      fullPath: '/{-$locale}/marketing/features'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingFeaturesRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutMarketingRoute
+    }
+    '/{-$locale}/_layout/marketing/blog/': {
+      id: '/{-$locale}/_layout/marketing/blog/'
+      path: '/blog'
+      fullPath: '/{-$locale}/marketing/blog/'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingBlogIndexRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutMarketingRoute
+    }
+    '/{-$locale}/_layout/marketing/blog/$slug': {
+      id: '/{-$locale}/_layout/marketing/blog/$slug'
+      path: '/blog/$slug'
+      fullPath: '/{-$locale}/marketing/blog/$slug'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingBlogSlugRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutMarketingRoute
+    }
+    '/{-$locale}/_layout/marketing/changelog/': {
+      id: '/{-$locale}/_layout/marketing/changelog/'
+      path: '/changelog'
+      fullPath: '/{-$locale}/marketing/changelog/'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingChangelogIndexRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutMarketingRoute
+    }
+    '/{-$locale}/_layout/marketing/docs/': {
+      id: '/{-$locale}/_layout/marketing/docs/'
+      path: '/docs'
+      fullPath: '/{-$locale}/marketing/docs/'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingDocsIndexRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutMarketingRoute
+    }
+    '/{-$locale}/_layout/marketing/docs/$slug': {
+      id: '/{-$locale}/_layout/marketing/docs/$slug'
+      path: '/docs/$slug'
+      fullPath: '/{-$locale}/marketing/docs/$slug'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingDocsSlugRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutMarketingRoute
+    }
+    '/{-$locale}/_layout/marketing/legal/$slug': {
+      id: '/{-$locale}/_layout/marketing/legal/$slug'
+      path: '/legal/$slug'
+      fullPath: '/{-$locale}/marketing/legal/$slug'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingLegalSlugRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutMarketingRoute
+    }
   }
 }
+
+interface Char123LocaleChar125LayoutMarketingRouteChildren {
+  Char123LocaleChar125LayoutMarketingFeaturesRoute: typeof Char123LocaleChar125LayoutMarketingFeaturesRoute
+  Char123LocaleChar125LayoutMarketingBlogSlugRoute: typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
+  Char123LocaleChar125LayoutMarketingDocsSlugRoute: typeof Char123LocaleChar125LayoutMarketingDocsSlugRoute
+  Char123LocaleChar125LayoutMarketingLegalSlugRoute: typeof Char123LocaleChar125LayoutMarketingLegalSlugRoute
+  Char123LocaleChar125LayoutMarketingBlogIndexRoute: typeof Char123LocaleChar125LayoutMarketingBlogIndexRoute
+  Char123LocaleChar125LayoutMarketingChangelogIndexRoute: typeof Char123LocaleChar125LayoutMarketingChangelogIndexRoute
+  Char123LocaleChar125LayoutMarketingDocsIndexRoute: typeof Char123LocaleChar125LayoutMarketingDocsIndexRoute
+}
+
+const Char123LocaleChar125LayoutMarketingRouteChildren: Char123LocaleChar125LayoutMarketingRouteChildren =
+  {
+    Char123LocaleChar125LayoutMarketingFeaturesRoute:
+      Char123LocaleChar125LayoutMarketingFeaturesRoute,
+    Char123LocaleChar125LayoutMarketingBlogSlugRoute:
+      Char123LocaleChar125LayoutMarketingBlogSlugRoute,
+    Char123LocaleChar125LayoutMarketingDocsSlugRoute:
+      Char123LocaleChar125LayoutMarketingDocsSlugRoute,
+    Char123LocaleChar125LayoutMarketingLegalSlugRoute:
+      Char123LocaleChar125LayoutMarketingLegalSlugRoute,
+    Char123LocaleChar125LayoutMarketingBlogIndexRoute:
+      Char123LocaleChar125LayoutMarketingBlogIndexRoute,
+    Char123LocaleChar125LayoutMarketingChangelogIndexRoute:
+      Char123LocaleChar125LayoutMarketingChangelogIndexRoute,
+    Char123LocaleChar125LayoutMarketingDocsIndexRoute:
+      Char123LocaleChar125LayoutMarketingDocsIndexRoute,
+  }
+
+const Char123LocaleChar125LayoutMarketingRouteWithChildren =
+  Char123LocaleChar125LayoutMarketingRoute._addFileChildren(
+    Char123LocaleChar125LayoutMarketingRouteChildren,
+  )
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   Char123LocaleChar125ContactRoute: Char123LocaleChar125ContactRoute,
+  Char123LocaleChar125PricingRoute: Char123LocaleChar125PricingRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiContactSplatRoute: ApiContactSplatRoute,
   ApiEmailSplatRoute: ApiEmailSplatRoute,
   ApiNewsletterSplatRoute: ApiNewsletterSplatRoute,
   ApiPaymentSplatRoute: ApiPaymentSplatRoute,
   ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
+  Char123LocaleChar125LayoutMarketingRoute:
+    Char123LocaleChar125LayoutMarketingRouteWithChildren,
   Char123LocaleChar125AuthErrorRoute: Char123LocaleChar125AuthErrorRoute,
   Char123LocaleChar125AuthForgotPasswordRoute:
     Char123LocaleChar125AuthForgotPasswordRoute,

@@ -35,5 +35,15 @@
 
   "auth_error_title": "认证出错",
   "auth_error_message": "链接可能已过期或无效。",
-  "auth_error_back": "返回登录"
+  "auth_error_back": "返回登录",
+
+  "nav_features": "特性",
+  "nav_blog": "博客",
+  "nav_changelog": "更新日志",
+  "nav_contact": "联系",
+  "nav_login": "登录",
+  "footer_rights": "保留所有权利",
+  "footer_terms": "服务条款",
+  "footer_privacy": "隐私政策",
+  "footer_changelog": "更新日志"
 }

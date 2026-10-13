@@ -35,5 +35,15 @@
 
   "auth_error_title": "Authentication error",
   "auth_error_message": "This link may have expired or is invalid.",
-  "auth_error_back": "Back to sign in"
+  "auth_error_back": "Back to sign in",
+
+  "nav_features": "Features",
+  "nav_blog": "Blog",
+  "nav_changelog": "Changelog",
+  "nav_contact": "Contact",
+  "nav_login": "Sign in",
+  "footer_rights": "All rights reserved",
+  "footer_terms": "Terms of Service",
+  "footer_privacy": "Privacy Policy",
+  "footer_changelog": "Changelog"
 }
