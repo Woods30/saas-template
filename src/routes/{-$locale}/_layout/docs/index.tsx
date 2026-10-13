@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import type { Locale } from '@/lib/locale'
 import { docsLanding } from '@/lib/docs'
+import type { Locale } from '@/lib/locale'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 
 /**

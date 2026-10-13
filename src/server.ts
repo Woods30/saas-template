@@ -17,8 +17,11 @@ import {
   type HandlerCallback,
 } from '@tanstack/react-start/server'
 import { KVCacheProvider } from './cache/provider/kv'
-import { LOCALE_COOKIE_NAME, readLocaleCookie } from './lib/locale'
+import { websiteConfig } from './config/website'
+import { LOCALE_COOKIE_NAME, readCookieValue, readLocaleCookie } from './lib/locale'
+import { addNonceToInlineScripts, buildCspHeader, generateNonce } from './lib/security'
 import { als, getServerContext } from './lib/server-context'
+import { defaultTheme, parseTheme, setServerThemeGetter, THEME_COOKIE_NAME } from './lib/theme'
 import { registerServerLocaleStrategy } from './locale/middleware'
 import { paraglideMiddleware } from './locale/paraglide/server.js'
 import { CloudflareEmailProvider } from './mail'
@@ -27,10 +30,13 @@ import { buildNewsletterProviderRegistry } from './newsletter'
 import { buildNotificationProviderRegistry } from './notification'
 import { buildPaymentProviderRegistry } from './payment'
 import { R2StorageProvider } from './storage/provider/r2'
-import { buildCspHeader, generateNonce, addNonceToInlineScripts } from './lib/security'
 
 // 模块加载期注册自定义策略，早于任何请求进入 paraglideMiddleware。
 registerServerLocaleStrategy()
+
+// 注入服务端主题读取器：`src/lib/theme.ts` 的 `getTheme()` 在 SSR 时经此读取 ALS，
+// 从而不必把 `node:async_hooks` 依赖带入客户端 bundle。
+setServerThemeGetter(() => getServerContext().theme)
 
 /**
  * Wrap the default stream handler so the per-request CSP nonce reaches TanStack
@@ -63,6 +69,9 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     // 每个请求生成新的 nonce，与 CSP header 同步；提前生成以便注入 ALS。
     const nonce = generateNonce()
+    // 主题随 `THEME` cookie 变化；无 cookie 时为 `system`（由 CSS 媒体查询决定明暗）。
+    const theme =
+      parseTheme(readCookieValue(request.headers.get('cookie'), THEME_COOKIE_NAME)) ?? defaultTheme
     // 将 env 与 nonce 一起存入 ALS，供 `src/lib/server-context.ts` 的
     // `getServerContext()` 与 `streamHandlerWithNonce` 各自读取。
     return als.run(
@@ -75,6 +84,7 @@ export default {
         notificationProviderRegistry: buildNotificationProviderRegistry(env),
         paymentProviderRegistry: buildPaymentProviderRegistry(env),
         nonce,
+        theme,
       },
       async () => {
         // 不使用 URL 前缀策略，中间件不会改写 URL；原样把 request 交给框架处理。
@@ -102,7 +112,10 @@ function buildMailProviderRegistry(
   }
   if (env.RESEND_API_KEY) {
     registry.resend = () =>
-      new ResendMailProvider(env.RESEND_API_KEY ?? '', 'SaaS Template <noreply@example.com>')
+      new ResendMailProvider(
+        env.RESEND_API_KEY ?? '',
+        `${websiteConfig.metadata.name} <noreply@example.com>`,
+      )
   }
   return registry
 }

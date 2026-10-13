@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test('home page hydrates without React warnings or pageerror', async ({ page }) => {
   const consoleMessages: string[] = []
@@ -11,7 +11,7 @@ test('home page hydrates without React warnings or pageerror', async ({ page }) 
     consoleMessages.push(`[pageerror] ${err.message}`)
   })
 
-  await page.goto('/zh/marketing')
+  await page.goto('/zh')
   await page.waitForLoadState('networkidle')
   // Allow any deferred hydration mismatches to surface
   await page.waitForTimeout(800)
@@ -20,8 +20,7 @@ test('home page hydrates without React warnings or pageerror', async ({ page }) 
   //  - browser extension attributes on <html> (immersive translate, etc.)
   const appMessages = consoleMessages.filter(
     (m) =>
-      !m.includes('data-immersive-translate') &&
-      !m.toLowerCase().includes('immersive-translate'),
+      !m.includes('data-immersive-translate') && !m.toLowerCase().includes('immersive-translate'),
   )
 
   if (appMessages.length > 0) {

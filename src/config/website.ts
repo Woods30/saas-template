@@ -12,11 +12,11 @@ import { publicEnv } from '@/env/public'
 export const websiteConfig = {
   baseUrl: publicEnv.VITE_BASE_URL,
   metadata: {
-    name: 'SaaS Template',
+    name: 'Jerbix',
     images: {
-      ogImage: '/og.png',
-      logoLight: '/logo-light.png',
-      logoDark: '/logo-dark.png',
+      ogImage: '/logo.png',
+      logoLight: '/logo.png',
+      logoDark: '/logo.png',
     },
   },
   // mail 与 notification 由各业务模块自行读取，不在 features 中开关。

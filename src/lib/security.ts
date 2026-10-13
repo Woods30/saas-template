@@ -1,6 +1,3 @@
-import { publicEnv } from '@/env/public'
-import { websiteConfig } from '@/config/website'
-
 /**
  * Known analytics & third-party origins allowed in CSP connect-src.
  * Each entry is a string used as a CSP keyword ('self', 'none') or origin prefix.
@@ -61,10 +58,6 @@ export function buildCspHeader(nonce: string): string {
   const nonceSrc = `'nonce-${nonce}'`
   const unsafeInline = "'unsafe-inline'"
 
-  // Resolve own origin from build-time baseUrl to avoid hardcoding a specific URL.
-  // Trailing slash is stripped so the string is suitable as a CSP origin token.
-  const selfOrigin = websiteConfig.baseUrl.replace(/\/$/, '')
-
   const connectSrc = [
     self,
     ...KNOWN_THIRD_PARTY_ORIGINS,
@@ -108,10 +101,10 @@ export function buildCspHeader(nonce: string): string {
  */
 export function generateNonce(): string {
   // UUID v4 → strip dashes → base64url encode
-  const uuid = crypto.randomUUID()
-  const bytes = new Uint8Array(
-    uuid.split('-').join('').match(/.{2}/g)!.map((h) => parseInt(h, 16)),
-  )
+  const hex = crypto.randomUUID().split('-').join('')
+  // A UUID v4 always has an even number of hex digits, so pairs are always present.
+  const bytePairs = hex.match(/.{2}/g) ?? []
+  const bytes = new Uint8Array(bytePairs.map((h) => parseInt(h, 16)))
   return btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -204,9 +197,9 @@ function drainCompleteScriptTags(
   const TAG_RE = /<script\b[^>]*>/gi
   let output = ''
   let lastIndex = 0
-  let match: RegExpExecArray | null
 
-  while ((match = TAG_RE.exec(text)) !== null) {
+  let match = TAG_RE.exec(text)
+  while (match !== null) {
     const tag = match[0]
     const tagStart = match.index
     // Always copy text between previous match and this one verbatim.
@@ -215,6 +208,7 @@ function drainCompleteScriptTags(
     const rewritten = rewriteScriptTag(tag, nonce)
     output += rewritten
     lastIndex = tagStart + tag.length
+    match = TAG_RE.exec(text)
   }
 
   // Anything after the last `>` is "remainder" — the buffer for the next chunk

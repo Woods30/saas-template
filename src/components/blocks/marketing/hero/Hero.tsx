@@ -35,10 +35,9 @@ export function Hero(props: HeroProps) {
         <img
           src={props.image.src}
           alt={props.image.alt}
-          className="mt-10 rounded-lg border shadow-sm"
+          className={props.imageClassName ?? 'mt-10 rounded-lg border shadow-sm'}
           decoding="async"
-          width={800}
-          height={450}
+          {...(props.imageClassName ? {} : { width: 800, height: 450 })}
         />
       )}
     </section>

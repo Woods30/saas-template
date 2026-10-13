@@ -107,11 +107,16 @@ export function parseAcceptLanguage(header: string | null | undefined): Locale |
 }
 
 /**
- * 依据真实请求解析语言：cookie 优先，其次 `Accept-Language`，最后回退默认语言。
+ * 依据真实请求解析语言，优先级：URL 显式前缀 → cookie → `Accept-Language` → 默认语言。
+ *
+ * URL 前缀优先级最高，使 `/en/pricing` 这类可分享、可被爬虫抓取的显式前缀 URL 渲染对应
+ * 语言内容（与 sitemap / hreflang 输出一致）。无前缀的 `/` 则回退到 cookie / 请求头。
+ *
  * 该函数是纯函数，SSR 与 hydration 使用同一实现，保证两侧结果一致。
  */
 export function resolveLocale(request: Request): Locale {
   return (
+    localeFromPathname(new URL(request.url).pathname) ??
     readLocaleCookie(request.headers.get('cookie')) ??
     parseAcceptLanguage(request.headers.get('accept-language')) ??
     defaultLocale
@@ -132,4 +137,35 @@ export function compareMessageKeys(
     missing: [...baseKeys].filter((key) => !candidateKeys.has(key)).sort(),
     extra: [...candidateKeys].filter((key) => !baseKeys.has(key)).sort(),
   }
+}
+
+/**
+ * 从 pathname 提取显式 locale 前缀（`/en/x` → `en`）；无前缀或未知前缀返回 `undefined`。
+ * 仅识别完整的第一段，避免 `/english` 被误判为 `en`。
+ */
+export function localeFromPathname(pathname: string): Locale | undefined {
+  const [, first] = pathname.split('/')
+  return parseLocale(first)
+}
+
+/**
+ * 剥离开头的已知 locale 前缀，返回裸路径。
+ * `/en` → `/`；`/en/pricing` → `/pricing`；`/pricing` → `/pricing`；`/fr/x` → `/fr/x`。
+ */
+export function stripLocalePrefix(pathname: string): string {
+  const segments = pathname.split('/')
+  if (segments.length >= 2 && parseLocale(segments[1])) {
+    const rest = `/${segments.slice(2).join('/')}`
+    return rest === '/' ? '/' : rest.replace(/\/$/, '')
+  }
+  return pathname || '/'
+}
+
+/**
+ * 把 pathname 的 locale 前缀替换为 `next`，用于语言切换时导航到真实 URL。
+ * 未知前缀不会被剥离，只在新前缀后保留原路径（避免丢路径）。
+ */
+export function swapLocale(pathname: string, next: Locale): string {
+  const bare = stripLocalePrefix(pathname)
+  return bare === '/' ? `/${next}` : `/${next}${bare}`
 }

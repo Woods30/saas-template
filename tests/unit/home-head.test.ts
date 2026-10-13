@@ -32,7 +32,7 @@ function withRequestLocale(locale: 'zh' | 'en'): void {
 
 /** 取出路由的 `head()` 并调用（`head` 是每请求调用的函数）。 */
 async function runHomeHead(): Promise<HeadResult> {
-  const { Route } = await import('@/routes/{-$locale}/_layout/marketing/index')
+  const { Route } = await import('@/routes/{-$locale}/index')
   const head = Route.options.head as unknown as () => HeadResult
   return head()
 }

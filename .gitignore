@@ -8,3 +8,6 @@ src/locale/paraglide
 .env
 .env.local
 .DS_Store
+.tanstack
+playwright-report
+test-results

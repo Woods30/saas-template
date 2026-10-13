@@ -1,7 +1,7 @@
 import { createFileRoute, notFound } from '@tanstack/react-router'
 import { Mdx } from '@/components/mdx/Mdx'
-import type { Locale } from '@/lib/locale'
 import { findDocBySlug } from '@/lib/docs'
+import type { Locale } from '@/lib/locale'
 import { seo } from '@/lib/seo'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 

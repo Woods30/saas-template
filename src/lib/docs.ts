@@ -14,8 +14,8 @@
  */
 
 import { allDocs } from 'content-collections'
-import type { Locale } from '@/lib/locale'
 import { contentSlug } from '@/lib/content-locale'
+import type { Locale } from '@/lib/locale'
 
 /** 文档条目的最小投影，供侧边栏与页面渲染共用。 */
 export interface DocEntry {

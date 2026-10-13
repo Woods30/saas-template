@@ -1,4 +1,4 @@
-import { cloudflarePool } from '@cloudflare/vitest-pool-workers';
+import { cloudflarePool } from '@cloudflare/vitest-pool-workers'
 
 export default {
   test: {
@@ -12,4 +12,4 @@ export default {
     }),
     include: ['tests/workers/**/*.test.ts'],
   },
-};
+}

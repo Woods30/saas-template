@@ -1,8 +1,8 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ClarityAnalyticsProvider } from '@/lib/analytics/clarity'
 import { GAAnalyticsProvider } from '@/lib/analytics/ga'
 import { PlausibleAnalyticsProvider } from '@/lib/analytics/plausible'
 import { UmamiAnalyticsProvider } from '@/lib/analytics/umami'
-import { ClarityAnalyticsProvider } from '@/lib/analytics/clarity'
 
 // ---------------------------------------------------------------------------
 // Analytics providers — 需要 jsdom 环境（window.gtag / window.plausible）
@@ -10,14 +10,10 @@ import { ClarityAnalyticsProvider } from '@/lib/analytics/clarity'
 describe('Analytics providers', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
-    // @ts-ignore — jsdom 环境允许直接删除 window 属性
-    delete (window as Record<string, unknown>)['gtag']
-    // @ts-ignore
-    delete (window as Record<string, unknown>)['plausible']
-    // @ts-ignore
-    delete (window as Record<string, unknown>)['umami']
-    // @ts-ignore
-    delete (window as Record<string, unknown>)['clarity']
+    // jsdom 环境允许直接删除 window 上的全局注入属性
+    for (const key of ['gtag', 'plausible', 'umami', 'clarity']) {
+      Reflect.deleteProperty(window, key)
+    }
   })
 
   // ---------------------------------------------------------------------------

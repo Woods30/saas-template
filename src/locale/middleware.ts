@@ -2,8 +2,8 @@
  * 服务端语言解析：把 `src/lib/locale.ts` 的纯函数接到 Paraglide 的请求上下文。
  *
  * 关键点：
- * - `resolveLocale` 依据**真实请求**解析（cookie → Accept-Language → zh），SSR 与
- *   hydration 共用同一实现，因此两侧结果一致。
+ * - `resolveLocale` 依据**真实请求**解析（URL 前缀 → cookie → Accept-Language → 默认语言），
+ *   SSR 与 hydration 共用同一实现，因此两侧结果一致。
  * - locale 只存放在 Paraglide 生成的 AsyncLocalStorage store 中，按请求隔离；
  *   不写入任何模块级可变变量，交错请求之间不会串语言。
  * - 服务端不支持 cookie/localStorage 策略，这里注册一个自定义策略，直接复用

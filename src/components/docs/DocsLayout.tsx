@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
+import type { ReactNode } from 'react'
 import { DocsSidebar } from '@/components/docs/DocsSidebar'
 import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher'
 import { websiteConfig } from '@/config/website'
@@ -24,10 +24,7 @@ export function DocsLayout({ locale, children }: { locale: Locale; children: Rea
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex h-14 items-center gap-3 border-b border-border px-6">
-        <Link
-          to="/{-$locale}"
-          className="text-sm font-semibold text-foreground hover:opacity-80"
-        >
+        <Link to="/{-$locale}" className="text-sm font-semibold text-foreground hover:opacity-80">
           {websiteConfig.metadata.name}
         </Link>
         <span className="text-muted-foreground">/</span>

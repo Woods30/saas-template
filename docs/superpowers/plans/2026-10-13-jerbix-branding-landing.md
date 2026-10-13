@@ -1309,42 +1309,146 @@ git commit -m "feat(landing): / 渲染单页 landing 并加入锚点导航"
 
 ---
 
-### Task 8: 全量验证
+### Task 8: 修复仓库基线校验问题 + 全量验证
 
-**Files:** 无新增（只跑校验；如有失败则就地修复）
+**背景（已核实）**：`pnpm check` 在**本次变更之前**（`main` 与 `02c56a9`）就已失败，与品牌化 / landing 无关。用户裁定：**把这些既有问题一并修掉**，使 `pnpm check` 真正全绿。
+
+**Files:**
+- Modify: `biome.json`、`public/favicon.svg`、`public/icon-jerboa.svg`、`public/icon.svg`、`src/lib/security.ts`、`tests/components/pricing.test.tsx`、`tests/components/analytics.test.ts`、`tests/workers/setup.ts`，以及其余被 `biome check --write` 格式化的既有文件（`e2e/*`、`playwright.config.ts`、`src/lib/content-locale.ts`、`src/lib/docs.ts`、`src/components/docs/DocsLayout.tsx`、`src/routes/{-$locale}/_layout/docs/*`、`tests/setup.ts`、`tests/unit/{security,seo}.test.ts`、`vitest.*.config.ts`）
+- Modify: `src/lib/theme.ts`（docstring 修正）、`tests/unit/theme.test.ts`（补 `getTheme`/`setServerThemeGetter` 覆盖）、`src/components/theme/ThemeToggle.tsx`（让 aria-label 反映下一主题，使 3 个消息键生效）
+- Test: 复用既有测试文件
 
 **Interfaces:**
 - Consumes: 前 7 个任务的全部产物
-- Produces: 全绿校验结果
+- Produces: `pnpm check` 全绿；`pnpm test` 全绿；`pnpm build` + `check:client-bundle` 通过
 
-- [ ] **Step 1: 运行完整测试**
+**注意（提交纪律）**：结构变更（格式化 / import 排序）与行为变更（移除未用变量、非空断言改写、aria-label 语义）**分两次提交**，不要混在一起。
+
+- [ ] **Step 1: 把 `.tanstack/` 加入 `.gitignore`**
+
+在 `.gitignore` 末尾追加：
+
+```
+.tanstack
+playwright-report
+test-results
+```
+
+- [ ] **Step 2: 结构变更 —— 格式化与 import 排序（单独提交）**
+
+Run: `npx biome check --write .`
+Expected: 大多数 `format` 与 `assist/source/organizeImports` 错误被自动修复（约 31 → 5 errors）。
+
+- [ ] **Step 3: 确认测试仍全绿，提交结构变更**
 
 Run: `pnpm test`
-Expected: 全部 PASS（含 node 与 jsdom 两个 project）
+Expected: 全绿（格式化不应改变行为）。
 
-- [ ] **Step 2: 运行完整校验**
+```bash
+git add .gitignore biome.json e2e playwright.config.ts src tests vitest.*.config.ts
+git commit -m "style: 应用 Biome 格式化与 import 排序（仓库基线）"
+```
+
+- [ ] **Step 4: 行为变更 —— 手工修复剩余 lint 错误**
+
+剩余的 5 个错误需人工判断：
+
+1. `public/favicon.svg`、`public/icon-jerboa.svg`、`public/icon.svg` — `lint/a11y/noSvgWithoutTitle`。
+   这三个是**装饰性品牌图标**（经 `<link rel="icon">` / `<img>` 使用，无内联语义）。
+   在 `biome.json` 的 `linter.rules.a11y` 中为 `public/**/*.svg` 关闭该规则，或给每个 SVG 加 `<title>`。
+   **选择**：在 `biome.json` 增加 override，对 `public/*.svg` 关闭 `noSvgWithoutTitle`（图标不应带 `<title>`，否则会被读屏器朗读为噪音）。例如：
+
+```json
+  "overrides": [
+    {
+      "includes": ["public/**/*.svg"],
+      "linter": { "rules": { "a11y": { "noSvgWithoutTitle": "off" } } }
+    }
+  ]
+```
+
+2. `src/lib/security.ts:209` — `lint/suspicious/noAssignInExpressions`。
+   把赋值表达式拆成独立语句（先赋值、再用变量），不改变逻辑。
+
+3. `tests/components/pricing.test.tsx` — `lint/a11y/useButtonType`。
+   给该 `<button>` 加 `type="button"`。
+
+- [ ] **Step 5: 修复 `pnpm typecheck` 的 5 个既有类型错误**
+
+`tests/components/pricing.test.tsx` 的 `noUncheckedIndexedAccess` 报错（`pro.prices[0]` 可能为 undefined）。
+在测试内用局部变量 + 显式断言替代索引访问，例如：
+
+```ts
+const [proPrice] = pro.prices
+expect(proPrice?.amount).toBe(1900)
+```
+
+对 `lifetime.prices[0]` 同理。改完 `pnpm typecheck` 应无错误。
+
+- [ ] **Step 6: 修正 `src/lib/theme.ts` 的 docstring**
+
+把模块头部「不依赖框架、不读写全局可变状态」改为「不依赖框架、便于单测」（模块确实持有并改写 `serverThemeGetter`，原措辞不准确）。
+
+- [ ] **Step 7: 补充 `tests/unit/theme.test.ts` 覆盖**
+
+增加两个用例（当前 `getTheme`/`setServerThemeGetter` 无覆盖）：
+
+```ts
+describe('getTheme / setServerThemeGetter', () => {
+  it('服务端路径返回注入的 getter 值', () => {
+    setServerThemeGetter(() => 'dark')
+    // node 环境无 document，走 serverThemeGetter
+    expect(getTheme()).toBe('dark')
+    setServerThemeGetter(() => defaultTheme) // 复位，避免影响其他用例
+  })
+
+  it('默认 getter 返回 defaultTheme', () => {
+    expect(getTheme()).toBe(defaultTheme)
+  })
+})
+```
+
+同时补充 `defaultTheme` 与 `THEMES` 的断言。
+
+- [ ] **Step 8: 让 `ThemeToggle` 的 aria-label 反映下一个主题**
+
+把静态 `m.theme_label()` 改为「动作 + 目标主题」，使 `theme_light` / `theme_dark` / `theme_system` 三个键真正生效。例如：
+
+```tsx
+const NEXT_LABEL = {
+  light: m.theme_dark,
+  dark: m.theme_system,
+  system: m.theme_light,
+} as const
+// aria-label={NEXT_LABEL[theme]()}  title 同理
+```
+
+> 若担心消息键文案（「浅色/深色/跟随系统」）作为按钮标签不够明确，可改为组合文案；保持三个键都被使用即可。
+
+- [ ] **Step 9: 运行完整校验，确认全绿**
 
 Run: `pnpm check`
-Expected: Biome / tsc / env / locale 校验全部通过（locale 键在 zh 与 en 一致）
+Expected: Biome 0 error / 0 warning、tsc 0 error、env 校验通过、locale 键一致。
 
-- [ ] **Step 3: 生产构建与客户端 bundle 检查**
+Run: `pnpm test`
+Expected: 全绿（含 node 与 jsdom 两个 project）。
+
+- [ ] **Step 10: 生产构建与客户端 bundle 检查**
 
 Run: `pnpm build && pnpm run check:client-bundle`
-Expected: 构建成功；客户端产物无服务端 secret
+Expected: 构建成功；客户端产物无服务端 secret。
 
-- [ ] **Step 4: 本地目视确认（可选但推荐）**
-
-Run: `pnpm dev`，然后打开 `http://localhost:3000/`
-Expected: `/` 直接显示 landing；Navbar 有 jerboa 图标 + Jerbix、主题按钮、语言图标；点击「价格」平滑滚动到价格区；切换主题后配色变化且不刷新；切换到 English 后 URL 变为 `/en`。
-
-- [ ] **Step 5: 提交修复（如有）**
-
-若上一步暴露问题，就地修复后：
+- [ ] **Step 11: 提交行为变更**
 
 ```bash
 git add -A
-git commit -m "fix: 收口品牌化与 landing 变更的校验问题"
+git commit -m "fix: 修复仓库基线的 lint 与类型错误，并补齐主题测试覆盖"
 ```
+
+- [ ] **Step 12: 本地目视确认（可选但推荐）**
+
+Run: `pnpm dev`，然后打开 `http://localhost:3000/`
+Expected: `/` 直接显示 landing；Navbar 有 jerboa 图标 + Jerbix、主题按钮、语言图标；点击「价格」平滑滚动到价格区；切换主题后配色变化且不刷新；切换到 English 后 URL 变为 `/en`。
 
 ---
 
