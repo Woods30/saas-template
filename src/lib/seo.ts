@@ -24,7 +24,10 @@ export function seo(path: string, options: SeoOptions) {
   const alternates = options.locale
     ? LOCALES.filter((l) => l !== options.locale).map((l) => ({
         rel: 'alternate' as const,
-        hreflang: localeConfig[l].hreflang,
+        // React JSX requires `hrefLang` (camelCase) for the `<link hreflang>` HTML
+        // attribute; lowercase `hreflang` triggers "Invalid DOM property" at runtime
+        // because TanStack Router's `<Asset>` spreads `attrs` straight onto `<link>`.
+        hrefLang: localeConfig[l].hreflang,
         href: `${getBaseUrl()}/${l}${path === '/' ? '' : path}`,
       }))
     : []

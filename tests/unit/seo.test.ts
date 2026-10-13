@@ -169,6 +169,34 @@ describe('seo()', () => {
       content: 'article',
     })
   })
+
+  it('传入 locale 时输出 hreflang alternates，键名用 hrefLang（camelCase）', async () => {
+    // TanStack Router 的 `<Asset>` 会把 `links[].attrs` 直接展开到 `<link {...attrs} />`。
+    // React JSX 只接受 `hrefLang`（camelCase）作为 `<link hreflang>` 的属性名；若用
+    // 小写 `hreflang`，运行时会抛 "Invalid DOM property `hreflang`"。本测试是回归守卫。
+    const { seoModule } = await loadModules(CUSTOM_BASE_URL)
+    const head = seoModule.seo('/pricing', { title: '价格 · Acme', locale: 'zh' })
+
+    expect(head.links).toContainEqual({
+      rel: 'alternate',
+      hrefLang: 'en',
+      href: `${CUSTOM_BASE_URL}/en/pricing`,
+    })
+    // 任何 alternate 都不应使用小写 `hreflang` 键
+    for (const link of head.links) {
+      if ('rel' in link && link.rel === 'alternate') {
+        expect(link).not.toHaveProperty('hreflang')
+      }
+    }
+  })
+
+  it('不传 locale 时不输出 alternates', async () => {
+    const { seoModule } = await loadModules(CUSTOM_BASE_URL)
+    const head = seoModule.seo('/pricing', { title: '价格 · Acme' })
+    expect(
+      head.links.some((link) => 'rel' in link && link.rel === 'alternate'),
+    ).toBe(false)
+  })
 })
 
 describe('websiteConfig', () => {
