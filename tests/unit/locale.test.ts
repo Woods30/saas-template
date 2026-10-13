@@ -205,3 +205,27 @@ describe('swapLocale', () => {
     expect(swapLocale('/fr/x', 'en')).toBe('/en/fr/x')
   })
 })
+
+describe('resolveLocale 的 URL 前缀优先级', () => {
+  function requestWithPath(path: string, headers: Record<string, string> = {}): Request {
+    return new Request(`http://localhost${path}`, { headers })
+  }
+
+  it('URL 前缀优先于 cookie 与 Accept-Language', () => {
+    const request = requestWithPath('/en/pricing', {
+      cookie: `${LOCALE_COOKIE_NAME}=zh`,
+      'accept-language': 'zh-CN',
+    })
+    expect(resolveLocale(request)).toBe('en')
+  })
+
+  it('无前缀时回退到 cookie（保持既有行为）', () => {
+    const request = requestWithPath('/pricing', { cookie: `${LOCALE_COOKIE_NAME}=en` })
+    expect(resolveLocale(request)).toBe('en')
+  })
+
+  it('未知前缀不生效，继续回退', () => {
+    const request = requestWithPath('/fr/x', { 'accept-language': 'en' })
+    expect(resolveLocale(request)).toBe('en')
+  })
+})

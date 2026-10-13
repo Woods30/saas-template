@@ -107,11 +107,16 @@ export function parseAcceptLanguage(header: string | null | undefined): Locale |
 }
 
 /**
- * 依据真实请求解析语言：cookie 优先，其次 `Accept-Language`，最后回退默认语言。
+ * 依据真实请求解析语言，优先级：URL 显式前缀 → cookie → `Accept-Language` → 默认语言。
+ *
+ * URL 前缀优先级最高，使 `/en/pricing` 这类可分享、可被爬虫抓取的显式前缀 URL 渲染对应
+ * 语言内容（与 sitemap / hreflang 输出一致）。无前缀的 `/` 则回退到 cookie / 请求头。
+ *
  * 该函数是纯函数，SSR 与 hydration 使用同一实现，保证两侧结果一致。
  */
 export function resolveLocale(request: Request): Locale {
   return (
+    localeFromPathname(new URL(request.url).pathname) ??
     readLocaleCookie(request.headers.get('cookie')) ??
     parseAcceptLanguage(request.headers.get('accept-language')) ??
     defaultLocale
