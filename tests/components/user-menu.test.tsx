@@ -10,12 +10,13 @@ import { setLocale } from '@/locale/paraglide/runtime.js'
  * - `isPending` 与「未登录」都渲染 `guestFallback`：SSR 阶段会话尚未就绪，服务端输出
  *   的就是待定态，此时渲染骨架会让服务端 HTML 完全没有登录入口（访客要等客户端拿到
  *   会话才看到它，链接会闪一下才出现）；
- * - 已登录时显示邮箱，并提供登出入口（此前 `signOut` 已导出但全仓无人调用）；
+ * - 已登录时显示邮箱，并提供登出入口（登出经 `signOutAndRedirect`（与个人中心用户卡片共用））；
  * - 未登录且未传 `guestFallback` 时不渲染任何内容。
  */
 const mocks = vi.hoisted(() => ({
   useSession: vi.fn(),
   signOut: vi.fn(),
+  signOutAndRedirect: vi.fn(),
 }))
 
 vi.mock('@/auth/client', () => ({
@@ -25,6 +26,10 @@ vi.mock('@/auth/client', () => ({
   },
   useSession: (...args: unknown[]) => mocks.useSession(...args),
   signOut: (...args: unknown[]) => mocks.signOut(...args),
+}))
+
+vi.mock('@/auth/sign-out', () => ({
+  signOutAndRedirect: (...args: unknown[]) => mocks.signOutAndRedirect(...args),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -82,12 +87,11 @@ describe('UserMenu', () => {
     expect(screen.getByRole('button', { name: 'user@example.com' })).toBeInTheDocument()
   })
 
-  it('点击登出会调用 signOut', async () => {
+  it('点击登出会调用 signOutAndRedirect', async () => {
     mocks.useSession.mockReturnValue({
       data: { user: { email: 'user@example.com', name: 'Alice' } },
       isPending: false,
     })
-    mocks.signOut.mockResolvedValue({ error: null })
     render(<UserMenu />)
 
     screen.getByRole('button', { name: /Alice/ }).click()
@@ -95,26 +99,24 @@ describe('UserMenu', () => {
       expect(screen.getByText('退出登录')).toBeInTheDocument()
     })
     screen.getByText('退出登录').click()
-    await waitFor(() => expect(mocks.signOut).toHaveBeenCalled())
+    await waitFor(() => expect(mocks.signOutAndRedirect).toHaveBeenCalled())
   })
 
-  it('登出失败时不跳转，只在控制台留痕', async () => {
+  it('登出由公共函数处理，组件自身不再跳转', async () => {
     mocks.useSession.mockReturnValue({
       data: { user: { email: 'user@example.com', name: 'Alice' } },
       isPending: false,
     })
-    mocks.signOut.mockResolvedValue({ error: { message: 'boom' } })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const assign = vi.fn()
-    vi.stubGlobal('location', { ...window.location, assign, reload: vi.fn() })
+    vi.stubGlobal('location', { ...window.location, assign })
     render(<UserMenu />)
 
     screen.getByRole('button', { name: /Alice/ }).click()
     await waitFor(() => expect(screen.getByText('退出登录')).toBeInTheDocument())
     screen.getByText('退出登录').click()
-    await waitFor(() => expect(warn).toHaveBeenCalled())
+    await waitFor(() => expect(mocks.signOutAndRedirect).toHaveBeenCalled())
+    // 跳转与否是公共函数的职责，组件不应自己动 location。
     expect(assign).not.toHaveBeenCalled()
-    warn.mockRestore()
     vi.unstubAllGlobals()
   })
 })

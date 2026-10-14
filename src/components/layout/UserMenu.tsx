@@ -2,7 +2,8 @@ import { Menu } from '@base-ui/react/menu'
 import { IconLogout, IconSettings, IconUser } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
-import { signOut, useSession } from '@/auth/client'
+import { useSession } from '@/auth/client'
+import { signOutAndRedirect } from '@/auth/sign-out'
 import { Button } from '@/components/ui/button'
 import { getRequestLocale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
@@ -23,7 +24,7 @@ interface UserMenuProps {
  *   渲染 `guestFallback` 则让 SSR 与客户端首帧一致（都是登录入口），hydration 后
  *   再按真实会话切换。
  * - **未登录**：`guestFallback`。
- * - **已登录**：用户菜单，展示账号邮箱并提供登出（此前 `signOut` 已导出却无人调用）。
+ * - **已登录**：用户菜单，展示账号邮箱并提供登出（登出经 `signOutAndRedirect`（与个人中心用户卡片共用）。
  */
 export function UserMenu({ guestFallback }: UserMenuProps) {
   const { data: session, isPending } = useSession()
@@ -32,16 +33,6 @@ export function UserMenu({ guestFallback }: UserMenuProps) {
   if (isPending || !session) return <>{guestFallback}</>
 
   const label = session.user.name ?? session.user.email
-
-  async function onSignOut() {
-    const { error } = await signOut()
-    if (error) {
-      // 失败时留在原地：整页跳转会让用户以为已经登出，而会话其实还在。
-      console.warn(`[auth] 登出失败: ${error.message ?? 'unknown'}`)
-      return
-    }
-    window.location.assign('/')
-  }
 
   return (
     <Menu.Root>
@@ -68,7 +59,7 @@ export function UserMenu({ guestFallback }: UserMenuProps) {
               {m.settings_user_menu()}
             </Menu.Item>
             <Menu.Item
-              onClick={onSignOut}
+              onClick={() => void signOutAndRedirect()}
               className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-muted"
             >
               <IconLogout size={16} aria-hidden />
