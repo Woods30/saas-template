@@ -24,7 +24,11 @@
 - `VITE_UMAMI_WEBSITE_ID ?? VITE_UMAMI_ID`、`VITE_CLARITY_PROJECT_ID ?? VITE_CLARITY_ID`
   是主字段 + 兼容字段并存，读取处为 `src/lib/analytics/index.ts` 与
   `src/config/service-status.ts`。
-- `SettingsLayout` 只有一组菜单，无 logo、无用户信息、无退出入口；用户已登录但无从登出。
+- `SettingsLayout` 只有一组菜单：无 logo、无面包屑、无用户信息、无退出入口；顶栏当前是
+  `SidebarTrigger` + `<h1>` 个人中心 + 「返回站点」链接。用户已登录但**在个人中心内
+  无从登出**（只能回首页导航栏的用户菜单）。
+- `crumb_home` / `crumb_blog` / `crumb_docs` 三个消息键已编译进 Paraglide 但全仓无
+  消费者，是预留键；`Breadcrumb` 组合件已装入 `src/components/ui/`，同样尚无消费者。
 - `fetchSession()`（`src/auth/session.ts`）只回 `id` / `name` / `email` / `emailVerified`，
   而 `users` 表有 `image` 字段（Google 登录会写入）。
 - `UserMenu`（导航栏）已有「邮箱 + 退出」的等价实现，`signOut` 逻辑写在其组件内部。
@@ -166,35 +170,103 @@ console.log('example 有而 schema 无：',ex.filter(k=>!schema.includes(k)));
 ### 5.1 目标结构
 
 ```
-┌────────────────────┐
-│ 🚀 Jerbix      ☀/🌙 │  ← SidebarHeader: logo + ThemeToggle
-├────────────────────┤
-│ 个人中心             │  ← SidebarGroupLabel
-│ 资料                │
-│ 安全                │
-│ 登录设备            │
-│ 通知偏好（模块开启）  │
-├────────────────────┤
-│ ◉  woods         ⌃ │  ← SidebarFooter: 用户卡片
-│    woods@example.com│
-└────────────────────┘
+┌──────────────────────────────┐
+│ 🚀 Jerbix                    │  ← SidebarHeader: 仅 logo
+├──────────────────────────────┤
+│ 个人中心                      │  ← SidebarGroupLabel
+│ 资料                         │
+│ 安全                         │
+│ 登录设备                      │
+│ 通知偏好（模块开启）           │
+├──────────────────────────────┤
+│ ◉  woods                  ⌃  │  ← SidebarFooter: 用户卡片
+│    woods@example.com         │
+└──────────────────────────────┘
+┌────────────────────────────────────────────┐
+│ [≡]  首页 › 个人中心 › 资料            ☀/🌙 │  ← 顶栏：折叠按钮 + 面包屑 + 主题切换（右上）
+├────────────────────────────────────────────┤
+│                                            │
+│                    内容区                   │
+│                                            │
+└────────────────────────────────────────────┘
 ```
+
+主题切换在**顶栏右上角**，不在侧栏头部：侧栏折叠成图标窄条时宽度只剩约 3rem，放按钮
+会和 logo 抢位；顶栏右上角是营销站 `Navbar` 的既有位置，用户已形成的预期不会被打断。
+
+顶栏没有标题：面包屑末级（`BreadcrumbPage`，带 `aria-current="page"`）就是当前页名，
+再放一个 `<h1>` 会让同一个词在屏幕与无障碍树里各出现一次。
 
 ### 5.2 `SettingsLayout` 改动
 
 只做组装，不新增自建折叠/抽屉逻辑——继续用 shadcn `sidebar` 的 Base UI 版：
 
-- `SidebarHeader`：logo 用 `websiteConfig.metadata.images.logoLight`，`Link` 到首页，
-  `aria-label` 为站点名；沿用 `Navbar` / `DocsLayout` 的 `dark:bg-white` 处理与
-  `width` / `height` 属性。右侧放 `ThemeToggle`（`websiteConfig.ui.enableThemeSwitch`
-  为 false 时组件自身返回 null，无需外层判断）。
+- `SidebarHeader`：**只有 logo**。用 `websiteConfig.metadata.images.logoLight`，`Link` 到
+  首页，`aria-label` 为站点名；沿用 `Navbar` / `DocsLayout` 的 `dark:bg-white` 处理与
+  `width` / `height` 属性。主题切换不放这里（见 5.1 的理由）。
 - `SidebarFooter`：用户卡片，见 5.3。
-- 顶部 `header` 保留现有 `SidebarTrigger` 与标题；「返回站点」链接在 logo 已有回站
-  点入口后撤掉，避免两个语义重复的出口。
 
 折叠成 icon（`collapsible="icon"`）时：logo 缩为图标位居中，用户卡片退化为头像
 trigger + tooltip。用 `group-data-[collapsible=icon]:*` 变体处理，与 sidebar 内部
 菜单项同一手法（`SidebarMenuButton` 已经这么做）。
+
+#### 顶栏：折叠按钮 + 面包屑
+
+`SidebarInset` 的 `header` 改为两样东西，**不再有 `<h1>` 与「返回站点」链接**：
+
+| 元素 | 组件 | 说明 |
+|---|---|---|
+| 折叠按钮 | `SidebarTrigger` | 现有件，`toggleSidebar()` + `collapsible="icon"`；点击收起侧栏为图标窄条，再点展开。**宽窄屏都常驻**——窄屏下侧栏以 `Sheet` 抽屉覆盖，同样需要它打开 |
+| 面包屑 | `Breadcrumb` 组合件 | 见下 |
+| 主题切换 | `ThemeToggle` | 右上角，`ml-auto` 推至右端；`websiteConfig.ui.enableThemeSwitch` 为 false 时组件自身返回 null，无需外层判断，布局自动回收 |
+
+「返回站点」撤掉：侧栏头部的 logo 已是回站点入口，两个语义重复的出口会让用户不确定
+点哪个。窄屏下 logo 与折叠按钮同屏可见，不存在没有出口的情况。
+
+撤掉后 `settings_back_home` 消息键失去唯一消费者。删消息键是行为变更（两个 locale 文件
+都要删，且要跑 `pnpm locale:sort`），因此**默认保留该键**——与 `crumb_*` 一样作为预留键，
+不因一次 UI 调整删产物。若用户明确要求删，则删 `messages/zh.json` 与 `messages/en.json`
+各一行并重新编译 locale。
+
+面包屑三级，用 shadcn 的 `Breadcrumb` / `BreadcrumbList` / `BreadcrumbItem` /
+`BreadcrumbLink` / `BreadcrumbPage` / `BreadcrumbSeparator` 组装（该组件已随
+`components.json` 的 base-nova 风格装入 `src/components/ui/`，全仓尚无消费者，本处是
+第一次使用，不手写等价物）：
+
+```
+首页 › 个人中心 › 资料
+```
+
+| 层级 | 渲染 | 目标 |
+|---|---|---|
+| 首页 | `BreadcrumbLink` + `Link` | `/{locale}`，文案 `m.crumb_home()` |
+| 个人中心 | `BreadcrumbLink` + `Link` | `/{locale}/settings/profile`，文案 `m.settings_title()` |
+| 当前板块 | `BreadcrumbPage` | 无链接，文案取 `getSettingsSectionMeta(section).title` |
+
+`crumb_home` 与 `settings_title` 两个消息键均已存在（前者编译进 Paraglide 但全仓无
+消费者，正可用于此），因此本次不新增消息键。
+
+当前板块的 id 从路由 pathname 取（`SettingsLayout` 已经在用
+`useRouterState({ select: (state) => state.location.pathname })` 做高亮），不新增 props
+或 context：以 `/settings/` 之后的一段作为 section，匹配 `SettingsSection` 联合类型的
+四个值之一。匹配不到时（如未来的新板块尚未在工厂注册）退化为只渲染前两级，不渲染
+末级——比渲染一个空 `BreadcrumbPage` 更诚实。
+
+`Header` 结构：
+
+```tsx
+<header className="flex h-14 items-center gap-2 border-b border-border px-4">
+  <SidebarTrigger />
+  <Breadcrumb>
+    <BreadcrumbList>…</BreadcrumbList>
+  </Breadcrumb>
+  <div className="ml-auto">
+    <ThemeToggle />
+  </div>
+</header>
+```
+
+`SidebarTrigger` 自带 `sr-only` 文案，无需另加 `aria-label`。
 
 ### 5.3 用户卡片
 
@@ -235,20 +307,30 @@ export async function signOutAndRedirect(): Promise<void>
   `AvatarImage`；无 image 渲染首字母 fallback；展开菜单出现「退出登录」；点击登出调用
   `signOutAndRedirect`；登出失败时不跳转只 `console.warn`（照 `user-menu.test.tsx`
   的现有写法）。
+- **新增组件测试** `tests/components/settings-layout.test.tsx`：面包屑渲染三级且末级为
+  `BreadcrumbPage`（`aria-current="page"`）；「首页」/「个人中心」是带正确 `href` 的
+  链接；窄屏断点下的触发按钮存在（jsdom 不做断点，按既有做法只断言元素存在与类名，
+  真实断点由 e2e 覆盖）；section 匹配不到时只渲染前两级。
 - **更新** `tests/components/user-menu.test.tsx` 适配 `sign-out` 模块。
 - **更新** `e2e/settings.spec.ts`：登出入口从首页导航栏的注释说明改为「个人中心底部
-  用户卡片」，并断言 logo、用户卡片、退出按钮可见。
+  用户卡片」；断言 logo、用户卡片、面包屑三级可见；新增一条：点击顶栏折叠按钮后
+  sidebar 收起（`data-state="collapsed"`），再点击恢复。
 - **新增/更新** `SessionInfo` 相关的单测（若存在）：补 `image` 字段。
 
 SSR 注意：`SettingsLayout` 的 session 来自路由 context（`beforeLoad`），不是
 `useSession()`，因此没有 `UserMenu` 那个「待定态渲染访客入口」的问题——守卫已经保证
-未登录进不来。
+未登录进不来。同理，面包屑的末级在 SSR 期即可确定（pathname 来自路由状态），没有
+「先渲染空面包屑再补」的闪烁。
+
+Breadcrumb 导航用的是 `m.*()` 求值文案，与侧栏菜单一致地在 render 期求值，随请求语言
+变化；不放进 `src/config/settings.ts` 的工厂之外的地方复制一份文案。
 
 ### 5.6 验收
 
 - `pnpm check`（locale 编译 + Biome + tsc + env + locale 校验）通过。
 - `pnpm test` 与组件测试通过。
-- 手动确认：折叠与展开两态下 logo、用户卡片、登出都可用；深浅色 logo 均清晰。
+- 手动确认：折叠与展开两态下 logo、用户卡片、登出都可用；深浅色 logo 均清晰；
+  窄屏下折叠按钮能拉出抽屉；面包屑两个链接都能正确跳转，末级不带链接。
 
 ## 6. 文档参考资料
 
