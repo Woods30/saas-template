@@ -15,6 +15,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: false,
+    // 邮件模板的 `actionUrl` 白名单从站点 base URL（`VITE_BASE_URL`）派生，
+    // 单测夹具统一用 `https://example.com`，故把测试环境的站点基址也定为它，
+    // 让「允许本站主机 / 拒绝外部主机」这两类安全断言保持有效。
+    env: { VITE_BASE_URL: 'https://example.com' },
     setupFiles: ['tests/setup.ts'],
     include: ['tests/unit/**/*.test.ts', 'tests/unit/**/*.test.tsx'],
     coverage: {

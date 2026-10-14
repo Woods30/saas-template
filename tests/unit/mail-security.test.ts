@@ -39,7 +39,7 @@ vi.mock('resend', () => ({
 // Imports after mocks
 // ---------------------------------------------------------------------------
 import { ZodError } from 'zod'
-import { renderTemplate } from '@/mail/render'
+import { allowedHostSuffixes, renderTemplate } from '@/mail/render'
 
 // ---------------------------------------------------------------------------
 // Reusable schema matching the route's contactMessageContextSchema
@@ -220,6 +220,67 @@ describe('renderTemplate context validation', () => {
         }),
       ).rejects.toThrow(ZodError)
     })
+  })
+
+  // ---------------------------------------------------------------------------
+  // welcome：新增模板的 schema 严格性与主题
+  // ---------------------------------------------------------------------------
+  describe('welcome', () => {
+    it('renders with valid { username } context', async () => {
+      const result = await renderTemplate({
+        to: 'test@example.com',
+        template: 'welcome',
+        locale: 'zh',
+        context: { username: 'Alice' },
+      })
+      expect(result.html).toBeTruthy()
+      expect(result.subject).toBe('欢迎加入')
+    })
+
+    it('has localized subjects for every supported locale', async () => {
+      const zh = await renderTemplate({
+        to: 'test@example.com',
+        template: 'welcome',
+        locale: 'zh',
+        context: { username: 'Alice' },
+      })
+      const en = await renderTemplate({
+        to: 'test@example.com',
+        template: 'welcome',
+        locale: 'en',
+        context: { username: 'Alice' },
+      })
+      expect(zh.subject).toBe('欢迎加入')
+      expect(en.subject).toBe('Welcome aboard')
+    })
+
+    it('throws when context has extra field', async () => {
+      await expect(
+        renderTemplate({
+          to: 'test@example.com',
+          template: 'welcome',
+          locale: 'zh',
+          context: { username: 'Alice', extra: 'bad' },
+        }),
+      ).rejects.toThrow(ZodError)
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// allowedHostSuffixes：白名单由站点 base URL 派生（取代已失效的 APP_DOMAIN）
+// ---------------------------------------------------------------------------
+describe('allowedHostSuffixes', () => {
+  it('derives the host from the given base URL', () => {
+    expect(allowedHostSuffixes('https://example.com')).toEqual(['example.com'])
+  })
+
+  it('ignores path and trailing slashes', () => {
+    expect(allowedHostSuffixes('https://example.com/zh/')).toEqual(['example.com'])
+  })
+
+  it('returns an empty list for an unparseable base URL', () => {
+    expect(allowedHostSuffixes('not a url')).toEqual([])
   })
 })
 

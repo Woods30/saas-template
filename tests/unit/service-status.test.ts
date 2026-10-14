@@ -531,6 +531,65 @@ describe('getServiceStatuses — analytics', () => {
 })
 
 // ---------------------------------------------------------------------------
+// auth 分支
+// ---------------------------------------------------------------------------
+describe('getServiceStatuses — auth', () => {
+  it('默认（不要求验证 + 邮件未配置）为 configured：开箱即用的注册登录必须可用', () => {
+    const statuses = getServiceStatuses({
+      config: makeConfig(),
+      publicEnv: parsePublicEnv({}),
+      serverEnv: parseServerEnv({}),
+    })
+    expect(statuses.auth.state).toBe('configured')
+  })
+
+  it('显式要求验证但邮件未配置时判为 incomplete：否则新用户永远无法登录', () => {
+    const statuses = getServiceStatuses({
+      config: makeConfig((c) => {
+        c.auth.requireEmailVerification = true
+      }),
+      publicEnv: parsePublicEnv({}),
+      serverEnv: parseServerEnv({}),
+    })
+    expect(statuses.auth.state).toBe('incomplete')
+    expect(statuses.auth.issues.map((i) => i.key)).toContain('mail.enabled')
+  })
+
+  it('要求验证且邮件配置齐全时为 configured', () => {
+    const statuses = getServiceStatuses({
+      config: makeConfig((c) => {
+        c.mail.enabled = true
+      }),
+      publicEnv: parsePublicEnv({}),
+      serverEnv: parseServerEnv({ RESEND_API_KEY: 'key', MAIL_FROM: 'noreply@jerbix.dev' }),
+    })
+    expect(statuses.auth.state).toBe('configured')
+  })
+
+  it('关闭邮箱验证时不依赖邮件配置（无邮件部署的唯一放行方式）', () => {
+    const statuses = getServiceStatuses({
+      config: makeConfig((c) => {
+        c.auth.requireEmailVerification = false
+      }),
+      publicEnv: parsePublicEnv({}),
+      serverEnv: parseServerEnv({}),
+    })
+    expect(statuses.auth.state).toBe('configured')
+  })
+
+  it('auth 关闭时不受该组合约束', () => {
+    const statuses = getServiceStatuses({
+      config: makeConfig((c) => {
+        c.auth.enabled = false
+      }),
+      publicEnv: parsePublicEnv({}),
+      serverEnv: parseServerEnv({}),
+    })
+    expect(statuses.auth.state).toBe('disabled')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // 凭据不外泄
 // ---------------------------------------------------------------------------
 describe('getServiceStatuses — 凭据不外泄', () => {
@@ -694,7 +753,12 @@ describe('formatServiceDiagnostics', () => {
   it('全部关闭时不产生 incomplete，且不输出任何字段值', () => {
     const result = formatServiceDiagnostics(
       statusesOf({
-        config: makeConfig(),
+        // auth 默认要求邮箱验证，因而默认配置下它必然 incomplete（缺 mail）——这正是
+        // 该规则的目的。本用例只关心「无 incomplete 时的输出与脱敏」，故显式关掉验证，
+        // 把 auth 也变成 configured；auth 与 mail 的死锁组合由上面的 auth 分支用例覆盖。
+        config: makeConfig((c) => {
+          c.auth.requireEmailVerification = false
+        }),
         publicEnv: parsePublicEnv({}),
         serverEnv: parseServerEnv({ RESEND_API_KEY: 'synthetic-secret' }),
       }),
@@ -724,6 +788,9 @@ describe('formatServiceDiagnostics', () => {
         config: makeConfig((c) => {
           c.payment.enabled = true
           c.payment.allowedPriceIds = ['price_1']
+          // 同上一用例：本用例只验证「齐全时 configured 且不泄漏 secret」，
+          // 关掉邮箱验证以隔离 auth 与 mail 的组合判定。
+          c.auth.requireEmailVerification = false
         }),
         publicEnv: parsePublicEnv({}),
         serverEnv: parseServerEnv({

@@ -11,10 +11,9 @@ import {
   formatUpdatedDate,
   splitNextSteps,
 } from '@/lib/docs'
-import type { Locale } from '@/lib/locale'
+import { getRequestLocale } from '@/lib/locale'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
-import { getLocale } from '@/locale/paraglide/runtime.js'
 
 /**
  * 单篇文档页。slug 与语言无关（见 `src/lib/docs.ts`），因此：
@@ -23,7 +22,7 @@ import { getLocale } from '@/locale/paraglide/runtime.js'
  */
 export const Route = createFileRoute('/{-$locale}/_layout/docs/$slug')({
   beforeLoad: ({ params }) => {
-    const locale = getLocale() as Locale
+    const locale = getRequestLocale()
     const doc = findDocBySlug(params.slug, locale)
     if (!doc) throw notFound()
     return { doc, locale }
@@ -53,7 +52,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/docs/$slug')({
       title: loaderData.title,
       description: loaderData.description,
       type: 'article',
-      locale: getLocale() as Locale,
+      locale: getRequestLocale(),
     })
   },
   component: DocPage,

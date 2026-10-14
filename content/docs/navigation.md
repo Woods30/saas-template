@@ -72,6 +72,12 @@ The `primary` target follows config: when `docs.enabled` is `true` it points at 
 
 Desktop and mobile render **the same data**, so the two can never disagree. Mobile supports the keyboard: `Enter` expands a group, `Escape` closes it, and focus returns to the trigger.
 
+### The account area
+
+The menu factories are filtered with `authenticated: false` — the navbar link list is deliberately session-independent, so SSR and the client always agree on it. The account slot is the one exception, and it is not a menu item at all: `src/components/layout/UserMenu.tsx` reads the real session through `authClient.useSession()` and renders either the guest fallback (the `login` action passed in as `guestFallback`) or the signed-in menu with the user's email and a sign-out item.
+
+While the session is still pending, `UserMenu` renders the guest fallback rather than a skeleton — a skeleton would leave the server HTML with no sign-in link at all, and the link would pop in after hydration. See [Authentication](./auth).
+
 ## Docs sidebar
 
 The docs sidebar does not use the menu model above. `src/lib/docs.ts` resolves `content/docs/` for the current language and passes the result to `DocsSidebar`.

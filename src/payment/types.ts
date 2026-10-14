@@ -1,3 +1,5 @@
+import type { Locale } from '@/config/locale'
+
 export type SubscriptionStatus =
   | 'active'
   | 'canceled'
@@ -14,7 +16,7 @@ export interface CheckoutParams {
   customerEmail: string
   successUrl: string
   cancelUrl: string
-  locale?: 'zh' | 'en'
+  locale?: Locale
   mode: 'subscription' | 'payment'
 }
 

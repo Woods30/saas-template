@@ -11,7 +11,8 @@
       "!**/src/locale/paraglide",
       "!**/routeTree.gen.ts",
       "!**/pnpm-lock.yaml",
-      "!**/src/db/migrations"
+      "!**/src/db/migrations",
+      "!**/src/components/ui"
     ]
   },
   "formatter": {

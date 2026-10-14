@@ -22,16 +22,23 @@ import { Route as ApiPaymentSplatRouteImport } from './routes/api/payment/$'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api/webhooks/stripe'
 import { Route as Char123LocaleChar125LayoutDocsRouteImport } from './routes/{-$locale}/_layout/docs'
 import { Route as Char123LocaleChar125LayoutMarketingRouteImport } from './routes/{-$locale}/_layout/marketing'
+import { Route as Char123LocaleChar125LayoutSettingsRouteImport } from './routes/{-$locale}/_layout/settings'
 import { Route as Char123LocaleChar125AuthErrorRouteImport } from './routes/{-$locale}/auth/error'
 import { Route as Char123LocaleChar125AuthForgotPasswordRouteImport } from './routes/{-$locale}/auth/forgot-password'
 import { Route as Char123LocaleChar125AuthLoginRouteImport } from './routes/{-$locale}/auth/login'
 import { Route as Char123LocaleChar125AuthRegisterRouteImport } from './routes/{-$locale}/auth/register'
 import { Route as Char123LocaleChar125AuthResetPasswordRouteImport } from './routes/{-$locale}/auth/reset-password'
+import { Route as Char123LocaleChar125AuthVerifyEmailRouteImport } from './routes/{-$locale}/auth/verify-email'
 import { Route as Char123LocaleChar125LayoutDocsIndexRouteImport } from './routes/{-$locale}/_layout/docs/index'
 import { Route as Char123LocaleChar125LayoutDocsSlugRouteImport } from './routes/{-$locale}/_layout/docs/$slug'
 import { Route as Char123LocaleChar125LayoutMarketingIndexRouteImport } from './routes/{-$locale}/_layout/marketing/index'
 import { Route as Char123LocaleChar125LayoutMarketingAboutRouteImport } from './routes/{-$locale}/_layout/marketing/about'
 import { Route as Char123LocaleChar125LayoutMarketingFeaturesRouteImport } from './routes/{-$locale}/_layout/marketing/features'
+import { Route as Char123LocaleChar125LayoutSettingsIndexRouteImport } from './routes/{-$locale}/_layout/settings/index'
+import { Route as Char123LocaleChar125LayoutSettingsNotificationsRouteImport } from './routes/{-$locale}/_layout/settings/notifications'
+import { Route as Char123LocaleChar125LayoutSettingsProfileRouteImport } from './routes/{-$locale}/_layout/settings/profile'
+import { Route as Char123LocaleChar125LayoutSettingsSecurityRouteImport } from './routes/{-$locale}/_layout/settings/security'
+import { Route as Char123LocaleChar125LayoutSettingsSessionsRouteImport } from './routes/{-$locale}/_layout/settings/sessions'
 import { Route as Char123LocaleChar125LayoutMarketingBlogIndexRouteImport } from './routes/{-$locale}/_layout/marketing/blog/index'
 import { Route as Char123LocaleChar125LayoutMarketingBlogSlugRouteImport } from './routes/{-$locale}/_layout/marketing/blog/$slug'
 import { Route as Char123LocaleChar125LayoutMarketingChangelogIndexRouteImport } from './routes/{-$locale}/_layout/marketing/changelog/index'
@@ -107,6 +114,12 @@ const Char123LocaleChar125LayoutMarketingRoute =
     path: '/{-$locale}/marketing',
     getParentRoute: () => rootRouteImport,
   } as any)
+const Char123LocaleChar125LayoutSettingsRoute =
+  Char123LocaleChar125LayoutSettingsRouteImport.update({
+    id: '/{-$locale}/_layout/settings',
+    path: '/{-$locale}/settings',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const Char123LocaleChar125AuthErrorRoute =
   Char123LocaleChar125AuthErrorRouteImport.update({
     id: '/{-$locale}/auth/error',
@@ -135,6 +148,12 @@ const Char123LocaleChar125AuthResetPasswordRoute =
   Char123LocaleChar125AuthResetPasswordRouteImport.update({
     id: '/{-$locale}/auth/reset-password',
     path: '/{-$locale}/auth/reset-password',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char123LocaleChar125AuthVerifyEmailRoute =
+  Char123LocaleChar125AuthVerifyEmailRouteImport.update({
+    id: '/{-$locale}/auth/verify-email',
+    path: '/{-$locale}/auth/verify-email',
     getParentRoute: () => rootRouteImport,
   } as any)
 const Char123LocaleChar125LayoutDocsIndexRoute =
@@ -166,6 +185,36 @@ const Char123LocaleChar125LayoutMarketingFeaturesRoute =
     id: '/features',
     path: '/features',
     getParentRoute: () => Char123LocaleChar125LayoutMarketingRoute,
+  } as any)
+const Char123LocaleChar125LayoutSettingsIndexRoute =
+  Char123LocaleChar125LayoutSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => Char123LocaleChar125LayoutSettingsRoute,
+  } as any)
+const Char123LocaleChar125LayoutSettingsNotificationsRoute =
+  Char123LocaleChar125LayoutSettingsNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => Char123LocaleChar125LayoutSettingsRoute,
+  } as any)
+const Char123LocaleChar125LayoutSettingsProfileRoute =
+  Char123LocaleChar125LayoutSettingsProfileRouteImport.update({
+    id: '/profile',
+    path: '/profile',
+    getParentRoute: () => Char123LocaleChar125LayoutSettingsRoute,
+  } as any)
+const Char123LocaleChar125LayoutSettingsSecurityRoute =
+  Char123LocaleChar125LayoutSettingsSecurityRouteImport.update({
+    id: '/security',
+    path: '/security',
+    getParentRoute: () => Char123LocaleChar125LayoutSettingsRoute,
+  } as any)
+const Char123LocaleChar125LayoutSettingsSessionsRoute =
+  Char123LocaleChar125LayoutSettingsSessionsRouteImport.update({
+    id: '/sessions',
+    path: '/sessions',
+    getParentRoute: () => Char123LocaleChar125LayoutSettingsRoute,
   } as any)
 const Char123LocaleChar125LayoutMarketingBlogIndexRoute =
   Char123LocaleChar125LayoutMarketingBlogIndexRouteImport.update({
@@ -206,16 +255,23 @@ export interface FileRoutesByFullPath {
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/{-$locale}/docs': typeof Char123LocaleChar125LayoutDocsRouteWithChildren
   '/{-$locale}/marketing': typeof Char123LocaleChar125LayoutMarketingRouteWithChildren
+  '/{-$locale}/settings': typeof Char123LocaleChar125LayoutSettingsRouteWithChildren
   '/{-$locale}/auth/error': typeof Char123LocaleChar125AuthErrorRoute
   '/{-$locale}/auth/forgot-password': typeof Char123LocaleChar125AuthForgotPasswordRoute
   '/{-$locale}/auth/login': typeof Char123LocaleChar125AuthLoginRoute
   '/{-$locale}/auth/register': typeof Char123LocaleChar125AuthRegisterRoute
   '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
+  '/{-$locale}/auth/verify-email': typeof Char123LocaleChar125AuthVerifyEmailRoute
   '/{-$locale}/docs/$slug': typeof Char123LocaleChar125LayoutDocsSlugRoute
   '/{-$locale}/marketing/about': typeof Char123LocaleChar125LayoutMarketingAboutRoute
   '/{-$locale}/marketing/features': typeof Char123LocaleChar125LayoutMarketingFeaturesRoute
+  '/{-$locale}/settings/notifications': typeof Char123LocaleChar125LayoutSettingsNotificationsRoute
+  '/{-$locale}/settings/profile': typeof Char123LocaleChar125LayoutSettingsProfileRoute
+  '/{-$locale}/settings/security': typeof Char123LocaleChar125LayoutSettingsSecurityRoute
+  '/{-$locale}/settings/sessions': typeof Char123LocaleChar125LayoutSettingsSessionsRoute
   '/{-$locale}/docs/': typeof Char123LocaleChar125LayoutDocsIndexRoute
   '/{-$locale}/marketing/': typeof Char123LocaleChar125LayoutMarketingIndexRoute
+  '/{-$locale}/settings/': typeof Char123LocaleChar125LayoutSettingsIndexRoute
   '/{-$locale}/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
   '/{-$locale}/marketing/legal/$slug': typeof Char123LocaleChar125LayoutMarketingLegalSlugRoute
   '/{-$locale}/marketing/blog/': typeof Char123LocaleChar125LayoutMarketingBlogIndexRoute
@@ -238,11 +294,17 @@ export interface FileRoutesByTo {
   '/{-$locale}/auth/login': typeof Char123LocaleChar125AuthLoginRoute
   '/{-$locale}/auth/register': typeof Char123LocaleChar125AuthRegisterRoute
   '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
+  '/{-$locale}/auth/verify-email': typeof Char123LocaleChar125AuthVerifyEmailRoute
   '/{-$locale}/docs/$slug': typeof Char123LocaleChar125LayoutDocsSlugRoute
   '/{-$locale}/marketing/about': typeof Char123LocaleChar125LayoutMarketingAboutRoute
   '/{-$locale}/marketing/features': typeof Char123LocaleChar125LayoutMarketingFeaturesRoute
+  '/{-$locale}/settings/notifications': typeof Char123LocaleChar125LayoutSettingsNotificationsRoute
+  '/{-$locale}/settings/profile': typeof Char123LocaleChar125LayoutSettingsProfileRoute
+  '/{-$locale}/settings/security': typeof Char123LocaleChar125LayoutSettingsSecurityRoute
+  '/{-$locale}/settings/sessions': typeof Char123LocaleChar125LayoutSettingsSessionsRoute
   '/{-$locale}/docs': typeof Char123LocaleChar125LayoutDocsIndexRoute
   '/{-$locale}/marketing': typeof Char123LocaleChar125LayoutMarketingIndexRoute
+  '/{-$locale}/settings': typeof Char123LocaleChar125LayoutSettingsIndexRoute
   '/{-$locale}/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
   '/{-$locale}/marketing/legal/$slug': typeof Char123LocaleChar125LayoutMarketingLegalSlugRoute
   '/{-$locale}/marketing/blog': typeof Char123LocaleChar125LayoutMarketingBlogIndexRoute
@@ -263,16 +325,23 @@ export interface FileRoutesById {
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/{-$locale}/_layout/docs': typeof Char123LocaleChar125LayoutDocsRouteWithChildren
   '/{-$locale}/_layout/marketing': typeof Char123LocaleChar125LayoutMarketingRouteWithChildren
+  '/{-$locale}/_layout/settings': typeof Char123LocaleChar125LayoutSettingsRouteWithChildren
   '/{-$locale}/auth/error': typeof Char123LocaleChar125AuthErrorRoute
   '/{-$locale}/auth/forgot-password': typeof Char123LocaleChar125AuthForgotPasswordRoute
   '/{-$locale}/auth/login': typeof Char123LocaleChar125AuthLoginRoute
   '/{-$locale}/auth/register': typeof Char123LocaleChar125AuthRegisterRoute
   '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
+  '/{-$locale}/auth/verify-email': typeof Char123LocaleChar125AuthVerifyEmailRoute
   '/{-$locale}/_layout/docs/$slug': typeof Char123LocaleChar125LayoutDocsSlugRoute
   '/{-$locale}/_layout/marketing/about': typeof Char123LocaleChar125LayoutMarketingAboutRoute
   '/{-$locale}/_layout/marketing/features': typeof Char123LocaleChar125LayoutMarketingFeaturesRoute
+  '/{-$locale}/_layout/settings/notifications': typeof Char123LocaleChar125LayoutSettingsNotificationsRoute
+  '/{-$locale}/_layout/settings/profile': typeof Char123LocaleChar125LayoutSettingsProfileRoute
+  '/{-$locale}/_layout/settings/security': typeof Char123LocaleChar125LayoutSettingsSecurityRoute
+  '/{-$locale}/_layout/settings/sessions': typeof Char123LocaleChar125LayoutSettingsSessionsRoute
   '/{-$locale}/_layout/docs/': typeof Char123LocaleChar125LayoutDocsIndexRoute
   '/{-$locale}/_layout/marketing/': typeof Char123LocaleChar125LayoutMarketingIndexRoute
+  '/{-$locale}/_layout/settings/': typeof Char123LocaleChar125LayoutSettingsIndexRoute
   '/{-$locale}/_layout/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
   '/{-$locale}/_layout/marketing/legal/$slug': typeof Char123LocaleChar125LayoutMarketingLegalSlugRoute
   '/{-$locale}/_layout/marketing/blog/': typeof Char123LocaleChar125LayoutMarketingBlogIndexRoute
@@ -294,16 +363,23 @@ export interface FileRouteTypes {
     | '/api/webhooks/stripe'
     | '/{-$locale}/docs'
     | '/{-$locale}/marketing'
+    | '/{-$locale}/settings'
     | '/{-$locale}/auth/error'
     | '/{-$locale}/auth/forgot-password'
     | '/{-$locale}/auth/login'
     | '/{-$locale}/auth/register'
     | '/{-$locale}/auth/reset-password'
+    | '/{-$locale}/auth/verify-email'
     | '/{-$locale}/docs/$slug'
     | '/{-$locale}/marketing/about'
     | '/{-$locale}/marketing/features'
+    | '/{-$locale}/settings/notifications'
+    | '/{-$locale}/settings/profile'
+    | '/{-$locale}/settings/security'
+    | '/{-$locale}/settings/sessions'
     | '/{-$locale}/docs/'
     | '/{-$locale}/marketing/'
+    | '/{-$locale}/settings/'
     | '/{-$locale}/marketing/blog/$slug'
     | '/{-$locale}/marketing/legal/$slug'
     | '/{-$locale}/marketing/blog/'
@@ -326,11 +402,17 @@ export interface FileRouteTypes {
     | '/{-$locale}/auth/login'
     | '/{-$locale}/auth/register'
     | '/{-$locale}/auth/reset-password'
+    | '/{-$locale}/auth/verify-email'
     | '/{-$locale}/docs/$slug'
     | '/{-$locale}/marketing/about'
     | '/{-$locale}/marketing/features'
+    | '/{-$locale}/settings/notifications'
+    | '/{-$locale}/settings/profile'
+    | '/{-$locale}/settings/security'
+    | '/{-$locale}/settings/sessions'
     | '/{-$locale}/docs'
     | '/{-$locale}/marketing'
+    | '/{-$locale}/settings'
     | '/{-$locale}/marketing/blog/$slug'
     | '/{-$locale}/marketing/legal/$slug'
     | '/{-$locale}/marketing/blog'
@@ -350,16 +432,23 @@ export interface FileRouteTypes {
     | '/api/webhooks/stripe'
     | '/{-$locale}/_layout/docs'
     | '/{-$locale}/_layout/marketing'
+    | '/{-$locale}/_layout/settings'
     | '/{-$locale}/auth/error'
     | '/{-$locale}/auth/forgot-password'
     | '/{-$locale}/auth/login'
     | '/{-$locale}/auth/register'
     | '/{-$locale}/auth/reset-password'
+    | '/{-$locale}/auth/verify-email'
     | '/{-$locale}/_layout/docs/$slug'
     | '/{-$locale}/_layout/marketing/about'
     | '/{-$locale}/_layout/marketing/features'
+    | '/{-$locale}/_layout/settings/notifications'
+    | '/{-$locale}/_layout/settings/profile'
+    | '/{-$locale}/_layout/settings/security'
+    | '/{-$locale}/_layout/settings/sessions'
     | '/{-$locale}/_layout/docs/'
     | '/{-$locale}/_layout/marketing/'
+    | '/{-$locale}/_layout/settings/'
     | '/{-$locale}/_layout/marketing/blog/$slug'
     | '/{-$locale}/_layout/marketing/legal/$slug'
     | '/{-$locale}/_layout/marketing/blog/'
@@ -380,11 +469,13 @@ export interface RootRouteChildren {
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
   Char123LocaleChar125LayoutDocsRoute: typeof Char123LocaleChar125LayoutDocsRouteWithChildren
   Char123LocaleChar125LayoutMarketingRoute: typeof Char123LocaleChar125LayoutMarketingRouteWithChildren
+  Char123LocaleChar125LayoutSettingsRoute: typeof Char123LocaleChar125LayoutSettingsRouteWithChildren
   Char123LocaleChar125AuthErrorRoute: typeof Char123LocaleChar125AuthErrorRoute
   Char123LocaleChar125AuthForgotPasswordRoute: typeof Char123LocaleChar125AuthForgotPasswordRoute
   Char123LocaleChar125AuthLoginRoute: typeof Char123LocaleChar125AuthLoginRoute
   Char123LocaleChar125AuthRegisterRoute: typeof Char123LocaleChar125AuthRegisterRoute
   Char123LocaleChar125AuthResetPasswordRoute: typeof Char123LocaleChar125AuthResetPasswordRoute
+  Char123LocaleChar125AuthVerifyEmailRoute: typeof Char123LocaleChar125AuthVerifyEmailRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -480,6 +571,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/{-$locale}/_layout/settings': {
+      id: '/{-$locale}/_layout/settings'
+      path: '/{-$locale}/settings'
+      fullPath: '/{-$locale}/settings'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/{-$locale}/auth/error': {
       id: '/{-$locale}/auth/error'
       path: '/{-$locale}/auth/error'
@@ -513,6 +611,13 @@ declare module '@tanstack/react-router' {
       path: '/{-$locale}/auth/reset-password'
       fullPath: '/{-$locale}/auth/reset-password'
       preLoaderRoute: typeof Char123LocaleChar125AuthResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/{-$locale}/auth/verify-email': {
+      id: '/{-$locale}/auth/verify-email'
+      path: '/{-$locale}/auth/verify-email'
+      fullPath: '/{-$locale}/auth/verify-email'
+      preLoaderRoute: typeof Char123LocaleChar125AuthVerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/{-$locale}/_layout/docs/': {
@@ -549,6 +654,41 @@ declare module '@tanstack/react-router' {
       fullPath: '/{-$locale}/marketing/features'
       preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingFeaturesRouteImport
       parentRoute: typeof Char123LocaleChar125LayoutMarketingRoute
+    }
+    '/{-$locale}/_layout/settings/': {
+      id: '/{-$locale}/_layout/settings/'
+      path: '/'
+      fullPath: '/{-$locale}/settings/'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsIndexRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutSettingsRoute
+    }
+    '/{-$locale}/_layout/settings/notifications': {
+      id: '/{-$locale}/_layout/settings/notifications'
+      path: '/notifications'
+      fullPath: '/{-$locale}/settings/notifications'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsNotificationsRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutSettingsRoute
+    }
+    '/{-$locale}/_layout/settings/profile': {
+      id: '/{-$locale}/_layout/settings/profile'
+      path: '/profile'
+      fullPath: '/{-$locale}/settings/profile'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsProfileRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutSettingsRoute
+    }
+    '/{-$locale}/_layout/settings/security': {
+      id: '/{-$locale}/_layout/settings/security'
+      path: '/security'
+      fullPath: '/{-$locale}/settings/security'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsSecurityRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutSettingsRoute
+    }
+    '/{-$locale}/_layout/settings/sessions': {
+      id: '/{-$locale}/_layout/settings/sessions'
+      path: '/sessions'
+      fullPath: '/{-$locale}/settings/sessions'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsSessionsRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutSettingsRoute
     }
     '/{-$locale}/_layout/marketing/blog/': {
       id: '/{-$locale}/_layout/marketing/blog/'
@@ -632,6 +772,33 @@ const Char123LocaleChar125LayoutMarketingRouteWithChildren =
     Char123LocaleChar125LayoutMarketingRouteChildren,
   )
 
+interface Char123LocaleChar125LayoutSettingsRouteChildren {
+  Char123LocaleChar125LayoutSettingsNotificationsRoute: typeof Char123LocaleChar125LayoutSettingsNotificationsRoute
+  Char123LocaleChar125LayoutSettingsProfileRoute: typeof Char123LocaleChar125LayoutSettingsProfileRoute
+  Char123LocaleChar125LayoutSettingsSecurityRoute: typeof Char123LocaleChar125LayoutSettingsSecurityRoute
+  Char123LocaleChar125LayoutSettingsSessionsRoute: typeof Char123LocaleChar125LayoutSettingsSessionsRoute
+  Char123LocaleChar125LayoutSettingsIndexRoute: typeof Char123LocaleChar125LayoutSettingsIndexRoute
+}
+
+const Char123LocaleChar125LayoutSettingsRouteChildren: Char123LocaleChar125LayoutSettingsRouteChildren =
+  {
+    Char123LocaleChar125LayoutSettingsNotificationsRoute:
+      Char123LocaleChar125LayoutSettingsNotificationsRoute,
+    Char123LocaleChar125LayoutSettingsProfileRoute:
+      Char123LocaleChar125LayoutSettingsProfileRoute,
+    Char123LocaleChar125LayoutSettingsSecurityRoute:
+      Char123LocaleChar125LayoutSettingsSecurityRoute,
+    Char123LocaleChar125LayoutSettingsSessionsRoute:
+      Char123LocaleChar125LayoutSettingsSessionsRoute,
+    Char123LocaleChar125LayoutSettingsIndexRoute:
+      Char123LocaleChar125LayoutSettingsIndexRoute,
+  }
+
+const Char123LocaleChar125LayoutSettingsRouteWithChildren =
+  Char123LocaleChar125LayoutSettingsRoute._addFileChildren(
+    Char123LocaleChar125LayoutSettingsRouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
@@ -648,6 +815,8 @@ const rootRouteChildren: RootRouteChildren = {
     Char123LocaleChar125LayoutDocsRouteWithChildren,
   Char123LocaleChar125LayoutMarketingRoute:
     Char123LocaleChar125LayoutMarketingRouteWithChildren,
+  Char123LocaleChar125LayoutSettingsRoute:
+    Char123LocaleChar125LayoutSettingsRouteWithChildren,
   Char123LocaleChar125AuthErrorRoute: Char123LocaleChar125AuthErrorRoute,
   Char123LocaleChar125AuthForgotPasswordRoute:
     Char123LocaleChar125AuthForgotPasswordRoute,
@@ -655,6 +824,8 @@ const rootRouteChildren: RootRouteChildren = {
   Char123LocaleChar125AuthRegisterRoute: Char123LocaleChar125AuthRegisterRoute,
   Char123LocaleChar125AuthResetPasswordRoute:
     Char123LocaleChar125AuthResetPasswordRoute,
+  Char123LocaleChar125AuthVerifyEmailRoute:
+    Char123LocaleChar125AuthVerifyEmailRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

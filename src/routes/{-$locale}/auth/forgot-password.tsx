@@ -1,87 +1,94 @@
+import { useForm } from '@tanstack/react-form'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { authClient } from '@/auth/client'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { createForgotSchema } from '@/auth/validation'
+import { AuthFormField } from '@/components/auth/AuthFormField'
+import { AuthLayout } from '@/components/auth/AuthLayout'
+import { authFormMessages } from '@/components/auth/formMessages'
+import { SubmitButton } from '@/components/auth/SubmitButton'
+import { getRequestLocale } from '@/lib/locale'
+import { assertPageEnabled } from '@/lib/module-access'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/auth/forgot-password')({
+  beforeLoad: () => assertPageEnabled('auth'),
   component: ForgotPasswordPage,
 })
 
 function ForgotPasswordPage() {
+  // `done` 表达「已离开表单，进入结果页」，`serverError` 是页面级提示——两者都不是字段状态，
+  // 留在组件里（见 `login.tsx` 对 TanStack Form 1.33 错误入口的说明）。
   const [done, setDone] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
+  const [serverError, setServerError] = useState<string | null>(null)
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setError(null)
-    setSubmitting(true)
-    const form = new FormData(e.currentTarget)
-    // Always return success to prevent email enumeration
-    await authClient.requestPasswordReset({
-      email: String(form.get('email') ?? ''),
-      redirectTo: '/auth/reset-password',
-    })
-    setSubmitting(false)
-    setDone(true)
-  }
+  const form = useForm({
+    defaultValues: { email: '' },
+    validators: { onSubmit: createForgotSchema(authFormMessages()) },
+    onSubmit: async ({ value }) => {
+      setServerError(null)
+      // 无论邮箱是否存在都返回成功，避免账号枚举；因此这里不看 `error`。
+      // `redirectTo` 带上当前语言前缀，重置链接才能回到同一语言的页面。
+      await authClient.requestPasswordReset({
+        email: value.email,
+        redirectTo: `/${getRequestLocale()}/auth/reset-password`,
+      })
+      setDone(true)
+    },
+  })
 
   if (done) {
     return (
-      <main className="mx-auto max-w-md p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>{m.auth_forgot_title()}</CardTitle>
-            <CardDescription>{m.auth_forgot_to_login()}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              {typeof m.auth_forgot_success === 'function'
-                ? m.auth_forgot_success()
-                : '如果邮箱存在，重置链接已发送。'}
-            </p>
-            <Link
-              to="/{-$locale}/auth/login"
-              className="mt-4 block text-center text-sm text-muted-foreground underline"
-            >
-              {m.auth_forgot_to_login()}
-            </Link>
-          </CardContent>
-        </Card>
-      </main>
+      <AuthLayout title={m.auth_forgot_title()}>
+        <p className="text-sm text-muted-foreground">{m.auth_forgot_success()}</p>
+        <Link
+          to="/{-$locale}/auth/login"
+          className="mt-4 block text-center text-sm text-muted-foreground underline hover:text-foreground"
+        >
+          {m.auth_forgot_to_login()}
+        </Link>
+      </AuthLayout>
     )
   }
 
   return (
-    <main className="mx-auto max-w-md p-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>{m.auth_forgot_title()}</CardTitle>
-          <CardDescription>{m.auth_forgot_to_login()}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="space-y-1">
-              <Label htmlFor="email">{m.auth_forgot_email_label()}</Label>
-              <Input id="email" name="email" type="email" required autoComplete="email" />
-            </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <Button type="submit" disabled={submitting} className="w-full">
-              {submitting ? '…' : m.auth_forgot_submit()}
-            </Button>
-            <Link
-              to="/{-$locale}/auth/login"
-              className="block text-center text-sm text-muted-foreground underline"
-            >
-              {m.auth_forgot_to_login()}
-            </Link>
-          </form>
-        </CardContent>
-      </Card>
-    </main>
+    <AuthLayout title={m.auth_forgot_title()} description={m.auth_forgot_to_login()}>
+      {/* `noValidate` 见 `login.tsx` 的说明：原生约束校验会拦下 submit，让 schema 校验永远不跑。 */}
+      <form
+        noValidate
+        className="space-y-4"
+        onSubmit={(e: React.SubmitEvent<HTMLFormElement>) => {
+          e.preventDefault()
+          void form.handleSubmit()
+        }}
+      >
+        <form.Field name="email">
+          {(field) => (
+            <AuthFormField
+              field={field}
+              label={m.auth_forgot_email_label()}
+              type="email"
+              autoComplete="email"
+            />
+          )}
+        </form.Field>
+        {serverError && (
+          <p role="alert" className="text-sm text-destructive">
+            {serverError}
+          </p>
+        )}
+        <form.Subscribe selector={(state) => state.isSubmitting}>
+          {(isSubmitting) => (
+            <SubmitButton pending={isSubmitting}>{m.auth_forgot_submit()}</SubmitButton>
+          )}
+        </form.Subscribe>
+        <Link
+          to="/{-$locale}/auth/login"
+          className="block text-center text-sm text-muted-foreground underline hover:text-foreground"
+        >
+          {m.auth_forgot_to_login()}
+        </Link>
+      </form>
+    </AuthLayout>
   )
 }

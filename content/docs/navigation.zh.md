@@ -72,6 +72,12 @@ export type MenuContext = { config: WebsiteConfig; authenticated: boolean; role?
 
 桌面菜单与移动端抽屉渲染**同一份**数据，不会出现两处不一致。移动端支持键盘操作：`Enter` 展开分组，`Escape` 关闭，焦点归还触发按钮。
 
+### 账号区
+
+菜单工厂以 `authenticated: false` 过滤——导航项列表刻意与会话无关，保证 SSR 与客户端始终一致。账号区是唯一的例外，且它根本不是菜单项：`src/components/layout/UserMenu.tsx` 通过 `authClient.useSession()` 读取**真实**会话，渲染访客入口（即作为 `guestFallback` 传入的 `login` 动作）或已登录菜单（展示邮箱与登出项）。
+
+会话待定期间，`UserMenu` 渲染访客入口而非骨架屏——骨架屏会让服务端 HTML 里完全没有登录入口，链接要等水合后才闪现。见[身份认证](./auth)。
+
 ## 文档侧边栏
 
 文档侧边栏不使用上面的菜单模型，而是由 `src/lib/docs.ts` 按当前语言解析 `content/docs/` 后传给 `DocsSidebar`。

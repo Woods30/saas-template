@@ -80,6 +80,8 @@ All optional; when absent the matching provider is not registered rather than fa
 
 Empty strings are normalized to `undefined` (see `treatEmptyAsUndefined` in `src/env/normalize.ts`), so a blank field in `.env` is the same as unset.
 
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` must both be set for Google sign-in to be offered — with only one, Better Auth does not register the provider and the sign-in page hides the button. Authentication's mail flows reuse `MAIL_FROM` / `RESEND_API_KEY` (or the Cloudflare equivalents); there is no separate auth sender. See [Authentication](./auth).
+
 ## Workers bindings
 
 Resource bindings do not go through the env schema; declare them in `wrangler.jsonc` and they arrive as request arguments:

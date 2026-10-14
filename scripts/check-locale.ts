@@ -1,12 +1,16 @@
 /**
- * 校验 `messages/*.json` 的键集合与 base locale 双向相等（忽略 `$schema`）。
+ * 校验 `messages/*.json` 的**文件集合**与 `LOCALES` 一一对应，且各语言的键集合与
+ * base locale 双向相等（忽略 `$schema`）。
  *
- * 任一语言缺失或多出键都会以非零退出码失败，避免漏译或多译悄悄进入主干。
+ * 三类问题都以非零退出码失败：
+ * - 缺少某个受支持语言的消息文件（新增语言后忘记补 `messages/xx.json`）；
+ * - 存在不受支持语言的消息文件（`LOCALES` 删了某语言但文件残留）；
+ * - 某语言缺失或多出键（漏译 / 多译）。
  */
 
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { compareMessageKeys, parseLocale } from '../src/lib/locale'
+import { compareMessageKeys, LOCALES, parseLocale } from '../src/lib/locale'
 
 const MESSAGES_DIR = 'messages'
 const SETTINGS_PATH = 'project.inlang/settings.json'
@@ -42,8 +46,25 @@ function main(): void {
     throw new Error(`未找到 base locale 文件 ${MESSAGES_DIR}/${baseFile}`)
   }
 
-  const baseMessages = readMessages(baseFile)
+  // 文件集合必须与受支持语言一一对应：多出 / 缺失都在这里拦下。
   let failed = false
+  const expected = new Set(LOCALES.map((locale) => `${locale}.json`))
+  const actual = new Set(files)
+  const missingFiles = [...expected].filter((file) => !actual.has(file)).sort()
+  const unexpectedFiles = [...actual].filter((file) => !expected.has(file)).sort()
+
+  if (missingFiles.length > 0) {
+    console.error(`❌ ${MESSAGES_DIR}/ 缺少受支持语言的消息文件：${missingFiles.join(', ')}`)
+    failed = true
+  }
+  if (unexpectedFiles.length > 0) {
+    console.error(
+      `❌ ${MESSAGES_DIR}/ 存在不受支持语言的消息文件：${unexpectedFiles.join(', ')}（请从 LOCALES 移除或补齐支持）`,
+    )
+    failed = true
+  }
+
+  const baseMessages = readMessages(baseFile)
 
   for (const file of files) {
     if (file === baseFile) continue

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { contentSlug, resolveContentLocale } from '@/lib/content-locale'
+import { LOCALES } from '@/config/locale'
+import { BASE_LOCALE, contentSlug, resolveContentLocale } from '@/lib/content-locale'
 
 describe('resolveContentLocale', () => {
   it('.zh.md 文件识别为 zh', () => {
@@ -48,5 +49,38 @@ describe('contentSlug', () => {
 
   it('多段路径保留（只剥末尾扩展名与 locale）', () => {
     expect(contentSlug('guide/install.zh.md')).toBe('guide/install')
+  })
+
+  it('不剥掉非 locale 的相似后缀', () => {
+    // `guide.zh-cn.md` 的后缀不是受支持 locale，应保留原样。
+    expect(contentSlug('guide.zh-cn.md')).toBe('guide.zh-cn')
+    expect(contentSlug('guide.v2.md')).toBe('guide.v2')
+  })
+})
+
+describe('语言后缀的派生（新增语言时不漏改正则）', () => {
+  // 后缀识别必须由 `LOCALES` 派生，而不是写死 `zh|en`。这里用一份**自定义**语言
+  // 列表来证明派生成立：若实现写死 zh/en，`ja` 不会被剥掉，用例即失败。
+  const WITH_JA = [...LOCALES, 'ja'] as const
+
+  it('剥掉列表内任意语言的后缀', () => {
+    for (const locale of WITH_JA) {
+      expect(contentSlug(`getting-started.${locale}.md`, WITH_JA)).toBe('getting-started')
+      expect(resolveContentLocale(`getting-started.${locale}.md`, WITH_JA)).toBe(locale)
+    }
+  })
+
+  it('列表外的语言后缀不被剥掉，也不会被识别为 locale', () => {
+    // `fr` 不在自定义列表内：slug 保留后缀，locale 回落到基准语言。
+    expect(contentSlug('getting-started.fr.md', WITH_JA)).toBe('getting-started.fr')
+    expect(resolveContentLocale('getting-started.fr.md', WITH_JA)).toBe(BASE_LOCALE)
+  })
+
+  it('默认参数使用站点配置的受支持语言', () => {
+    for (const locale of LOCALES) {
+      expect(contentSlug(`a.${locale}.md`)).toBe('a')
+    }
+    // 未支持的后缀保留原样。
+    expect(contentSlug('a.ja.md')).toBe('a.ja')
   })
 })

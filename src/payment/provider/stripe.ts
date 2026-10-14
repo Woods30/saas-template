@@ -1,4 +1,5 @@
 import Stripe from 'stripe'
+import { defaultLocale } from '@/config/locale'
 import type {
   CheckoutParams,
   CheckoutResult,
@@ -39,7 +40,9 @@ export class StripePaymentProvider implements PaymentProvider {
       customer_email: params.customerEmail,
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
-      locale: params.locale === 'zh' ? 'zh' : 'en',
+      // 调用方已校验为受支持语言；兜底用站点默认语言，而非「非 zh 即 en」——
+      // 后者会在新增语言时把新语言错误地当成 en 提交给 Stripe。
+      locale: params.locale ?? defaultLocale,
       metadata: { userId: params.userId },
       ...(params.mode === 'payment' ? { invoice_creation: { enabled: true } } : {}),
       ...(params.mode === 'payment' ? { allow_promotion_codes: true } : {}),

@@ -1,7 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { docsLanding } from '@/lib/docs'
-import type { Locale } from '@/lib/locale'
-import { getLocale } from '@/locale/paraglide/runtime.js'
+import { getRequestLocale } from '@/lib/locale'
 
 /**
  * `/docs` 本身不渲染内容，重定向到该语言下的第一篇文档。
@@ -9,7 +8,7 @@ import { getLocale } from '@/locale/paraglide/runtime.js'
  */
 export const Route = createFileRoute('/{-$locale}/_layout/docs/')({
   beforeLoad: () => {
-    const locale = getLocale() as Locale
+    const locale = getRequestLocale()
     const landing = docsLanding(locale)
     if (!landing) return
     throw redirect({

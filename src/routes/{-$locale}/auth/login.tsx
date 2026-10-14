@@ -1,73 +1,113 @@
+import { useForm } from '@tanstack/react-form'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { signIn } from '@/auth/client'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { fetchAuthProviderAvailability } from '@/auth/providers'
+import { createLoginSchema } from '@/auth/validation'
+import { AuthFormField } from '@/components/auth/AuthFormField'
+import { AuthLayout } from '@/components/auth/AuthLayout'
+import { authFormMessages } from '@/components/auth/formMessages'
+import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons'
+import { SubmitButton } from '@/components/auth/SubmitButton'
+import { assertPageEnabled } from '@/lib/module-access'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/auth/login')({
+  beforeLoad: async () => {
+    assertPageEnabled('auth')
+    // 社交登录凭据是服务端 secret，客户端 bundle 读不到，因此经 server function 取；
+    // SSR 阶段就地执行，客户端导航时降级为一次 RPC，两条路径结果一致。
+    return fetchAuthProviderAvailability()
+  },
   component: LoginPage,
 })
 
 function LoginPage() {
-  const [error, setError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
+  const { google } = Route.useRouteContext()
+  // 字段值、字段级校验错误、提交态全部由 TanStack Form 持有；`serverError` 是**页面级**提示，
+  // 不是字段状态，TanStack Form 1.33 也没有「设置任意页面级错误」的类型安全入口
+  // （`errorMap.onServer` 需要先声明 `onServer` validator 才可写），故仍用一个 `useState`。
+  const [serverError, setServerError] = useState<string | null>(null)
+  const form = useForm({
+    defaultValues: { email: '', password: '' },
+    validators: { onSubmit: createLoginSchema(authFormMessages()) },
+    onSubmit: async ({ value }) => {
+      setServerError(null)
+      const { error } = await signIn.email({ email: value.email, password: value.password })
+      if (error) {
+        setServerError(error.message?.split('\n')[0] ?? m.auth_error_generic())
+        return
+      }
+      window.location.assign('/')
+    },
+  })
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setError(null)
-    setSubmitting(true)
-    const form = new FormData(e.currentTarget)
-    const { error: authError } = await signIn.email({
-      email: String(form.get('email') ?? ''),
-      password: String(form.get('password') ?? ''),
-    })
-    setSubmitting(false)
-    if (authError) {
-      setError(authError.message?.split('\n')[0] ?? '登录失败')
-      return
-    }
-    window.location.assign('/')
+  function onGoogleClick() {
+    // 失败时 better-auth 会带 `error` 查询参数重定向回本站；这里只在发起阶段兜底复位。
+    void signIn.social({ provider: 'google', callbackURL: '/' })
   }
 
   return (
-    <main className="mx-auto max-w-md p-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>{m.auth_login_title()}</CardTitle>
-          <CardDescription>{m.auth_login_to_register()}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="space-y-1">
-              <Label htmlFor="email">{m.auth_login_email_label()}</Label>
-              <Input id="email" name="email" type="email" required autoComplete="email" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="password">{m.auth_login_password_label()}</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                required
-                autoComplete="current-password"
-              />
-            </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <Button type="submit" disabled={submitting} className="w-full">
-              {submitting ? '…' : m.auth_login_submit()}
-            </Button>
-            <Link
-              to="/{-$locale}/auth/forgot-password"
-              className="block text-center text-sm text-muted-foreground underline"
-            >
-              {m.auth_login_to_forgot()}
-            </Link>
-          </form>
-        </CardContent>
-      </Card>
-    </main>
+    <AuthLayout title={m.auth_login_title()} description={m.auth_login_to_register()}>
+      {/*
+        `noValidate` 必填：`<Input type="email">` 会触发浏览器原生约束校验，值非法时
+        原生校验会直接拦下 `submit`，`onSubmit` 永远不执行、schema 校验与错误文案也就
+        永远不出现。校验权归 schema。
+      */}
+      <form
+        noValidate
+        className="space-y-4"
+        onSubmit={(e: React.SubmitEvent<HTMLFormElement>) => {
+          e.preventDefault()
+          void form.handleSubmit()
+        }}
+      >
+        <form.Field name="email">
+          {(field) => (
+            <AuthFormField
+              field={field}
+              label={m.auth_login_email_label()}
+              type="email"
+              autoComplete="email"
+            />
+          )}
+        </form.Field>
+        <form.Field name="password">
+          {(field) => (
+            <AuthFormField
+              field={field}
+              label={m.auth_login_password_label()}
+              type="password"
+              autoComplete="current-password"
+            />
+          )}
+        </form.Field>
+        {serverError && (
+          <p role="alert" className="text-sm text-destructive">
+            {serverError}
+          </p>
+        )}
+        <form.Subscribe selector={(state) => state.isSubmitting}>
+          {(isSubmitting) => (
+            <SubmitButton pending={isSubmitting}>{m.auth_login_submit()}</SubmitButton>
+          )}
+        </form.Subscribe>
+      </form>
+      <SocialAuthButtons googleEnabled={google} onGoogleClick={onGoogleClick} />
+      <div className="mt-4 flex items-center justify-between text-sm">
+        <Link
+          to="/{-$locale}/auth/forgot-password"
+          className="text-muted-foreground underline hover:text-foreground"
+        >
+          {m.auth_login_to_forgot()}
+        </Link>
+        <Link
+          to="/{-$locale}/auth/register"
+          className="text-muted-foreground underline hover:text-foreground"
+        >
+          {m.auth_login_to_register_link()}
+        </Link>
+      </div>
+    </AuthLayout>
   )
 }

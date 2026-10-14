@@ -80,6 +80,8 @@ export function parseServerEnv(raw: unknown): ServerEnv
 
 空字符串被归一化为 `undefined`（见 `src/env/normalize.ts` 的 `treatEmptyAsUndefined`），因此 `.env` 里留空的字段等同于未设置。
 
+`GOOGLE_CLIENT_ID` 与 `GOOGLE_CLIENT_SECRET` 必须同时配置，Google 登录才会提供——只配一个时 Better Auth 不会注册该 provider，登录页也不渲染按钮。认证模块的邮件流程复用 `MAIL_FROM` / `RESEND_API_KEY`（或 Cloudflare 对应字段），没有独立的认证发件人。见[身份认证](./auth)。
+
 ## Workers binding
 
 资源 binding 不走 env schema，由 `wrangler.jsonc` 声明后经请求参数传入：

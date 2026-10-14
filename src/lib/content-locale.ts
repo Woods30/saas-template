@@ -1,3 +1,14 @@
+import { LOCALES, type Locale } from '@/config/locale'
+
+/**
+ * 无语言后缀的内容文件所属语言。
+ *
+ * **与 Paraglide 的 `baseLocale`（`zh`）不是同一个概念**：那个是「文案兜底语言」，
+ * 这个是「内容源语言」。本仓库的 `content/` 约定英文为原文、`.zh.md` 为中文译本，
+ * 因此无后缀文件归为 `en`。
+ */
+export const BASE_LOCALE: Locale = 'en'
+
 /**
  * Resolve the content locale from a Content Collections document's `_meta`.
  *
@@ -12,17 +23,34 @@
  * file as `locale: 'en'`. The blog / changelog pages then filtered on
  * `locale === getLocale()` and showed empty Chinese pages.
  *
- * Use `_meta.fileName` so the suffix `.zh.md` is present, and only treat the
- * file as Chinese when it explicitly carries the `.zh.` infix — anything
- * else (including future locales like `ja` / `fr`) defaults to `en`.
+ * Use `_meta.fileName` so the suffix `.zh.md` is present. A file with no
+ * locale suffix is the **base locale** source (`en` today, matching the repo
+ * convention of English originals with `.zh.md` translations); a file with a
+ * recognised `.<locale>.` infix resolves to that locale.
  *
- * Exported for unit testing so the transform behavior is pinned.
+ * The locale list is a **parameter** (defaulting to the site's configured
+ * languages) rather than a hardcoded `zh` / `en` pair, so adding a language
+ * only requires updating `src/config/locale.ts` — this function and
+ * {@link contentSlug} both follow automatically. Exported for unit testing.
  *
  * @param fileName - `_meta.fileName` from a Content Collections document
- * @returns `'zh'` if the file is a Chinese source, `'en'` otherwise
+ * @param locales - Recognised locale suffixes; defaults to the configured ones
+ * @returns The document's locale, or {@link BASE_LOCALE} when unrecognised
  */
-export function resolveContentLocale(fileName: string): 'en' | 'zh' {
-  return fileName.endsWith('.zh.md') ? 'zh' : 'en'
+export function resolveContentLocale(
+  fileName: string,
+  locales: readonly string[] = LOCALES,
+): Locale {
+  // 契约是 `_meta.fileName`（含扩展名）。要求以 `.md` 结尾能挡住「误传 `_meta.path`」
+  // 这类调用错误——`_meta.path` 已剥掉 `.md`，`hello-world.zh` 会被误判成中文。
+  if (!fileName.endsWith('.md')) return BASE_LOCALE
+  const withoutExtension = fileName.slice(0, -'.md'.length)
+  const dot = withoutExtension.lastIndexOf('.')
+  if (dot !== -1) {
+    const suffix = withoutExtension.slice(dot + 1)
+    if (locales.includes(suffix)) return suffix as Locale
+  }
+  return BASE_LOCALE
 }
 
 /**
@@ -42,12 +70,18 @@ export function resolveContentLocale(fileName: string): 'en' | 'zh' {
  *   hello-world.md   → hello-world
  *   changelog.zh.md  → changelog
  *
- * Exported for unit testing.
+ * Only suffixes present in `locales` are stripped, so a genuine dotted name
+ * (`guide.zh-cn.md`, `guide.v2.md`) keeps its suffix instead of being
+ * truncated. Exported for unit testing.
  *
  * @param fileName - `_meta.fileName` from a Content Collections document
+ * @param locales - Recognised locale suffixes; defaults to the configured ones
  * @returns The locale-independent slug used in URLs and lookups
  */
-export function contentSlug(fileName: string): string {
-  // Drop the markdown extension first, then any trailing locale segment.
-  return fileName.replace(/\.md$/, '').replace(/\.(?:zh|en)$/, '')
+export function contentSlug(fileName: string, locales: readonly string[] = LOCALES): string {
+  const withoutExtension = fileName.replace(/\.md$/, '')
+  const dot = withoutExtension.lastIndexOf('.')
+  if (dot === -1) return withoutExtension
+  const suffix = withoutExtension.slice(dot + 1)
+  return locales.includes(suffix) ? withoutExtension.slice(0, dot) : withoutExtension
 }

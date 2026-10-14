@@ -1,6 +1,6 @@
 ---
 title: 功能集成概览
-description: 六个服务模块的门禁语义、端点与接线方式
+description: 各服务模块的门禁语义、端点与接线方式
 locale: zh
 order: 5
 group: features
@@ -12,6 +12,8 @@ updated: 2026-10-14
 1. **开关**——`src/config/website.ts` 里的 `enabled`；
 2. **provider 注册表**——`src/{mail,newsletter,notification,payment}/index.ts`，在 `src/server.ts` 的请求入口按当前 env 构建，存入 AsyncLocalStorage；
 3. **运行时门禁**——`src/lib/module-access.server.ts`，在 API 处理的最前处拦截。
+
+[身份认证](./auth) 是第七个受门禁管辖的模块，默认开启。它没有 provider 注册表——接线由 Better Auth 自己持有——因此只适用第 1、3 步。它的邮件流程确实经由 `mail` 模块的 provider 发送，见下文。
 
 ## 门禁语义
 
@@ -31,8 +33,25 @@ updated: 2026-10-14
 | `/api/newsletter/*` | `POST` / `DELETE` | `newsletter` |
 | `/api/payment/*` | `POST` / `DELETE` | `payment` |
 | `/api/email/*` | `POST` | `mail` |
+| `/api/auth/*` | `GET` / `POST` | `auth` |
 
 > **注意事项**：Stripe webhook（`/api/webhooks/stripe`）**不受** `payment.enabled` 门禁，以便模块关闭后仍能处理存量订阅的合法事件。
+
+`auth` 不声明任何**字段级**必要配置，`BETTER_AUTH_SECRET` 改由 `check:env:prod` 在部署前强制校验；本地开发时 Better Auth 会退回自带的开发密钥，在门禁处判失败只会无谓地挡住本地开发。
+
+但它有一条**矛盾规则**会触发 503：`auth.requireEmailVerification` 为 `true` 而 `mail` 未配置完整时，`auth` 报告 `incomplete`。要求邮箱验证却发不出验证邮件，等于让新用户永远无法登录——这是部署事故，不是可接受的降级。详见[认证邮件](#认证邮件经由邮件模块发送)。
+
+## 认证邮件经由邮件模块发送
+
+认证模块的三个邮件流程（邮箱验证、重置密码、欢迎邮件）不是独立的 provider，而是经由 `mail.enabled` 选定的 provider 渲染：
+
+```
+Better Auth 回调  →  src/auth/emails.ts  →  src/mail/index.ts sendMail(provider)
+```
+
+`src/auth/emails.ts` 是唯一的桥梁，且绝不抛出：Better Auth 在注册、登录请求内部调用 `sendVerificationEmail` / `sendResetPassword`，回调抛错会让**注册本身失败**。失败一律收敛为 `{ ok: false, error }` 并记 `console.warn`。
+
+这层依赖是单向且软性的：`mail.enabled: false` 时认证邮件静默跳过。但 `requireEmailVerification` **不**跟随该开关——它是显式安全控制（`auth.requireEmailVerification`），因为让「邮件没配好」静默放行未验证注册，等于允许任何人冒用不属于自己的邮箱。它出厂为 `false`，好让未接邮件的模板开箱可用；**接上邮件时应改为 `true`**。而「要求验证但邮件未配齐」这一矛盾组合会被 `getServiceStatuses()` 报出，并让 `pnpm check:env:prod` 失败。见[身份认证](./auth)。
 
 ## 各模块文档
 
@@ -43,6 +62,7 @@ updated: 2026-10-14
 | 支付 | [支付](./payment) |
 | 通知 | [通知](./notifications) |
 | 分析 | [分析](./analytics) |
+| 身份认证 | [身份认证](./auth) |
 
 ## 配置状态诊断
 

@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
 import { getAuth } from '@/auth/auth'
+import { localeSchema } from '@/config/locale'
 import { getMailFrom } from '@/config/service-status'
 import { websiteConfig } from '@/config/website'
 import { getModuleUnavailableResponse } from '@/lib/module-access.server'
@@ -32,7 +33,7 @@ export const contactMessageContextSchema = z.object({
 const bodySchema = z.object({
   to: z.string().email(),
   template: z.literal('contactMessage'),
-  locale: z.enum(['zh', 'en']),
+  locale: localeSchema,
   context: contactMessageContextSchema,
 })
 

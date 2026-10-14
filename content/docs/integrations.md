@@ -1,6 +1,6 @@
 ---
 title: Integrations Overview
-description: Gate semantics, endpoints, and wiring for the six service modules
+description: Gate semantics, endpoints, and wiring for the service modules
 locale: en
 order: 5
 group: features
@@ -12,6 +12,8 @@ The six service modules (`mail` / `contact` / `newsletter` / `payment` / `notifi
 1. **Switch** — `enabled` in `src/config/website.ts`;
 2. **Provider registry** — `src/{mail,newsletter,notification,payment}/index.ts`, built per request in `src/server.ts` and stored in AsyncLocalStorage;
 3. **Runtime gate** — `src/lib/module-access.server.ts`, enforced at the very front of the API handler.
+
+[Authentication](./auth) is a seventh gated module, on by default. It has no provider registry — Better Auth owns its own wiring — so only steps 1 and 3 apply to it. Its mail flows do go through the `mail` module's providers; see below.
 
 ## Gate semantics
 
@@ -31,8 +33,25 @@ The response carries only a stable error code — never the missing field or a c
 | `/api/newsletter/*` | `POST` / `DELETE` | `newsletter` |
 | `/api/payment/*` | `POST` / `DELETE` | `payment` |
 | `/api/email/*` | `POST` | `mail` |
+| `/api/auth/*` | `GET` / `POST` | `auth` |
 
 > **Note**: The Stripe webhook (`/api/webhooks/stripe`) is **not** gated by `payment.enabled`, so existing subscriptions keep processing valid events after the module is turned off.
+
+`auth` declares no **field-level** required config, so `BETTER_AUTH_SECRET` is enforced by `check:env:prod` at deploy time instead; locally Better Auth falls back to its own development secret, and failing the gate there would block local development for no gain.
+
+It does have one **conflict rule** that yields a 503: when `auth.requireEmailVerification` is `true` and `mail` is not fully configured, `auth` reports `incomplete`. Requiring verification while the verification mail cannot be sent means no new user can ever sign in — a deployment accident, not an acceptable degradation. See [Auth mail through the mail module](#auth-mail-through-the-mail-module).
+
+## Auth mail through the mail module
+
+The authentication module's three mail flows (verification, password reset, welcome) are not a separate provider — they render through whichever provider `mail.enabled` selects:
+
+```
+Better Auth callback  →  src/auth/emails.ts  →  src/mail/index.ts sendMail(provider)
+```
+
+`src/auth/emails.ts` is the only bridge, and it never throws: Better Auth calls `sendVerificationEmail` / `sendResetPassword` from inside the sign-up and sign-in request, so a throwing callback would fail the sign-up itself. Failures collapse to `{ ok: false, error }` plus a `console.warn`.
+
+The dependency is one-way and soft: with `mail.enabled: false` the auth mail silently skips. But `requireEmailVerification` does **not** follow that switch — it is an explicit security control (`auth.requireEmailVerification`), because letting an unconfigured mail provider silently permit unverified registration would let anyone claim an address they do not own. It ships `false` so the mail-less template works out of the box; **set it to `true` when you turn mail on.** The contradictory combination (verification required, mail not configured) is reported by `getServiceStatuses()` and fails `pnpm check:env:prod`. See [Authentication](./auth).
 
 ## Per-module docs
 
@@ -43,6 +62,7 @@ The response carries only a stable error code — never the missing field or a c
 | Payment | [Payment](./payment) |
 | Notifications | [Notifications](./notifications) |
 | Analytics | [Analytics](./analytics) |
+| Authentication | [Authentication](./auth) |
 
 ## Config status diagnostics
 

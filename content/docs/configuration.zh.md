@@ -79,6 +79,8 @@ export const websiteConfig = createWebsiteConfig(publicEnv)
 | `notification.enabled` | `boolean` | `false` | Discord 或飞书 Webhook |
 | `analytics.enabled` | `boolean` | `false` | 见[分析](./integrations#分析) |
 | `analytics.providers` | `AnalyticsName[]` | `[]` | 每个选中 provider 的 ID |
+| `auth.enabled` | `boolean` | `true` | 见[身份认证](./auth) |
+| `auth.requireEmailVerification` | `boolean` | `false` | 安全控制，见[身份认证](./auth)。**不**跟随 `mail.enabled`。接上邮件后应改为 `true` |
 
 ## 社交媒体
 
@@ -133,6 +135,7 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
     payment: { enabled: false, provider: 'stripe', allowedPriceIds: [] },
     notification: { enabled: false },
     analytics: { enabled: false, providers: [] },
+    auth: { enabled: true, requireEmailVerification: false },
     social: {},
     features: {
       enableI18n: true,

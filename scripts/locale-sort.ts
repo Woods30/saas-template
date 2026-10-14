@@ -2,10 +2,14 @@
  * 把 `messages/*.json` 的键按字典序重排，保留 `$schema` 等所有字段。
  *
  * 排序后的文件按 2 空格缩进、结尾换行输出，与仓库其余 JSON 风格一致。
+ *
+ * 以 `LOCALES` 为基准：缺少某个受支持语言的消息文件、或存在不受支持语言的残留文件，
+ * 都直接失败而不是静默跳过——否则新增语言后 `locale:sort` 会「成功」却漏掉新文件。
  */
 
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { LOCALES } from '../src/lib/locale'
 
 const MESSAGES_DIR = 'messages'
 
@@ -20,15 +24,15 @@ function sortRecord(record: Record<string, unknown>): Record<string, unknown> {
 }
 
 function main(): void {
-  const files = readdirSync(MESSAGES_DIR)
-    .filter((file) => file.endsWith('.json'))
-    .sort()
-
-  if (files.length === 0) {
-    throw new Error(`未在 ${MESSAGES_DIR}/ 找到任何 .json 消息文件`)
+  const expected = LOCALES.map((locale) => `${locale}.json`).sort()
+  const missing = expected.filter((file) => !existsSync(join(MESSAGES_DIR, file)))
+  if (missing.length > 0) {
+    throw new Error(
+      `未在 ${MESSAGES_DIR}/ 找到受支持语言的消息文件：${missing.join(', ')}（请先创建再排序）`,
+    )
   }
 
-  for (const file of files) {
+  for (const file of expected) {
     const path = join(MESSAGES_DIR, file)
     const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {

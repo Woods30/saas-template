@@ -3,7 +3,7 @@ import { allBlogs, allDocs } from 'content-collections'
 import type { WebsiteConfig } from '@/config/website'
 import { websiteConfig } from '@/config/website'
 import { contentSlug } from '@/lib/content-locale'
-import { LOCALES, type Locale } from '@/lib/locale'
+import { LOCALES, type Locale, parseLocale } from '@/lib/locale'
 
 /** 单条 sitemap 记录：绝对 loc 与同页其他语言的 alternate 链接。 */
 export interface SitemapEntry {
@@ -83,10 +83,14 @@ export function getSitemapPaths(
       const key = keyOf(post)
       const alternates = source.blogs
         .filter((b) => b.locale !== locale && b.published && keyOf(b) === key)
-        .map((b) => ({
-          hreflang: b.locale as Locale,
-          href: buildUrl(baseUrl, b.locale as Locale, `/marketing/blog/${b._meta.path}`),
-        }))
+        .flatMap((b) => {
+          // 内容的 `locale` 经 schema 校验，但仍显式解析一次：sitemap 输出的 hreflang
+          // 必须是合法语言标签，未支持的取值宁可跳过也不要写进 sitemap 污染索引。
+          const alt = parseLocale(b.locale)
+          return alt
+            ? [{ hreflang: alt, href: buildUrl(baseUrl, alt, `/marketing/blog/${b._meta.path}`) }]
+            : []
+        })
       entries.push({
         loc: buildUrl(baseUrl, locale, `/marketing/blog/${slug}`),
         alternates,
@@ -101,10 +105,10 @@ export function getSitemapPaths(
       const slug = slugOf(doc)
       const alternates = source.docs
         .filter((d) => d.locale !== locale && slugOf(d) === slug)
-        .map((d) => ({
-          hreflang: d.locale as Locale,
-          href: buildUrl(baseUrl, d.locale as Locale, `/docs/${slug}`),
-        }))
+        .flatMap((d) => {
+          const alt = parseLocale(d.locale)
+          return alt ? [{ hreflang: alt, href: buildUrl(baseUrl, alt, `/docs/${slug}`) }] : []
+        })
       entries.push({ loc: buildUrl(baseUrl, locale, `/docs/${slug}`), alternates })
     }
   }

@@ -1,33 +1,22 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { AuthLayout } from '@/components/auth/AuthLayout'
+import { assertPageEnabled } from '@/lib/module-access'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/auth/error')({
+  beforeLoad: () => assertPageEnabled('auth'),
   component: AuthErrorPage,
 })
 
 function AuthErrorPage() {
   return (
-    <main className="mx-auto max-w-md p-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>{m.auth_error_title()}</CardTitle>
-          <CardDescription>{m.auth_error_back()}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            {typeof m.auth_error_message === 'function'
-              ? m.auth_error_message()
-              : m.auth_error_message}
-          </p>
-          <Link
-            to="/{-$locale}/auth/login"
-            className="mt-4 block text-center text-sm text-muted-foreground underline"
-          >
-            {m.auth_error_back()}
-          </Link>
-        </CardContent>
-      </Card>
-    </main>
+    <AuthLayout title={m.auth_error_title()} description={m.auth_error_message()}>
+      <Link
+        to="/{-$locale}/auth/login"
+        className="block text-center text-sm text-muted-foreground underline hover:text-foreground"
+      >
+        {m.auth_error_back()}
+      </Link>
+    </AuthLayout>
   )
 }

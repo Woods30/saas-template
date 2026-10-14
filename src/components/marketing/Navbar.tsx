@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher'
 import { MenuItems } from '@/components/layout/MenuItems'
 import { MenuLink } from '@/components/layout/MenuLink'
+import { UserMenu } from '@/components/layout/UserMenu'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { getNavbarActions, getNavbarLinks } from '@/config/navbar-config'
 import { websiteConfig } from '@/config/website'
@@ -20,7 +21,8 @@ export function Navbar() {
   const menuTrigger = useRef<HTMLButtonElement>(null)
   const headerRef = useRef<HTMLElement>(null)
 
-  // 访客上下文：站点导航不读取会话状态，避免伪造登录信息。
+  // 站点导航项按「访客」上下文过滤：登录后哪些项该出现，由 `UserMenu` 单独呈现，
+  // 导航本身不按会话切换结构，避免同一 URL 的 DOM 随会话抖动。
   const links = getNavbarLinks(locale, { config: websiteConfig, authenticated: false })
   const actions = getNavbarActions(locale, websiteConfig)
 
@@ -75,10 +77,15 @@ export function Navbar() {
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <ThemeToggle />
           <LocaleSwitcher value={locale} />
-          <MenuLink
-            item={actions.login}
-            className={`${navigationLinkClass} hidden lg:block`}
-            onClick={closeMenus}
+          {/* 会话感知账号区：未登录时是「登录」入口，已登录时换成账号 + 登出。 */}
+          <UserMenu
+            guestFallback={
+              <MenuLink
+                item={actions.login}
+                className={`${navigationLinkClass} hidden lg:block`}
+                onClick={closeMenus}
+              />
+            }
           />
           <MenuLink
             item={actions.primary}
@@ -113,7 +120,12 @@ export function Navbar() {
             linkClassName={navigationLinkClass}
             onNavigate={closeMenus}
           />
-          <MenuLink item={actions.login} className={navigationLinkClass} onClick={closeMenus} />
+          {/* 移动面板里的账号区：与桌面同源，避免两处各写一份会话判断。 */}
+          <UserMenu
+            guestFallback={
+              <MenuLink item={actions.login} className={navigationLinkClass} onClick={closeMenus} />
+            }
+          />
           <MenuLink
             item={actions.primary}
             className="mt-2 inline-flex items-center justify-between rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"

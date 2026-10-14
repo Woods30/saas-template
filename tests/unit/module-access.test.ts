@@ -53,8 +53,16 @@ vi.mock('@/lib/server-context', () => ({
   als: { getStore: () => mocks.getServerContext() },
 }))
 
+// auth 页面的 `beforeLoad` 会调用 `fetchAuthProviderAvailability`（一个 server function）。
+// server function 需要 TanStack Start 的请求上下文，测试环境没有，调用会抛无关错误并
+// 遮住真正要断言的门禁。这里把它替换为固定值，让门禁成为唯一被测对象。
+vi.mock('@/auth/providers', () => ({
+  getAuthProviderAvailability: () => ({ google: false }),
+  fetchAuthProviderAvailability: async () => ({ google: false }),
+}))
+
 import { notFound } from '@tanstack/react-router'
-import { createWebsiteConfig, type WebsiteConfig } from '@/config/website'
+import { createWebsiteConfig, type WebsiteConfig, websiteConfig } from '@/config/website'
 import { type PublicEnv, parsePublicEnv } from '@/env/public'
 import type { ServerEnv } from '@/env/server'
 import { parseServerEnv } from '@/env/server'
@@ -94,6 +102,40 @@ function expectNotFound(fn: () => unknown): void {
   throw new Error('期望抛出 notFound()，但未抛出')
 }
 
+/** 同 {@link expectNotFound}，但接受 async 的 `beforeLoad`。 */
+async function expectNotFoundAsync(fn: () => unknown): Promise<void> {
+  try {
+    await fn()
+  } catch (error) {
+    expect((error as { isNotFound?: boolean }).isNotFound).toBe(true)
+    return
+  }
+  throw new Error('期望抛出 notFound()，但未抛出')
+}
+
+/**
+ * 取全部 auth 页面路由的 `beforeLoad`。
+ *
+ * 开关通过**直接改写 `websiteConfig.auth` 单例**切换（与 `navigation.test.tsx` 同一做法）：
+ * `assertPageEnabled` 在**调用时**读 `config[module].enabled`，因此无需重载模块图。
+ * 路由模块在 import 时就把 `websiteConfig` 绑定进闭包，用 `doMock` 替换模块导出对已
+ * 导入的路由无效——这也是此前「关闭开关后页面照旧放行」的原因。
+ */
+async function importAuthRoutes(): Promise<Array<() => unknown>> {
+  const modules = await Promise.all([
+    import('@/routes/{-$locale}/auth/login'),
+    import('@/routes/{-$locale}/auth/register'),
+    import('@/routes/{-$locale}/auth/forgot-password'),
+    import('@/routes/{-$locale}/auth/reset-password'),
+    import('@/routes/{-$locale}/auth/verify-email'),
+    import('@/routes/{-$locale}/auth/error'),
+  ])
+  return modules.map(
+    (mod) =>
+      (mod.Route as { options: { beforeLoad: () => unknown } }).options.beforeLoad as () => unknown,
+  )
+}
+
 // ---------------------------------------------------------------------------
 // assertPageEnabled — 页面开关
 // ---------------------------------------------------------------------------
@@ -120,6 +162,16 @@ describe('assertPageEnabled', () => {
     expect(() => assertPageEnabled('docs', makeConfig())).not.toThrow()
     expect(() => assertPageEnabled('blog', makeConfig())).not.toThrow()
     expect(() => assertPageEnabled('changelog', makeConfig())).not.toThrow()
+  })
+
+  it('auth 默认开启时不抛，关闭时抛 notFound', () => {
+    expect(() => assertPageEnabled('auth', makeConfig())).not.toThrow()
+    expectNotFound(() =>
+      assertPageEnabled(
+        'auth',
+        makeConfig({ auth: { enabled: false, requireEmailVerification: true } }),
+      ),
+    )
   })
 
   it('抛出的错误是 notFound 标记', () => {
@@ -418,6 +470,27 @@ describe('页面路由门禁接线', () => {
     const beforeLoad = docs.options.beforeLoad as () => unknown
     expect(() => beforeLoad()).not.toThrow()
   })
+
+  it('auth 页面默认开启时 beforeLoad 不抛 notFound', async () => {
+    const modules = await importAuthRoutes()
+    for (const beforeLoad of modules) {
+      // `beforeLoad` 可能是同步（`() => assertPageEnabled(...)`）也可能是异步
+      // （login / register 额外取社交登录可见性），统一 await 后断言不抛。
+      await expect(Promise.resolve().then(beforeLoad)).resolves.not.toThrow()
+    }
+  })
+
+  it('auth 关闭时每个 auth 页面 beforeLoad 都抛 notFound', async () => {
+    const modules = await importAuthRoutes()
+    websiteConfig.auth.enabled = false
+    try {
+      for (const beforeLoad of modules) {
+        await expectNotFoundAsync(beforeLoad)
+      }
+    } finally {
+      websiteConfig.auth.enabled = true
+    }
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -545,6 +618,25 @@ describe('API handler 门禁（默认服务全关）', () => {
     expect(read).not.toHaveBeenCalled()
     expect(mocks.getAuth).not.toHaveBeenCalled()
     expect(mocks.sendMail).not.toHaveBeenCalled()
+  })
+
+  it('auth 关闭时 /api/auth/* 返回 404，且不调用 getAuth', async () => {
+    const mod = (await importRouteWithConfig(
+      { auth: { enabled: false, requireEmailVerification: true } },
+      {},
+      '@/routes/api/auth/$',
+    )) as { Route: unknown }
+    const handler = getHandler(mod.Route, 'POST')
+    const request = new Request('https://jerbix.dev/api/auth/sign-in/email', {
+      method: 'POST',
+      body: '{}',
+    })
+    const read = vi.spyOn(request, 'json')
+    const res = await handler({ request })
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: 'MODULE_DISABLED' })
+    expect(read).not.toHaveBeenCalled()
+    expect(mocks.getAuth).not.toHaveBeenCalled()
   })
 })
 

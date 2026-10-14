@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { getAuth } from '@/auth/auth'
+import { type Locale, localeSchema } from '@/config/locale'
 import { websiteConfig } from '@/config/website'
 import { createDb, schema } from '@/db'
 import { getModuleUnavailableResponse } from '@/lib/module-access.server'
@@ -14,7 +15,7 @@ const checkoutBodySchema = z.object({
   successUrl: z.string(),
   cancelUrl: z.string(),
   mode: z.enum(['subscription', 'payment']),
-  locale: z.enum(['zh', 'en']).optional(),
+  locale: localeSchema.optional(),
 })
 
 const portalBodySchema = z.object({
@@ -30,7 +31,7 @@ export async function createCheckoutSession(params: {
   successUrl: string
   cancelUrl: string
   mode: 'subscription' | 'payment'
-  locale?: 'zh' | 'en'
+  locale?: Locale
   userId: string
   customerEmail: string
 }): Promise<{ url: string; sessionId: string }> {

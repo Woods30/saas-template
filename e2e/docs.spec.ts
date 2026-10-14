@@ -1,4 +1,9 @@
+import { readdirSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
+
+const docsDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'content', 'docs')
 
 /**
  * E2E: 文档站（docs）
@@ -71,7 +76,13 @@ test.describe('Docs', () => {
     await expect(sidebar.locator('section h2')).toHaveText(['开始', '配置', '功能模块'])
     // 组标题不可点击，只有文档条目是链接。
     await expect(sidebar.locator('h2 a')).toHaveCount(0)
-    await expect(sidebar.locator('a')).toHaveCount(10)
+    // 条数从 `content/docs/` 的译文文件数派生：新增一篇文档不必回来改断言，
+    // 但「侧边栏漏掉某篇」仍会被抓到（这正是本用例要防的）。
+    await expect(sidebar.locator('a')).toHaveCount(
+      readdirSync(docsDir).filter((f) => f.endsWith('.zh.md')).length,
+    )
+    // 身份认证是新增条目，确认它真的进了侧边栏。
+    await expect(sidebar.getByRole('link', { name: '身份认证' })).toBeVisible()
   })
 
   test('右侧「本页目录」列出锚点且可跳转', async ({ page }) => {

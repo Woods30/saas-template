@@ -1,3 +1,4 @@
+import { defaultLocale } from '@/config/locale'
 import { websiteConfig } from '@/config/website'
 import { sendMail } from '@/mail'
 import { notify } from '@/notification'
@@ -17,7 +18,8 @@ export async function deliverContactNotification(input: ContactInput): Promise<v
   const mailResult = await sendMail(websiteConfig.mail.provider, {
     to: supportEmail,
     template: 'contactMessage',
-    locale: 'zh',
+    // 收件人是站长（站点配置里的 supportEmail），语言固定为默认语言，不随访客语言变化。
+    locale: defaultLocale,
     context: {
       fromName: input.name,
       fromEmail: input.fromEmail,

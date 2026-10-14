@@ -55,6 +55,8 @@ Vitest + Playwright。
 - **模块门禁**：`src/lib/module-access.ts`（页面，`beforeLoad` 抛 `notFound()`）、
   `src/lib/module-access.server.ts`（API，关闭 → `404 MODULE_DISABLED`，配置不全 →
   `503 SERVICE_UNAVAILABLE`）。门禁必须早于 body 解析、鉴权、限流与 provider 调用。
+- **认证**：`src/auth/auth.ts` 的 `getAuth(env)` 每请求可重入；社交登录可见性经
+  `src/auth/providers.ts` 的 server function 判定（服务端 secret 不得进客户端 bundle）。
 
 ## 关键不变量
 
@@ -72,6 +74,9 @@ Vitest + Playwright。
    `.content-collections/generated/**` 均不得手工编辑。
 6. **Workers 运行时**：非 Node.js，含 native binding 的包不可用（见
    `docs/adr/0001-why-cloudflare-workers.md`）。
+7. **`src/components/ui` 只放上游原件**：该目录下的文件是 shadcn registry 的原样拷贝，
+   **一律不本地修改**，以便直接跟随上游更新。需要调整外观时在调用处传 `className`，
+   或用组合件包一层，不要改原件本身。
 
 ## 项目规约
 
@@ -83,6 +88,25 @@ Vitest + Playwright。
 - 中文与半角英数字、符号之间添加一个半角空格，例如：`使用 `pnpm` 安装依赖`。
 - 标点符号使用标准中文全角标点。
 - API、CLI、配置项等机器可读字段的键名仍使用英文，仅其说明文字使用中文。
+
+### UI 组件
+
+**硬规则：先找现成组件，找不到才自己写。**
+
+- 编写任何页面前，先确认 shadcn / Base UI 是否已有对应组件；**有就直接用**，仅在确实
+  没有可用组件时才手写。
+- 本仓是 shadcn 的 **Base UI** 风格工程（`components.json` 的 `style: base-nova`、
+  `iconLibrary: tabler`）。新增组件用 CLI 安装，不要手抄源码：
+
+  ```bash
+  pnpm dlx shadcn@latest add <component> -y
+  ```
+
+- 组件装入 `src/components/ui/`，视为上游原件，**不本地修改**（见「关键不变量」第 7 条）。
+- 破坏性操作确认用 `AlertDialog`，不要用 `window.confirm`；空态用 `Empty` / `Spinner`；
+  状态标记用 `Badge`——不要手写等价物。
+- 表单统一用 **TanStack Form + Zod `validators` + `Field` 组合件**，见
+  `content/docs/forms.zh.md`。
 
 ### 变更纪律
 
@@ -105,6 +129,8 @@ schema / 迁移变更、生产环境与部署设置变更。
 | 网站配置全字段 | `content/docs/configuration.zh.md` |
 | 导航 / 页脚 / 社交菜单 | `content/docs/navigation.zh.md` |
 | 邮件 / 订阅 / 支付 / 通知 / 分析 | `content/docs/integrations.zh.md` 及各模块单页 |
+| 身份认证与个人中心 | `content/docs/auth.zh.md`、`content/docs/auth-account.zh.md` |
+| 表单约定（TanStack Form） | `content/docs/forms.zh.md` |
 | 环境变量与两层校验 | `content/docs/environment.zh.md` |
 | 术语表与不变量清单 | `CONTEXT.md` |
 | 架构与路由表 | `docs/architecture.md` |

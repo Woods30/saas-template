@@ -1,9 +1,11 @@
-export type EmailTemplate = 'verifyEmail' | 'forgotPassword' | 'contactMessage'
+import type { Locale } from '@/config/locale'
+
+export type EmailTemplate = 'verifyEmail' | 'forgotPassword' | 'contactMessage' | 'welcome'
 
 export interface SendTemplateParams {
   to: string
   template: EmailTemplate
-  locale: 'zh' | 'en'
+  locale: Locale
   context: Record<string, unknown>
   fromAddress?: string
 }

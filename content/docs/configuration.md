@@ -79,6 +79,8 @@ The six service modules are **off** by default. Fill in the required config befo
 | `notification.enabled` | `boolean` | `false` | A Discord or Feishu webhook |
 | `analytics.enabled` | `boolean` | `false` | See [Analytics](./integrations#analytics) |
 | `analytics.providers` | `AnalyticsName[]` | `[]` | The ID for each selected provider |
+| `auth.enabled` | `boolean` | `true` | See [Authentication](./auth) |
+| `auth.requireEmailVerification` | `boolean` | `false` | Security control; see [Authentication](./auth). Does **not** follow `mail.enabled`. Set to `true` once mail is configured |
 
 ## Social media
 
@@ -133,6 +135,7 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
     payment: { enabled: false, provider: 'stripe', allowedPriceIds: [] },
     notification: { enabled: false },
     analytics: { enabled: false, providers: [] },
+    auth: { enabled: true, requireEmailVerification: false },
     social: {},
     features: {
       enableI18n: true,

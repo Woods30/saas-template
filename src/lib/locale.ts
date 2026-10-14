@@ -3,32 +3,36 @@
  *
  * 解析顺序为 cookie → Accept-Language → 默认语言，任何一步出现未知或畸形取值
  * 都安全回退到下一优先级，不抛异常。
+ *
+ * 受支持语言的**清单与元数据**不在这里，而在 `src/config/locale.ts`（单一事实
+ * 来源）；本模块只负责「怎么解析」。两者分开后，本文件不必随新增语言改动，
+ * 而需要知道有哪些语言的地方一律从配置取。
  */
 
-export const LOCALES = ['zh', 'en'] as const
+import {
+  defaultLocale,
+  isLocale,
+  LOCALE_COOKIE_NAME,
+  type Locale,
+  parseLocale,
+} from '@/config/locale'
+import { getLocale } from '@/locale/paraglide/runtime.js'
 
-export type Locale = (typeof LOCALES)[number]
-
-export const defaultLocale: Locale = 'zh'
-
-export const LOCALE_COOKIE_NAME = 'NEXT_LOCALE'
-
-export const localeConfig = {
-  zh: { name: '中文', hreflang: 'zh-CN' },
-  en: { name: 'English', hreflang: 'en' },
-} as const satisfies Record<Locale, { name: string; hreflang: string }>
-
-/** HTML `lang` 属性取值，例如 `zh-CN`。 */
-export function htmlLang(locale: Locale): string {
-  return localeConfig[locale].hreflang
-}
-
-/** 把任意字符串归一化为受支持的 locale；未知或缺失返回 `undefined`。 */
-export function parseLocale(value: string | undefined): Locale | undefined {
-  if (typeof value !== 'string') return undefined
-  const normalized = value.trim().toLowerCase()
-  return LOCALES.find((locale) => locale === normalized)
-}
+// 重新导出配置符号：既有调用方（含 40+ 条 `tests/unit/locale.test.ts` 用例）都从
+// 本模块导入，保持这一入口可以避免无谓的调用点改动。真正的事实来源仍是配置模块。
+export {
+  defaultLocale,
+  htmlLang,
+  isLocale,
+  LOCALE_COOKIE_NAME,
+  LOCALE_OPTIONS,
+  LOCALES,
+  type Locale,
+  type LocaleOption,
+  localeConfig,
+  localeSchema,
+  parseLocale,
+} from '@/config/locale'
 
 /**
  * 从 `Cookie` 头中按名取出 cookie 原始值（**不做**百分号解码）。
@@ -121,6 +125,21 @@ export function resolveLocale(request: Request): Locale {
     parseAcceptLanguage(request.headers.get('accept-language')) ??
     defaultLocale
   )
+}
+
+/**
+ * 当前请求的语言，已校验为受支持的 {@link Locale}。
+ *
+ * Paraglide 的 `getLocale()` 声明为返回 `Locale`，但它的实现读 cookie / `Accept-Language`
+ * 这类**用户可控**输入，实际可能给出未支持的值。此前调用方一律用 `getLocale() as Locale`
+ * 强转把风险掩盖掉——类型看着对，运行期却可能拿到 `'fr'`。
+ *
+ * 这里做一次显式校验并回退默认语言：调用方不必再写断言，也不会把非法值传进
+ * `docsForLocale` 这类按语言查找的地方（那会静默返回空列表）。
+ */
+export function getRequestLocale(): Locale {
+  const raw: unknown = getLocale()
+  return isLocale(raw) ? raw : defaultLocale
 }
 
 /**

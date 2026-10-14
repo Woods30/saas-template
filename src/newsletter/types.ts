@@ -1,6 +1,8 @@
+import type { Locale } from '@/config/locale'
+
 export interface SubscribeNewsletterParams {
   email: string
-  locale?: 'zh' | 'en'
+  locale?: Locale
 }
 
 export interface UnsubscribeNewsletterParams {

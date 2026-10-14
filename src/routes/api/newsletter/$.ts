@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
 import { websiteConfig } from '@/config/website'
 import { getModuleUnavailableResponse } from '@/lib/module-access.server'
-import { checkRateLimit, subscribe, unsubscribe } from '@/newsletter'
+import { checkRateLimit, checkStatus, subscribe, unsubscribe } from '@/newsletter'
 
 const subscribeBodySchema = z.object({
   email: z.string().min(3).max(320),
@@ -30,9 +30,40 @@ function jsonOk() {
   })
 }
 
+function json(body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
 export const Route = createFileRoute('/api/newsletter/$')({
   server: {
     handlers: {
+      /**
+       * 查询订阅状态。个人中心的「通知偏好」用它回填开关初值。
+       *
+       * 状态查询是幂等的读，不加限流（写操作才需要），但仍受模块门禁约束。
+       * provider 查询失败时返回 `subscribed: false` 而不是错误——开关显示为「未订阅」
+       * 是安全的一侧，用户重试即会再次查询。
+       */
+      GET: async ({ request }) => {
+        const unavailable = getModuleUnavailableResponse('newsletter')
+        if (unavailable) return unavailable
+
+        const email = new URL(request.url).searchParams.get('email') ?? ''
+        if (!email) return json({ subscribed: false })
+
+        try {
+          const subscribed = await checkStatus(websiteConfig.newsletter.provider, { email })
+          return json({ subscribed })
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          console.warn(`[newsletter] status check failed: ${msg.split('\n')[0]}`)
+          return json({ subscribed: false })
+        }
+      },
+
       POST: async ({ request }) => {
         // 门禁先于 body 解析、限流与 provider 调用。
         const unavailable = getModuleUnavailableResponse('newsletter')

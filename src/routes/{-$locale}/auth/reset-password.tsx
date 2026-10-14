@@ -1,67 +1,56 @@
+import { useForm } from '@tanstack/react-form'
 import { createFileRoute, Link, Navigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { authClient } from '@/auth/client'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { createResetSchema, MIN_PASSWORD_LENGTH } from '@/auth/validation'
+import { AuthFormField } from '@/components/auth/AuthFormField'
+import { AuthLayout } from '@/components/auth/AuthLayout'
+import { authFormMessages } from '@/components/auth/formMessages'
+import { SubmitButton } from '@/components/auth/SubmitButton'
+import { assertPageEnabled } from '@/lib/module-access'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/auth/reset-password')({
+  beforeLoad: () => assertPageEnabled('auth'),
   component: ResetPasswordPage,
 })
 
 function ResetPasswordPage() {
-  const [error, setError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
+  // `done` / `missingToken` 表达页面去向，`serverError` 是页面级提示——都不是字段状态。
+  const [serverError, setServerError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
   const [missingToken, setMissingToken] = useState(false)
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setError(null)
-    setSubmitting(true)
-    const form = new FormData(e.currentTarget)
-    const params = new URLSearchParams(window.location.search)
-    const token = params.get('token')
-    if (!token) {
-      setMissingToken(true)
-      return
-    }
-    const { error: authError } = await authClient.resetPassword({
-      newPassword: String(form.get('password') ?? ''),
-      token,
-    })
-    setSubmitting(false)
-    if (authError) {
-      setError(authError.message?.split('\n')[0] ?? '重置失败')
-      return
-    }
-    setDone(true)
-  }
+  const form = useForm({
+    defaultValues: { password: '' },
+    validators: { onSubmit: createResetSchema(authFormMessages()) },
+    onSubmit: async ({ value }) => {
+      setServerError(null)
+      const token = new URLSearchParams(window.location.search).get('token')
+      if (!token) {
+        setMissingToken(true)
+        return
+      }
+      const { error } = await authClient.resetPassword({ newPassword: value.password, token })
+      if (error) {
+        setServerError(error.message?.split('\n')[0] ?? m.auth_error_generic())
+        return
+      }
+      setDone(true)
+    },
+  })
 
   if (done) {
     return (
-      <main className="mx-auto max-w-md p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>{m.auth_reset_title()}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              {typeof m.auth_reset_success === 'function'
-                ? m.auth_reset_success()
-                : '密码已重置，请登录。'}
-            </p>
-            <Link
-              to="/{-$locale}/auth/login"
-              className="mt-4 block text-center text-sm text-muted-foreground underline"
-            >
-              {m.auth_forgot_to_login()}
-            </Link>
-          </CardContent>
-        </Card>
-      </main>
+      <AuthLayout title={m.auth_reset_title()}>
+        <p className="text-sm text-muted-foreground">{m.auth_reset_success()}</p>
+        <Link
+          to="/{-$locale}/auth/login"
+          className="mt-4 block text-center text-sm text-muted-foreground underline hover:text-foreground"
+        >
+          {m.auth_forgot_to_login()}
+        </Link>
+      </AuthLayout>
     )
   }
 
@@ -70,32 +59,38 @@ function ResetPasswordPage() {
   }
 
   return (
-    <main className="mx-auto max-w-md p-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>{m.auth_reset_title()}</CardTitle>
-          <CardDescription>{m.auth_forgot_to_login()}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="space-y-1">
-              <Label htmlFor="password">{m.auth_reset_password_label()}</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                required
-                autoComplete="new-password"
-                minLength={8}
-              />
-            </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <Button type="submit" disabled={submitting} className="w-full">
-              {submitting ? '…' : m.auth_reset_submit()}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </main>
+    <AuthLayout title={m.auth_reset_title()} description={m.auth_forgot_to_login()}>
+      {/* `noValidate` 见 `login.tsx` 的说明：原生约束校验会拦下 submit，让 schema 校验永远不跑。 */}
+      <form
+        noValidate
+        className="space-y-4"
+        onSubmit={(e: React.SubmitEvent<HTMLFormElement>) => {
+          e.preventDefault()
+          void form.handleSubmit()
+        }}
+      >
+        <form.Field name="password">
+          {(field) => (
+            <AuthFormField
+              field={field}
+              label={m.auth_reset_password_label()}
+              type="password"
+              autoComplete="new-password"
+              minLength={MIN_PASSWORD_LENGTH}
+            />
+          )}
+        </form.Field>
+        {serverError && (
+          <p role="alert" className="text-sm text-destructive">
+            {serverError}
+          </p>
+        )}
+        <form.Subscribe selector={(state) => state.isSubmitting}>
+          {(isSubmitting) => (
+            <SubmitButton pending={isSubmitting}>{m.auth_reset_submit()}</SubmitButton>
+          )}
+        </form.Subscribe>
+      </form>
+    </AuthLayout>
   )
 }

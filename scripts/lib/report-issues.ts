@@ -46,7 +46,9 @@ export function formatServiceDiagnostics(
     lines.push(`${name}: ${label}`)
     if (status.state === 'incomplete') hasIncomplete = true
     for (const issue of status.issues) {
-      const scope = issue.manual ? '部署核对' : '缺失'
+      // 「缺失」只适用于字段未提供；配置矛盾（如要求邮箱验证却没配邮件）里字段是存在的，
+      // 标成「缺失」会让运维去找一个其实已经填了的字段。
+      const scope = issue.manual ? '部署核对' : issue.conflict ? '冲突' : '缺失'
       lines.push(`  - [${scope}] ${issue.key}（${issue.location}）：${issue.reason}`)
     }
   }

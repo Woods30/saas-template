@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   compareMessageKeys,
   defaultLocale,
+  getRequestLocale,
   LOCALE_COOKIE_NAME,
   parseAcceptLanguage,
   parseLocale,
@@ -9,10 +10,30 @@ import {
   readLocaleCookie,
   resolveLocale,
 } from '@/lib/locale'
+import { overwriteGetLocale } from '@/locale/paraglide/runtime.js'
 
 function requestWith(headers: Record<string, string>): Request {
   return new Request('http://localhost/', { headers })
 }
+
+describe('getRequestLocale', () => {
+  afterEach(() => {
+    // `overwriteGetLocale` 改的是模块级实现，必须复位，否则污染同文件后续用例。
+    overwriteGetLocale(() => 'zh')
+  })
+
+  it('返回受支持的语言', () => {
+    overwriteGetLocale(() => 'en')
+    expect(getRequestLocale()).toBe('en')
+  })
+
+  it('对 Paraglide 给出的未支持语言回退默认语言，而不是原样透传', () => {
+    // `getLocale()` 读 cookie / Accept-Language，属用户可控输入，可能给出 'fr'。
+    // 此前调用方一律 `as Locale` 强转，把非法值一路带进 `docsForLocale`（静默返回空）。
+    overwriteGetLocale(() => 'fr' as never)
+    expect(getRequestLocale()).toBe(defaultLocale)
+  })
+})
 
 describe('parseLocale', () => {
   it('识别受支持的语言并归一化大小写', () => {

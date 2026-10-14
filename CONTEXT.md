@@ -26,6 +26,10 @@
   AsyncLocalStorage，业务代码经 `getServerContext()` 取用。
 - **SiteModule / ServiceModule**：`src/config/website.ts` 的联合类型。`SiteModule` 含
   `docs` / `blog` / `changelog` 与全部服务模块；`ServiceModule` 仅服务模块，供 API 门禁使用。
+  `auth` 也在 `ServiceModule` 内，但它**没有 provider 注册表**（接线由 Better Auth 自己持有），
+  因此只适用开关与门禁两步。它的必要配置只有一条**矛盾规则**：`auth.requireEmailVerification`
+  为 `true` 而 `mail` 未配置完整时，状态为 `incomplete`——要求验证却发不出验证邮件，等于
+  让新用户永远无法登录。这是该模块唯一会触发 503 的情形。
 - **模块门禁**：`assertPageEnabled`（页面，抛 `notFound()`）与 `getModuleUnavailableResponse`
   （API，404 `MODULE_DISABLED` / 503 `SERVICE_UNAVAILABLE`）。
 - **ServiceStatus**：`getServiceStatuses()` 的返回值，`disabled` / `incomplete` /
@@ -36,6 +40,15 @@
   语言无关 slug 的函数，是文档站与 legal 路由「切换语言不 404」的基础。
 - **ServerContext**：`src/lib/server-context.ts` 的每请求上下文，含归一化 env、CSP nonce、
   主题与四个 provider 注册表。
+- **fetchSession()**：`src/auth/session.ts` 的 server function，读当前请求会话并只返回页面
+  需要的字段。受保护路由在 `beforeLoad` 用它判会话；必须是 server function，因为会话
+  cookie 是 httpOnly 且 `getAuth` 需要每请求 env。
+- **受保护路由**：`src/routes/{-$locale}/_layout/settings.tsx` 确立的模式——pathless layout
+  的 `beforeLoad` 先 `assertPageEnabled('auth')`，再用 `fetchSession()` 判会话，未登录
+  `redirect` 到登录页并带上 locale 参数。
+- **AuthFormMessages**：`src/auth/validation.ts` 的校验文案契约。schema 工厂接收文案而非
+  自己调 `m.*()`，使校验逻辑不依赖 Paraglide 运行时、可脱离组件单测；页面用
+  `authFormMessages()` 求值。
 
 ## 关键不变量
 
@@ -61,8 +74,9 @@
 - **已完成**：基础设施（Sub-Plan A）、业务模块（B：认证 / 支付 / 存储 / 邮件 / Newsletter /
   通知 / D1）、营销页面与内容站（C：8 个营销 blocks + 文档站 / 博客 / 更新日志）、测试与
   部署（D：E2E / CI / CSP）、品牌化与 Landing 单页、网站源码配置与公共菜单（模块开关、
-  菜单契约、服务状态、配置文档）。
-- **尚未实现**：账户工作台（Sidebar / Avatar / 个人资料 / 账单 / 订阅设置）、管理后台、
+  菜单契约、服务状态、配置文档）、个人中心（`/{locale}/settings/*`：资料 / 安全 / 登录设备 /
+  通知偏好，含 `fetchSession` 守卫）与表单统一（TanStack Form + Zod + shadcn `Field`）。
+- **尚未实现**：账单与订阅设置（账户工作台仅完成资料 / 安全 / 设备 / 通知四块）、管理后台、
   文件上传、API 密钥、AI 网关、PWA。`websiteConfig.features` 中对应的开关是能力边界标记，
   不注册路由。
 - **Node 下限**：`package.json` 的 `engines.node` 为 `^22.12.0 || ^24.0.0 || >=26.0.0`（`vitest@5`

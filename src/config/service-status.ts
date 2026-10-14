@@ -16,6 +16,8 @@ export type ConfigIssue = {
   reason: string
   location: 'src/config/website.ts' | 'env' | 'Cloudflare binding'
   manual?: boolean
+  /** 配置矛盾（字段存在但取值互斥），而非字段缺失。仅影响诊断文案的分组标签。 */
+  conflict?: boolean
 }
 
 export type ServiceStatus = {
@@ -67,6 +69,9 @@ export function getServiceStatuses(input: {
     name: ServiceModule,
     requirements: Array<[string, boolean, ConfigIssue['location']]>,
     manualIssues: ConfigIssue[] = [],
+    // 与 manualIssues 不同：这些**计入** completeness 判定，用于表达配置矛盾
+    // （字段存在但取值互斥）这类无法用「某字段是否提供」描述的缺陷。
+    conflictIssues: ConfigIssue[] = [],
   ) => {
     const issues = config[name].enabled
       ? requirements
@@ -74,9 +79,13 @@ export function getServiceStatuses(input: {
           .map(([key, , location]) => ({ key, location, reason: REQUIRED_CONFIG_REASON }))
       : []
     result[name] = {
-      state: !config[name].enabled ? 'disabled' : issues.length ? 'incomplete' : 'configured',
+      state: !config[name].enabled
+        ? 'disabled'
+        : issues.length + conflictIssues.length
+          ? 'incomplete'
+          : 'configured',
       // manual 核对项仅用于部署提示，不参与 completeness 判定，故不进入 issues.length。
-      issues: config[name].enabled ? [...issues, ...manualIssues] : [],
+      issues: config[name].enabled ? [...issues, ...conflictIssues, ...manualIssues] : [],
     }
   }
 
@@ -170,6 +179,32 @@ export function getServiceStatuses(input: {
       ])
   }
   check('analytics', analytics)
+
+  // auth 没有「运行期必需」的 env：
+  // - `BETTER_AUTH_SECRET` 缺失时 better-auth 会退回自带的开发期密钥，本地开发照常可用；
+  //   生产环境的强制校验由 `check-env-prod`（`validateProdServerEnv`）在部署前完成，
+  //   若在这里也判为 incomplete，本地开发会被 503 挡住，得不偿失。
+  // - 邮件配置本身也不是字段级必需项：`auth.requireEmailVerification: false` 时无邮件照常工作。
+  //
+  // 但有一组组合是**死锁**：要求邮箱验证却发不出验证邮件，新用户注册后永远无法登录。
+  // 这是配置矛盾而非缺字段，因此单列一条带专属原因的诊断——沿用「缺少必要配置」会让
+  // 运维去找一个其实存在、只是开关没开的字段。
+  check(
+    'auth',
+    [],
+    [],
+    config.auth.requireEmailVerification && result.mail.state !== 'configured'
+      ? [
+          {
+            key: 'mail.enabled',
+            location: 'src/config/website.ts',
+            conflict: true,
+            reason:
+              '要求邮箱验证但邮件未配置完整，新用户将永远无法登录；请补齐邮件配置，或显式设置 auth.requireEmailVerification: false',
+          },
+        ]
+      : [],
+  )
 
   return result
 }
