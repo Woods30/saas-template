@@ -383,13 +383,14 @@ const mocks = vi.hoisted(() => ({
 - [ ] **Step 7: 运行受影响的测试**
 
 Run: `pnpm exec vitest run --config vitest.components.config.ts tests/components/user-menu.test.tsx`
-Expected: PASS，剩余 5 个用例全部通过。
+Expected: PASS，**6** passed（原 7 个用例，删掉被 mock 模块覆盖的「登出失败时不跳转」一条）。
 
 - [ ] **Step 8: 跑全量检查**
 
 Run: `pnpm check && pnpm test && pnpm exec vitest run --config vitest.components.config.ts`
-Expected: check 末尾 `✅ 所有 locale 键配对一致（base: zh）`；单测 601 passed；组件测试
-146 passed（单元 +1 来自 `auth-sign-out.test.ts`，组件侧用例数 −1）。
+Expected: check 末尾 `✅ 所有 locale 键配对一致（base: zh）`；单测 **602** passed
+（600 基线 + `auth-sign-out.test.ts` 2 条）；组件测试 **151** passed
+（146 基线 − 1 条删除的 user-menu 用例）。
 
 - [ ] **Step 9: 提交**
 
@@ -698,7 +699,7 @@ Expected: PASS，7 passed。
 - [ ] **Step 5: 跑全量检查**
 
 Run: `pnpm check && pnpm test && pnpm exec vitest run --config vitest.components.config.ts`
-Expected: 全部通过；组件测试 153 passed（146 + 7）。
+Expected: 全部通过；组件测试 **158** passed（151 + 7）。
 
 - [ ] **Step 6: 手动验证折叠交互（可选但建议）**
 
@@ -817,9 +818,9 @@ Create `tests/components/settings-user-card.test.tsx`：
 
 ```tsx
 import { render, screen, waitFor } from '@testing-library/react'
-import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SettingsUserCard } from '@/components/settings/SettingsUserCard'
+import { Sidebar, SidebarFooter, SidebarProvider } from '@/components/ui/sidebar'
 import type { SessionInfo } from '@/auth/session'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
@@ -831,6 +832,9 @@ import { setLocale } from '@/locale/paraglide/runtime.js'
  * - 展开菜单提供「退出登录」——这是个人中心内唯一的登出入口（`_layout` 路由不渲染营销导航栏）；
  * - 登出委托给 `signOutAndRedirect`，卡片自身不碰 `location`；
  * - 折叠成 icon 时只露头像，菜单仍可打开。
+ *
+ * 渲染必须包在 `SidebarProvider` 里：`SidebarMenuButton` 内部调 `useSidebar()`
+ * （见 `src/components/ui/sidebar.tsx`），在 Provider 外会直接抛错。
  */
 const mocks = vi.hoisted(() => ({
   signOutAndRedirect: vi.fn(),
@@ -839,6 +843,19 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/auth/sign-out', () => ({
   signOutAndRedirect: (...args: unknown[]) => mocks.signOutAndRedirect(...args),
 }))
+
+/** 渲染卡片；包 `SidebarProvider` 是因为 `SidebarMenuButton` 内部调 `useSidebar()`。 */
+function renderCard(session: SessionInfo) {
+  return render(
+    <SidebarProvider>
+      <Sidebar>
+        <SidebarFooter>
+          <SettingsUserCard session={session} />
+        </SidebarFooter>
+      </Sidebar>
+    </SidebarProvider>,
+  )
+}
 
 function sessionWith(overrides: Partial<SessionInfo['user']> = {}): SessionInfo {
   return {
@@ -871,31 +888,29 @@ function clearCookies() {
 
 describe('SettingsUserCard', () => {
   it('有 image 时渲染头像图片', () => {
-    render(
-      <SettingsUserCard session={sessionWith({ image: 'https://example.com/a.png' })} />,
-    )
+    renderCard(sessionWith({ image: 'https://example.com/a.png' }))
     expect(screen.getByRole('img')).toHaveAttribute('src', 'https://example.com/a.png')
   })
 
   it('无 image 时渲染 name 首字母作为 fallback', () => {
-    render(<SettingsUserCard session={sessionWith()} />)
+    renderCard(sessionWith())
     // Avatar 的 fallback 渲染首字母；没有 <img>。
     expect(document.querySelector('img')).toBeNull()
     expect(screen.getByText('w')).toBeInTheDocument()
   })
 
   it('name 为空时用邮箱首字母', () => {
-    render(<SettingsUserCard session={sessionWith({ name: '' })} />)
+    renderCard(sessionWith({ name: '' }))
     expect(screen.getByText('w')).toBeInTheDocument()
   })
 
   it('展示名字与邮箱', () => {
-    render(<SettingsUserCard session={sessionWith()} />)
+    renderCard(sessionWith())
     expect(screen.getByText('woods@example.com')).toBeInTheDocument()
   })
 
   it('展开菜单后提供退出登录，点击调用 signOutAndRedirect', async () => {
-    render(<SettingsUserCard session={sessionWith()} />)
+    renderCard(sessionWith())
     screen.getByRole('button', { name: /woods/ }).click()
     await waitFor(() => expect(screen.getByText('退出登录')).toBeInTheDocument())
     screen.getByText('退出登录').click()
@@ -907,7 +922,10 @@ describe('SettingsUserCard', () => {
 - [ ] **Step 2: 运行测试确认失败**
 
 Run: `pnpm exec vitest run --config vitest.components.config.ts tests/components/settings-user-card.test.tsx`
-Expected: FAIL，无法解析 `@/components/settings/SettingsUserCard`。
+Expected: FAIL，无法解析 `@/components/settings/SettingsUserCard`（模块尚不存在）。
+这也确认了测试文件的 import 与 `SidebarProvider` 包裹本身没有语法错误——若失败信息
+是 `useSidebar must be used within a SidebarProvider`，说明 Provider 包裹没写对，
+回到 Step 1 检查。
 
 - [ ] **Step 3: 写最小实现**
 
@@ -1126,7 +1144,7 @@ Expected: PASS，7 + 5 = 12 passed。
 - [ ] **Step 8: 跑全量检查**
 
 Run: `pnpm check && pnpm test && pnpm exec vitest run --config vitest.components.config.ts`
-Expected: 全部通过；组件测试 158 passed（153 + 5）。
+Expected: 全部通过；组件测试 **163** passed（158 + 5）。
 
 - [ ] **Step 9: 提交**
 
@@ -1607,7 +1625,7 @@ git commit -m "test: e2e 改从用户卡片登出，并覆盖顶栏折叠交互"
 
 - [ ] `pnpm check` 通过（locale 编译 + Biome + tsc + env 校验 + locale 配对）
 - [ ] `pnpm test` 通过（602 tests：600 基线 + `auth-sign-out` 2 条）
-- [ ] `pnpm exec vitest run --config vitest.components.config.ts` 通过（158 tests：146 基线 + 布局 7 + 卡片 5）
+- [ ] `pnpm exec vitest run --config vitest.components.config.ts` 通过（163 tests：146 基线 − user-menu 删除 1 + 布局 7 + 卡片 5）
 - [ ] `pnpm exec playwright test e2e/settings.spec.ts` 通过
 - [ ] Node 脚本核对 `.env.example` 与 schema 键集合：仅差 `VITE_UMAMI_ID` / `VITE_CLARITY_ID`
 - [ ] 手动走查 `/zh/settings/profile`：logo、面包屑、用户卡片、登出、折叠/展开均正常
