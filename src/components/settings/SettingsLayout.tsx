@@ -1,11 +1,21 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
+import { ThemeToggle } from '@/components/theme/ThemeToggle'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
+  SidebarHeader,
   SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
@@ -13,7 +23,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar'
-import { getSettingsSections } from '@/config/settings'
+import { getSettingsSectionMeta, getSettingsSections } from '@/config/settings'
 import { websiteConfig } from '@/config/website'
 import type { Locale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
@@ -28,6 +38,10 @@ import { m } from '@/locale/paraglide/messages.js'
  *
  * 与 `DocsLayout` 自建侧栏不同，这里不抽公共组件、也不改动 docs 的实现：docs 侧栏
  * 有它自己的 cookie 与折叠语义，两者强行合并只会互相牵制。
+ *
+ * 顶栏是「折叠按钮 + 三级面包屑 + 右上角主题切换」：页面标题由面包屑末级
+ * （`aria-current="page"`）承担，因此这里不再渲染 `<h1>`；回站点的出口在侧栏头的
+ * logo 上，因此也不需要单独的「返回站点」链接。
  */
 export function SettingsLayout({ locale, children }: { locale: Locale; children: ReactNode }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
@@ -35,10 +49,33 @@ export function SettingsLayout({ locale, children }: { locale: Locale; children:
     config: websiteConfig,
     authenticated: true,
   })
+  // 当前板块：取 `/settings/` 之后的一段，与侧栏高亮用的是同一个 pathname。
+  // 未注册的新板块（未来加了路由但工厂还没补）匹配不到，此时面包屑退化为两级，
+  // 不渲染一个空的末级。
+  const currentSection = pathname.split('/settings/')[1]?.split('/')[0]
+  const currentMeta = sections.find((item) => item.id === currentSection)
+    ? getSettingsSectionMeta(currentSection as Parameters<typeof getSettingsSectionMeta>[0])
+    : null
 
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon">
+        <SidebarHeader>
+          <Link
+            to="/{-$locale}"
+            params={{ locale }}
+            aria-label={websiteConfig.metadata.name}
+            className="flex items-center rounded-lg px-2 py-1 transition-opacity hover:opacity-80"
+          >
+            <img
+              src={websiteConfig.metadata.images.logoLight}
+              alt=""
+              width={1400}
+              height={380}
+              className="h-auto w-28 dark:bg-white"
+            />
+          </Link>
+        </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
             <SidebarGroupLabel>{m.settings_title()}</SidebarGroupLabel>
@@ -71,17 +108,42 @@ export function SettingsLayout({ locale, children }: { locale: Locale; children:
       </Sidebar>
       <SidebarInset>
         <header className="flex h-14 items-center gap-2 border-b border-border px-4">
+          {/* 折叠按钮：点击收起侧栏为图标窄条，再点展开。宽窄屏都常驻——
+              窄屏下侧栏是 Sheet 抽屉，同样需要它打开。 */}
           <SidebarTrigger />
-          <h1 className="text-sm font-medium">{m.settings_title()}</h1>
-          {/* 个人中心不渲染营销导航栏（`_layout` 路由与 docs 一致），
-              因此这里给出回站点的入口，避免页面成为死胡同。 */}
-          <Link
-            to="/{-$locale}"
-            params={{ locale }}
-            className="ml-auto text-sm text-muted-foreground underline hover:text-foreground"
-          >
-            {m.settings_back_home()}
-          </Link>
+          {/* 三级面包屑：末级带 aria-current="page"，即页面标题，
+              因此这里不再放 <h1>；回站点入口由侧栏头的 logo 承担，
+              因此也不放「返回站点」。 */}
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink render={<Link to="/{-$locale}" params={{ locale }} />}>
+                  {m.crumb_home()}
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbLink
+                  render={<Link to="/{-$locale}/settings/profile" params={{ locale }} />}
+                >
+                  {m.settings_title()}
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              {currentMeta && (
+                <>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>{currentMeta.title}</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </>
+              )}
+            </BreadcrumbList>
+          </Breadcrumb>
+          {/* 主题切换放顶栏右上角而非侧栏头：侧栏折叠后只剩约 3rem，
+              按钮会和 logo 抢位；这里与营销站 Navbar 的位置一致。 */}
+          <div className="ml-auto">
+            <ThemeToggle />
+          </div>
         </header>
         <div className="mx-auto w-full max-w-3xl px-4 py-6">{children}</div>
       </SidebarInset>
