@@ -7,6 +7,8 @@ export interface SessionInfo {
     name: string
     email: string
     emailVerified: boolean
+    /** OAuth 头像地址；邮箱密码注册用户为 `null`，UI 侧回退到首字母。 */
+    image: string | null
   }
 }
 
@@ -38,6 +40,7 @@ export const fetchSession = createServerFn({ method: 'GET' }).handler(
         name: session.user.name ?? '',
         email: session.user.email,
         emailVerified: session.user.emailVerified,
+        image: session.user.image ?? null,
       },
     }
   },
