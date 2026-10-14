@@ -301,6 +301,15 @@ export async function signOutAndRedirect(): Promise<void> {
 Run: `pnpm exec vitest run tests/unit/auth-sign-out.test.ts`
 Expected: PASS，2 passed。
 
+若报 `ReferenceError: window is not defined`，在测试文件**首行**加环境声明
+（`vitest.config.ts` 的 environment 是 `node`，而本用例 stub 了 `window.location`）：
+
+```ts
+// @vitest-environment jsdom
+```
+
+只加在这一行，brief 给出的测试代码本身不改。
+
 - [ ] **Step 5: 改 `UserMenu` 调用公共函数**
 
 Modify `src/components/layout/UserMenu.tsx`：
@@ -336,6 +345,9 @@ vi.mock('@/auth/sign-out', () => ({
 ```tsx
 const mocks = vi.hoisted(() => ({
   useSession: vi.fn(),
+  // 保留：`@/auth/client` 仍被 mock（`useSession` 需要它），mock 工厂里引用 `mocks.signOut`，
+  // 少这一项会报 TS2339。
+  signOut: vi.fn(),
   signOutAndRedirect: vi.fn(),
 }))
 ```
@@ -383,14 +395,15 @@ const mocks = vi.hoisted(() => ({
 - [ ] **Step 7: 运行受影响的测试**
 
 Run: `pnpm exec vitest run --config vitest.components.config.ts tests/components/user-menu.test.tsx`
-Expected: PASS，**6** passed（原 7 个用例，删掉被 mock 模块覆盖的「登出失败时不跳转」一条）。
+Expected: PASS，**7** passed（Step 6 净变化为 0：删掉被 mock 模块覆盖的「登出失败时不跳转」，
+同时新增「登出由公共函数处理」，7 − 1 + 1 = 7）。
 
 - [ ] **Step 8: 跑全量检查**
 
 Run: `pnpm check && pnpm test && pnpm exec vitest run --config vitest.components.config.ts`
 Expected: check 末尾 `✅ 所有 locale 键配对一致（base: zh）`；单测 **602** passed
-（600 基线 + `auth-sign-out.test.ts` 2 条）；组件测试 **151** passed
-（146 基线 − 1 条删除的 user-menu 用例）。
+（600 基线 + `auth-sign-out.test.ts` 2 条）；组件测试 **146** passed
+（与基线相同：删除 1 条 user-menu 用例，新增 1 条 user-menu 用例，净变化 0）。
 
 - [ ] **Step 9: 提交**
 
@@ -699,7 +712,7 @@ Expected: PASS，7 passed。
 - [ ] **Step 5: 跑全量检查**
 
 Run: `pnpm check && pnpm test && pnpm exec vitest run --config vitest.components.config.ts`
-Expected: 全部通过；组件测试 **158** passed（151 + 7）。
+Expected: 全部通过；组件测试 **153** passed（146 基线 + 7）。
 
 - [ ] **Step 6: 手动验证折叠交互（可选但建议）**
 
@@ -1144,7 +1157,7 @@ Expected: PASS，7 + 5 = 12 passed。
 - [ ] **Step 8: 跑全量检查**
 
 Run: `pnpm check && pnpm test && pnpm exec vitest run --config vitest.components.config.ts`
-Expected: 全部通过；组件测试 **163** passed（158 + 5）。
+Expected: 全部通过；组件测试 **158** passed（153 + 5）。
 
 - [ ] **Step 9: 提交**
 
@@ -1625,7 +1638,7 @@ git commit -m "test: e2e 改从用户卡片登出，并覆盖顶栏折叠交互"
 
 - [ ] `pnpm check` 通过（locale 编译 + Biome + tsc + env 校验 + locale 配对）
 - [ ] `pnpm test` 通过（602 tests：600 基线 + `auth-sign-out` 2 条）
-- [ ] `pnpm exec vitest run --config vitest.components.config.ts` 通过（163 tests：146 基线 − user-menu 删除 1 + 布局 7 + 卡片 5）
+- [ ] `pnpm exec vitest run --config vitest.components.config.ts` 通过（158 tests：146 基线 + 布局 7 + 卡片 5）
 - [ ] `pnpm exec playwright test e2e/settings.spec.ts` 通过
 - [ ] Node 脚本核对 `.env.example` 与 schema 键集合：仅差 `VITE_UMAMI_ID` / `VITE_CLARITY_ID`
 - [ ] 手动走查 `/zh/settings/profile`：logo、面包屑、用户卡片、登出、折叠/展开均正常
