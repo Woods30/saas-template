@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionInfo } from '@/auth/session'
 import { SettingsUserCard } from '@/components/settings/SettingsUserCard'
@@ -113,6 +113,17 @@ function avatarImage() {
   return document.querySelector<HTMLImageElement>('img[data-slot="avatar-image"]')
 }
 
+/** 触发按钮的文本区：头像右侧那个 `grid flex-1` div，名字与邮箱都在其内。
+ *  按结构而非样式类取——按钮里唯一的 div 就是它（头像是 span、箭头是 svg）。
+ *  必须先定位它再断言：按钮自身的 `aria-label` 也是 `name || email`，直接
+ *  `screen.getByText('woods')` 会命中按钮与 span 两侧，`getAllByText` 一样含糊。 */
+function textSlot() {
+  const trigger = screen.getByRole('button', { name: 'woods' })
+  const slot = trigger.querySelector('div')
+  if (!slot) throw new Error('触发按钮内未找到名字与邮箱的文本区')
+  return slot
+}
+
 describe('SettingsUserCard', () => {
   it('有 image 时渲染头像图片', async () => {
     renderCard(sessionWith({ image: 'https://example.com/a.png' }))
@@ -137,7 +148,11 @@ describe('SettingsUserCard', () => {
 
   it('展示名字与邮箱', () => {
     renderCard(sessionWith())
-    expect(screen.getByText('woods@example.com')).toBeInTheDocument()
+    // 名字必须来自 `name` 字段、且是正文里的那一行（按钮 aria-label 也是
+    // `name || email`，所以收窄到文本区内取，确保测的是渲染而非可访问名）。
+    const slot = textSlot()
+    expect(within(slot).getByText('woods')).toBeInTheDocument()
+    expect(within(slot).getByText('woods@example.com')).toBeInTheDocument()
   })
 
   it('展开菜单后提供退出登录，点击调用 signOutAndRedirect', async () => {

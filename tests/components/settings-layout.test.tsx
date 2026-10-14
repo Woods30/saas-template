@@ -146,3 +146,32 @@ describe('SettingsLayout 顶栏', () => {
     expect(screen.getByRole('button', { name: /主题/ })).toBeInTheDocument()
   })
 })
+
+/**
+ * 侧栏底部的用户卡片。个人中心是 `_layout` 路由、不渲染营销导航栏，导航栏
+ * `UserMenu` 里的登出入口在这里不可见——这张卡片就是本路由内唯一的登出口，
+ * 因此「外壳是否真的把它装进了侧栏底部」必须有自己的断言守着：
+ * 只在卡片组件内测渲染，外壳漏装 `SidebarFooter` 也不会有人发现。
+ */
+describe('SettingsLayout 侧栏底部的用户卡片', () => {
+  /** 侧栏 footer：shadcn `SidebarFooter` 的原生契约（`src/components/ui/sidebar.tsx`
+   *  渲染 `data-slot="sidebar-footer"`），不是本仓库自造的标记。 */
+  function sidebarFooter() {
+    const footer = document.querySelector<HTMLElement>('[data-slot="sidebar-footer"]')
+    if (!footer) throw new Error('侧栏未渲染 sidebar-footer')
+    return footer
+  }
+
+  it('把用户卡片渲染进侧栏底部', () => {
+    renderLayout()
+    expect(sidebarFooter()).toBeInTheDocument()
+  })
+
+  it('footer 内确实是用户卡片：头像、名字与邮箱都在其内', () => {
+    renderLayout()
+    const footer = sidebarFooter()
+    // 卡片内容必须落在 footer 里：只证明 footer 存在不等于卡片装对了地方。
+    expect(within(footer).getByText('woods@example.com')).toBeInTheDocument()
+    expect(within(footer).getByRole('button', { name: 'woods' })).toBeInTheDocument()
+  })
+})
