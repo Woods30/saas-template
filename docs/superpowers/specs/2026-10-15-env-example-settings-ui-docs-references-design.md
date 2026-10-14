@@ -223,10 +223,10 @@ trigger + tooltip。用 `group-data-[collapsible=icon]:*` 变体处理，与 sid
 「返回站点」撤掉：侧栏头部的 logo 已是回站点入口，两个语义重复的出口会让用户不确定
 点哪个。窄屏下 logo 与折叠按钮同屏可见，不存在没有出口的情况。
 
-撤掉后 `settings_back_home` 消息键失去唯一消费者。删消息键是行为变更（两个 locale 文件
-都要删，且要跑 `pnpm locale:sort`），因此**默认保留该键**——与 `crumb_*` 一样作为预留键，
-不因一次 UI 调整删产物。若用户明确要求删，则删 `messages/zh.json` 与 `messages/en.json`
-各一行并重新编译 locale。
+撤掉后 `settings_back_home` 消息键失去唯一消费者，**随之删除**：`messages/zh.json` 与
+`messages/en.json` 各删一行，再跑 `pnpm locale:sort` 重排、`pnpm typecheck` 让
+Paraglide 重新编译。删键后 `pnpm check` 的 locale 校验会确认两个文件仍配对——这一步
+正是防漏删一侧的关卡。
 
 面包屑三级，用 shadcn 的 `Breadcrumb` / `BreadcrumbList` / `BreadcrumbItem` /
 `BreadcrumbLink` / `BreadcrumbPage` / `BreadcrumbSeparator` 组装（该组件已随
@@ -330,7 +330,8 @@ Breadcrumb 导航用的是 `m.*()` 求值文案，与侧栏菜单一致地在 re
 - `pnpm check`（locale 编译 + Biome + tsc + env + locale 校验）通过。
 - `pnpm test` 与组件测试通过。
 - 手动确认：折叠与展开两态下 logo、用户卡片、登出都可用；深浅色 logo 均清晰；
-  窄屏下折叠按钮能拉出抽屉；面包屑两个链接都能正确跳转，末级不带链接。
+  窄屏下折叠按钮能拉出抽屉；面包屑两个链接都能正确跳转，末级不带链接；
+  切换语言后面包屑与侧栏文案随之变化，`settings_back_home` 已从两个 locale 文件中消失。
 
 ## 6. 文档参考资料
 
@@ -373,8 +374,13 @@ options"），URL 相同。飞书文档同时存在中英文页，en 版指英�
 ### 6.4 其他同步
 
 - 受影响文档的 `updated` 字段改为 `2026-10-15`。
-- `content/docs/auth-account.zh.md` 若在本次个人中心 UI 改动后描述失实（如侧边栏结构、
-  用户卡片），一并校正——文档与代码同步是本设计的一部分。
+- `content/docs/auth-account.zh.md` 与 `.md` 在本次个人中心 UI 改动后描述失实处一并
+  校正——文档与代码同步是本设计的一部分。至少要覆盖：
+  - 「侧边栏」小节补 `SidebarHeader`（logo）与 `SidebarFooter`（用户卡片）；
+  - 新增顶栏段落：`SidebarTrigger` + 三级面包屑 + 右上角主题切换，说明 `<h1>` 为何
+    不保留（末级 `BreadcrumbPage` 带 `aria-current="page"`）；
+  - 「下一步」小节之前插入「参考资料」（该篇两条：Better Auth 选项参考、TanStack Start
+    认证指南）。
 - 不新增文档文件；`references` 不单独成篇（用户已选定末尾小节方案）。
 
 ## 7. 分步交付顺序
@@ -382,11 +388,18 @@ options"），URL 相同。飞书文档同时存在中英文页，en 版指英�
 | 提交 | 内容 |
 |---|---|
 | 1 | `.env.example` 重建（结构变更，无行为变更） |
-| 2 | 个人中心 UI（行为变更：新 card、session 带 image、登出抽公共函数） |
+| 2 | 个人中心 UI（行为变更：顶栏面包屑 + 折叠按钮 + 主题切换、侧栏头 logo、用户卡片、session 带 `image`、登出抽公共函数、删 `settings_back_home`） |
 | 3 | 文档参考资料 + `auth-account` 描述校正 |
 
-提交 2 内部再分：先抽 `src/auth/sign-out.ts` 并改 `UserMenu`（结构等价重构，测试同步），
-再加用户卡片与 session 字段。两个提交都只含单一逻辑变更。
+提交 2 内部再分，保证每个提交只含单一逻辑变更：
+
+| 子提交 | 内容 | 性质 |
+|---|---|---|
+| 2a | 抽 `src/auth/sign-out.ts`，`UserMenu` 改为调用它 | 结构等价重构，测试同步更新 |
+| 2b | `SessionInfo` 加 `image`、用户卡片、侧栏头 logo、顶栏面包屑 + 主题切换、删 `settings_back_home` | 行为变更 |
+
+2b 中的删键与 UI 改动同在一步，但同属「个人中心外壳重做」这一个逻辑单元：删键的
+唯一原因就是顶栏不再渲染「返回站点」链接，拆开会让中间态出现一个没有消费者的键。
 
 ## 8. 不在本次范围
 
