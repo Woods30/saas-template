@@ -8,6 +8,7 @@
  * 服务端通过 ALS 得到请求的 cookie 值；客户端直接读 `document.cookie`。
  * 二者对同一 cookie 得出同一结果，因此 SSR 与 hydration 一致（与 locale 同构）。
  */
+import { websiteConfig } from '@/config/website'
 import { readCookieValue } from '@/lib/locale'
 
 export const THEME_COOKIE_NAME = 'THEME'
@@ -16,7 +17,8 @@ export const THEMES = ['light', 'dark', 'system'] as const
 
 export type Theme = (typeof THEMES)[number]
 
-export const defaultTheme: Theme = 'system'
+/** 站点默认主题由 `websiteConfig.ui.defaultTheme` 统一决定，避免两处硬编码漂移。 */
+export const defaultTheme: Theme = websiteConfig.ui.defaultTheme
 
 /** 把任意字符串归一化为受支持的 theme；未知或缺失返回 `undefined`。 */
 export function parseTheme(value: string | undefined): Theme | undefined {

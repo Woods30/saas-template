@@ -1,5 +1,5 @@
-// Env is a global interface declared in src/types/cloudflare.d.ts — no import needed
 import { CACHE_TTL, createCacheKey, deleteCache, getOrSetCache } from '@/cache'
+import type { ServerEnv } from '@/env/server'
 import { checkRateLimit as sharedCheckRateLimit } from '@/lib/rate-limit'
 import { getServerContext } from '@/lib/server-context'
 import { BeehiivNewsletterProvider } from './provider/beehiiv'
@@ -14,24 +14,36 @@ import type {
 export type NewsletterProviderName = 'resend' | 'beehiiv'
 type NewsletterProviderFactory = () => NewsletterProvider
 
+/** 归一化后 provider 所需的 server env 子集。 */
+type NewsletterEnv = Pick<
+  ServerEnv,
+  | 'RESEND_API_KEY'
+  | 'RESEND_AUDIENCE_ID'
+  | 'BEEHIIV_API_KEY'
+  | 'BEEHIIV_PUBLICATION_ID'
+  | 'BEEHIIV_SEND_WELCOME_EMAIL'
+>
+
 /**
  * 按当前请求 env 构建 newsletter provider 注册表。
  * 在 src/server.ts 的 als.run() 中调用，结果注入 ServerContext.newsletterProviderRegistry。
+ * 只消费 `parseServerEnv` 归一化后的字段，避免未校验的原始 binding 进入 provider。
  */
 export function buildNewsletterProviderRegistry(
-  env: Env,
+  env: NewsletterEnv,
 ): Record<NewsletterProviderName, NewsletterProviderFactory | undefined> {
+  const { RESEND_API_KEY, RESEND_AUDIENCE_ID, BEEHIIV_API_KEY, BEEHIIV_PUBLICATION_ID } = env
   return {
     resend:
-      env.RESEND_API_KEY && env.RESEND_AUDIENCE_ID
-        ? () => new ResendNewsletterProvider(env.RESEND_API_KEY ?? '', env.RESEND_AUDIENCE_ID ?? '')
+      RESEND_API_KEY && RESEND_AUDIENCE_ID
+        ? () => new ResendNewsletterProvider(RESEND_API_KEY, RESEND_AUDIENCE_ID)
         : undefined,
     beehiiv:
-      env.BEEHIIV_API_KEY && env.BEEHIIV_PUBLICATION_ID
+      BEEHIIV_API_KEY && BEEHIIV_PUBLICATION_ID
         ? () =>
             new BeehiivNewsletterProvider(
-              env.BEEHIIV_API_KEY ?? '',
-              env.BEEHIIV_PUBLICATION_ID ?? '',
+              BEEHIIV_API_KEY,
+              BEEHIIV_PUBLICATION_ID,
               env.BEEHIIV_SEND_WELCOME_EMAIL === 'true',
             )
         : undefined,

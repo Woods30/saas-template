@@ -12,18 +12,49 @@
 .mdx h3 {
   @apply mt-6 mb-2 text-xl font-semibold;
 }
+/* 锚点跳转时给标题留出 sticky header 的高度，避免标题被顶栏盖住。 */
+.mdx h2,
+.mdx h3 {
+  @apply scroll-mt-20;
+}
 .mdx p {
   @apply mb-4;
 }
+/* 行内代码：单色 `bg-muted` 在浅色下几乎看不出边界，改用描边 + 主题色前景，
+   既与正文区分开，又不至于像一块补丁。 */
 .mdx code {
-  @apply rounded bg-muted px-1 py-0.5 text-sm;
+  @apply rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] text-foreground;
 }
 .mdx pre {
   @apply mb-4 overflow-auto rounded bg-zinc-900 p-4 text-zinc-100;
 }
 .mdx pre code {
-  @apply bg-transparent p-0 text-sm;
+  @apply border-0 bg-transparent p-0 text-sm text-inherit;
 }
 .mdx strong {
   @apply font-semibold;
+}
+.mdx a {
+  @apply text-foreground underline underline-offset-4 hover:text-foreground/80;
+}
+.mdx .mdx-quote {
+  @apply my-4 rounded-r-md border-l-2 border-border bg-muted/40 py-3 pr-4 pl-4 text-sm text-muted-foreground;
+}
+.mdx .mdx-quote p {
+  @apply mb-0;
+}
+.mdx ul {
+  @apply mb-4 list-disc space-y-1 pl-6;
+}
+.mdx ol {
+  @apply mb-4 list-decimal space-y-1 pl-6;
+}
+.mdx table {
+  @apply w-full border-collapse text-left text-sm;
+}
+.mdx th {
+  @apply border-b border-border px-3 py-2 font-semibold;
+}
+.mdx td {
+  @apply border-b border-border/60 px-3 py-2 align-top;
 }

@@ -1,4 +1,4 @@
-// Env is a global interface declared in src/types/cloudflare.d.ts — no import needed
+import type { ServerEnv } from '@/env/server'
 import { getServerContext } from '@/lib/server-context'
 import { StripePaymentProvider } from './provider/stripe'
 import type {
@@ -12,17 +12,20 @@ import type {
 export type PaymentProviderName = 'stripe'
 type PaymentProviderFactory = () => PaymentProvider
 
+/** 归一化后 provider 所需的 server env 子集。 */
+type PaymentEnv = Pick<ServerEnv, 'STRIPE_SECRET_KEY' | 'STRIPE_WEBHOOK_SECRET'>
+
 /**
  * 按当前请求 env 构建 payment provider 注册表。
  * 在 src/server.ts 的 als.run() 中调用，结果注入 ServerContext.paymentProviderRegistry。
+ * 只消费 `parseServerEnv` 归一化后的字段。
  */
 export function buildPaymentProviderRegistry(
-  env: Env,
+  env: PaymentEnv,
 ): Partial<Record<PaymentProviderName, PaymentProviderFactory>> {
-  const secretKey = env.STRIPE_SECRET_KEY
-  const webhookSecret = env.STRIPE_WEBHOOK_SECRET
-  if (secretKey && webhookSecret) {
-    return { stripe: () => new StripePaymentProvider(secretKey, webhookSecret) }
+  const { STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET } = env
+  if (STRIPE_SECRET_KEY && STRIPE_WEBHOOK_SECRET) {
+    return { stripe: () => new StripePaymentProvider(STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET) }
   }
   return { stripe: undefined }
 }

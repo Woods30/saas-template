@@ -4,5 +4,7 @@ export interface FaqItem {
 }
 export interface FaqProps {
   title?: string
+  eyebrow?: string
+  variant?: 'default' | 'split'
   items: FaqItem[]
 }

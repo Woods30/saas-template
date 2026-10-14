@@ -1,5 +1,44 @@
 # Jerbix 品牌化 + Landing 单页 + 主题 / Locale 切换 设计文档
 
+## 2026-10-14 品牌故事与产品价值收口
+
+本节按用户最新要求取代此前首屏工程示意与品牌旅程长文案。
+
+- 品牌为 Jerbix，产品为 Jerbix Starter。品牌 Slogan 为 `Small Steps. Big Leaps.`，产品 Slogan 为 `Leap from Idea to Launch.`。
+- 中英文首屏均使用英文产品 Slogan，并标注 `lang="en"`。正文用一句简短价值说明，强调 TanStack Start + Cloudflare、组件复用与业务基础；不重复展示品牌口号或长篇中文译句。
+- 首屏图从工程模块拓扑改为跳鼠沿着小／大跳跃弧线向前的旅程。灵感、构建、上线三个原生按钮切换吉祥物位置及简短说明，支持键盘、暂停、reduced-motion、离屏与文档隐藏停止。
+- 技术栈与组件工具置于首页主体前部：TanStack Start / Router / Query + TypeScript；Workers / D1 / R2 / KV + Drizzle；Tailwind CSS v4 / shadcn/ui / Base UI / Tabler。展示已有 UI、营销 Blocks、文档内容与 setup / env / locale / Biome / Vitest / Playwright 工具，不将需要凭据的服务宣传为零配置。
+- 品牌故事移至源码说明之后，浓缩为两段，讲述跳鼠小巧、敏捷、善于跳跃与一个人／小团队创造产品的联系。品牌 Slogan 在故事与 Footer 展示。
+- Navbar 使用用户指定的 `logo-horizontal-transparent.svg` 原图，保留完整跳鼠与字标、locale 链接和可访问名称。深色主题使用 Logo 专用浅色底片，移动端保持紧凑。
+- 页面顺序：Hero → 技术条 → 技术栈与工具 → 业务模块 Bento → 开发流程 → 源码说明 → 品牌故事 → FAQ → CTA。沿用既有锚点，不新增依赖，不修改认证、支付、数据库或生产设置。
+
+## 2026-10-13 动态产品实验室增强（用户已确认）
+
+- 首屏加入轨道、品牌吉祥物、可点击模块节点与能力说明；模块按钮使用 aria-pressed，桌面轻微视差仅在细指针且用户允许动效时启用。
+- 六张 Bento 提供登录、支付流程、Cloudflare 架构、文件、邮件、语言场景示意。示意不请求服务，不使用虚构业务指标，全部标明演示；语言示意仅切换预览文案。
+- workflow 使用三个可点击步骤，右侧切换配置、业务代码、检查部署示意；按钮使用 aria-pressed，面板与当前步骤通过 aria-labelledby 关联。
+- CSS 负责轨道、连线、吉祥物浮动、卡片反馈和进入视口的短动画；React 负责模块与步骤选择、暂停控制和 IntersectionObserver。无新增依赖或文件，保持中英、明暗主题与既有锚点。
+- 持续动画支持显式暂停；reduced-motion 时禁用动画与视差，文档隐藏与区块离开视口时停止持续动画；正文在无 JS / 无 observer 时仍可见。
+- 验收：先编写模块选择、暂停与恢复、workflow 切换、双语预览的失败测试；浏览器验证键盘、375 / 390 / 768 / 桌面、明暗主题、暂停与 reduced-motion；完整 check / unit / component / marketing / hydration E2E / build / bundle 检查。
+- 交付状态：已实现并验证，详细测试结果与既有构建警告见同日期实施计划中的「本轮验收记录」。
+
+## 2026-10-13 产品首页改版（用户已确认）
+
+本节取代下方历史设计中的首页内容顺序；路由、品牌资产与主题机制继续沿用。
+
+- 产品定位：面向独立开发者与创业者的 TanStack Start + Cloudflare Workers SaaS Starter，交付可修改的起步工程。
+- 价值主线：把时间花在产品上，减少常用基础模块的重复接线。
+- 参考：Tailark 仅作 blocks 视觉参考；TanStarter 的收益与技术依据表达、ShipAny 的启动流程与场景表达作为内容参考。
+- 顺序：双栏 Hero → 技术基础条 → 核心优势 Bento（features）→ 三步启动流程（workflow）→ 模板能力与上手入口（pricing，保留旧锚点兼容）→ FAQ（faq）→ CTA。
+- Hero 主标题：把时间花在产品上，让 Jerbix 打好 SaaS 的基础。按钮为了解如何开始、探索内置能力；工程能力示意必须标为示意，不使用虚构业务数据或声称为实际后台。
+- 能力依据：Workers / D1 / R2 / KV、TypeScript、认证基础、Stripe Checkout / Portal / Webhook、事务邮件模板、中英双语与内容站点、setup 与检查工具。明确需要配置自己的资源、服务凭据并接入产品业务。
+- 撤下首页演示套餐、用户配额、未经核实的性能数字和用户评价；保留独立定价页，首页不以注册账号模拟购买模板。
+- FAQ 明确数据库为 D1（SQLite）与 Drizzle；不宣称现成 PostgreSQL / MySQL、MFA、Magic Link、退款全流程、送达追踪、AI 工作流或后台已交付。
+- 视觉：奶油底、海军蓝文字、品牌紫与暖橙点缀；统一 max-w-6xl，细边框与适量留白，桌面非对称布局、移动端单栏。导航折叠并支持键盘操作，保留明暗主题和 reduced-motion。
+- 数据与组件：优先修改现有文件，首页配置在 render 时读取消息，复用既有 Hero / Features / Faq / Cta；首页专属流程和技术条放在 LandingPage 内的独立函数中，不引入依赖。
+- 验收：中英文首页文案与 SEO 一致，跨语言切换不固化；旧 pricing 锚点可达；375 / 390 / 768 / 桌面宽度无横向溢出；移动导航可展开、关闭；明暗主题、FAQ、CTA、锚点正常；pnpm check、单元与组件测试、marketing / hydration E2E、build 和 bundle 检查通过。
+
+
 - **日期**：2026-10-13
 - **状态**：Approved（待实现）
 - **范围**：Sub-Plan C 之后的品牌与交互收口（Landing 路由、品牌资产、主题系统、locale 路由）

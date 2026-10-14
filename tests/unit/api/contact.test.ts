@@ -27,7 +27,7 @@ vi.mock('@/notification', () => ({
   notify: vi.fn().mockResolvedValue(true),
 }))
 
-import { submitContact } from '@/routes/api/contact/$'
+import { Route, submitContact } from '@/routes/api/contact/$'
 
 describe('submitContact', () => {
   const validData = {
@@ -56,5 +56,68 @@ describe('submitContact', () => {
     const result = await submitContact('203.0.113.1', validData)
 
     expect(result).toEqual({ ok: true })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 配置门禁：contact 默认关闭 → POST 返回 404，且不读取 body / 不调用 provider
+// ---------------------------------------------------------------------------
+describe('POST /api/contact 门禁', () => {
+  function getPostHandler(): (ctx: { request: Request }) => Promise<Response> {
+    const handlers = (
+      Route as unknown as { options?: { server?: { handlers?: Record<string, unknown> } } }
+    ).options?.server?.handlers
+    const handler = handlers?.POST
+    if (typeof handler !== 'function') throw new Error('POST handler 缺失')
+    return handler as (ctx: { request: Request }) => Promise<Response>
+  }
+
+  it('contact 关闭时返回 404 MODULE_DISABLED，且不读取 body', async () => {
+    const request = new Request('https://jerbix.dev/api/contact/submit', {
+      method: 'POST',
+      body: '{}',
+    })
+    const read = vi.spyOn(request, 'json')
+
+    const response = await getPostHandler()({ request })
+
+    expect(response.status).toBe(404)
+    expect(await response.json()).toEqual({ error: 'MODULE_DISABLED' })
+    expect(read).not.toHaveBeenCalled()
+    expect(mockCheckRateLimit).not.toHaveBeenCalled()
+  })
+
+  it('contact 启用但 mail 未配置完整时返回 503 SERVICE_UNAVAILABLE', async () => {
+    vi.resetModules()
+    vi.doMock('@/config/website', async () => {
+      const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
+      const { parsePublicEnv } =
+        await vi.importActual<typeof import('@/env/public')>('@/env/public')
+      const base = actual.createWebsiteConfig(
+        parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' }),
+      )
+      return { ...actual, websiteConfig: { ...base, contact: { enabled: true } } }
+    })
+
+    const { Route: Reimported } = await import('@/routes/api/contact/$')
+    const handlers = (
+      Reimported as unknown as { options?: { server?: { handlers?: Record<string, unknown> } } }
+    ).options?.server?.handlers
+    const handler = handlers?.POST
+    if (typeof handler !== 'function') throw new Error('POST handler 缺失')
+
+    const request = new Request('https://jerbix.dev/api/contact/submit', {
+      method: 'POST',
+      body: '{}',
+    })
+    const read = vi.spyOn(request, 'json')
+
+    const response = await (handler as (ctx: { request: Request }) => Promise<Response>)({
+      request,
+    })
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ error: 'SERVICE_UNAVAILABLE' })
+    expect(read).not.toHaveBeenCalled()
   })
 })

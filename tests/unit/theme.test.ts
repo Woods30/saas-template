@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { websiteConfig } from '@/config/website'
 import {
   defaultTheme,
   getTheme,
@@ -38,9 +39,18 @@ describe('THEME_COOKIE_NAME', () => {
 })
 
 describe('THEMES / defaultTheme', () => {
-  it('THEMES 覆盖三种取值且默认值为 system', () => {
+  it('THEMES 覆盖三种取值且默认值来自 websiteConfig.ui.defaultTheme', () => {
     expect(THEMES).toEqual(['light', 'dark', 'system'])
-    expect(defaultTheme).toBe('system')
+    expect(defaultTheme).toBe(websiteConfig.ui.defaultTheme)
+  })
+
+  it('defaultTheme 跟随 websiteConfig.ui.defaultTheme，而非硬编码 system', async () => {
+    vi.resetModules()
+    const { websiteConfig: freshConfig } = await import('@/config/website')
+    freshConfig.ui.defaultTheme = 'dark'
+    // 在同一份新模块图里重新求值 theme，确认它读取配置。
+    const { defaultTheme: freshDefaultTheme } = await import('@/lib/theme')
+    expect(freshDefaultTheme).toBe('dark')
   })
 })
 

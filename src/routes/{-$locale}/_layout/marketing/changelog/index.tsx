@@ -1,13 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { allChangelogs } from 'content-collections'
 import { Mdx } from '@/components/mdx/Mdx'
+import { assertPageEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/marketing/changelog/')({
+  beforeLoad: () => assertPageEnabled('changelog'),
   head: () =>
-    seo('/changelog', {
+    seo('/marketing/changelog', {
       title: m.changelog_page_title(),
       description: m.changelog_page_description(),
       locale: getLocale(),

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ClarityAnalyticsProvider } from '@/lib/analytics/clarity'
 import { GAAnalyticsProvider } from '@/lib/analytics/ga'
 import { PlausibleAnalyticsProvider } from '@/lib/analytics/plausible'
@@ -86,5 +86,86 @@ describe('Analytics providers', () => {
     ;(window as unknown as { clarity: typeof clarity }).clarity = clarity
     new ClarityAnalyticsProvider('id').track({ name: 'click' })
     expect(clarity).toHaveBeenCalledWith('event', 'click')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// initAnalytics —— 启用过滤、publicEnv 来源与 Umami 脚本 URL
+// ---------------------------------------------------------------------------
+describe('initAnalytics', () => {
+  const injected: HTMLScriptElement[] = []
+
+  beforeEach(() => {
+    vi.resetModules()
+    injected.length = 0
+    // 记录注入脚本，避免真实网络请求（jsdom 默认不加载 script.src）。
+    vi.spyOn(document.head, 'appendChild').mockImplementation((node: Node) => {
+      injected.push(node as HTMLScriptElement)
+      return node
+    })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.doUnmock('@/config/website')
+    vi.doUnmock('@/env/public')
+    vi.resetModules()
+  })
+
+  function mockConfig(analytics: { enabled: boolean; providers: string[] }) {
+    vi.doMock('@/config/website', () => ({ websiteConfig: { analytics } }))
+  }
+
+  function mockPublicEnv(env: Record<string, unknown>) {
+    vi.doMock('@/env/public', () => ({ publicEnv: env }))
+  }
+
+  it('analytics 关闭时不注册也不注入脚本', async () => {
+    mockConfig({ enabled: false, providers: ['ga'] })
+    mockPublicEnv({ VITE_GA_ID: 'G-XXX' })
+    const { initAnalytics } = await import('@/lib/analytics')
+    initAnalytics()
+    expect(injected).toHaveLength(0)
+  })
+
+  it('选中 GA 且配置 ID 时注入 gtag 脚本', async () => {
+    mockConfig({ enabled: true, providers: ['ga'] })
+    mockPublicEnv({ VITE_GA_ID: 'G-XXX' })
+    const { initAnalytics } = await import('@/lib/analytics')
+    initAnalytics()
+    expect(injected.map((s) => s.src)).toContain(
+      'https://www.googletagmanager.com/gtag/js?id=G-XXX',
+    )
+  })
+
+  it('未选中 GA 时即使有 VITE_GA_ID 也不注入', async () => {
+    mockConfig({ enabled: true, providers: ['plausible'] })
+    mockPublicEnv({ VITE_GA_ID: 'G-XXX', VITE_PLAUSIBLE_DOMAIN: 'jerbix.dev' })
+    const { initAnalytics } = await import('@/lib/analytics')
+    initAnalytics()
+    const srcs = injected.map((s) => s.src)
+    expect(srcs).not.toContain('https://www.googletagmanager.com/gtag/js?id=G-XXX')
+    expect(srcs).toContain('https://plausible.io/js/script.js')
+  })
+
+  it('选中 Umami 但缺脚本 URL 时不注入', async () => {
+    mockConfig({ enabled: true, providers: ['umami'] })
+    mockPublicEnv({ VITE_UMAMI_WEBSITE_ID: 'site-1' })
+    const { initAnalytics } = await import('@/lib/analytics')
+    initAnalytics()
+    expect(injected).toHaveLength(0)
+  })
+
+  it('选中 Umami 且脚本 URL 存在时注入该 URL', async () => {
+    mockConfig({ enabled: true, providers: ['umami'] })
+    mockPublicEnv({
+      VITE_UMAMI_WEBSITE_ID: 'site-1',
+      VITE_UMAMI_SCRIPT_URL: 'https://stats.jerbix.dev/script.js',
+    })
+    const { initAnalytics } = await import('@/lib/analytics')
+    initAnalytics()
+    expect(injected.map((s) => s.src)).toContain('https://stats.jerbix.dev/script.js')
+    // 不再使用示例主机作为就绪依据。
+    expect(injected.map((s) => s.src)).not.toContain('https://umami.example.com/script.js')
   })
 })

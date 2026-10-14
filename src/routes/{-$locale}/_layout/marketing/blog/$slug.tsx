@@ -3,11 +3,14 @@ import { allBlogs } from 'content-collections'
 import { JsonLd } from '@/components/JsonLd'
 import { Mdx } from '@/components/mdx/Mdx'
 import { articleJsonLd } from '@/lib/json-ld'
+import { assertPageEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/marketing/blog/$slug')({
   beforeLoad: ({ params }) => {
+    // 门禁最前处：关闭时无需再做内容查找。
+    assertPageEnabled('blog')
     const locale = getLocale()
     const post = allBlogs.find(
       (p) => p._meta.path === params.slug && p.locale === locale && p.published,
@@ -18,9 +21,10 @@ export const Route = createFileRoute('/{-$locale}/_layout/marketing/blog/$slug')
   loader: ({ context }) => ({
     title: context.post.title,
     description: context.post.description,
+    path: context.post._meta.path,
   }),
   head: ({ loaderData }) =>
-    seo(`/blog/${loaderData?.title}`, {
+    seo(`/marketing/blog/${loaderData?.path}`, {
       title: loaderData?.title ?? '',
       description: loaderData?.description,
       type: 'article',
@@ -38,7 +42,7 @@ function BlogPost() {
           title: post.title,
           description: post.description,
           date: post.date,
-          path: `/blog/${post._meta.path}`,
+          path: `/marketing/blog/${post._meta.path}`,
         })}
       />
       <main className="mx-auto max-w-3xl px-6 py-10">

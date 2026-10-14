@@ -9,11 +9,12 @@ import { getLocale } from '@/locale/paraglide/runtime.js'
  */
 export const Route = createFileRoute('/{-$locale}/_layout/docs/')({
   beforeLoad: () => {
-    const landing = docsLanding(getLocale() as Locale)
+    const locale = getLocale() as Locale
+    const landing = docsLanding(locale)
     if (!landing) return
     throw redirect({
       to: '/{-$locale}/docs/$slug',
-      params: { slug: landing.slug },
+      params: { locale, slug: landing.slug },
     })
   },
   component: () => null,

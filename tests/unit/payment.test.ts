@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { parseServerEnv } from '@/env/server'
 import { buildPaymentProviderRegistry } from '@/payment'
 
 // ------------------------------------------------------------------------------------------------
@@ -217,15 +218,17 @@ describe('StripePaymentProvider', () => {
 
 describe('buildPaymentProviderRegistry', () => {
   it('missing env returns stripe as undefined', () => {
-    const registry = buildPaymentProviderRegistry({} as Env)
+    const registry = buildPaymentProviderRegistry(parseServerEnv({}))
     expect(registry.stripe).toBeUndefined()
   })
 
   it('complete env returns stripe factory', () => {
-    const registry = buildPaymentProviderRegistry({
-      STRIPE_SECRET_KEY: 'sk_test',
-      STRIPE_WEBHOOK_SECRET: 'whsec_test',
-    } as Env)
+    const registry = buildPaymentProviderRegistry(
+      parseServerEnv({
+        STRIPE_SECRET_KEY: 'sk_test',
+        STRIPE_WEBHOOK_SECRET: 'whsec_test',
+      }),
+    )
     expect(typeof registry.stripe).toBe('function')
   })
 })
@@ -234,6 +237,51 @@ describe('getPaymentProvider', () => {
   it('getPaymentProvider is callable via the mock', async () => {
     const { getPaymentProvider: gp } = await import('@/payment')
     expect(() => gp('stripe')).not.toThrow()
+  })
+})
+
+// ------------------------------------------------------------------------------------------------
+// POST /api/payment 配置门禁（payment 默认关闭）
+// ------------------------------------------------------------------------------------------------
+describe('POST /api/payment 门禁', () => {
+  function getHandler(method: 'POST' | 'DELETE') {
+    return async (route: unknown, request: Request): Promise<Response> => {
+      const handlers = (route as { options?: { server?: { handlers?: Record<string, unknown> } } })
+        .options?.server?.handlers
+      const handler = handlers?.[method]
+      if (typeof handler !== 'function') throw new Error(`${method} handler 缺失`)
+      return (handler as (ctx: { request: Request }) => Promise<Response>)({ request })
+    }
+  }
+
+  it('payment 关闭时 POST 返回 404，且不调用 auth / rate-limit / provider', async () => {
+    const { Route } = await import('@/routes/api/payment/$')
+    const request = new Request('https://jerbix.dev/api/payment/checkout', {
+      method: 'POST',
+      body: '{}',
+    })
+    const read = vi.spyOn(request, 'json')
+
+    const response = await getHandler('POST')(Route, request)
+
+    expect(response.status).toBe(404)
+    expect(await response.json()).toEqual({ error: 'MODULE_DISABLED' })
+    expect(read).not.toHaveBeenCalled()
+    expect(mockCheckoutProvider.createCheckoutSession).not.toHaveBeenCalled()
+  })
+
+  it('payment 关闭时 DELETE 返回 404', async () => {
+    const { Route } = await import('@/routes/api/payment/$')
+    const request = new Request('https://jerbix.dev/api/payment/portal', {
+      method: 'DELETE',
+      body: '{}',
+    })
+
+    const response = await getHandler('DELETE')(Route, request)
+
+    expect(response.status).toBe(404)
+    expect(await response.json()).toEqual({ error: 'MODULE_DISABLED' })
+    expect(mockCheckoutProvider.createCustomerPortalLink).not.toHaveBeenCalled()
   })
 })
 

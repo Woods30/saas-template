@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { getAuth } from '@/auth/auth'
 import { websiteConfig } from '@/config/website'
 import { createDb, schema } from '@/db'
+import { getModuleUnavailableResponse } from '@/lib/module-access.server'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getServerContext } from '@/lib/server-context'
 import { getPaymentProvider } from '@/payment'
@@ -41,6 +42,10 @@ export const Route = createFileRoute('/api/payment/$')({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        // 门禁先于鉴权、限流、body 解析与 provider 调用。
+        const unavailable = getModuleUnavailableResponse('payment')
+        if (unavailable) return unavailable
+
         const { env } = getServerContext()
 
         // --- Auth gate ---
@@ -96,6 +101,10 @@ export const Route = createFileRoute('/api/payment/$')({
       },
 
       DELETE: async ({ request }) => {
+        // 门禁先于鉴权、限流、body 解析与 DB 查询。
+        const unavailable = getModuleUnavailableResponse('payment')
+        if (unavailable) return unavailable
+
         const { env } = getServerContext()
 
         // --- Auth gate ---

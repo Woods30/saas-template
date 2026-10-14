@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
@@ -24,6 +24,15 @@ vi.mock('@/lib/server-context', () => ({
 // ---------------------------------------------------------------------------
 vi.mock('@react-email/render', () => ({
   render: vi.fn().mockResolvedValue('<html><body>test</body></html>'),
+}))
+
+// 在 SDK 边界 mock，保留真实 provider 的渲染和错误脱敏逻辑。
+const { mockResendSend } = vi.hoisted(() => ({ mockResendSend: vi.fn() }))
+
+vi.mock('resend', () => ({
+  Resend: class {
+    emails = { send: mockResendSend }
+  },
 }))
 
 // ---------------------------------------------------------------------------
@@ -218,22 +227,23 @@ describe('renderTemplate context validation', () => {
 // Finding 2: Sensitive data redaction in error messages
 // ---------------------------------------------------------------------------
 describe('Sensitive data redaction in provider errors', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('Resend provider returns first line of error only', async () => {
-    // Verify that the resend provider strips multi-line errors
+    // 禁止真实网络请求，并确认多行错误确实经过 provider 处理。
+    const mockFetch = vi.fn().mockRejectedValue(new Error('测试禁止真实网络请求'))
+    vi.stubGlobal('fetch', mockFetch)
     const { ResendMailProvider } = await import('@/mail/provider/resend')
-    const fakeClient = {
-      emails: {
-        send: vi.fn().mockResolvedValue({
-          data: null,
-          error: {
-            message:
-              'API key invalid\nFull payload: to=user@example.com subject=secret\nstack: ...',
-          },
-        }),
+    mockResendSend.mockReset()
+    mockResendSend.mockResolvedValue({
+      data: null,
+      error: {
+        message: 'API key invalid\nFull payload: to=user@example.com subject=secret\nstack: ...',
       },
-    }
-    // @ts-expect-error mock partial client
-    const provider = new ResendMailProvider(fakeClient, 'noreply@example.com')
+    })
+    const provider = new ResendMailProvider('re_test', 'noreply@example.com')
 
     const result = await provider.sendTemplate({
       to: 'user@example.com',
@@ -242,7 +252,15 @@ describe('Sensitive data redaction in provider errors', () => {
       context: { username: 'Alice', actionUrl: 'https://example.com/verify' },
     })
 
-    expect(result.ok).toBe(false)
+    expect(mockFetch).not.toHaveBeenCalled()
+    expect(mockResendSend).toHaveBeenCalledOnce()
+    expect(mockResendSend).toHaveBeenCalledWith({
+      from: 'noreply@example.com',
+      to: 'user@example.com',
+      subject: '验证你的邮箱',
+      html: '<html><body>test</body></html>',
+    })
+    expect(result).toEqual({ ok: false, error: 'API key invalid' })
     // Must NOT contain the payload or subject
     expect(result.error).not.toContain('user@example.com')
     expect(result.error).not.toContain('secret')

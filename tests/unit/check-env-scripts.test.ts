@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { resolveRawEnv } from '../../scripts/lib/env-file'
 
 /**
  * `scripts/check-env.ts`、`scripts/check-env-prod.ts`、`scripts/check-client-bundle.ts` 的黑盒测试。
@@ -26,14 +27,18 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 const tsxBin = join(repoRoot, 'node_modules', '.bin', 'tsx')
+// 脚本从仓库根运行时靠 `tsconfig.json` 的 `paths` 解析 `@/*` 别名；测试把 cwd 切到临时目录后
+// 该 tsconfig 不在解析路径上，需显式指回仓库 tsconfig，才能加载 `src/config/website` 等模块。
+const repoTsconfig = join(repoRoot, 'tsconfig.json')
 
 const checkEnv = 'scripts/check-env.ts'
 const checkEnvProd = 'scripts/check-env-prod.ts'
 const checkBundle = 'scripts/check-client-bundle.ts'
 
-// 合成 secret：仅用于测试，绝非真实凭据。
+// 合成 secret / URL：仅用于测试，绝非真实凭据。
 const VALID_SECRET = 'test-better-auth-secret-0123456789' // 36 字符，≥ 32
 const SHORT_SECRET = 'too-short' // < 32 字符
+const VALID_URL = 'https://jerbix.dev' // 合法生产域名（真实形状，非保留域）
 
 interface RunResult {
   code: number
@@ -55,15 +60,34 @@ const dotenvKeys = readFileSync(join(repoRoot, '.env.example'), 'utf-8')
   .map((line) => line.slice(0, line.indexOf('=')))
   .filter((key) => key.length > 0)
 
+/**
+ * 需要从子进程环境里额外清除的键。
+ *
+ * `.env.example` 未列出、但已在 `src/env` schema 声明或会影响校验的进程变量：
+ * - `NODE_ENV`：Vitest 运行在 `test`，若继承会干扰生产语义断言；
+ * - `ADMIN_EMAILS`、`BEEHIIV_SEND_WELCOME_EMAIL`、`VITE_UMAMI_WEBSITE_ID`、
+ *   `VITE_CLARITY_PROJECT_ID`：schema 已声明，防止真实值经进程 env 泄漏进子进程。
+ */
+const EXTRA_ENV_KEYS = [
+  'NODE_ENV',
+  'ADMIN_EMAILS',
+  'BEEHIIV_SEND_WELCOME_EMAIL',
+  'VITE_UMAMI_WEBSITE_ID',
+  'VITE_CLARITY_PROJECT_ID',
+] as const
+
+/** 从子进程环境删除的键集合：`.env.example` 全部键 + 额外键，确保临时 `.env` 是唯一来源。 */
+const scrubKeys = [...dotenvKeys, ...EXTRA_ENV_KEYS]
+
 /** 在指定 cwd 下用 tsx 运行脚本，返回退出码与输出。 */
 function runScript(cwd: string, script: string, extraEnv: Record<string, string> = {}): RunResult {
   const env: Record<string, string | undefined> = { ...process.env, ...extraEnv }
-  for (const key of dotenvKeys) {
+  for (const key of scrubKeys) {
     if (!(key in extraEnv)) delete env[key]
   }
 
   try {
-    const stdout = execFileSync(tsxBin, [script], {
+    const stdout = execFileSync(tsxBin, ['--tsconfig', repoTsconfig, script], {
       cwd,
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -125,11 +149,20 @@ describe('check-env.ts（开发校验）', () => {
     expect(result.stdout).toContain('开发环境变量校验通过')
   })
 
-  it('缺少 `.env` 时给出可操作的提示并失败', () => {
+  it('缺少 `.env` 时改用进程 env（CI）：合法字段即通过', () => {
     const dir = makeWorkspace()
-    const result = runScript(dir, checkEnv)
+    const result = runScript(dir, checkEnv, { VITE_BASE_URL: VALID_URL })
+    expect(result.stderr).toBe('')
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('开发环境变量校验通过')
+  })
+
+  it('缺少 `.env` 时进程 env 的非法字段仍失败', () => {
+    const dir = makeWorkspace()
+    const result = runScript(dir, checkEnv, { VITE_BASE_URL: 'not-a-url' })
     expect(result.code).toBe(1)
-    expect(result.stderr).toContain('.env')
+    expect(result.stderr).toContain('VITE_BASE_URL')
+    expect(result.stderr).not.toContain('not-a-url')
   })
 
   it('非法 VITE_BASE_URL 失败，且只报变量名不打印值', () => {
@@ -178,16 +211,27 @@ describe('check-env.ts（开发校验）', () => {
 })
 
 describe('check-env-prod.ts（生产校验）', () => {
-  it('缺少 `.env` 时失败', () => {
+  it('缺少 `.env` 但进程 env 完整时通过（CI）', () => {
+    const result = runScript(makeWorkspace(), checkEnvProd, {
+      BETTER_AUTH_SECRET: 'a'.repeat(32),
+      VITE_BASE_URL: VALID_URL,
+    })
+    expect(result.stderr).toBe('')
+    expect(result.code).toBe(0)
+    expect(result.stderr).not.toContain('a'.repeat(32))
+    expect(result.stdout).toContain('生产环境变量校验通过')
+  })
+
+  it('缺少 `.env` 且进程 env 不完整时失败（报字段名不报值）', () => {
     const dir = makeWorkspace()
     const result = runScript(dir, checkEnvProd)
     expect(result.code).toBe(1)
-    expect(result.stderr).toContain('.env')
+    expect(result.stderr).toContain('VITE_BASE_URL')
   })
 
   it('`.env` 的 NODE_ENV=development 无法绕过生产校验（缺少 secret 即失败）', () => {
     const dir = makeWorkspace()
-    writeDotEnv(dir, 'NODE_ENV=development\n')
+    writeDotEnv(dir, `NODE_ENV=development\nVITE_BASE_URL=${VALID_URL}\n`)
     const result = runScript(dir, checkEnvProd)
     expect(result.code).toBe(1)
     expect(result.stderr).toContain('BETTER_AUTH_SECRET')
@@ -195,7 +239,7 @@ describe('check-env-prod.ts（生产校验）', () => {
 
   it('生产 secret 过短（< 32 字符）失败', () => {
     const dir = makeWorkspace()
-    writeDotEnv(dir, `BETTER_AUTH_SECRET=${SHORT_SECRET}\n`)
+    writeDotEnv(dir, `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET=${SHORT_SECRET}\n`)
     const result = runScript(dir, checkEnvProd)
     expect(result.code).toBe(1)
     expect(result.stderr).toContain('BETTER_AUTH_SECRET')
@@ -204,7 +248,7 @@ describe('check-env-prod.ts（生产校验）', () => {
 
   it('引用包裹的合法 secret 通过', () => {
     const dir = makeWorkspace()
-    writeDotEnv(dir, `BETTER_AUTH_SECRET="${VALID_SECRET}"\n`)
+    writeDotEnv(dir, `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET="${VALID_SECRET}"\n`)
     const result = runScript(dir, checkEnvProd)
     expect(result.stderr).toBe('')
     expect(result.code).toBe(0)
@@ -213,18 +257,59 @@ describe('check-env-prod.ts（生产校验）', () => {
 
   it('非法 DISCORD_WEBHOOK_URL 失败', () => {
     const dir = makeWorkspace()
-    writeDotEnv(dir, `BETTER_AUTH_SECRET=${VALID_SECRET}\nDISCORD_WEBHOOK_URL=not-a-url\n`)
+    writeDotEnv(
+      dir,
+      `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET=${VALID_SECRET}\nDISCORD_WEBHOOK_URL=not-a-url\n`,
+    )
     const result = runScript(dir, checkEnvProd)
     expect(result.code).toBe(1)
     expect(result.stderr).toContain('DISCORD_WEBHOOK_URL')
   })
 
-  it('进程 env 提供合法 secret 时通过', () => {
+  it('进程 env 提供合法 secret 与 URL 时通过', () => {
     const dir = makeWorkspace()
     writeDotEnv(dir, '# 空 .env\n')
-    const result = runScript(dir, checkEnvProd, { BETTER_AUTH_SECRET: VALID_SECRET })
+    const result = runScript(dir, checkEnvProd, {
+      BETTER_AUTH_SECRET: VALID_SECRET,
+      VITE_BASE_URL: VALID_URL,
+    })
     expect(result.stderr).toBe('')
     expect(result.code).toBe(0)
+  })
+
+  it('默认关闭的服务模块不要求其 secret 齐备', () => {
+    const dir = makeWorkspace()
+    // 只提供生产必需的 URL 与 auth secret，未提供 RESEND / STRIPE 等服务端凭据。
+    writeDotEnv(dir, `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
+    const result = runScript(dir, checkEnvProd)
+    expect(result.stderr).toBe('')
+    expect(result.code).toBe(0)
+  })
+
+  it('生产缺少公开 URL 不能借默认 localhost 通过', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(dir, `BETTER_AUTH_SECRET=${'b'.repeat(32)}\n`)
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('VITE_BASE_URL')
+    expect(result.stderr).not.toContain('b'.repeat(32))
+  })
+
+  it('生产 VITE_BASE_URL 为空串失败（无值回显）', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(dir, `VITE_BASE_URL=\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('VITE_BASE_URL')
+  })
+
+  it('生产 VITE_BASE_URL 为 HTTP（非 HTTPS）失败（无值回显）', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(dir, `VITE_BASE_URL=http://jerbix.dev\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('VITE_BASE_URL')
+    expect(result.stderr).not.toContain('jerbix.dev')
   })
 
   it('VITE_BASE_URL=localhost 失败（无值回显）', () => {
@@ -236,6 +321,15 @@ describe('check-env-prod.ts（生产校验）', () => {
     expect(result.stderr).not.toContain('localhost')
   })
 
+  it('VITE_BASE_URL=IPv6 loopback 失败（无值回显）', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(dir, `VITE_BASE_URL=https://[::1]:3000\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('VITE_BASE_URL')
+    expect(result.stderr).not.toContain('::1')
+  })
+
   it('VITE_BASE_URL=127.0.0.1 失败（无值回显）', () => {
     const dir = makeWorkspace()
     writeDotEnv(dir, `VITE_BASE_URL=http://127.0.0.1:3000\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
@@ -245,12 +339,60 @@ describe('check-env-prod.ts（生产校验）', () => {
     expect(result.stderr).not.toContain('127.0.0.1')
   })
 
+  it('VITE_BASE_URL=0.0.0.0 失败（无值回显）', () => {
+    const dir = makeWorkspace()
+    // 用 https 隔离 host 守卫，否则 http 会先被协议守卫拦下，无法证明 0.0.0.0 分支生效。
+    writeDotEnv(dir, `VITE_BASE_URL=https://0.0.0.0\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('VITE_BASE_URL')
+    expect(result.stderr).not.toContain('0.0.0.0')
+  })
+
+  it('VITE_BASE_URL=裸保留域名 example.net 失败（无值回显）', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(dir, `VITE_BASE_URL=https://example.net\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('VITE_BASE_URL')
+    expect(result.stderr).not.toContain('example.net')
+  })
+
+  it('VITE_BASE_URL=裸保留域名 example.org 失败（无值回显）', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(dir, `VITE_BASE_URL=https://example.org\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('VITE_BASE_URL')
+    expect(result.stderr).not.toContain('example.org')
+  })
+
+  it('VITE_BASE_URL 内嵌凭据失败（无值回显）', () => {
+    const dir = makeWorkspace()
+    // 合成凭据：仅用于测试，绝非真实凭据。
+    const credentialUrl = 'https://user:pass@jerbix.dev@jerbix.dev'
+    writeDotEnv(dir, `VITE_BASE_URL=${credentialUrl}\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('VITE_BASE_URL')
+    expect(result.stderr).not.toContain('pass@jerbix.dev')
+  })
+
   it('VITE_BASE_URL=*.example.com 失败（无值回显）', () => {
     const dir = makeWorkspace()
     writeDotEnv(
       dir,
       `VITE_BASE_URL=https://myapp.example.com\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`,
     )
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('VITE_BASE_URL')
+    expect(result.stderr).not.toContain('example.com')
+  })
+
+  it('VITE_BASE_URL=裸保留域名 example.com 失败（无值回显）', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(dir, `VITE_BASE_URL=https://example.com\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
     const result = runScript(dir, checkEnvProd)
     expect(result.code).toBe(1)
     expect(result.stderr).toContain('VITE_BASE_URL')
@@ -275,16 +417,13 @@ describe('check-env-prod.ts（生产校验）', () => {
     expect(result.stderr).not.toContain('test')
   })
 
-  it('合法 prod URL 通过（无值回显）', () => {
+  it('合法生产 URL https://jerbix.dev 通过（无值回显）', () => {
     const dir = makeWorkspace()
-    writeDotEnv(
-      dir,
-      `VITE_BASE_URL=https://real-site.example.com\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`,
-    )
+    writeDotEnv(dir, `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
     const result = runScript(dir, checkEnvProd)
     expect(result.code).toBe(0)
     expect(result.stdout).toContain('生产环境变量校验通过')
-    expect(result.stderr).not.toContain('real-site')
+    expect(result.stderr).not.toContain('jerbix.dev')
   })
 })
 
@@ -342,6 +481,36 @@ describe('check-client-bundle.ts（bundle 扫描）', () => {
     )
     const result = runScript(dir, checkBundle)
     expect(result.code).toBe(0)
+  })
+})
+
+describe('resolveRawEnv（.env 缺失与合并规则）', () => {
+  it('`.env` 不存在时回退为空文件，不抛 ENOENT', () => {
+    const dir = makeWorkspace()
+    const raw = resolveRawEnv(join(dir, '.env'))
+    // 进程 env 仍在（如 PATH），但 `.env` 独有的键不应凭空出现。
+    expect(raw).not.toHaveProperty('__SAAS_ENV_FILE_ONLY__')
+    expect(typeof raw).toBe('object')
+  })
+
+  it('文件独有的键被读入，进程 env 同键优先', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(dir, '__SAAS_ENV_FILE_ONLY__=from-file\nVITE_BASE_URL=from-file\n')
+
+    // 显式设置进程 env 值（合成），使「进程 env 优先」规则恒定被验证，不依赖外部是否设置。
+    const processValue = 'https://process-override.jerbix.dev'
+    const previous = process.env.VITE_BASE_URL
+    process.env.VITE_BASE_URL = processValue
+    try {
+      const raw = resolveRawEnv(join(dir, '.env'))
+      // 文件独有键被读入。
+      expect(raw.__SAAS_ENV_FILE_ONLY__).toBe('from-file')
+      // 同键取进程 env 值，而非文件里的 from-file。
+      expect(raw.VITE_BASE_URL).toBe(processValue)
+    } finally {
+      if (previous === undefined) delete process.env.VITE_BASE_URL
+      else process.env.VITE_BASE_URL = previous
+    }
   })
 })
 

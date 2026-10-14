@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
 import { deliverContactNotification } from '@/contact/notifications'
 import type { ContactInput } from '@/contact/schema'
+import { getModuleUnavailableResponse } from '@/lib/module-access.server'
 import { checkRateLimit } from '@/lib/rate-limit'
 
 const contactBodySchema = z.object({
@@ -36,6 +37,10 @@ export const Route = createFileRoute('/api/contact/$')({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        // 门禁先于 body 解析、限流与通知投递。
+        const unavailable = getModuleUnavailableResponse('contact')
+        if (unavailable) return unavailable
+
         const ip = getClientIp(request)
 
         const body = await request.json().catch(() => null)

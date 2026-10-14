@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
 import { websiteConfig } from '@/config/website'
+import { getModuleUnavailableResponse } from '@/lib/module-access.server'
 import { checkRateLimit, subscribe, unsubscribe } from '@/newsletter'
 
 const subscribeBodySchema = z.object({
@@ -33,6 +34,10 @@ export const Route = createFileRoute('/api/newsletter/$')({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        // 门禁先于 body 解析、限流与 provider 调用。
+        const unavailable = getModuleUnavailableResponse('newsletter')
+        if (unavailable) return unavailable
+
         const ip = getClientIp(request)
         if (!(await checkRateLimit(ip, 'subscribe'))) {
           return jsonRateLimited()
@@ -53,6 +58,10 @@ export const Route = createFileRoute('/api/newsletter/$')({
       },
 
       DELETE: async ({ request }) => {
+        // 门禁先于 body 解析、限流与 provider 调用。
+        const unavailable = getModuleUnavailableResponse('newsletter')
+        if (unavailable) return unavailable
+
         const ip = getClientIp(request)
         if (!(await checkRateLimit(ip, 'unsubscribe'))) {
           return jsonRateLimited()

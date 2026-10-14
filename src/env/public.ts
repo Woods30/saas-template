@@ -11,6 +11,20 @@ const schema = z.object({
   VITE_PLAUSIBLE_DOMAIN: z.string().optional(),
   VITE_UMAMI_WEBSITE_ID: z.string().optional(),
   VITE_UMAMI_ID: z.string().optional(),
+  VITE_UMAMI_SCRIPT_URL: z
+    .url()
+    .refine(
+      (value) => {
+        try {
+          const url = new URL(value)
+          return url.protocol === 'https:' && !url.username && !url.password
+        } catch {
+          return false
+        }
+      },
+      { message: 'VITE_UMAMI_SCRIPT_URL 必须为无凭据的 HTTPS URL' },
+    )
+    .optional(),
   VITE_CLARITY_PROJECT_ID: z.string().optional(),
   VITE_CLARITY_ID: z.string().optional(),
   VITE_TURNSTILE_SITE_KEY: z.string().optional(),

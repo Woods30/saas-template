@@ -1,6 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
 import { getAuth } from '@/auth/auth'
+import { getMailFrom } from '@/config/service-status'
+import { websiteConfig } from '@/config/website'
+import { getModuleUnavailableResponse } from '@/lib/module-access.server'
 import { getServerContext } from '@/lib/server-context'
 import { sendMail } from '@/mail'
 
@@ -37,6 +40,10 @@ export const Route = createFileRoute('/api/email/$')({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        // 门禁先于鉴权、body 解析与 provider 调用。
+        const unavailable = getModuleUnavailableResponse('mail')
+        if (unavailable) return unavailable
+
         const { env } = getServerContext()
 
         // --- Auth gate ---
@@ -67,13 +74,14 @@ export const Route = createFileRoute('/api/email/$')({
           return new Response('Forbidden', { status: 403 })
         }
 
-        // --- Determine default sender from provider ---
-        // Cloudflare binding has no credentials concept; fall back to CLOUDFLARE_EMAIL_SENDER.
-        // Resend uses its own API key — defaultSender is baked into the provider at registration.
-        const defaultSender = env.CLOUDFLARE_EMAIL_SENDER ?? 'noreply@example.com'
+        // --- Determine provider and sender from unified config ---
+        // Provider 与发件人均取自站点配置 / 归一化 env，与 mail registry 保持同源；
+        // 不再依据 `EMAIL` binding 存在与否临时切换 provider。
+        const provider = websiteConfig.mail.provider
+        const defaultSender = getMailFrom(websiteConfig, env)
 
         // --- Send; ignore client-supplied fromAddress (prevents sender spoofing) ---
-        const result = await sendMail(env.EMAIL ? 'cloudflare' : 'resend', {
+        const result = await sendMail(provider, {
           to: body.to,
           template: body.template,
           locale: body.locale,

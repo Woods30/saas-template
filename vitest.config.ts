@@ -3,7 +3,14 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   resolve: {
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // 与 tsconfig 的 `content-collections` path 对齐：sitemap 路径工厂等纯逻辑
+      // 会读取生成的博客 / 文档清单，单测需要同一别名才能解析该模块。
+      'content-collections': fileURLToPath(
+        new URL('./.content-collections/generated/index.js', import.meta.url),
+      ),
+    },
   },
   test: {
     environment: 'node',

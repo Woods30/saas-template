@@ -10,10 +10,11 @@ export interface ContactInput {
 }
 
 export async function deliverContactNotification(input: ContactInput): Promise<void> {
-  const supportEmail = websiteConfig.mail?.supportEmail ?? 'support@example.com'
+  // 收件人与发件 provider 均取自站点配置，与 mail registry 使用同一归一化来源。
+  const supportEmail = websiteConfig.mail.supportEmail
 
   // 1. 邮件通知（核心通道；失败要记 log）
-  const mailResult = await sendMail('cloudflare', {
+  const mailResult = await sendMail(websiteConfig.mail.provider, {
     to: supportEmail,
     template: 'contactMessage',
     locale: 'zh',
@@ -28,9 +29,9 @@ export async function deliverContactNotification(input: ContactInput): Promise<v
     console.warn(`[contact] 邮件通知失败: ${mailResult.error?.split('\n')[0] ?? 'unknown'}`)
   }
 
-  // 2. Discord 通知（仅当 enable；失败不阻塞）
+  // 2. Discord 通知（仅当 enabled；失败不阻塞）
   // Discord embed title limited to 200 chars, description to 1000 chars.
-  if (websiteConfig.notification?.enable) {
+  if (websiteConfig.notification?.enabled) {
     const truncatedSubject =
       input.subject.length > 200 ? `${input.subject.slice(0, 197)}...` : input.subject
     const truncatedMessage =

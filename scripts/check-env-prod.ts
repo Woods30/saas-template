@@ -3,61 +3,72 @@
  *
  * 强制以 production 语义校验（忽略 `.env` 与进程中的 `NODE_ENV`），复用 `src/env` 的 schema：
  * - 已提供的字段须合法（URL / enum / secret 长度）；
- * - `BETTER_AUTH_SECRET` 必填且 ≥ 32 字符（见 `validateProdServerEnv`）。
+ * - `BETTER_AUTH_SECRET` 必填且 ≥ 32 字符（见 `validateProdServerEnv`）；
+ * - `VITE_BASE_URL` 必须为显式提供的真实 HTTPS 域名，不接受 schema 默认补值；
+ * - 已启用服务的必要字段缺失即失败（`getServiceStatuses` 的 incomplete）。
  *
- * 仅校验本地配置，不代表 Cloudflare 云端已配置 secrets。诊断只输出变量名与原因，绝不打印值。
+ * 仅校验本地配置，不代表 Cloudflare 云端已配置 secrets。诊断只输出字段名、原因与位置，
+ * 绝不打印值、`.env` 内容或 secret。
  */
 import { ZodError } from 'zod'
+import { getServiceStatuses, validateWebsiteConfig } from '../src/config/service-status'
+import { createWebsiteConfig } from '../src/config/website'
 import { parsePublicEnv } from '../src/env/public'
 import { validateProdServerEnv } from '../src/env/server'
 import { resolveRawEnv } from './lib/env-file'
-import { formatZodIssues } from './lib/report-issues'
+import { formatServiceDiagnostics, formatZodIssues } from './lib/report-issues'
 
-/** 不允许作为生产 VITE_BASE_URL 的占位域名模式。 */
-const FORBIDDEN_HOSTNAMES = [
-  'localhost',
-  '127.0.0.1',
-  '0.0.0.0',
-  // 阻塞无连字符的单标签子域名（如 myapp.example.com）；允许带连字符的真实标识名（如 real-site.example.com）。
-  /^[^.-]+\.example\.com$/,
-  /^[^.-]+\.example$/,
-  /^[^.-]+\.test$/,
-]
+/**
+ * 判断 `VITE_BASE_URL` 是否为可用于生产的真实 HTTPS 站点根。
+ *
+ * 用标准 `URL` 解析，不做正则截取：要求 `https:`、无用户名 / 密码、主机名非本地 / 回环，
+ * 且非保留示例域（`example.com/.net/.org` 及其子域、`*.example`、`*.test`）。
+ */
+function isProductionBaseUrl(value: string | undefined): boolean {
+  if (!value) return false
+  try {
+    const url = new URL(value)
+    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+    return (
+      url.protocol === 'https:' &&
+      !url.username &&
+      !url.password &&
+      host !== 'localhost' &&
+      !host.endsWith('.localhost') &&
+      host !== '::1' &&
+      host !== '0.0.0.0' &&
+      !/^127\./.test(host) &&
+      !['example.com', 'example.net', 'example.org'].some(
+        (domain) => host === domain || host.endsWith(`.${domain}`),
+      ) &&
+      !host.endsWith('.example') &&
+      !host.endsWith('.test')
+    )
+  } catch {
+    return false
+  }
+}
 
 function main(): void {
-  // Try to resolve .env; if it doesn't exist, exit immediately.
-  const raw = (() => {
-    try {
-      return resolveRawEnv()
-    } catch {
-      console.error('❌ 未找到 .env。复制模板后重试：cp .env.example .env')
-      process.exit(1)
-    }
-  })()
+  // `.env` 不存在时回退到进程 env（CI 场景）；此时不再提示复制模板。
+  const raw = resolveRawEnv()
 
   // 强制 production：不信任 `.env` / 进程里的 NODE_ENV，避免本地 development 值绕过生产校验。
   const prodRaw: Record<string, string | undefined> = { ...raw, NODE_ENV: 'production' }
 
-  // 生产 VITE_BASE_URL 禁止占位域名（SEO/OG 指向 localhost 的产物无意义）。
-  const baseUrl = prodRaw.VITE_BASE_URL ?? ''
-  if (baseUrl) {
-    const hostname = baseUrl
-      .replace(/^https?:\/\//, '')
-      .replace(/\/.*$/, '')
-      .replace(/:\d+$/, '')
-    // 精确匹配禁止主机名（localhost 等）或通配后缀匹配（*.example.com 等）。
-    const matched = FORBIDDEN_HOSTNAMES.some((pattern) =>
-      typeof pattern === 'string' ? pattern === hostname : pattern.test(hostname),
+  // 生产必须显式提供真实 HTTPS `VITE_BASE_URL`：空 / 缺省会落回 schema 默认 localhost，不能接受。
+  if (!isProductionBaseUrl(raw.VITE_BASE_URL)) {
+    console.error(
+      '❌ VITE_BASE_URL 必须为显式提供的真实 HTTPS 生产域名（不能为空、本地、回环或保留域名）',
     )
-    if (matched) {
-      console.error('❌ VITE_BASE_URL 不能为本地或占位域名，请使用实际的生产域名')
-      process.exit(1)
-    }
+    process.exit(1)
   }
 
+  let publicEnv: ReturnType<typeof parsePublicEnv>
+  let serverEnv: ReturnType<typeof validateProdServerEnv>
   try {
-    parsePublicEnv(prodRaw)
-    validateProdServerEnv(prodRaw)
+    publicEnv = parsePublicEnv(prodRaw)
+    serverEnv = validateProdServerEnv(prodRaw)
   } catch (error) {
     if (error instanceof ZodError) {
       console.error('❌ 生产环境变量校验失败：')
@@ -69,6 +80,25 @@ function main(): void {
       process.exit(1)
     }
     throw error
+  }
+
+  // 用脚本自己解析的 raw env 构造配置，避免导入 Vite 下求值的 `websiteConfig`。
+  const config = createWebsiteConfig(publicEnv)
+
+  const configIssues = validateWebsiteConfig(config)
+  if (configIssues.length > 0) {
+    console.error('❌ 网站配置校验失败：')
+    for (const issue of configIssues) {
+      console.error(`  - ${issue.key}（${issue.location}）：${issue.reason}`)
+    }
+    process.exit(1)
+  }
+
+  const diagnostics = formatServiceDiagnostics(getServiceStatuses({ config, publicEnv, serverEnv }))
+  if (diagnostics.hasIncomplete) {
+    console.error('❌ 已启用服务缺少必要配置：')
+    for (const line of diagnostics.lines) console.error(`  ${line}`)
+    process.exit(1)
   }
 
   console.log('✅ 生产环境变量校验通过')

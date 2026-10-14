@@ -29,9 +29,18 @@ export function readDotEnvFile(path: string = DEFAULT_DOTENV_PATH): Record<strin
  * 进程环境变量优先级更高：`VITE_BASE_URL=... pnpm check:env` 可临时覆盖 `.env`。
  * 返回的对象可直接交给 `src/env` 的 Zod schema 校验；空串归一由 `src/env/normalize.ts`
  * 统一处理，此处不重复实现另一套空值规则。
+ *
+ * `.env` 不存在时（CI 只提供进程 env）不报错，回退为空文件：只忽略明确的 `ENOENT`，
+ * 权限 / 语法等其它错误继续抛出，避免把真实故障误当成「没有 `.env`」而静默通过。
  */
 export function resolveRawEnv(
   path: string = DEFAULT_DOTENV_PATH,
 ): Record<string, string | undefined> {
-  return { ...readDotEnvFile(path), ...process.env }
+  let fromFile: Record<string, string> = {}
+  try {
+    fromFile = readDotEnvFile(path)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+  return { ...fromFile, ...process.env }
 }

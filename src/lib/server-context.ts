@@ -9,6 +9,7 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { KVCacheProvider } from '@/cache/provider/kv'
+import type { ServerEnv } from '@/env/server'
 import { defaultTheme, type Theme } from '@/lib/theme'
 import type { MailProvider } from '@/mail/types'
 import type { NewsletterProviderName } from '@/newsletter'
@@ -20,7 +21,12 @@ import type { PaymentProvider } from '@/payment/types'
 import type { R2StorageProvider } from '@/storage/provider/r2'
 
 interface ServerContext {
-  env: Env
+  /**
+   * 每请求归一化 env：`src/server.ts` 在请求入口把 `parseServerEnv` 的结果合并进原始
+   * binding 对象后写入，故此处同时具备已校验的字符串字段与原始资源 binding
+   * （DB / CACHE / BUCKET / EMAIL）。
+   */
+  env: Env & ServerEnv
   cacheProvider: KVCacheProvider
   storageProvider: R2StorageProvider
   mailProviderRegistry?: Record<string, (() => MailProvider) | undefined>
@@ -40,6 +46,11 @@ interface ServerContext {
    * 请求入口写入；`__root.tsx` 据此输出 `<html data-theme>`，避免首屏闪烁。
    */
   theme: Theme
+  /**
+   * 文档侧边栏是否收起（来自 `DOCS_SIDEBAR` cookie）。由 `src/server.ts` 在请求
+   * 入口写入；`DocsLayout` 据此决定首屏是否渲染侧栏，避免 hydration 时闪一下。
+   */
+  docsSidebarCollapsed: boolean
 }
 
 const als = new AsyncLocalStorage<ServerContext>()
@@ -54,7 +65,7 @@ export function getServerContext(): ServerContext {
     // 客户端调用或 outside of ALS context — 典型于测试环境
     // 返回带 undefined env 的宽松对象，调用方需自行防御
     return {
-      env: undefined as unknown as Env,
+      env: undefined as unknown as Env & ServerEnv,
       cacheProvider: undefined as unknown as KVCacheProvider,
       storageProvider: undefined as unknown as R2StorageProvider,
       newsletterProviderRegistry: undefined,
@@ -64,6 +75,8 @@ export function getServerContext(): ServerContext {
       nonce: '',
       // 客户端 / 测试环境无 per-request 主题；回退为跟随系统。
       theme: defaultTheme,
+      // 客户端 / 测试环境无 per-request 偏好；侧边栏默认展开。
+      docsSidebarCollapsed: false,
     }
   }
   return ctx

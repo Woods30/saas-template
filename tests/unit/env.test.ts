@@ -26,6 +26,35 @@ describe('parsePublicEnv', () => {
     expect(env.VITE_PAYMENT_PROVIDER).toBeUndefined()
     expect(env.VITE_GA_ID).toBeUndefined()
   })
+
+  it('接受无凭据的 HTTPS Umami 脚本 URL', () => {
+    const url = 'https://stats.jerbix.dev/script.js'
+    expect(parsePublicEnv({ VITE_UMAMI_SCRIPT_URL: url }).VITE_UMAMI_SCRIPT_URL).toBe(url)
+  })
+
+  it.each([
+    'not-a-url',
+    'http://stats.jerbix.dev/script.js',
+    new URL('script.js', 'https://stats.jerbix.dev')
+      .toString()
+      .replace('https://', 'https://user@'),
+    new URL('script.js', 'https://stats.jerbix.dev')
+      .toString()
+      .replace('https://', 'https://:password@'),
+  ])('拒绝非法或含凭据的 Umami 脚本 URL：%s', (url) => {
+    expect(() => parsePublicEnv({ VITE_UMAMI_SCRIPT_URL: url })).toThrow(/VITE_UMAMI_SCRIPT_URL/)
+  })
+
+  it('Umami 脚本 URL 可省略或留空', () => {
+    expect(parsePublicEnv({}).VITE_UMAMI_SCRIPT_URL).toBeUndefined()
+    expect(parsePublicEnv({ VITE_UMAMI_SCRIPT_URL: '' }).VITE_UMAMI_SCRIPT_URL).toBeUndefined()
+  })
+
+  it('公开 env 不保留服务端 secret 或 MAIL_FROM', () => {
+    const env = parsePublicEnv({ RESEND_API_KEY: 'test-only', MAIL_FROM: 'noreply@jerbix.dev' })
+    expect(env).not.toHaveProperty('RESEND_API_KEY')
+    expect(env).not.toHaveProperty('MAIL_FROM')
+  })
 })
 
 describe('parseServerEnv', () => {
@@ -33,6 +62,26 @@ describe('parseServerEnv', () => {
     const env = parseServerEnv({})
     expect(env.NODE_ENV).toBe('development')
   })
+
+  it('接受合法 MAIL_FROM 邮件地址', () => {
+    expect(parseServerEnv({ MAIL_FROM: 'noreply@jerbix.dev' }).MAIL_FROM).toBe('noreply@jerbix.dev')
+  })
+
+  it.each(['bad-address', 'Jerbix <noreply@jerbix.dev>'])('拒绝非法 MAIL_FROM：%s', (MAIL_FROM) => {
+    expect(() => parseServerEnv({ MAIL_FROM })).toThrow(/MAIL_FROM/)
+  })
+
+  it('MAIL_FROM 可省略或留空', () => {
+    expect(parseServerEnv({}).MAIL_FROM).toBeUndefined()
+    expect(parseServerEnv({ MAIL_FROM: '' }).MAIL_FROM).toBeUndefined()
+  })
+
+  it.each([{ NODE_ENV: 'invalid' }, { BEEHIIV_SEND_WELCOME_EMAIL: 'invalid' }])(
+    '在解析边界拒绝非法原始 enum binding：%o',
+    (raw) => {
+      expect(() => parseServerEnv(raw)).toThrow()
+    },
+  )
 })
 
 describe('validateProdServerEnv', () => {

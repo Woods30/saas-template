@@ -17,7 +17,10 @@ import {
   type HandlerCallback,
 } from '@tanstack/react-start/server'
 import { KVCacheProvider } from './cache/provider/kv'
+import { getMailFrom } from './config/service-status'
 import { websiteConfig } from './config/website'
+import { parseServerEnv, type ServerEnv } from './env/server'
+import { DOCS_SIDEBAR_COOKIE_NAME, parseSidebarCollapsed, setServerSidebarGetter } from './lib/docs'
 import { LOCALE_COOKIE_NAME, readCookieValue, readLocaleCookie } from './lib/locale'
 import { addNonceToInlineScripts, buildCspHeader, generateNonce } from './lib/security'
 import { als, getServerContext } from './lib/server-context'
@@ -37,6 +40,9 @@ registerServerLocaleStrategy()
 // 注入服务端主题读取器：`src/lib/theme.ts` 的 `getTheme()` 在 SSR 时经此读取 ALS，
 // 从而不必把 `node:async_hooks` 依赖带入客户端 bundle。
 setServerThemeGetter(() => getServerContext().theme)
+
+// 同一手法注入文档侧边栏偏好读取器，让 `DocsLayout` 的首屏状态与客户端一致。
+setServerSidebarGetter(() => getServerContext().docsSidebarCollapsed)
 
 /**
  * Wrap the default stream handler so the per-request CSP nonce reaches TanStack
@@ -72,19 +78,33 @@ export default {
     // 主题随 `THEME` cookie 变化；无 cookie 时为 `system`（由 CSS 媒体查询决定明暗）。
     const theme =
       parseTheme(readCookieValue(request.headers.get('cookie'), THEME_COOKIE_NAME)) ?? defaultTheme
+    // 归一化服务端 env：secret 只经 `parseServerEnv` 校验后才进入 registry；
+    // 资源 binding（DB / CACHE / BUCKET / EMAIL）保留原始对象，供 provider 与框架使用。
+    const parsedEnv = parseServerEnv(env as unknown as Record<string, unknown>)
+    // 显式覆盖两个原始类型为 `string` 的 enum 字段，令归一化结果满足 `ServerEnv`；
+    // 其余字段由 `...parsedEnv` 提供，`DB / CACHE / BUCKET / EMAIL` 保留原 binding 对象。
+    const normalizedEnv: Env & ServerEnv = {
+      ...env,
+      ...parsedEnv,
+      NODE_ENV: parsedEnv.NODE_ENV,
+      BEEHIIV_SEND_WELCOME_EMAIL: parsedEnv.BEEHIIV_SEND_WELCOME_EMAIL,
+    }
     // 将 env 与 nonce 一起存入 ALS，供 `src/lib/server-context.ts` 的
     // `getServerContext()` 与 `streamHandlerWithNonce` 各自读取。
     return als.run(
       {
-        env,
+        env: normalizedEnv,
         cacheProvider: new KVCacheProvider(env.CACHE as KVNamespace),
         storageProvider: new R2StorageProvider(env.BUCKET as unknown as R2Bucket),
-        mailProviderRegistry: buildMailProviderRegistry(env),
-        newsletterProviderRegistry: buildNewsletterProviderRegistry(env),
-        notificationProviderRegistry: buildNotificationProviderRegistry(env),
-        paymentProviderRegistry: buildPaymentProviderRegistry(env),
+        mailProviderRegistry: buildMailProviderRegistry(normalizedEnv),
+        newsletterProviderRegistry: buildNewsletterProviderRegistry(normalizedEnv),
+        notificationProviderRegistry: buildNotificationProviderRegistry(normalizedEnv),
+        paymentProviderRegistry: buildPaymentProviderRegistry(normalizedEnv),
         nonce,
         theme,
+        docsSidebarCollapsed: parseSidebarCollapsed(
+          readCookieValue(request.headers.get('cookie'), DOCS_SIDEBAR_COOKIE_NAME),
+        ),
       },
       async () => {
         // 不使用 URL 前缀策略，中间件不会改写 URL；原样把 request 交给框架处理。
@@ -99,23 +119,23 @@ export default {
 }
 
 /**
- * Build per-request mail provider registry from env bindings.
+ * Build per-request mail provider registry from normalized env bindings.
  * Returns a plain object (not a Map) matching the registry shape.
+ *
+ * 归一化后 provider 只消费已校验字段；默认发件人由 `getMailFrom` 统一决定，
+ * 缺失发件人时对应 provider 不注册（不使用 `example.com` 回退）。
  */
 function buildMailProviderRegistry(
-  env: Env,
+  env: Env & ServerEnv,
 ): Record<string, (() => import('./mail').MailProvider) | undefined> {
   const registry: Record<string, (() => import('./mail').MailProvider) | undefined> = {}
-  if (env.EMAIL) {
-    registry.cloudflare = () =>
-      new CloudflareEmailProvider(env.EMAIL, env.CLOUDFLARE_EMAIL_SENDER ?? 'noreply@example.com')
+  const mailFrom = getMailFrom(websiteConfig, env)
+  if (env.EMAIL && mailFrom) {
+    const email = env.EMAIL
+    registry.cloudflare = () => new CloudflareEmailProvider(email, mailFrom)
   }
-  if (env.RESEND_API_KEY) {
-    registry.resend = () =>
-      new ResendMailProvider(
-        env.RESEND_API_KEY ?? '',
-        `${websiteConfig.metadata.name} <noreply@example.com>`,
-      )
+  if (env.RESEND_API_KEY && mailFrom) {
+    registry.resend = () => new ResendMailProvider(env.RESEND_API_KEY ?? '', mailFrom)
   }
   return registry
 }

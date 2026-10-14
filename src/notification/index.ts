@@ -1,4 +1,4 @@
-// Env is a global interface declared in src/types/cloudflare.d.ts — no import needed
+import type { ServerEnv } from '@/env/server'
 import { getServerContext } from '@/lib/server-context'
 import { DiscordNotificationProvider } from './provider/discord'
 import { FeishuNotificationProvider } from './provider/feishu'
@@ -6,19 +6,24 @@ import type { NotificationChannel, NotificationPayload, NotificationProvider } f
 
 type ProviderFactory = () => NotificationProvider
 
+/** 归一化后 provider 所需的 server env 子集。 */
+type NotificationEnv = Pick<ServerEnv, 'DISCORD_WEBHOOK_URL' | 'FEISHU_WEBHOOK_URL'>
+
 /**
  * 按当前请求 env 构建 notification provider 注册表。
  * 在 src/server.ts 的 als.run() 中调用，结果注入 ServerContext.notificationProviderRegistry。
+ * 只消费 `parseServerEnv` 归一化后的字段。
  */
 export function buildNotificationProviderRegistry(
-  _env: Env,
+  env: NotificationEnv,
 ): Partial<Record<NotificationChannel, ProviderFactory>> {
+  const { DISCORD_WEBHOOK_URL, FEISHU_WEBHOOK_URL } = env
   return {
-    discord: _env.DISCORD_WEBHOOK_URL
-      ? () => new DiscordNotificationProvider(_env.DISCORD_WEBHOOK_URL ?? '')
+    discord: DISCORD_WEBHOOK_URL
+      ? () => new DiscordNotificationProvider(DISCORD_WEBHOOK_URL)
       : undefined,
-    feishu: _env.FEISHU_WEBHOOK_URL
-      ? () => new FeishuNotificationProvider(_env.FEISHU_WEBHOOK_URL ?? '')
+    feishu: FEISHU_WEBHOOK_URL
+      ? () => new FeishuNotificationProvider(FEISHU_WEBHOOK_URL)
       : undefined,
   }
 }

@@ -1,0 +1,216 @@
+import { z } from 'zod'
+import type { PublicEnv } from '@/env/public'
+import type { ServerEnv } from '@/env/server'
+import type { ServiceModule, WebsiteConfig } from './website'
+
+/**
+ * 服务配置诊断。
+ *
+ * 纯函数，不发起网络请求、不读取 `import.meta.env` / `process.env`，也不回显任何凭据值。
+ * 公开 env、服务端 env 与资源 binding 存在性都由调用方解析后传入，便于 CLI 与单测复用。
+ *
+ * 状态只表示「开关与必要字段是否齐备」，**不代表**外部服务 ready 或投递 / 收款成功。
+ */
+export type ConfigIssue = {
+  key: string
+  reason: string
+  location: 'src/config/website.ts' | 'env' | 'Cloudflare binding'
+  manual?: boolean
+}
+
+export type ServiceStatus = {
+  state: 'disabled' | 'incomplete' | 'configured'
+  issues: ConfigIssue[]
+}
+
+/**
+ * 归一化默认发件人。
+ *
+ * 优先 `MAIL_FROM`；缺失且 provider 为 Cloudflare 时回退兼容字段 `CLOUDFLARE_EMAIL_SENDER`。
+ * Resend 不借用 Cloudflare sender，也不回退 `example.com`（缺失即返回 `undefined`）。
+ */
+export function getMailFrom(config: WebsiteConfig, env: ServerEnv): string | undefined {
+  return (
+    env.MAIL_FROM ??
+    (config.mail.provider === 'cloudflare' ? env.CLOUDFLARE_EMAIL_SENDER : undefined)
+  )
+}
+
+const REQUIRED_CONFIG_REASON = '已启用模块缺少必要配置'
+const DEPLOYMENT_CHECK_REASON = '部署时核对 binding 与实际收件限制'
+
+function isSafeHttpsUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && !url.username && !url.password
+  } catch {
+    return false
+  }
+}
+
+function isRootOrProtocolRelativePath(value: string): boolean {
+  // root-relative（`/logo.svg`）与 protocol-relative（`//cdn/logo.svg`）均以 `/` 开头。
+  return value.startsWith('/')
+}
+
+export function getServiceStatuses(input: {
+  config: WebsiteConfig
+  publicEnv: PublicEnv
+  serverEnv: ServerEnv
+  bindings?: { email: boolean }
+}): Record<ServiceModule, ServiceStatus> {
+  const { config, publicEnv: pub, serverEnv: env, bindings } = input
+  // 受控本地断言：每个 ServiceModule 键都会在下方被 `check` 完整赋值后才返回，
+  // 不借助断言绕过 Router 或 env 校验。
+  const result = {} as Record<ServiceModule, ServiceStatus>
+  const check = (
+    name: ServiceModule,
+    requirements: Array<[string, boolean, ConfigIssue['location']]>,
+    manualIssues: ConfigIssue[] = [],
+  ) => {
+    const issues = config[name].enabled
+      ? requirements
+          .filter(([, valid]) => !valid)
+          .map(([key, , location]) => ({ key, location, reason: REQUIRED_CONFIG_REASON }))
+      : []
+    result[name] = {
+      state: !config[name].enabled ? 'disabled' : issues.length ? 'incomplete' : 'configured',
+      // manual 核对项仅用于部署提示，不参与 completeness 判定，故不进入 issues.length。
+      issues: config[name].enabled ? [...issues, ...manualIssues] : [],
+    }
+  }
+
+  const mailManual: ConfigIssue[] =
+    config.mail.enabled && config.mail.provider === 'cloudflare' && !bindings
+      ? [
+          {
+            key: 'EMAIL',
+            location: 'Cloudflare binding',
+            reason: DEPLOYMENT_CHECK_REASON,
+            manual: true,
+          },
+        ]
+      : []
+
+  check(
+    'mail',
+    config.mail.provider === 'resend'
+      ? [
+          ['RESEND_API_KEY', !!env.RESEND_API_KEY, 'env'],
+          ['MAIL_FROM', !!env.MAIL_FROM, 'env'],
+        ]
+      : [
+          ['MAIL_FROM / CLOUDFLARE_EMAIL_SENDER', !!getMailFrom(config, env), 'env'],
+          ['EMAIL', bindings?.email !== false, 'Cloudflare binding'],
+        ],
+    mailManual,
+  )
+
+  check('contact', [
+    ['mail.enabled', result.mail.state === 'configured', 'src/config/website.ts'],
+    [
+      'mail.supportEmail',
+      z.email().safeParse(config.mail.supportEmail).success,
+      'src/config/website.ts',
+    ],
+  ])
+
+  check(
+    'newsletter',
+    config.newsletter.provider === 'resend'
+      ? [
+          ['RESEND_API_KEY', !!env.RESEND_API_KEY, 'env'],
+          ['RESEND_AUDIENCE_ID', !!env.RESEND_AUDIENCE_ID, 'env'],
+        ]
+      : [
+          ['BEEHIIV_API_KEY', !!env.BEEHIIV_API_KEY, 'env'],
+          ['BEEHIIV_PUBLICATION_ID', !!env.BEEHIIV_PUBLICATION_ID, 'env'],
+        ],
+  )
+
+  check('payment', [
+    ['STRIPE_SECRET_KEY', !!env.STRIPE_SECRET_KEY, 'env'],
+    ['STRIPE_WEBHOOK_SECRET', !!env.STRIPE_WEBHOOK_SECRET, 'env'],
+    [
+      'payment.allowedPriceIds',
+      config.payment.allowedPriceIds.some((id) => id.trim().length > 0),
+      'src/config/website.ts',
+    ],
+  ])
+
+  check('notification', [
+    [
+      'DISCORD_WEBHOOK_URL / FEISHU_WEBHOOK_URL',
+      !!(env.DISCORD_WEBHOOK_URL || env.FEISHU_WEBHOOK_URL),
+      'env',
+    ],
+  ])
+
+  const analytics: Array<[string, boolean, ConfigIssue['location']]> = [
+    ['analytics.providers', config.analytics.providers.length > 0, 'src/config/website.ts'],
+  ]
+  for (const provider of config.analytics.providers) {
+    if (provider === 'ga') analytics.push(['VITE_GA_ID', !!pub.VITE_GA_ID, 'env'])
+    if (provider === 'plausible')
+      analytics.push(['VITE_PLAUSIBLE_DOMAIN', !!pub.VITE_PLAUSIBLE_DOMAIN, 'env'])
+    if (provider === 'umami')
+      analytics.push(
+        [
+          'VITE_UMAMI_WEBSITE_ID / VITE_UMAMI_ID',
+          !!(pub.VITE_UMAMI_WEBSITE_ID ?? pub.VITE_UMAMI_ID),
+          'env',
+        ],
+        ['VITE_UMAMI_SCRIPT_URL', !!pub.VITE_UMAMI_SCRIPT_URL, 'env'],
+      )
+    if (provider === 'clarity')
+      analytics.push([
+        'VITE_CLARITY_PROJECT_ID / VITE_CLARITY_ID',
+        !!(pub.VITE_CLARITY_PROJECT_ID ?? pub.VITE_CLARITY_ID),
+        'env',
+      ])
+  }
+  check('analytics', analytics)
+
+  return result
+}
+
+/**
+ * 校验源码配置中无法由 TypeScript 类型守住的取值。
+ *
+ * 只产出字段名、原因与位置，绝不含原始值（避免把非法 URL / 邮箱写进日志）。
+ * schema 层面的类型错误由 TypeScript 防守，这里不重复。
+ */
+export function validateWebsiteConfig(config: WebsiteConfig): ConfigIssue[] {
+  const issues: ConfigIssue[] = []
+  const location = 'src/config/website.ts' as const
+
+  for (const [platform, url] of Object.entries(config.social)) {
+    if (url && !isSafeHttpsUrl(url)) {
+      issues.push({
+        key: `social.${platform}`,
+        location,
+        reason: '社交链接必须为无凭据的 HTTPS URL',
+      })
+    }
+  }
+
+  if (config.mail.supportEmail && !z.email().safeParse(config.mail.supportEmail).success) {
+    issues.push({
+      key: 'mail.supportEmail',
+      location,
+      reason: 'supportEmail 必须为合法邮箱地址',
+    })
+  }
+
+  for (const [name, path] of Object.entries(config.metadata.images)) {
+    if (!isRootOrProtocolRelativePath(path)) {
+      issues.push({
+        key: `metadata.images.${name}`,
+        location,
+        reason: '图片路径必须为 root-relative 或 protocol-relative',
+      })
+    }
+  }
+
+  return issues
+}

@@ -9,19 +9,14 @@
  * 与 `wrangler types` 生成的 `Env` 接口等效，供全项目使用。
  */
 /// <reference types="@cloudflare/workers-types" />
-interface Env {
+type ServerEnvBindings = Partial<import('@/env/server').ServerEnv>
+
+interface Env extends Omit<ServerEnvBindings, 'NODE_ENV' | 'BEEHIIV_SEND_WELCOME_EMAIL'> {
   DB: D1Database
   CACHE: KVNamespace
   BUCKET: R2Bucket
-  EMAIL: SendEmail
-  CLOUDFLARE_EMAIL_SENDER?: string
-  RESEND_API_KEY?: string
-  RESEND_AUDIENCE_ID?: string
-  BEEHIIV_API_KEY?: string
-  BEEHIIV_PUBLICATION_ID?: string
-  BEEHIIV_SEND_WELCOME_EMAIL?: string
-  DISCORD_WEBHOOK_URL?: string
-  FEISHU_WEBHOOK_URL?: string
-  STRIPE_SECRET_KEY?: string
-  STRIPE_WEBHOOK_SECRET?: string
+  EMAIL?: SendEmail
+  // binding 是未经校验的原始字符串；enum 限制与默认值由 parseServerEnv 处理。
+  NODE_ENV?: ServerEnvBindings['NODE_ENV'] | string
+  BEEHIIV_SEND_WELCOME_EMAIL?: ServerEnvBindings['BEEHIIV_SEND_WELCOME_EMAIL'] | string
 }

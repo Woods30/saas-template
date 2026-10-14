@@ -11,6 +11,7 @@ const schema = z.object({
   CLOUDFLARE_API_TOKEN: z.string().optional(),
   CLOUDFLARE_EMAIL_SENDER: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
+  MAIL_FROM: z.email().optional(),
   RESEND_AUDIENCE_ID: z.string().optional(),
   BEEHIIV_API_KEY: z.string().optional(),
   BEEHIIV_PUBLICATION_ID: z.string().optional(),

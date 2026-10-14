@@ -1,13 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { allBlogs } from 'content-collections'
 import { PostCard } from '@/components/blog/PostCard'
+import { assertPageEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/marketing/blog/')({
+  beforeLoad: () => assertPageEnabled('blog'),
   head: () =>
-    seo('/blog', {
+    seo('/marketing/blog', {
       title: m.blog_page_title(),
       description: m.blog_page_description(),
       locale: getLocale(),

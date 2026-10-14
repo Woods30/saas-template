@@ -70,6 +70,7 @@ vi.mock('resend', () => ({
 // ---------------------------------------------------------------------------
 // Module under test — import after mocks
 // ---------------------------------------------------------------------------
+import { parseServerEnv } from '@/env/server'
 import {
   BeehiivNewsletterProvider,
   buildNewsletterProviderRegistry,
@@ -79,6 +80,7 @@ import {
   subscribe,
   unsubscribe,
 } from '@/newsletter'
+import { Route as NewsletterRoute } from '@/routes/api/newsletter/$'
 
 // ---------------------------------------------------------------------------
 // ResendNewsletterProvider
@@ -222,15 +224,17 @@ describe('BeehiivNewsletterProvider', () => {
 // ---------------------------------------------------------------------------
 describe('buildNewsletterProviderRegistry', () => {
   it('returns undefined for resend when env is missing', () => {
-    const registry = buildNewsletterProviderRegistry({} as never)
+    const registry = buildNewsletterProviderRegistry(parseServerEnv({}))
     expect(registry.resend).toBeUndefined()
   })
 
   it('returns factory for resend when env has keys', () => {
-    const registry = buildNewsletterProviderRegistry({
-      RESEND_API_KEY: 'key-1',
-      RESEND_AUDIENCE_ID: 'audience-1',
-    } as never)
+    const registry = buildNewsletterProviderRegistry(
+      parseServerEnv({
+        RESEND_API_KEY: 'key-1',
+        RESEND_AUDIENCE_ID: 'audience-1',
+      }),
+    )
     expect(typeof registry.resend).toBe('function')
     const factory = registry.resend
     if (!factory) return
@@ -239,15 +243,17 @@ describe('buildNewsletterProviderRegistry', () => {
   })
 
   it('returns undefined for beehiiv when env is missing', () => {
-    const registry = buildNewsletterProviderRegistry({} as never)
+    const registry = buildNewsletterProviderRegistry(parseServerEnv({}))
     expect(registry.beehiiv).toBeUndefined()
   })
 
   it('returns factory for beehiiv when env has keys', () => {
-    const registry = buildNewsletterProviderRegistry({
-      BEEHIIV_API_KEY: 'key-1',
-      BEEHIIV_PUBLICATION_ID: 'pub-1',
-    } as never)
+    const registry = buildNewsletterProviderRegistry(
+      parseServerEnv({
+        BEEHIIV_API_KEY: 'key-1',
+        BEEHIIV_PUBLICATION_ID: 'pub-1',
+      }),
+    )
     expect(typeof registry.beehiiv).toBe('function')
     const factory = registry.beehiiv
     if (!factory) return
@@ -256,10 +262,12 @@ describe('buildNewsletterProviderRegistry', () => {
   })
 
   it('beehiiv factory receives sendWelcomeEmail: false by default', () => {
-    const registry = buildNewsletterProviderRegistry({
-      BEEHIIV_API_KEY: 'key-1',
-      BEEHIIV_PUBLICATION_ID: 'pub-1',
-    } as never)
+    const registry = buildNewsletterProviderRegistry(
+      parseServerEnv({
+        BEEHIIV_API_KEY: 'key-1',
+        BEEHIIV_PUBLICATION_ID: 'pub-1',
+      }),
+    )
     const factory = registry.beehiiv
     if (!factory) return
 
@@ -278,11 +286,13 @@ describe('buildNewsletterProviderRegistry', () => {
   })
 
   it('beehiiv factory receives sendWelcomeEmail: true when env is "true"', () => {
-    const registry = buildNewsletterProviderRegistry({
-      BEEHIIV_API_KEY: 'key-1',
-      BEEHIIV_PUBLICATION_ID: 'pub-1',
-      BEEHIIV_SEND_WELCOME_EMAIL: 'true',
-    } as never)
+    const registry = buildNewsletterProviderRegistry(
+      parseServerEnv({
+        BEEHIIV_API_KEY: 'key-1',
+        BEEHIIV_PUBLICATION_ID: 'pub-1',
+        BEEHIIV_SEND_WELCOME_EMAIL: 'true',
+      }),
+    )
     const factory = registry.beehiiv
     if (!factory) return
 
@@ -469,5 +479,38 @@ describe('checkRateLimit', () => {
     }
     const sixth = await checkRateLimit('5.6.7.8', 'subscribe')
     expect(sixth).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// POST /api/newsletter 配置门禁（newsletter 默认关闭）
+// ---------------------------------------------------------------------------
+describe('POST /api/newsletter 门禁', () => {
+  function getHandler(): (ctx: { request: Request }) => Promise<Response> {
+    const handlers = (
+      NewsletterRoute as unknown as {
+        options?: { server?: { handlers?: Record<string, unknown> } }
+      }
+    ).options?.server?.handlers
+    const handler = handlers?.POST
+    if (typeof handler !== 'function') throw new Error('POST handler 缺失')
+    return handler as (ctx: { request: Request }) => Promise<Response>
+  }
+
+  it('newsletter 关闭时返回 404，且不读取 body / 不调用 provider / 不调用 rate-limit', async () => {
+    const request = new Request('https://jerbix.dev/api/newsletter/subscribe', {
+      method: 'POST',
+      body: '{}',
+    })
+    const read = vi.spyOn(request, 'json')
+
+    const response = await getHandler()({ request })
+
+    expect(response.status).toBe(404)
+    expect(await response.json()).toEqual({ error: 'MODULE_DISABLED' })
+    expect(read).not.toHaveBeenCalled()
+    // newsletter 模块自身的 rate-limit 也必须在门禁之后。
+    const setCalls = mockCacheProvider.set.mock.calls.length
+    expect(setCalls).toBe(0)
   })
 })

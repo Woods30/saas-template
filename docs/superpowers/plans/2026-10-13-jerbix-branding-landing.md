@@ -8,6 +8,60 @@
 
 **Tech Stack:** TanStack Start / Router（文件路由）、React 19、Tailwind v4 + shadcn v4 token、`@base-ui/react`（Menu/Button）、`@tabler/icons-react`、Vitest（node + jsdom 两个 config）、Playwright。
 
+## 2026-10-14 品牌故事与产品价值收口
+
+用户追加要求：呈现跳鼠品牌寓意，头部使用指定横版 Logo；减少重复中文口号，突出技术栈组合与可复用组件工具。优先编辑既有文件，指定 Logo 资源接入由本次明确请求授权。
+
+- [x] 在既有 landing / home-head 测试中先验证双层品牌、旅程选择与短首屏、技术栈工具展示、英文标题语言属性及产品 SEO；运行确认失败。
+- [x] 更新双语消息、LandingPage、Hero 与 homeBlocks、Footer 及首页 head；首屏改为跳跃旅程，品牌故事后置，新增技术栈与组件工具展示。
+- [x] Navbar 接入 `public/logo-horizontal-transparent.svg`，保留原图与 locale，验证移动与明暗主题。
+- [x] 独立 review 并通过失败测试修复 SVG 轨迹暂停、平板登录断点、标题测试与 `lang="en"` 问题；最终 spec / quality 均通过。
+- [x] 完整 check / unit / component / marketing / hydration E2E、生产构建、bundle 扫描与布局验收，记录结果。
+
+本轮验收：`pnpm check` 零 error / warning；283 项单元测试、41 项组件测试、17 项 marketing / hydration E2E 通过。单元与组件测试使用 `--maxWorkers=2`，E2E 使用 `--workers=2`；首轮高负载下出现主题按钮交互超时，浏览器实际切换与完整 E2E 复跑均通过。中英文 × 375 / 390 / 768 / 1100 / 1440 px × 明暗主题共 20 组无横向溢出，指定 Logo 加载正常；键盘旅程选择、吉祥物与轨迹暂停、离屏停止、reduced-motion 通过。生产构建成功，客户端 38 个文件无敏感字段；保留主 chunk 546.77 kB 与 auth 混合导入的既有构建警告。截图为 `.playwright-mcp/brand-story-zh-desktop.png`、`.playwright-mcp/brand-story-zh-mobile.png`、`.playwright-mcp/brand-story-en-dark.png`。当前分支保留，未提交、推送或部署。
+
+测试隔离修复：既有邮件脱敏测试错误地将 fake client 当作 API key，导致真实网络请求；已在 SDK 边界 mock 并验证禁止 fetch、精确截断多行错误，不修改邮件生产代码。首页 head 测试改为准备期导入真实 Route，避免冷模块加载占用单个用例超时，保留每请求语言验证。
+
+## 2026-10-13 动态产品实验室实施计划
+
+本轮沿用已确认产品文案与定位，不提交或推送；所有任务仅编辑既有文件。紧密耦合的交互与样式在当前会话实施，最后独立 review。
+
+- [x] 在 `tests/components/landing.test.tsx` 中先增加模块按钮 aria-pressed / 说明变化、暂停恢复、三个 workflow 按钮关联面板切换、语言示意预览测试；运行组件测试确认缺失交互导致失败。
+- [x] 修改 `src/components/marketing/LandingPage.tsx`，实现首屏可选择架构、六项场景示意、流程预览及全页暂停；保持小函数职责分离。新增文案追加 `messages/zh.json` 与 `messages/en.json`，始终 render 时调用。
+- [x] 修改 `src/styles/globals.css` 和既有 Hero / Features 组件，为 landing 设置作用域样式：网格光晕、轨道、连线、浮动、按钮箭头、卡片 Hover / focus、单次入场；prefers-reduced-motion 全部关闭，暂停与文档隐藏时冻结，IntersectionObserver 不隐藏未执行 JS 的内容。
+- [x] 执行完整检查与浏览器交互、responsive / dark / reduced-motion 验证；独立 review 并修复重要缺陷，记录测试与构建警告。
+
+本轮验收记录：281 项单元测试、37 项组件测试、16 项 marketing / hydration E2E 通过；`pnpm check` 零 error / warning。中英文 × 375 / 390 / 768 / 1440 px × 明暗主题共 16 组无横向溢出、模块按钮重叠或文字裁切；窄屏中心标签遮挡问题已通过失败 E2E 复现、修复并回归验证。暂停 / 恢复、离屏停止、reduced-motion 与语言预览交互通过。独立 review 的 spec / quality 均通过，已修复步骤排布、终端离屏暂停和 reduced-motion Hover 位移问题。生产构建成功，客户端扫描 38 个文件无敏感字段；Vite 仍有 542.01 kB 主 chunk 与 auth 混合静态 / 动态导入的既有警告。最终截图位于 `.playwright-mcp/lab-en-dark.png`、`.playwright-mcp/lab-mobile.png` 与 `.playwright-mcp/lab-en-mobile-stage.png`。保留当前分支工作区，未提交、推送或部署。
+
+## 2026-10-13 产品首页改版实施计划
+
+用户已确认定位、文案方向、首页撤下演示价格与无来源评价。以下任务取代历史首页任务；不执行历史计划中的提交、复制资源或创建文件步骤。
+
+### Task A：产品叙事与首页 blocks
+
+修改 `messages/zh.json`、`messages/en.json`、`src/config/blocks/home.ts`、`src/components/marketing/LandingPage.tsx`、既有 Hero / Features / Faq / Cta 的组件与 types、`tests/components/landing.test.tsx`。不创建文件或新增依赖。
+
+接口：保留 `homeBlocks` 导出，使用 getter 使消息在读取时求值；Hero 增加可选 ReactNode visual / eyebrow，Features 支持图标与 bento variant，保留旧调用默认行为。LandingPage 内分离技术条、流程与模板说明函数，各函数只读取所需文案。保留 features / pricing / faq 锚点。
+
+- [x] 先在现有 landing 测试增加 zh → en → zh 连续 render 的正文检查、首页无演示套餐和评价、D1 FAQ、主要文档 CTA；执行组件测试确认预期失败。
+- [x] 重写双语消息与首页配置，使用具体收益和准确能力边界；替换数字 Stats 和 Testimonials，接入双栏 Hero、技术条、Bento、三步流程、源码能力说明、FAQ 与 CTA。
+- [x] 运行 locale:compile、landing 组件测试、typecheck 与定向 Biome，修复错误并交由独立代理复核。
+
+### Task B：响应式导航与资源 Footer
+
+修改 `src/components/marketing/Navbar.tsx`、`Footer.tsx`、已有 `tests/components/landing.test.tsx` 和 `e2e/marketing.spec.ts` / `e2e/hydration.spec.ts`；新文案仅追加到已有 messages 文件。
+
+接口：Navbar 的价格入口改为源码说明入口但仍指向 pricing 锚点；主导航 features / workflow / docs，更多资源进入 Footer。移动菜单 trigger 具有 aria-expanded / aria-controls，支持 Escape 与导航后关闭；主题与语言切换保持现有接口。
+
+- [x] 添加移动菜单开关 / Escape 焦点恢复 / 导航后关闭的失败 E2E，以及首页双语正文、375 px 无溢出和源码锚点 E2E。
+- [x] 实现紧凑导航、移动菜单与资源 Footer；保留合法路由与 locale。
+- [x] 去除 hydration 测试中对正文语言 mismatch 的忽略，确认真正无 hydration 错误。
+- [x] 运行 pnpm check、pnpm test、显式组件测试、marketing / hydration E2E、pnpm build、check:client-bundle；在浏览器验证明暗主题与 375 / 390 / 768 / 桌面布局，独立最终 review 后修复重要问题。
+
+验收记录：281 项单元测试、34 项组件测试、14 项 E2E 通过；静态检查零 error / warning；双语四尺寸明暗主题共 16 组无横向溢出，reduced-motion 使用 auto 滚动；独立最终 review 的 spec / quality 均通过。生产构建成功，客户端 38 个文件无敏感字段；Vite 仍提示 540 KB 主 chunk 与 auth 混合静态 / 动态导入警告，未调整构建阈值或认证结构。本次保留分支工作区，不提交或推送。
+
+约束：中文注释与中英文产品文案、保留用户已有生成物和 migration 修改、不修改认证 / 支付行为或 schema、不提交或推送、不新增依赖、不新增文件。仅改已有设计 / 计划以记录已确认改版。验证完成后勾选本节任务。
+
 ## Global Constraints
 
 - 所有新增注释、文档、用户可见文案使用**中文**；中文与半角英数字之间加一个半角空格；使用标准中文全角标点。

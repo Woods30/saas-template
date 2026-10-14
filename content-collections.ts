@@ -11,6 +11,9 @@ const docs = defineCollection({
     description: z.string(),
     locale: z.string().default('en'),
     order: z.number().default(0),
+    group: z.string().default(''),
+    /** 最近更新日期（`YYYY-MM-DD`）；缺省为空串，页面不渲染该行。 */
+    updated: z.string().default(''),
     content: z.string().optional(),
   }),
   transform: (doc) => ({ ...doc, locale: resolveContentLocale(doc._meta.fileName) }),

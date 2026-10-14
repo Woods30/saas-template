@@ -31,6 +31,7 @@ vi.mock('@/notification', () => ({
   notify: (...args: unknown[]) => mockNotify(...args),
 }))
 
+import { websiteConfig } from '@/config/website'
 import { deliverContactNotification } from '@/contact/notifications'
 // ---------------------------------------------------------------------------
 // Module under test — import after mocks
@@ -117,13 +118,14 @@ describe('deliverContactNotification', () => {
     vi.clearAllMocks()
   })
 
-  it('calls sendMail with contactMessage template and correct fromName mapping', async () => {
+  it('calls sendMail with configured provider and contactMessage template', async () => {
     mockSendTemplate.mockResolvedValue({ ok: true })
 
     await deliverContactNotification(validInput)
 
+    // provider 取自 websiteConfig.mail.provider（默认 resend），不再固定 cloudflare。
     expect(mockSendTemplate).toHaveBeenCalledWith(
-      'cloudflare',
+      websiteConfig.mail.provider,
       expect.objectContaining({
         template: 'contactMessage',
         locale: 'zh',
@@ -147,7 +149,7 @@ describe('deliverContactNotification', () => {
     warnSpy.mockRestore()
   })
 
-  it('does NOT call notify when notification.enable is false', async () => {
+  it('does NOT call notify when notification.enabled is false', async () => {
     mockSendTemplate.mockResolvedValue({ ok: true })
 
     await deliverContactNotification(validInput)
@@ -155,16 +157,16 @@ describe('deliverContactNotification', () => {
     expect(mockNotify).not.toHaveBeenCalled()
   })
 
-  it('calls notify when notification.enable is true', async () => {
+  it('calls notify when notification.enabled is true', async () => {
     mockSendTemplate.mockResolvedValue({ ok: true })
     mockNotify.mockResolvedValue(true)
 
-    // websiteConfig.notification.enable = true — re-import with mocked config
+    // websiteConfig.notification.enabled = true — re-import with mocked config
     vi.resetModules()
     vi.doMock('@/config/website', () => ({
       websiteConfig: {
         mail: { supportEmail: 'support@example.com' },
-        notification: { enable: true },
+        notification: { enabled: true },
       },
     }))
     vi.doMock('@/lib/server-context', () => ({
@@ -209,12 +211,12 @@ describe('deliverContactNotification', () => {
 
     mockNotificationProviderRegistry.discord = () => ({ send: async () => false })
 
-    // websiteConfig.notification.enable = true
+    // websiteConfig.notification.enabled = true
     vi.resetModules()
     vi.doMock('@/config/website', () => ({
       websiteConfig: {
         mail: { supportEmail: 'support@example.com' },
-        notification: { enable: true },
+        notification: { enabled: true },
       },
     }))
     vi.doMock('@/lib/server-context', () => ({
@@ -253,7 +255,7 @@ describe('deliverContactNotification', () => {
     vi.doMock('@/config/website', () => ({
       websiteConfig: {
         mail: { supportEmail: 'support@example.com' },
-        notification: { enable: true },
+        notification: { enabled: true },
       },
     }))
     vi.doMock('@/lib/server-context', () => ({
@@ -301,7 +303,7 @@ describe('deliverContactNotification', () => {
     vi.doMock('@/config/website', () => ({
       websiteConfig: {
         mail: { supportEmail: 'support@example.com' },
-        notification: { enable: true },
+        notification: { enabled: true },
       },
     }))
     vi.doMock('@/lib/server-context', () => ({

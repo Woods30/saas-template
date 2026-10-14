@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { overwriteServerAsyncLocalStorage } from '@/locale/paraglide/runtime.js'
+import { Route } from '@/routes/{-$locale}/index'
 
 /**
  * 首页 `head()` 的 i18n 回归测试。
@@ -31,8 +32,7 @@ function withRequestLocale(locale: 'zh' | 'en'): void {
 }
 
 /** 取出路由的 `head()` 并调用（`head` 是每请求调用的函数）。 */
-async function runHomeHead(): Promise<HeadResult> {
-  const { Route } = await import('@/routes/{-$locale}/index')
+function runHomeHead(): HeadResult {
   const head = Route.options.head as unknown as () => HeadResult
   return head()
 }
@@ -42,26 +42,35 @@ afterEach(() => {
 })
 
 describe('首页 head 的 i18n', () => {
-  it('description 随请求语言变化（en 输出英文）', async () => {
+  it.each(['zh', 'en'] as const)('%s 首页与 OG 标题明确品牌和产品技术栈', (locale) => {
+    withRequestLocale(locale)
+    const { meta } = runHomeHead()
+    const title = 'Jerbix – TanStack Start SaaS Starter Kit'
+    expect(meta).toContainEqual({ title })
+    expect(meta).toContainEqual({ property: 'og:title', content: title })
+  })
+  it('description 随请求语言变化（en 输出英文）', () => {
     withRequestLocale('en')
-    const en = await runHomeHead()
+    const en = runHomeHead()
     expect(en.meta).toContainEqual({
       name: 'description',
-      content: 'A SaaS starter built on TanStack Start and Cloudflare Workers',
+      content:
+        'Jerbix is a customizable SaaS starter for indie developers, built on TanStack Start and Cloudflare Workers to reduce repetitive auth, payment, and content integration work.',
     })
 
     withRequestLocale('zh')
-    const zh = await runHomeHead()
+    const zh = runHomeHead()
     expect(zh.meta).toContainEqual({
       name: 'description',
-      content: '基于 TanStack Start 与 Cloudflare Workers 的 SaaS 起手模板',
+      content:
+        'Jerbix 是面向独立开发者的 SaaS Starter 源码起步工程，基于 TanStack Start 与 Cloudflare Workers，减少认证、支付与内容模块的重复接线。',
     })
   })
 
-  it('英文请求不输出中文 description（回归缺陷）', async () => {
+  it('英文请求不输出中文 description（回归缺陷）', () => {
     withRequestLocale('en')
-    const en = await runHomeHead()
+    const en = runHomeHead()
     const description = en.meta.find((entry) => entry.name === 'description')
-    expect(description?.content).not.toContain('起手模板')
+    expect(description?.content).not.toMatch(/[㐀-鿿]/u)
   })
 })

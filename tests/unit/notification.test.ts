@@ -20,6 +20,7 @@ vi.mock('@/lib/server-context', () => ({
 // ---------------------------------------------------------------------------
 // Module under test — import after mocks
 // ---------------------------------------------------------------------------
+import { parseServerEnv } from '@/env/server'
 import {
   buildNotificationProviderRegistry,
   DiscordNotificationProvider,
@@ -109,16 +110,18 @@ describe('FeishuNotificationProvider', () => {
 // ---------------------------------------------------------------------------
 describe('buildNotificationProviderRegistry', () => {
   it('returns undefined for both providers when env is empty', () => {
-    const registry = buildNotificationProviderRegistry({} as never)
+    const registry = buildNotificationProviderRegistry(parseServerEnv({}))
     expect(registry.discord).toBeUndefined()
     expect(registry.feishu).toBeUndefined()
   })
 
   it('returns factories when env has webhook URLs', () => {
-    const registry = buildNotificationProviderRegistry({
-      DISCORD_WEBHOOK_URL: 'https://discord.com/api/webhooks/123/abc',
-      FEISHU_WEBHOOK_URL: 'https://open.feishu.cn/open-apis/bot/v2/hook/abc-123',
-    } as never)
+    const registry = buildNotificationProviderRegistry(
+      parseServerEnv({
+        DISCORD_WEBHOOK_URL: 'https://discord.com/api/webhooks/123/abc',
+        FEISHU_WEBHOOK_URL: 'https://open.feishu.cn/open-apis/bot/v2/hook/abc-123',
+      }),
+    )
     expect(typeof registry.discord).toBe('function')
     expect(typeof registry.feishu).toBe('function')
     const discordFactory = registry.discord

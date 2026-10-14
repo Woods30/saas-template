@@ -22,6 +22,7 @@ interface LocaleSwitcherProps {
 export function LocaleSwitcher({ value }: LocaleSwitcherProps) {
   function select(next: Locale) {
     if (next === value) return
+    // biome-ignore lint/suspicious/noDocumentCookie: 导航前同步 cookie，保证 SSR 语言一致并兼容不支持 Cookie Store 的浏览器。
     document.cookie = `${LOCALE_COOKIE_NAME}=${next}; Path=/; Max-Age=${LOCALE_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`
     const { pathname, search, hash } = window.location
     window.location.assign(`${swapLocale(pathname, next)}${search}${hash}`)
