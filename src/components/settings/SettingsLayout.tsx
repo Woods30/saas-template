@@ -65,7 +65,7 @@ export function SettingsLayout({ locale, children }: { locale: Locale; children:
             to="/{-$locale}"
             params={{ locale }}
             aria-label={websiteConfig.metadata.name}
-            className="flex items-center rounded-lg px-2 py-1 transition-opacity hover:opacity-80"
+            className="flex items-center rounded-lg px-2 py-1 transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
           >
             <img
               src={websiteConfig.metadata.images.logoLight}
