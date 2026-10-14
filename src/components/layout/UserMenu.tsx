@@ -24,7 +24,7 @@ interface UserMenuProps {
  *   渲染 `guestFallback` 则让 SSR 与客户端首帧一致（都是登录入口），hydration 后
  *   再按真实会话切换。
  * - **未登录**：`guestFallback`。
- * - **已登录**：用户菜单，展示账号邮箱并提供登出（登出经 `signOutAndRedirect`（与个人中心用户卡片共用）。
+ * - **已登录**：用户菜单，展示账号邮箱并提供登出（登出经 `signOutAndRedirect`，与个人中心用户卡片共用）。
  */
 export function UserMenu({ guestFallback }: UserMenuProps) {
   const { data: session, isPending } = useSession()

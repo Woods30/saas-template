@@ -327,7 +327,7 @@ Modify `src/components/layout/UserMenu.tsx`：
 ```
 
 同时把组件顶部注释里「并提供登出（此前 `signOut` 已导出却无人调用）」更新为
-「登出经 `signOutAndRedirect`（与个人中心用户卡片共用）」。
+「登出经 `signOutAndRedirect`，与个人中心用户卡片共用」。
 
 - [ ] **Step 6: 更新 `user-menu.test.tsx` 的 mock 目标**
 
