@@ -1,5 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
+import type { SessionInfo } from '@/auth/session'
+import { SettingsUserCard } from '@/components/settings/SettingsUserCard'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import {
   Breadcrumb,
@@ -12,6 +14,7 @@ import {
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -42,8 +45,19 @@ import { m } from '@/locale/paraglide/messages.js'
  * 顶栏是「折叠按钮 + 三级面包屑 + 右上角主题切换」：页面标题由面包屑末级
  * （`aria-current="page"`）承担，因此这里不再渲染 `<h1>`；回站点的出口在侧栏头的
  * logo 上，因此也不需要单独的「返回站点」链接。
+ *
+ * 侧栏底部的 `SettingsUserCard` 是个人中心内**唯一**的登出入口——本路由是 `_layout`，
+ * 不渲染营销导航栏，导航栏 `UserMenu` 里的登出在这里不可见。
  */
-export function SettingsLayout({ locale, children }: { locale: Locale; children: ReactNode }) {
+export function SettingsLayout({
+  locale,
+  session,
+  children,
+}: {
+  locale: Locale
+  session: SessionInfo
+  children: ReactNode
+}) {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const sections = getSettingsSections(locale, {
     config: websiteConfig,
@@ -105,6 +119,9 @@ export function SettingsLayout({ locale, children }: { locale: Locale; children:
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
+        <SidebarFooter>
+          <SettingsUserCard session={session} />
+        </SidebarFooter>
       </Sidebar>
       <SidebarInset>
         <header className="flex h-14 items-center gap-2 border-b border-border px-4">

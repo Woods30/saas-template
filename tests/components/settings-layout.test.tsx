@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SessionInfo } from '@/auth/session'
 import { SettingsLayout } from '@/components/settings/SettingsLayout'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
@@ -63,13 +64,26 @@ function clearCookies() {
   }
 }
 
-/** 渲染外壳；session 在守卫里已取到，本组件只吃 children 与 locale。 */
+/** 渲染外壳；session 由路由 beforeLoad 的守卫取到后透传进来。 */
 function renderLayout() {
   return render(
-    <SettingsLayout locale="zh">
+    <SettingsLayout locale="zh" session={sessionWith()}>
       <div>内容区</div>
     </SettingsLayout>,
   )
+}
+
+/** 夹具：与 `settings-user-card.test.tsx` 同形的会话（守卫已确认登录，此处只喂给用户卡片）。 */
+function sessionWith(): SessionInfo {
+  return {
+    user: {
+      id: 'u_1',
+      name: 'woods',
+      email: 'woods@example.com',
+      emailVerified: true,
+      image: null,
+    },
+  }
 }
 
 describe('SettingsLayout 顶栏', () => {

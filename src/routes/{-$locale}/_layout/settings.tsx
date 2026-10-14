@@ -27,8 +27,9 @@ export const Route = createFileRoute('/{-$locale}/_layout/settings')({
 })
 
 function SettingsLayoutRoute() {
+  const { session } = Route.useRouteContext()
   return (
-    <SettingsLayout locale={getRequestLocale()}>
+    <SettingsLayout locale={getRequestLocale()} session={session}>
       <Outlet />
     </SettingsLayout>
   )
