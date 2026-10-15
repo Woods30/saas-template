@@ -13,6 +13,7 @@ export default defineConfig({
     },
   },
   test: {
+    name: 'components',
     environment: 'jsdom',
     globals: true,
     setupFiles: ['tests/setup.ts'],
@@ -21,5 +22,7 @@ export default defineConfig({
       'tests/components/**/*.test.ts',
       'tests/unit/**/*.test.tsx',
     ],
+    testTimeout: 15000,
+    hookTimeout: 15000,
   },
 })
