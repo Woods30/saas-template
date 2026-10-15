@@ -1,7 +1,9 @@
 import { execFileSync } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { CORE_PATHS, isCorePath } from '../../scripts/core-paths'
 
 /**
@@ -45,10 +47,10 @@ interface RunResult {
 }
 
 /** 在仓库根用 tsx 运行 CLI，返回退出码与输出（不抛出，便于断言任意退出码）。 */
-function runCheckCore(base: string): RunResult {
+function runCheckCore(base: string, cwd: string = repoRoot): RunResult {
   try {
     const stdout = execFileSync(tsxBin, [checkCoreChanged, base], {
-      cwd: repoRoot,
+      cwd,
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -61,6 +63,36 @@ function runCheckCore(base: string): RunResult {
       stderr: typeof err.stderr === 'string' ? err.stderr : '',
     }
   }
+}
+
+const createdDirs: string[] = []
+
+afterAll(() => {
+  for (const dir of createdDirs) rmSync(dir, { recursive: true, force: true })
+})
+
+/**
+ * 新建隔离 git 仓库：`main` 有一次提交，HEAD 位于**无共同祖先**的 `orphan` 分支。
+ *
+ * 复现「ref 可解析但无 merge base」：`git rev-parse --verify --quiet main^{commit}` 退出 0
+ * （前置 ref 校验通过），但 `git diff main...HEAD` 因 no merge base 退出 128。
+ */
+function makeOrphanRepo(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'saas-core-changed-'))
+  createdDirs.push(dir)
+  const git = (args: string[]) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' })
+  git(['init', '-q'])
+  git(['config', 'user.email', 'test@example.com'])
+  git(['config', 'user.name', 'test'])
+  writeFileSync(join(dir, 'a.txt'), 'a\n', 'utf-8')
+  git(['add', '.'])
+  git(['commit', '-qm', 'init'])
+  git(['branch', '-m', 'main'])
+  git(['checkout', '-q', '--orphan', 'orphan'])
+  writeFileSync(join(dir, 'b.txt'), 'b\n', 'utf-8')
+  git(['add', '.'])
+  git(['commit', '-qm', 'orphan'])
+  return dir
 }
 
 /**
@@ -90,5 +122,19 @@ describe('check-core-changed CLI 退出码', () => {
     expect(runCheckCore('nonexistent-ref-for-fail-loud-check').code).not.toBe(
       runCheckCore('HEAD').code,
     )
+  })
+
+  /**
+   * ref 可解析但 `git diff` 失败（无 merge base）也必须落 2，不得落到 1。
+   *
+   * 这是同一 fail-open 的更窄触发面：`main` 通过 ref 前置校验，但孤儿分支与 `main` 无
+   * 共同祖先，`git diff main...HEAD` 退出 128。若不捕获，execFileSync 抛异常 → Node 退出
+   * 1，与「确属非核心」不可区分，CI 门禁会静默跳过 e2e。测试用隔离临时仓库复现，不触碰
+   * 真实仓库的分支 / 提交。
+   */
+  it('ref 有效但无 merge base（diff 失败）时退出码为 2，且 stderr 指明该 ref', () => {
+    const result = runCheckCore('main', makeOrphanRepo())
+    expect(result.code).toBe(2)
+    expect(result.stderr).toContain('main')
   })
 })
