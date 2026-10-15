@@ -45,7 +45,7 @@ export function SettingsUserCard({ session }: { session: SessionInfo }) {
             <IconChevronUp className="ml-auto size-4" />
           </Menu.Trigger>
           <Menu.Portal>
-            <Menu.Positioner side="top" align="start" sideOffset={8}>
+            <Menu.Positioner side="top" align="start" sideOffset={8} className="z-50">
               <Menu.Popup className="min-w-56 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
                 <Menu.Item
                   onClick={() => void signOutAndRedirect()}
