@@ -59,11 +59,78 @@ test.describe('Docs', () => {
     await expect(toolbar.getByRole('button', { name: '切换语言' })).toBeVisible()
     // 主题切换按钮与语言切换同在左下角工具条内。
     await expect(toolbar.getByRole('button', { name: /切换主题/ })).toBeVisible()
-    // 文档 Logo 与网站一致，取自 websiteConfig 的 logoLight。
-    await expect(page.locator('header img').first()).toHaveAttribute(
+    // 宽屏没有顶栏：Logo 与侧栏开关都在侧栏里。窄屏顶栏是 `lg:hidden`，
+    // 因此这里断言侧栏内的 Logo，而不是可能被隐藏的顶栏。
+    await expect(page.locator('aside').first().locator('img').first()).toHaveAttribute(
       'src',
       '/logo-horizontal-transparent.svg',
     )
+  })
+
+  test('宽屏顶栏隐藏，Logo 与侧栏开关都在侧栏顶部', async ({ page }) => {
+    await page
+      .context()
+      .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: 'http://localhost:3000' }])
+    await page.goto('/docs/getting-started')
+    await page.waitForLoadState('networkidle')
+
+    // 宽屏（Desktop Chrome 默认 1280×720）下顶栏整条隐藏，避免与侧栏的 Logo 重复。
+    await expect(page.locator('header')).toBeHidden()
+    const sidebar = page.locator('aside').first()
+    await expect(sidebar.locator('img').first()).toBeVisible()
+    await expect(sidebar.getByRole('button', { name: '收起文档导航' })).toBeVisible()
+  })
+
+  test('收起侧栏后，展开与搜索入口移到侧栏之外的浮动工具条', async ({ page }) => {
+    await page
+      .context()
+      .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: 'http://localhost:3000' }])
+    await page.goto('/docs/getting-started')
+    await page.waitForLoadState('networkidle')
+
+    await page.getByRole('button', { name: '收起文档导航' }).click()
+    const sidebar = page.locator('aside').first()
+    await expect(sidebar).toBeHidden()
+
+    // 侧栏整块隐藏后，展开入口必须落在它外面才点得到。
+    const expand = page.getByRole('button', { name: '展开文档导航' })
+    await expect(expand).toBeVisible()
+    expect(await expand.evaluate((el) => el.closest('aside') !== null)).toBe(false)
+    // 同一个工具条里还有搜索入口。
+    await expect(page.getByRole('button', { name: '搜索文档' })).toBeVisible()
+
+    await expand.click()
+    await expect(page.locator('aside').first()).toBeVisible()
+  })
+
+  test('窄屏顶栏提供搜索图标，打开与侧栏同一个弹窗', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page
+      .context()
+      .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: 'http://localhost:3000' }])
+    await page.goto('/docs/getting-started')
+    await page.waitForLoadState('networkidle')
+
+    // 窄屏侧栏是隐藏的，顶栏的搜索图标是唯一入口。
+    const headerSearch = page.locator('header').getByRole('button', { name: '搜索文档' })
+    await expect(headerSearch).toBeVisible()
+    await headerSearch.click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('searchbox')).toBeFocused()
+  })
+
+  test('⌘K / Ctrl+K 打开搜索弹窗', async ({ page }) => {
+    await page
+      .context()
+      .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: 'http://localhost:3000' }])
+    await page.goto('/docs/getting-started')
+    await page.waitForLoadState('networkidle')
+
+    await page.keyboard.press('ControlOrMeta+k')
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('searchbox')).toBeFocused()
   })
 
   test('侧边栏按 group 呈现二级结构', async ({ page }) => {

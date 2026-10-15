@@ -10,6 +10,8 @@ const LOCALE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
 interface LocaleSwitcherProps {
   /** 当前 locale，由服务端与客户端解析结果一致地传入。 */
   value: Locale
+  /** 追加到触发按钮上的类名（各调用处的外观差异走这里，不改 ui/ 原件）。 */
+  className?: string
 }
 
 /**
@@ -19,7 +21,7 @@ interface LocaleSwitcherProps {
  * `NEXT_LOCALE` cookie，使无前缀的 `/` 也能记住选择。用整页导航而非客户端路由，
  * 与既有「locale 变更必须走文档导航」的约束一致，保证 SSR 与 hydration 一致。
  */
-export function LocaleSwitcher({ value }: LocaleSwitcherProps) {
+export function LocaleSwitcher({ value, className }: LocaleSwitcherProps) {
   function select(next: Locale) {
     if (next === value) return
     // biome-ignore lint/suspicious/noDocumentCookie: 导航前同步 cookie，保证 SSR 语言一致并兼容不支持 Cookie Store 的浏览器。
@@ -30,7 +32,10 @@ export function LocaleSwitcher({ value }: LocaleSwitcherProps) {
 
   return (
     <Menu.Root>
-      <Menu.Trigger render={<Button variant="ghost" size="icon" aria-label={m.locale_label()} />}>
+      <Menu.Trigger
+        render={<Button variant="ghost" size="icon" aria-label={m.locale_label()} />}
+        className={className}
+      >
         <IconLanguage aria-hidden />
       </Menu.Trigger>
       <Menu.Portal>

@@ -30,7 +30,7 @@ const THEME_LABEL = {
  * **不触发整页刷新**，因此不会闪烁。初始状态经 `getTheme()` 取得：SSR 读 ALS，客户端读
  * cookie，两侧一致，故 hydration 稳定。
  */
-export function ThemeToggle() {
+export function ThemeToggle({ className }: { className?: string } = {}) {
   // Hooks 必须先于任何 early return 执行，避免条件渲染破坏调用顺序。
   const [theme, setTheme] = useState<Theme>(() => getTheme())
   const Icon = THEME_ICON[theme]
@@ -47,7 +47,10 @@ export function ThemeToggle() {
 
   return (
     <Menu.Root>
-      <Menu.Trigger render={<Button variant="ghost" size="icon" aria-label={m.theme_label()} />}>
+      <Menu.Trigger
+        render={<Button variant="ghost" size="icon" aria-label={m.theme_label()} />}
+        className={className}
+      >
         <Icon aria-hidden />
       </Menu.Trigger>
       <Menu.Portal>

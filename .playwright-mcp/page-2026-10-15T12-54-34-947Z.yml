@@ -1,0 +1,236 @@
+- generic [ref=f56e3]:
+  - complementary [ref=f56e4]:
+    - generic [ref=f56e5]:
+      - link "Jerbix" [ref=f56e6] [cursor=pointer]:
+        - /url: /en
+      - generic [ref=f56e7]: Documentation
+      - button "Collapse docs navigation" [expanded] [ref=f56e8]
+    - button "Search documentation" [ref=f56e13]:
+      - generic [ref=f56e17]: Search docs
+      - generic [ref=f56e18]:
+        - generic [ref=f56e19]: ⌘
+        - generic [ref=f56e20]: K
+    - navigation "文档导航" [ref=f56e22]:
+      - generic [ref=f56e23]:
+        - heading "Start" [level=2] [ref=f56e24]
+        - list [ref=f56e29]:
+          - listitem [ref=f56e30]:
+            - link "Getting Started" [ref=f56e31] [cursor=pointer]:
+              - /url: /en/docs/getting-started
+      - generic [ref=f56e37]:
+        - heading "Configuration" [level=2] [ref=f56e38]
+        - list [ref=f56e42]:
+          - listitem [ref=f56e43]:
+            - link "Website Config" [ref=f56e44] [cursor=pointer]:
+              - /url: /en/docs/configuration
+          - listitem [ref=f56e49]:
+            - link "Navigation & Menus" [ref=f56e50] [cursor=pointer]:
+              - /url: /en/docs/navigation
+          - listitem [ref=f56e57]:
+            - link "Environment Variables" [ref=f56e58] [cursor=pointer]:
+              - /url: /en/docs/environment
+          - listitem [ref=f56e62]:
+            - link "Form conventions" [ref=f56e63] [cursor=pointer]:
+              - /url: /en/docs/forms
+      - generic [ref=f56e68]:
+        - heading "Feature Modules" [level=2] [ref=f56e69]
+        - list [ref=f56e77]:
+          - listitem [ref=f56e78]:
+            - link "Integrations Overview" [ref=f56e79] [cursor=pointer]:
+              - /url: /en/docs/integrations
+          - listitem [ref=f56e88]:
+            - link "Email" [ref=f56e89] [cursor=pointer]:
+              - /url: /en/docs/email
+          - listitem [ref=f56e94]:
+            - link "Newsletter" [ref=f56e95] [cursor=pointer]:
+              - /url: /en/docs/newsletter
+          - listitem [ref=f56e100]:
+            - link "Payment" [ref=f56e101] [cursor=pointer]:
+              - /url: /en/docs/payment
+          - listitem [ref=f56e105]:
+            - link "Notifications" [ref=f56e106] [cursor=pointer]:
+              - /url: /en/docs/notifications
+          - listitem [ref=f56e111]:
+            - link "Analytics" [ref=f56e112] [cursor=pointer]:
+              - /url: /en/docs/analytics
+          - listitem [ref=f56e118]:
+            - link "Authentication" [ref=f56e119] [cursor=pointer]:
+              - /url: /en/docs/auth
+          - listitem [ref=f56e124]:
+            - link "Account center" [ref=f56e125] [cursor=pointer]:
+              - /url: /en/docs/auth-account
+    - generic [ref=f56e130]:
+      - button "Change language" [ref=f56e131]
+      - button "Toggle theme" [ref=f56e132]
+  - main [ref=f56e133]:
+    - generic [ref=f56e134]:
+      - article [ref=f56e135]:
+        - heading "Getting Started" [level=1] [ref=f56e136]
+        - paragraph [ref=f56e137]: Run Jerbix from scratch — environment, resources, and deploy checks
+        - paragraph [ref=f56e138]: Last updated October 15, 2026
+        - separator [ref=f56e139]
+        - generic [ref=f56e140]:
+          - heading "Prepare your environment" [level=2] [ref=f56e141]
+          - paragraph [ref=f56e142]: You need Node.js 22.12+ on an even-numbered LTS (22 or 24), pnpm, and a Cloudflare account.
+          - code [ref=f56e144]: pnpm install pnpm exec wrangler login pnpm exec wrangler whoami
+          - paragraph [ref=f56e145]:
+            - code [ref=f56e146]: wrangler login
+            - text: opens a browser to authorize. Use
+            - code [ref=f56e147]: whoami
+            - text: to confirm the account before continuing.
+          - heading "Provision resources" [level=2] [ref=f56e148]
+          - code [ref=f56e150]: pnpm run setup
+          - paragraph [ref=f56e151]:
+            - text: The script creates or looks up a D1 database, R2 bucket, and KV namespace, generates an auth secret, and writes local
+            - code [ref=f56e152]: .env
+            - text: and
+            - code [ref=f56e153]: wrangler.jsonc
+            - text: .
+          - alert [ref=f56e154]:
+            - generic [ref=f56e155]:
+              - strong [ref=f56e156]: Note
+              - text: ": The resources it creates belong to your Cloudflare account. Check existing configuration before running so you do not overwrite values you need to keep."
+          - paragraph [ref=f56e157]: Stripe, email, and notification can be configured in the script or later. You must still fill in credentials for whichever modules you use before deploying.
+          - heading "Start local development" [level=2] [ref=f56e158]
+          - code [ref=f56e160]: pnpm dev
+          - paragraph [ref=f56e161]:
+            - text: Open
+            - code [ref=f56e162]: http://localhost:3000
+            - text: ". The database uses D1 (SQLite) with Drizzle. The script attempts local migrations; if that fails, retry manually:"
+          - code [ref=f56e164]: pnpm exec wrangler d1 migrations apply DB --local
+          - heading "Customize the site" [level=2] [ref=f56e165]
+          - table [ref=f56e168]:
+            - rowgroup [ref=f56e169]:
+              - row [ref=f56e170]:
+                - columnheader "What to change" [ref=f56e171]
+                - columnheader "Where" [ref=f56e172]
+            - rowgroup [ref=f56e173]:
+              - row [ref=f56e174]:
+                - cell "Site name, logo, module switches" [ref=f56e175]
+                - cell [ref=f56e176]:
+                  - code [ref=f56e177]: src/config/website.ts
+              - row [ref=f56e178]:
+                - cell "UI copy" [ref=f56e179]
+                - cell [ref=f56e180]:
+                  - code [ref=f56e181]: messages/zh.json
+                  - text: ","
+                  - code [ref=f56e182]: messages/en.json
+              - row [ref=f56e183]:
+                - cell "Page routes" [ref=f56e184]
+                - cell [ref=f56e185]:
+                  - code [ref=f56e186]: src/routes/
+              - row [ref=f56e187]:
+                - cell "Marketing blocks" [ref=f56e188]
+                - cell [ref=f56e189]:
+                  - code [ref=f56e190]: src/components/blocks/marketing/
+              - row [ref=f56e191]:
+                - cell "Docs / blog content" [ref=f56e192]
+                - cell [ref=f56e193]:
+                  - code [ref=f56e194]: content/
+          - paragraph [ref=f56e195]:
+            - text: See
+            - link "Website Config" [ref=f56e196] [cursor=pointer]:
+              - /url: ./configuration
+            - text: for every configuration field.
+          - heading "Check and deploy" [level=2] [ref=f56e197]
+          - code [ref=f56e199]: pnpm check pnpm test pnpm exec vitest run --config vitest.components.config.ts pnpm build pnpm check:client-bundle
+          - code [ref=f56e201]: pnpm deploy
+          - paragraph [ref=f56e202]:
+            - code [ref=f56e203]: pnpm deploy
+            - text: runs the production env check, builds, verifies the client bundle, then runs
+            - code [ref=f56e204]: wrangler deploy
+            - text: .
+          - alert [ref=f56e205]:
+            - generic [ref=f56e206]:
+              - strong [ref=f56e207]: Note
+              - text: ": A local"
+              - code [ref=f56e208]: .env
+              - text: does
+              - strong [ref=f56e209]: not
+              - text: become production secrets. Configure them separately with
+              - code [ref=f56e210]: wrangler secret put
+              - text: ", and never put secrets in"
+              - code [ref=f56e211]: VITE_
+              - text: variables — those are shipped to the browser bundle.
+          - heading "References" [level=2] [ref=f56e212]
+          - list [ref=f56e213]:
+            - listitem [ref=f56e214]:
+              - link "Cloudflare Wrangler configuration" [ref=f56e215] [cursor=pointer]:
+                - /url: https://developers.cloudflare.com/workers/wrangler/configuration/
+              - text: — keys and bindings in
+              - code [ref=f56e216]: wrangler.jsonc
+            - listitem [ref=f56e217]:
+              - link "Cloudflare D1" [ref=f56e218] [cursor=pointer]:
+                - /url: https://developers.cloudflare.com/d1/
+              - text: — database creation and migrations
+            - listitem [ref=f56e219]:
+              - link "Cloudflare Workers KV get started" [ref=f56e220] [cursor=pointer]:
+                - /url: https://developers.cloudflare.com/kv/get-started/
+              - text: — KV namespaces and bindings
+            - listitem [ref=f56e221]:
+              - link "Cloudflare R2 Workers API" [ref=f56e222] [cursor=pointer]:
+                - /url: https://developers.cloudflare.com/r2/get-started/workers-api/
+              - text: — object storage from a Worker
+            - listitem [ref=f56e223]:
+              - link "Cloudflare Workers Secrets" [ref=f56e224] [cursor=pointer]:
+                - /url: https://developers.cloudflare.com/workers/configuration/secrets/
+              - text: — production secrets and local
+              - code [ref=f56e225]: .dev.vars
+            - listitem [ref=f56e226]:
+              - link "Drizzle &lt;&gt; Cloudflare D1" [ref=f56e227] [cursor=pointer]:
+                - /url: https://orm.drizzle.team/docs/connect-cloudflare-d1
+              - text: — driver and initialization
+        - generic [ref=f56e228]:
+          - heading "What's next" [level=2] [ref=f56e229]
+          - list [ref=f56e234]:
+            - listitem [ref=f56e235]:
+              - link "Website Config every websiteConfig field and switch" [ref=f56e236] [cursor=pointer]:
+                - /url: /en/docs/configuration
+                - generic [ref=f56e241]:
+                  - generic [ref=f56e242]: Website Config
+                  - generic [ref=f56e244]: every websiteConfig field and switch
+            - listitem [ref=f56e248]:
+              - link "Navigation & Menus navbar, footer, and docs sidebar" [ref=f56e249] [cursor=pointer]:
+                - /url: /en/docs/navigation
+                - generic [ref=f56e256]:
+                  - generic [ref=f56e257]: Navigation & Menus
+                  - generic [ref=f56e259]: navbar, footer, and docs sidebar
+            - listitem [ref=f56e263]:
+              - link "Integrations email, payment, newsletter, notifications, analytics" [ref=f56e264] [cursor=pointer]:
+                - /url: /en/docs/integrations
+                - generic [ref=f56e273]:
+                  - generic [ref=f56e274]: Integrations
+                  - generic [ref=f56e276]: email, payment, newsletter, notifications, analytics
+            - listitem [ref=f56e280]:
+              - link "Environment Variables the two-layer check and the VITE_ rule" [ref=f56e281] [cursor=pointer]:
+                - /url: /en/docs/environment
+                - generic [ref=f56e285]:
+                  - generic [ref=f56e286]: Environment Variables
+                  - generic [ref=f56e288]: the two-layer check and the VITE_ rule
+        - navigation [ref=f56e292]:
+          - link "Next Website Config" [ref=f56e294] [cursor=pointer]:
+            - /url: /en/docs/configuration
+            - generic [ref=f56e295]: Next
+            - generic [ref=f56e299]: Website Config
+      - complementary [ref=f56e300]:
+        - navigation "On this page" [ref=f56e301]:
+          - paragraph [ref=f56e302]: On this page
+          - list [ref=f56e303]:
+            - listitem [ref=f56e304]:
+              - link "Prepare your environment" [ref=f56e305] [cursor=pointer]:
+                - /url: "#prepare-your-environment"
+            - listitem [ref=f56e306]:
+              - link "Provision resources" [ref=f56e307] [cursor=pointer]:
+                - /url: "#provision-resources"
+            - listitem [ref=f56e308]:
+              - link "Start local development" [ref=f56e309] [cursor=pointer]:
+                - /url: "#start-local-development"
+            - listitem [ref=f56e310]:
+              - link "Customize the site" [ref=f56e311] [cursor=pointer]:
+                - /url: "#customize-the-site"
+            - listitem [ref=f56e312]:
+              - link "Check and deploy" [ref=f56e313] [cursor=pointer]:
+                - /url: "#check-and-deploy"
+            - listitem [ref=f56e314]:
+              - link "References" [ref=f56e315] [cursor=pointer]:
+                - /url: "#references"

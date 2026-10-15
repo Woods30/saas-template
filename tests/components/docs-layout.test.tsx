@@ -42,6 +42,18 @@ function panel() {
   return screen.getByRole('complementary')
 }
 
+/**
+ * 窄屏顶栏。
+ *
+ * jsdom 不应用 Tailwind 的 `lg:hidden`，因此顶栏与侧栏里的按钮在测试里**同时可见**，
+ * 按名字全局查询会命中多个。需要区分时用本函数把查询范围收窄到顶栏。
+ */
+function header() {
+  const element = document.querySelector('header')
+  if (!element) throw new Error('未找到顶栏')
+  return element as HTMLElement
+}
+
 describe('DocsLayout', () => {
   it('宽屏默认展开侧栏，窄屏隐藏', () => {
     render(<DocsLayout locale="zh">正文</DocsLayout>)
@@ -84,9 +96,41 @@ describe('DocsLayout', () => {
     render(<DocsLayout locale="zh">正文</DocsLayout>)
     const trigger = screen.getByRole('button', { name: '打开文档导航' })
     fireEvent.click(trigger)
+    // 顶栏的同一个按钮切换成「关闭」语义；全页只有这一个关闭入口（侧栏顶部不再重复）。
     fireEvent.click(screen.getByRole('button', { name: '关闭文档导航' }))
     expect(panel().className).not.toContain('fixed')
     await waitFor(() => expect(document.activeElement).toBe(trigger))
+  })
+
+  it('顶栏的搜索图标与侧栏触发器打开同一个弹窗', () => {
+    render(<DocsLayout locale="zh">正文</DocsLayout>)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    // 侧栏在窄屏是隐藏的，顶栏的图标是那里唯一的搜索入口。
+    fireEvent.click(within(header()).getByRole('button', { name: '搜索文档' }))
+    expect(screen.getByRole('dialog')).toBeTruthy()
+  })
+
+  it('⌘K / Ctrl+K 打开搜索弹窗', () => {
+    render(<DocsLayout locale="zh">正文</DocsLayout>)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    expect(screen.getByRole('dialog')).toBeTruthy()
+  })
+
+  it('侧栏收起后，展开入口移到侧栏之外（否则再也点不到）', () => {
+    render(<DocsLayout locale="zh">正文</DocsLayout>)
+    // 展开态：收起按钮在侧栏内，浮动工具条不存在。
+    expect(within(panel()).getByRole('button', { name: '收起文档导航' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '展开文档导航' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '收起文档导航' }))
+    // 侧栏整体隐藏（`lg:hidden`），展开按钮必须落在它外面才点得到。
+    const expand = screen.getByRole('button', { name: '展开文档导航' })
+    expect(panel().contains(expand)).toBe(false)
+    expect(expand.parentElement?.className).toContain('fixed')
+
+    fireEvent.click(expand)
+    expect(panel().className).not.toContain('lg:hidden')
   })
 
   it('抽屉按 Escape 关闭', () => {

@@ -1,7 +1,7 @@
 import { Dialog } from '@base-ui/react/dialog'
 import { IconCornerDownRight, IconSearch, IconX } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
-import { type ReactNode, useId, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useId, useState } from 'react'
 import { DOC_FALLBACK_ICON, DOC_ICON } from '@/components/docs/doc-icons'
 import { type DocEntry, type DocSearchResult, searchDocs } from '@/lib/docs'
 import type { Locale } from '@/lib/locale'
@@ -16,30 +16,71 @@ import { m } from '@/locale/paraglide/messages.js'
  * 纯前端检索（见 `searchDocs`）：文档在构建期已全部载入，无需请求后端。默认**不**
  * 列出全部文档——只有输入关键词后才给结果；命中正文时按 h2 → h3 的层级渲染目录树，
  * 让人一眼看出命中在文档的哪个位置。
+ *
+ * 弹窗开合可由父级接管（`open` / `onOpenChange`）：窄屏顶栏的搜索图标与侧栏的触发器
+ * 要打开**同一个**弹窗，而窄屏下侧栏本身是隐藏的，状态只能由共同的父级持有。
  */
-export function DocsSearch({ docs, locale }: { docs: DocEntry[]; locale: Locale }) {
-  const [open, setOpen] = useState(false)
+export function DocsSearch({
+  docs,
+  locale,
+  open,
+  onOpenChange,
+}: {
+  docs: DocEntry[]
+  locale: Locale
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}) {
+  // 未受控时自持状态；受控时完全由父级决定开合。
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = open !== undefined
+  const openState = isControlled ? open : internalOpen
   const [query, setQuery] = useState('')
   const listId = useId()
 
   const results = searchDocs(docs, query)
   const hasQuery = query.trim() !== ''
 
+  const setOpen = useCallback(
+    (next: boolean) => {
+      if (!isControlled) setInternalOpen(next)
+      onOpenChange?.(next)
+      // 关闭时清空查询：下次打开是干净的起点，而不是上次的残词。
+      if (!next) setQuery('')
+    },
+    [isControlled, onOpenChange],
+  )
+
+  // ⌘K / Ctrl+K 打开搜索：这是搜索框上标注的快捷键，必须真的可用，否则标注即谎言。
+  // 依赖 `openState`：关闭后才重新挂监听，弹窗已开时不必再抢快捷键。
+  useEffect(() => {
+    if (openState) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key.toLowerCase() !== 'k' || !(event.metaKey || event.ctrlKey)) return
+      event.preventDefault()
+      setOpen(true)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [openState, setOpen])
+
   return (
-    <Dialog.Root
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next)
-        // 关闭时清空查询：下次打开是干净的起点，而不是上次的残词。
-        if (!next) setQuery('')
-      }}
-    >
+    <Dialog.Root open={openState} onOpenChange={setOpen}>
       <Dialog.Trigger
         aria-label={m.docs_search_label()}
-        className="flex w-full items-center gap-2 rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+        className="flex w-full items-center gap-2 rounded-lg border border-border bg-transparent px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
       >
         <IconSearch className="size-4 shrink-0" aria-hidden />
         <span className="truncate">{m.docs_search_placeholder()}</span>
+        {/* 键帽提示：让「⌘K 可用」这件事在界面上可见。 */}
+        <span className="ml-auto flex shrink-0 items-center gap-0.5">
+          <kbd className="rounded border border-border bg-muted px-1.5 font-sans text-[0.7rem]">
+            ⌘
+          </kbd>
+          <kbd className="rounded border border-border bg-muted px-1.5 font-sans text-[0.7rem]">
+            K
+          </kbd>
+        </span>
       </Dialog.Trigger>
       <Dialog.Portal>
         {/* 遮罩 + 视口：弹窗水平居中并贴近顶部，长结果列表在视口内滚动。 */}
