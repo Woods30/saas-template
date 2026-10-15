@@ -32,7 +32,7 @@
     "db:studio:local": "drizzle-kit studio --config=drizzle.config.local.ts",
     "db:studio:remote": "drizzle-kit studio --config=drizzle.config.ts",
     "setup": "tsx scripts/setup.ts",
-    "content:build": "content-collections build"
+    "content:build": "content-collections build && tsx scripts/normalize-content-collections.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1149.0",
