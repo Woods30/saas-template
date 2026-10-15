@@ -36,7 +36,16 @@ export function AuthLayout({ title, description, children }: AuthLayoutProps) {
       </Link>
       <Card>
         <CardHeader>
-          <CardTitle>{title}</CardTitle>
+          {/*
+            base-nova 的 `CardTitle` 渲染 `<div>`（旧版手写件是 `<h3>`），而这里是认证页
+            唯一的标题——直接用它会让页面没有 heading（屏幕阅读器无法按标题导航，e2e 的
+            `getByRole('heading')` 也会失配）。ui 原件不本地修改，改在此处补回语义：
+            `<h1>` 包住标题文本，Tailwind preflight 已把标题的字号/字重重置为 inherit，
+            因此外观仍由 `CardTitle` 的类名决定。
+          */}
+          <CardTitle>
+            <h1>{title}</h1>
+          </CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
         </CardHeader>
         <CardContent>{children}</CardContent>
