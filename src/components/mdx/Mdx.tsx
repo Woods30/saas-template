@@ -17,7 +17,7 @@ export function Mdx({ source }: { source: string }) {
   // frontmatter 标题渲染页面 `<h1>`），丢弃首个 h1 块避免页面出现两个标题。
   const blocks = useMemo(() => stripLeadingHeading(parseBlocks(source)), [source])
   return (
-    <div className="mdx prose max-w-3xl">
+    <div className="mdx prose">
       {blocks.map((b, idx) => {
         const key = `block-${idx}`
         if (b.kind === 'h1') return <h1 key={key}>{b.text}</h1>

@@ -72,6 +72,7 @@
     "@inlang/paraglide-js": "^2.27.0",
     "@inlang/plugin-message-format": "4.5.2",
     "@playwright/test": "^1.64.0",
+    "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
