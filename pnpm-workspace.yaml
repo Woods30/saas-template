@@ -1,5 +1,6 @@
 allowBuilds:
   esbuild: true
+  simple-git-hooks: true
   workerd: true
 # minimumReleaseAgeExclude：豁免 pnpm 的「最小发布年龄」门禁。
 # pnpm 11 起 minimumReleaseAge 默认 1440 分钟（1 天），拒绝安装近期刚发布的版本，
