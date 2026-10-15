@@ -103,6 +103,12 @@ jobs:
         with:
           name: build
           path: dist/
+      # 必须有 `.env`：wrangler.jsonc 的 vars 把 NODE_ENV 定为 production，缺 `.env`
+      # 时 better-auth 判定为生产环境并拒绝使用默认 secret，凡是走会话的用例（auth /
+      # settings）全部 500。`.env.example` 里 NODE_ENV=development 会在 dev 下覆盖
+      # 该 binding，且 optional 字段留空即可通过 `pnpm check:env`，故直接照抄。
+      - name: Create .env
+        run: cp .env.example .env
       # 启动 dev server；playwright.config.ts 的 webServer.command 接管生命周期
       - name: Start server
         run: pnpm run dev --port 3000 &
