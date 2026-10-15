@@ -30,7 +30,8 @@ export function SettingsUserCard({ session }: { session: SessionInfo }) {
               <SidebarMenuButton
                 size="lg"
                 aria-label={name || email}
-                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                tooltip={name || email}
+                className="data-popup-open:bg-sidebar-accent data-popup-open:text-sidebar-accent-foreground"
               />
             }
           >
