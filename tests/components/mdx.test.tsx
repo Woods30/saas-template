@@ -22,6 +22,21 @@ describe('Mdx 表格', () => {
     expect(columnHeaders.map((c) => c.textContent)).toEqual(['字段', '类型'])
   })
 
+  it('表头带底色、外层容器带边框与圆角（调用处补齐 ui/table 缺失的视觉）', () => {
+    // ui/table 上游的 TableHeader 只有 `[&_tr]:border-b`、TableHead 无背景、Table 根无
+    // border——「表头底色 + 外框」由调用处（Mdx.tsx）补，故钉死调用处契约而非 ui 原件。
+    render(<Mdx source={['| 字段 | 类型 |', '| --- | --- |', '| name | string |'].join('\n')} />)
+    const table = screen.getByRole('table')
+    for (const head of within(table).getAllByRole('columnheader')) {
+      expect(head.className).toContain('bg-muted/50')
+    }
+    // 外框落在包裹 Table 的容器上（Table 内部自带 overflow-x-auto 容器）。
+    const wrapper = table.closest('.not-prose')
+    expect(wrapper).not.toBeNull()
+    expect(wrapper?.className).toContain('border')
+    expect(wrapper?.className).toContain('rounded-lg')
+  })
+
   it('分隔行不产生数据行，也不会渲染出多余的行', () => {
     render(<Mdx source={['| A |', '|---|', '| 1 |', '| 2 |'].join('\n')} />)
     const table = screen.getByRole('table')

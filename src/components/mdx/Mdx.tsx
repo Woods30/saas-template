@@ -107,13 +107,17 @@ type AnyBlock = Block | TableBlock | ListBlock | QuoteBlock
 function Table({ table }: { table: TableBlock }) {
   return (
     // `not-prose`：表格样式由 ui/table 提供，不叠加 typography 的表格排版。
-    <div className="not-prose mb-4">
+    // ui/table 上游不含表头底色与外框，故在调用处补：外层容器给 `border` + `rounded-lg`，
+    // 每个 TableHead 给 `bg-muted/50`（表头行的下边框由 TableHeader 的 `[&_tr]:border-b` 提供）。
+    <div className="not-prose mb-4 overflow-hidden rounded-lg border border-border">
       <UITable>
         <TableHeader>
           <TableRow>
             {table.header.map((cell, column) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: 静态表格，位置即身份
-              <TableHead key={`h-${column}`}>{renderInline(cell)}</TableHead>
+              <TableHead key={`h-${column}`} className="bg-muted/50">
+                {renderInline(cell)}
+              </TableHead>
             ))}
           </TableRow>
         </TableHeader>
