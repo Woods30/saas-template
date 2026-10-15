@@ -47,7 +47,7 @@ test.describe('Settings', () => {
     await register(page)
     await page.goto('/zh/settings/profile')
     // 昵称输入框带出当前会话的昵称。
-    await expect(page.getByLabel('昵称')).toHaveValue('设置用户')
+    await expect(page.getByRole('textbox', { name: '昵称' })).toHaveValue('设置用户')
     // 默认未接 newsletter，「通知偏好」入口不应出现；其余三项恒在。
     await expect(page.getByRole('link', { name: '安全' })).toBeVisible()
     await expect(page.getByRole('link', { name: '登录设备' })).toBeVisible()
@@ -59,21 +59,25 @@ test.describe('Settings', () => {
     await page.goto('/zh/settings/profile')
     await waitForForm(page)
 
-    await page.getByLabel('昵称').fill('新昵称')
+    // 昵称输入框用 `role` 定位而非 `getByLabel`：侧栏用户卡片的触发按钮带
+    // `aria-label={name}`，卡片名字会变（这里是「新昵称」），与输入框标签「昵称」
+    // 存在子串重叠，`getByLabel('昵称')` 会同时命中按钮和输入框。
+    const nameField = page.getByRole('textbox', { name: '昵称' })
+    await nameField.fill('新昵称')
     await page.getByRole('button', { name: '保存' }).click()
     await expect(page.getByRole('status')).toBeVisible({ timeout: 15000 })
 
     await page.reload()
-    await expect(page.getByLabel('昵称')).toHaveValue('新昵称')
+    await expect(nameField).toHaveValue('新昵称')
   })
 
   test('登出后再次访问个人中心被重定向', async ({ page }) => {
     await register(page)
     await expect(page).toHaveURL(/\/zh$|\/$/)
 
-    // 个人中心是 `_layout` 路由，不渲染营销导航栏（与 docs 一致），
-    // 因此登出入口在首页导航栏的用户菜单里。
-    await page.getByRole('button', { name: '设置用户' }).click()
+    // 登出入口在侧栏底部用户卡片：`settings` 是 `_layout` 路由，不渲染营销导航栏，
+    // `UserMenu` 在这里不可见。
+    await page.getByRole('button', { name: /设置用户/ }).click()
     await page.getByText('退出登录').click()
     // 登出会整页跳转（`window.location.assign('/')`）。等导航真正落地再继续——
     // 只等 URL 变化会撞上仍在进行的导航，随后的 `goto` 直接被 abort。
@@ -85,5 +89,27 @@ test.describe('Settings', () => {
 
     await page.goto('/zh/settings/profile')
     await page.waitForURL(/\/zh\/auth\/login/)
+  })
+
+  test('顶栏折叠按钮收起侧栏为图标窄条，再点恢复', async ({ page }) => {
+    await register(page)
+    await page.goto('/zh/settings/profile')
+    // 等 hydration 完成再点折叠按钮：此时 React 刚接管，若在首帧上直接点，
+    // 事件处理器还没绑定上，`toggleSidebar` 不会执行，`data-state` 仍是 expanded。
+    await page.waitForLoadState('networkidle')
+
+    // 折叠前：三级面包屑末级是当前板块，且是当前页（非链接）。
+    // 「资料」在页面上有三处（侧栏导航项、面包屑末级、内容区标题），文本相同，
+    // 因此断言必须限定在面包屑导航内——只有末级那份带 aria-current="page"。
+    const breadcrumb = page.getByRole('navigation', { name: 'breadcrumb' })
+    await expect(breadcrumb).toBeVisible()
+    await expect(breadcrumb.getByText('资料')).toHaveAttribute('aria-current', 'page')
+
+    const sidebar = page.locator('[data-slot="sidebar"]')
+    await expect(sidebar).toHaveAttribute('data-state', 'expanded')
+    await page.locator('[data-slot="sidebar-trigger"]').click()
+    await expect(sidebar).toHaveAttribute('data-state', 'collapsed')
+    await page.locator('[data-slot="sidebar-trigger"]').click()
+    await expect(sidebar).toHaveAttribute('data-state', 'expanded')
   })
 })
