@@ -51,7 +51,7 @@ export function ThemeToggle() {
         <Icon aria-hidden />
       </Menu.Trigger>
       <Menu.Portal>
-        <Menu.Positioner align="end" sideOffset={8}>
+        <Menu.Positioner align="end" sideOffset={8} className="z-50">
           <Menu.Popup className="min-w-36 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
             {/* 用 RadioItem 而非 Item：主题是三选一，RadioItem 会渲染 aria-checked，
                 让选中态对辅助技术可见，而不是只靠一个视觉上的对勾。 */}

@@ -120,3 +120,24 @@ describe('UserMenu', () => {
     vi.unstubAllGlobals()
   })
 })
+
+/** 从弹层向上找到 Base UI 的 Positioner 定位容器（`Menu.Popup` 的父元素）。 */
+function positionerOf(menu: HTMLElement): HTMLElement | null {
+  let node: HTMLElement | null = menu
+  while (node && !node.className.includes('z-')) node = node.parentElement
+  return node
+}
+
+describe('UserMenu 弹层层叠', () => {
+  it('定位容器带 z-50，避免被 z-40 的 header 压住', async () => {
+    mocks.useSession.mockReturnValue({
+      data: { user: { email: 'user@example.com', name: 'Alice' } },
+      isPending: false,
+    })
+    render(<UserMenu />)
+    screen.getByRole('button', { name: 'Alice' }).click()
+    const menu = await screen.findByRole('menu')
+    const positioner = positionerOf(menu)
+    expect(positioner?.className).toContain('z-50')
+  })
+})

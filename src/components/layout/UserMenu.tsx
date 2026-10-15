@@ -40,7 +40,7 @@ export function UserMenu({ guestFallback }: UserMenuProps) {
         <IconUser aria-hidden />
       </Menu.Trigger>
       <Menu.Portal>
-        <Menu.Positioner align="end" sideOffset={8}>
+        <Menu.Positioner align="end" sideOffset={8} className="z-50">
           <Menu.Popup className="min-w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
             <div className="border-b border-border px-2 py-1.5">
               <p className="text-xs text-muted-foreground">{m.auth_menu_account()}</p>

@@ -124,4 +124,29 @@ test.describe('Settings', () => {
     await page.locator('[data-slot="sidebar-trigger"]').click()
     await expect(sidebar).toHaveAttribute('data-state', 'expanded')
   })
+
+  test('登录后头像菜单不被 header 遮挡', async ({ page }) => {
+    await register(page)
+    // 注册后已在首页（register 内部等 URL 落到 /zh 或 /），Navbar 的头像菜单可展开。
+    const trigger = page.getByRole('button', { name: '设置用户' })
+    await trigger.click()
+    const menu = page.getByRole('menu')
+    await expect(menu).toBeVisible()
+
+    // 弹层顶边与 header 底边**必然重叠**：弹层定位在触发按钮下方 8px，而按钮本身位于
+    // header 内，故弹层顶边落在 header 的下缘区域内。z-50 不改变弹层位置，改变的是该
+    // 重叠带里「谁在最上层」。因此这里不能用几何位置断言（弹层顶边永远在 header 底边
+    // 之上），只能做命中测试：重叠带里命中的最上层元素必须是弹层自身，而非 header 的后代。
+    const menuBox = await menu.boundingBox()
+    if (!menuBox) throw new Error('无法取得弹层的边界')
+    const topmostIsMenu = await page.evaluate(
+      ({ x, y }) => {
+        const el = document.elementFromPoint(x, y)
+        return el !== null && el.closest('[role="menu"]') !== null
+      },
+      // 取弹层顶边往里 3px 处的中点——正是此前被 header 压住的区域。
+      { x: Math.round(menuBox.x + menuBox.width / 2), y: Math.round(menuBox.y + 3) },
+    )
+    expect(topmostIsMenu).toBe(true)
+  })
 })

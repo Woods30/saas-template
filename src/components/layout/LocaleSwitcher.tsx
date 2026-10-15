@@ -34,7 +34,7 @@ export function LocaleSwitcher({ value }: LocaleSwitcherProps) {
         <IconLanguage aria-hidden />
       </Menu.Trigger>
       <Menu.Portal>
-        <Menu.Positioner align="end" sideOffset={8}>
+        <Menu.Positioner align="end" sideOffset={8} className="z-50">
           <Menu.Popup className="min-w-36 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
             {LOCALES.map((locale) => (
               <Menu.Item
