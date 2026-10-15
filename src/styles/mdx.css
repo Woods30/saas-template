@@ -57,12 +57,3 @@
 .mdx ol {
   @apply mb-4 list-decimal space-y-1 pl-6;
 }
-.mdx table {
-  @apply w-full border-collapse text-left text-sm;
-}
-.mdx th {
-  @apply border-b border-border px-3 py-2 font-semibold;
-}
-.mdx td {
-  @apply border-b border-border/60 px-3 py-2 align-top;
-}
