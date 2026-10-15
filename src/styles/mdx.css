@@ -3,6 +3,13 @@
 .mdx {
   @apply max-w-3xl leading-7;
 }
+/* 正文首元素不额外留上边距（页面标题与 hr 已提供间隔）。 */
+.mdx > :first-child {
+  @apply mt-0;
+}
+.mdx li {
+  @apply leading-7;
+}
 .mdx h1 {
   @apply mt-8 mb-4 text-3xl font-bold;
 }
@@ -25,17 +32,18 @@
 .mdx code {
   @apply rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] text-foreground;
 }
+/* 代码块用主题令牌而非固定深色，明暗主题下都有层次。 */
 .mdx pre {
-  @apply mb-4 overflow-auto rounded bg-zinc-900 p-4 text-zinc-100;
+  @apply mb-4 overflow-x-auto rounded-lg border border-border bg-muted p-4;
 }
 .mdx pre code {
-  @apply border-0 bg-transparent p-0 text-sm text-inherit;
+  @apply border-0 bg-transparent p-0 font-mono text-sm text-foreground;
 }
 .mdx strong {
   @apply font-semibold;
 }
 .mdx a {
-  @apply text-foreground underline underline-offset-4 hover:text-foreground/80;
+  @apply text-primary underline underline-offset-4 hover:text-primary/80;
 }
 .mdx .mdx-quote {
   @apply my-4 rounded-r-md border-l-2 border-border bg-muted/40 py-3 pr-4 pl-4 text-sm text-muted-foreground;

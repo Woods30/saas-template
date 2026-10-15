@@ -63,10 +63,10 @@ function DocPage() {
   const { locale } = Route.useRouteContext()
 
   return (
-    // 正文与右侧目录并排；目录在窄屏隐藏（阅读空间优先），宽屏固定在右侧。
-    <div className="flex gap-10">
+    // 正文与右侧目录并排并整体居中；超宽屏下不再左对齐留出大片空洞。
+    <div className="mx-auto flex max-w-5xl justify-center gap-10">
       <article className="max-w-3xl min-w-0 flex-1">
-        <h1 className="text-3xl font-bold">{doc.title}</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{doc.title}</h1>
         <p className="mt-2 text-muted-foreground">{doc.description}</p>
         {doc.updated !== '' && (
           <p className="mt-2 text-xs text-muted-foreground">

@@ -1,4 +1,13 @@
 import { Fragment, useMemo } from 'react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Table as UITable,
+} from '@/components/ui/table'
 import { headingId } from '@/lib/docs'
 import '@/styles/mdx.css'
 
@@ -42,7 +51,11 @@ export function Mdx({ source }: { source: string }) {
           )
         if (b.kind === 'table') return <Table key={key} table={b} />
         if (b.kind === 'quote')
-          return (
+          return isNoteQuote(b.text) ? (
+            <Alert key={key} className="not-prose my-4">
+              <AlertDescription>{renderInline(b.text)}</AlertDescription>
+            </Alert>
+          ) : (
             <blockquote key={key} className="mdx-quote">
               {renderInline(b.text)}
             </blockquote>
@@ -93,33 +106,36 @@ type AnyBlock = Block | TableBlock | ListBlock | QuoteBlock
 
 function Table({ table }: { table: TableBlock }) {
   return (
-    <div className="mb-4 overflow-x-auto">
-      <table>
-        <thead>
-          <tr>
-            {/* 表格由静态 markdown 一次性渲染，行序不重排，位置即稳定身份。用单元格文本
-                作 key 反而会撞车——同一行常有两列取值相同（如 `'stripe'`），重复 key 会让
-                React 丢弃单元格。 */}
+    // `not-prose`：表格样式由 ui/table 提供，不叠加 typography 的表格排版。
+    <div className="not-prose mb-4">
+      <UITable>
+        <TableHeader>
+          <TableRow>
             {table.header.map((cell, column) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: 静态表格，位置即身份
-              <th key={`h-${column}`}>{renderInline(cell)}</th>
+              <TableHead key={`h-${column}`}>{renderInline(cell)}</TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {table.rows.map((row, rowIndex) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: 同上，行序静态且不重排。
-            <tr key={`r-${rowIndex}`}>
+            <TableRow key={`r-${rowIndex}`}>
               {row.map((cell, column) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: 同上，单元格位置静态且不重排。
-                <td key={`c-${rowIndex}-${column}`}>{renderInline(cell)}</td>
+                <TableCell key={`c-${rowIndex}-${column}`}>{renderInline(cell)}</TableCell>
               ))}
-            </tr>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </UITable>
     </div>
   )
+}
+
+/** 引用块是否以 `**Note**` / `**注意事项**` / `**Notes**` 开头——是则升级为 Alert。 */
+function isNoteQuote(text: string): boolean {
+  return /^\s*\*\*(Note|Notes|注意事项)\*\*/.test(text)
 }
 
 /**

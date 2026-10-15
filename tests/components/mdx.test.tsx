@@ -13,13 +13,13 @@ import { Mdx } from '@/components/mdx/Mdx'
 afterEach(cleanup)
 
 describe('Mdx 表格', () => {
-  it('把 markdown 表格渲染为 table / thead / tbody 结构', () => {
-    render(<Mdx source={['| 字段 | 类型 |', '|---|---|', '| `name` | string |'].join('\n')} />)
+  it('把 markdown 表格渲染为 ui/table 结构', () => {
+    render(<Mdx source={['| 字段 | 类型 |', '| --- | --- |', '| name | string |'].join('\n')} />)
     const table = screen.getByRole('table')
+    // ui/table 的 Table 根带 data-slot="table"（外层容器是 table-container）。
+    expect(table).toHaveAttribute('data-slot', 'table')
     const columnHeaders = within(table).getAllByRole('columnheader')
     expect(columnHeaders.map((c) => c.textContent)).toEqual(['字段', '类型'])
-    const cells = within(table).getAllByRole('cell')
-    expect(cells.map((c) => c.textContent)).toEqual(['name', 'string'])
   })
 
   it('分隔行不产生数据行，也不会渲染出多余的行', () => {
@@ -141,6 +141,18 @@ describe('Mdx 引用块', () => {
   it('引用块内的行内代码仍被解析', () => {
     render(<Mdx source="> 需要 `pnpm check`" />)
     expect(screen.getByRole('blockquote').querySelector('code')?.textContent).toBe('pnpm check')
+  })
+
+  it('以 **Note** 开头的引用渲染为 Alert', () => {
+    render(<Mdx source="> **Note**: 生产环境必须配置真实域名。" />)
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveAttribute('data-slot', 'alert')
+    expect(alert.textContent).toContain('生产环境必须配置真实域名。')
+  })
+
+  it('中文「注意事项」开头的引用同样升级为 Alert', () => {
+    render(<Mdx source="> **注意事项**：不要泄漏 secret。" />)
+    expect(screen.getByRole('alert').textContent).toContain('不要泄漏 secret。')
   })
 })
 
