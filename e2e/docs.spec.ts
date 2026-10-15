@@ -162,7 +162,7 @@ test.describe('Docs', () => {
       .context()
       .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: 'http://localhost:3000' }])
     await page.goto('/docs/getting-started')
-    await expect(page.getByText('最近更新 2026 年 10 月 14 日')).toBeVisible()
+    await expect(page.getByText('最近更新 2026 年 10 月 15 日')).toBeVisible()
   })
 
   test('「下一步」渲染为带图标与描述的块状卡片，且与分页导航区分开', async ({ page }) => {
