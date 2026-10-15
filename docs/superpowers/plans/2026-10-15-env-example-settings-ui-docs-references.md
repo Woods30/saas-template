@@ -1645,3 +1645,21 @@ git commit -m "test: e2e 改从用户卡片登出，并覆盖顶栏折叠交互"
 
 
 
+
+## 验收清单结果（2026-10-15，全部任务完成后实测）
+
+- [x] `pnpm check` 通过（locale 编译 + Biome + tsc + env 校验 + locale 配对）—— exit 0
+- [x] `pnpm exec vitest run --config vitest.components.config.ts` 通过 —— 19 files / **160** passed
+      （146 基线 + 布局 7 + 卡片 5 + 名字与 footer 装配补测 2）
+- [x] `pnpm exec playwright test e2e/settings.spec.ts` 通过 —— **6 passed**（`--workers=1`；默认 6 worker 下
+      有既有抖动，失败点全在 `register()` 的注册页 hydration 等待超时，非本计划引入）
+- [x] Node 脚本核对 `.env.example` 与 schema 键集合：example 30 键、schema 32 键，仅差
+      `VITE_UMAMI_ID` / `VITE_CLARITY_ID`（Task 1 有意重命名为 `VITE_UMAMI_WEBSITE_ID` /
+      `VITE_CLARITY_PROJECT_ID`）
+- [x] 手动走查 `/zh/settings/profile`：浅色 logo、深色白底片、折叠/展开（data-state 与 48px/256px 实测）、
+      三级面包屑、用户卡片、真实鼠标点击登出、键盘焦点环，全部正常
+- [x] `pnpm test` 通过 —— 602 tests（3 条为既有 flaky 冷启动超时，单独重跑涉及文件 48 passed；与多个子代理
+      在基线上的取证一致）
+
+实际数字与初始预期的差异（计划编写时预估 158 条组件测试）来自两处追加：Task 5 的 Important 覆盖缺口
+补测（删 `SidebarFooter` 或名字 span 原会全绿）+ Task 8 的登出用例改走侧栏卡片。
