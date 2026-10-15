@@ -6,7 +6,10 @@
 
 - **Node.js** `^22.12.0 || ^24.0.0 || >=26.0.0`（见 `package.json` 的 `engines`；`vitest@5` 排除
   奇数大版本 23 / 25，建议使用偶数 LTS，如 22 / 24）
-- **pnpm**（当前验证版本 pnpm 12.4.2；`pnpm-workspace.yaml` 为 pnpm 11+ 格式）
+- **pnpm**（版本见 `package.json` 的 `packageManager`，当前 12.4.2；CI 经
+  `pnpm/action-setup` 自动读取该字段，不再单独钉版本。`pnpm-workspace.yaml` 为
+  pnpm 11+ 格式——**pnpm 9 会以 `packages field missing or empty` 拒绝它**，
+  故不要降级到 9）
 
 ```bash
 pnpm install
