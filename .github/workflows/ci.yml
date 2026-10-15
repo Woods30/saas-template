@@ -87,6 +87,10 @@ jobs:
     if: needs.changes.outputs.core == 'true' || github.event_name == 'push'
     env:
       E2E_BASE_URL: http://localhost:3000
+      # 本 job 自己启动并等待 dev server（见下方 Start / Wait 步骤）。若不设此变量，
+      # playwright.config.ts 的 webServer 会再起一个，CI 下 `reuseExistingServer` 为
+      # false，于是直接报「port 3000 already used」——两个 server 抢同一端口。
+      E2E_NO_SERVER: 1
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
