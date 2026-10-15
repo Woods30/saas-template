@@ -41,13 +41,14 @@ cp .env.example .env   # 照抄示例即可，optional 字段留空
 - 单一逻辑工作单元；结构变更与行为变更分开提交。
 - 遵循 TDD：先写失败测试，再写实现，再 commit。
 - 提交消息格式：`<type>(<scope>): <subject>`（subject 使用中文）。
-- 提交前运行 `pnpm check` 与 `pnpm test`。
+- 提交前运行 `pnpm check` 与 `pnpm test`；pre-commit 钩子会对暂存文件跑
+  `biome check --write` 自动格式化。
 
 ## 验证清单
 
 提交前建议确认：
 
-- `pnpm test` —— 单元测试通过
+- `pnpm test` —— 单元测试与组件测试通过
 - `pnpm typecheck` —— 类型检查通过
 - `pnpm lint` —— Biome 无告警
 - `pnpm build` —— 生产构建成功

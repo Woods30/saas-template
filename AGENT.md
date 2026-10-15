@@ -25,12 +25,14 @@ Vitest + Playwright。
 | `pnpm dev` | 开发服务器（Vite，端口 3000） |
 | `pnpm build` | 生产构建；`pnpm preview` 预览产物 |
 | `pnpm check` | locale 编译 + Biome + TypeScript + env + locale 校验（提交前必跑） |
-| `pnpm test` | Vitest 单元测试 |
+| `pnpm test` | Vitest 单元测试 + 组件测试（`test.projects` 合并两组） |
+| `pnpm test:affected` | 仅跑受影响测试（`vitest run --changed`） |
 | `pnpm test:watch` | watch 模式 |
 | `pnpm typecheck` | 编译 locale 后跑 `tsc --noEmit` |
 | `pnpm lint` / `pnpm lint:fix` / `pnpm format` | Biome |
-| `pnpm exec vitest run --config vitest.components.config.ts` | 组件测试（jsdom） |
+| `pnpm exec vitest run --config vitest.components.config.ts` | 只跑组件测试（jsdom）；全量已含在 `pnpm test` 内 |
 | `pnpm test:e2e` | Playwright E2E |
+| `pnpm check:core` | 判定当前 diff 是否触及核心区（退出码 0=核心、1=非核心、2=无法判定） |
 | `pnpm check:env` / `pnpm check:env:prod` | 开发 / 生产环境变量校验 |
 | `pnpm check:client-bundle` | 检查客户端 bundle 不含服务端 secret |
 | `pnpm deploy` | 生产 env 校验 → 构建 → bundle 检查 → `wrangler deploy` |
@@ -114,6 +116,11 @@ Vitest + Playwright。
 - **结构整理与行为修改分开提交**，不在同一提交里混合。
 - 提交仅在全部测试通过、Linter 警告为零、代表单一逻辑工作单元时执行；提交消息末尾附
   `Co-Authored-By: Claude Code <noreply@anthropic.com>`。
+- **pre-commit 钩子**（simple-git-hooks + lint-staged）在提交时对暂存文件跑
+  `biome check --write`，自动格式化并暂存修正。
+- **CI**：e2e 仅在 PR 触及核心区或 push 到 `main` 时运行；核心区清单以
+  `scripts/core-paths.ts` 为**单一事实来源**（本地 `pnpm check:core` 与 CI 共用，不得
+  两处各写一份）。
 - 不新增依赖前先确认既有依赖无法满足需求。
 
 ### 需要确认的操作
