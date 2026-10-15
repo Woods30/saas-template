@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { destructiveFocusRing } from '@/lib/a11y'
 import { getRequestLocale } from '@/lib/locale'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
@@ -231,7 +232,9 @@ function DeleteAccountCard() {
           </p>
         )}
         <AlertDialog>
-          <AlertDialogTrigger render={<Button type="button" variant="destructive" />}>
+          <AlertDialogTrigger
+            render={<Button type="button" variant="destructive" className={destructiveFocusRing} />}
+          >
             {m.settings_security_delete_button()}
           </AlertDialogTrigger>
           <AlertDialogContent>
