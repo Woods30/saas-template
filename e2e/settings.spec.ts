@@ -84,13 +84,13 @@ test.describe('Settings', () => {
     const sidebar = page.locator('[data-slot="sidebar"]')
     await sidebar.getByRole('button', { name: /设置用户/ }).click()
 
-    // 登出项用键盘激活而非点击：弹出层（`Menu.Popup`）没设 z-index，而侧栏容器是
-    // `fixed z-10`，命中测试时 `sidebar-content` 盖在菜单项之上——鼠标点下去会被
-    // 当成「点击外部」把菜单关掉、登出并不发生。键盘激活走同一条 menuitem 处理链，
-    // 且不受层叠影响，因此用它确认登出。（这是产品缺陷，非测试取巧，见任务报告。）
+    // 真实鼠标点击登出项：菜单弹出层与侧栏容器都设了 z-index，菜单在上层，
+    // 指针能正常命中 menuitem。这里走真实点击路径，不做键盘绕过。
+    // 定位用页面级而非侧栏级：`Menu.Portal` 把弹出层挂到 body 下，并非
+    // `[data-slot="sidebar"]` 的 DOM 后代，链式定位会匹配不到。
     const logout = page.getByRole('menuitem', { name: '退出登录' })
     await logout.waitFor()
-    await logout.press('Enter')
+    await logout.click()
     // 登出会整页跳转（`window.location.assign('/')`）。等导航真正落地再继续——
     // 只等 URL 变化会撞上仍在进行的导航，随后的 `goto` 直接被 abort。
     await page.waitForURL((url) => url.pathname === '/zh' || url.pathname === '/')
