@@ -32,6 +32,13 @@
 .mdx code {
   @apply rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] text-foreground;
 }
+/* typography 会给行内 code 加伪元素引号（`content:"\`"`），MDX 已有自己的行内代码
+   样式，须关掉，否则每个行内代码都会渲染出字面反引号。块级 `pre code` 由 typography
+   自身重置为 `content: none`，无需在此处理。 */
+.mdx code::before,
+.mdx code::after {
+  content: none;
+}
 /* 代码块用主题令牌而非固定深色，明暗主题下都有层次。 */
 .mdx pre {
   @apply mb-4 overflow-x-auto rounded-lg border border-border bg-muted p-4;
