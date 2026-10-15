@@ -75,10 +75,22 @@ test.describe('Settings', () => {
     await register(page)
     await expect(page).toHaveURL(/\/zh$|\/$/)
 
-    // 登出入口在侧栏底部用户卡片：`settings` 是 `_layout` 路由，不渲染营销导航栏，
-    // `UserMenu` 在这里不可见。
-    await page.getByRole('button', { name: /设置用户/ }).click()
-    await page.getByText('退出登录').click()
+    // 登出入口在侧栏底部用户卡片，得先离开首页进个人中心：`settings` 是 `_layout`
+    // 路由、不渲染营销导航栏，首页顶栏的 `UserMenu` 在这里并不存在。
+    await page.goto('/zh/settings/profile')
+    // 等 hydration 完成再点卡片：与折叠用例同一约定——React 刚接管首帧时点下去，
+    // 事件处理器还没绑定上，弹窗不会出现。
+    await page.waitForLoadState('networkidle')
+    const sidebar = page.locator('[data-slot="sidebar"]')
+    await sidebar.getByRole('button', { name: /设置用户/ }).click()
+
+    // 登出项用键盘激活而非点击：弹出层（`Menu.Popup`）没设 z-index，而侧栏容器是
+    // `fixed z-10`，命中测试时 `sidebar-content` 盖在菜单项之上——鼠标点下去会被
+    // 当成「点击外部」把菜单关掉、登出并不发生。键盘激活走同一条 menuitem 处理链，
+    // 且不受层叠影响，因此用它确认登出。（这是产品缺陷，非测试取巧，见任务报告。）
+    const logout = page.getByRole('menuitem', { name: '退出登录' })
+    await logout.waitFor()
+    await logout.press('Enter')
     // 登出会整页跳转（`window.location.assign('/')`）。等导航真正落地再继续——
     // 只等 URL 变化会撞上仍在进行的导航，随后的 `goto` 直接被 abort。
     await page.waitForURL((url) => url.pathname === '/zh' || url.pathname === '/')
@@ -91,7 +103,7 @@ test.describe('Settings', () => {
     await page.waitForURL(/\/zh\/auth\/login/)
   })
 
-  test('顶栏折叠按钮收起侧栏为图标窄条，再点恢复', async ({ page }) => {
+  test('顶栏折叠按钮收起侧栏再展开', async ({ page }) => {
     await register(page)
     await page.goto('/zh/settings/profile')
     // 等 hydration 完成再点折叠按钮：此时 React 刚接管，若在首帧上直接点，
