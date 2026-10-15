@@ -4,7 +4,7 @@ description: The session guard on protected routes, plus the profile, security, 
 locale: en
 order: 12
 group: features
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 The account management area behind sign-in, at `/{locale}/settings/*`. Reach it from
@@ -53,7 +53,7 @@ one RPC on client navigation, so both paths see the real session — the same re
 `fetchAuthProviderAvailability`.
 
 The return value carries **only the fields the pages need** (`id` / `name` / `email` /
-`emailVerified`) rather than the whole session. Child pages read it via
+`emailVerified` / `image`) rather than the whole session. Child pages read it via
 `Route.useRouteContext()`.
 
 ## The four sections
@@ -90,10 +90,42 @@ narrow screens. This file only assembles them.
 It is deliberately **not shared** with the hand-built sidebar in `DocsLayout`: that one has
 its own cookie and collapse semantics, and merging them would only tangle both.
 
+The sidebar has three sections, bottom-up:
+
+| Section | Contents |
+|---|---|
+| `SidebarHeader` | Site logo, links to home; white plate in dark theme (same treatment as the marketing Navbar) |
+| `SidebarContent` | The section menu described above, copy from `getSettingsSections` |
+| `SidebarFooter` | User card (`SettingsUserCard`): avatar + name + email, expand to sign out |
+
+The user card is the **only** sign-out entry inside the account area — `settings` is a
+`_layout` route that does not render the marketing Navbar, so `UserMenu` is not visible
+here. The avatar comes from `SessionInfo.user.image` (the `users.image` column, written by
+Google sign-in); when empty it falls back to the first letter of `name` or email.
+
+The top bar (the `header` inside `SidebarInset`) holds three things, left to right:
+
+1. `SidebarTrigger` — the collapse button; click to shrink the sidebar to an icon rail,
+   click again to expand. Visible on every breakpoint; on narrow screens the sidebar is a
+   `Sheet` drawer and needs this button to open.
+2. A three-level breadcrumb — `Home › Account › Current section`. The first two levels are
+   `BreadcrumbLink`s, the last is a `BreadcrumbPage` (with `aria-current="page"`).
+3. `ThemeToggle` — top right. In the sidebar header it would fight the logo for space (the
+   collapsed sidebar is only ~3rem wide), and the marketing Navbar already puts it there.
+
+The top bar has **no** `<h1>`: the last breadcrumb level is already the page title, and
+repeating it would surface the same word twice — once visually, once in the accessibility
+tree. There is also **no** "Back to site" link — the logo is that entry point.
+
 ## Page metadata
 
 Each child page's `head()` runs `seo()` for meta and canonical, then appends
 `robots: noindex` — personal pages should not be indexed.
+
+## References
+
+- [Better Auth options](https://www.better-auth.com/docs/reference/options) — account fields and session settings
+- [TanStack Start authentication guide](https://tanstack.com/start/latest/docs/framework/react/guide/authentication) — `beforeLoad` guards and full-page redirects
 
 ## Next steps
 

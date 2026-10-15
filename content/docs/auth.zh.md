@@ -4,7 +4,7 @@ description: 邮箱密码与 Google 登录、邮件流程、会话守卫与表�
 locale: zh
 order: 11
 group: features
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 邮箱密码 + Google OAuth，基于 Better Auth v1.7.7 与 Drizzle adapter（D1 / SQLite）。
@@ -122,6 +122,13 @@ RPC。若改用普通函数，从导航栏点进登录页时按钮会静默消�
   校验，值非法时原生校验直接拦下 `submit`，schema 校验与错误文案就永远不会出现。
 - 邮件回调绝不抛出；抛错会连带注册 / 登录失败。
 - 受保护路由在 `beforeLoad` 里用 `fetchSession()` 判会话，未登录 `redirect` 到登录页。
+
+## 参考资料
+
+- [Better Auth 配置选项](https://www.better-auth.com/docs/reference/options)——`BETTER_AUTH_SECRET` 等配置项说明
+- [Better Auth Google provider](https://www.better-auth.com/docs/authentication/google)——Google 登录的凭据申请与配置
+- [Google OAuth 2.0 Web Server](https://developers.google.com/identity/protocols/oauth2/web-server)——授权码流程的完整说明
+- [TanStack Start 认证指南](https://tanstack.com/start/latest/docs/framework/react/guide/authentication)——会话、受保护路由与服务端函数
 
 ## 下一步
 

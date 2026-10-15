@@ -4,7 +4,7 @@ description: Discord / 飞书 Webhook 的接线
 locale: zh
 order: 9
 group: features
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 | provider | 必要配置 |
@@ -19,6 +19,11 @@ notification: { enabled: true },
 ```
 
 > **注意事项**：`notify()` 在 provider 未注册、投递失败或抛错时都只写 `console.warn` 并返回 `false`——通知失败**不**阻塞业务流程。Discord embed 有长度上限，标题截断至 200 字符、正文 1000 字符。
+
+## 参考资料
+
+- [Discord Webhooks](https://docs.discord.com/developers/resources/webhook)——incoming webhook 的创建与调用
+- [飞书自定义机器人](https://open.feishu.cn/document/ukTMukTMukTM/ucTM5YjL3ETO24yNxkjN)——自定义机器人的 webhook 与安全设置
 
 ## 下一步
 

@@ -4,7 +4,7 @@ description: Run Jerbix from scratch — environment, resources, and deploy chec
 locale: en
 order: 1
 group: start
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 ## Prepare your environment
@@ -72,6 +72,15 @@ pnpm deploy
 `pnpm deploy` runs the production env check, builds, verifies the client bundle, then runs `wrangler deploy`.
 
 > **Note**: A local `.env` does **not** become production secrets. Configure them separately with `wrangler secret put`, and never put secrets in `VITE_` variables — those are shipped to the browser bundle.
+
+## References
+
+- [Cloudflare Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/) — keys and bindings in `wrangler.jsonc`
+- [Cloudflare D1](https://developers.cloudflare.com/d1/) — database creation and migrations
+- [Cloudflare Workers KV get started](https://developers.cloudflare.com/kv/get-started/) — KV namespaces and bindings
+- [Cloudflare R2 Workers API](https://developers.cloudflare.com/r2/get-started/workers-api/) — object storage from a Worker
+- [Cloudflare Workers Secrets](https://developers.cloudflare.com/workers/configuration/secrets/) — production secrets and local `.dev.vars`
+- [Drizzle <> Cloudflare D1](https://orm.drizzle.team/docs/connect-cloudflare-d1) — driver and initialization
 
 ## Next steps
 

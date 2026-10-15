@@ -4,7 +4,7 @@ description: 两层 env 校验、VITE_ 规则与生产检查
 locale: zh
 order: 4
 group: config
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 环境变量分两层，由两个 Zod schema 分别校验：
@@ -122,6 +122,23 @@ pnpm check:env
 `pnpm run setup` 会交互式创建 D1 / R2 / KV 资源、生成认证密钥并写入 `.env` 与 `wrangler.jsonc`。
 
 > **注意事项**：本地 `.env` **不会**自动成为生产环境的 secret——部署前须另行用 `wrangler secret put` 配置。
+
+## 参考资料
+
+- [Better Auth 配置选项](https://www.better-auth.com/docs/reference/options)——`BETTER_AUTH_SECRET` 等配置项
+- [Stripe API keys](https://docs.stripe.com/keys)——密钥类型与 webhook 签名密钥
+- [Google OAuth 2.0 Web Server](https://developers.google.com/identity/protocols/oauth2/web-server)——`GOOGLE_CLIENT_ID` / `SECRET` 的申请
+- [Cloudflare Workers Secrets](https://developers.cloudflare.com/workers/configuration/secrets/)——生产 secret 与本地 `.dev.vars`
+- [Cloudflare Wrangler 配置](https://developers.cloudflare.com/workers/wrangler/configuration/)——binding 声明
+- [Cloudflare D1](https://developers.cloudflare.com/d1/)——`DB` binding 对应的资源
+- [Cloudflare Workers KV 快速开始](https://developers.cloudflare.com/kv/get-started/)——`CACHE` binding 对应的资源
+- [Cloudflare R2 Workers API](https://developers.cloudflare.com/r2/get-started/workers-api/)——`BUCKET` binding 对应的资源
+- [Drizzle <> Cloudflare D1](https://orm.drizzle.team/docs/connect-cloudflare-d1)——ORM 侧的连接方式
+- [Resend API](https://resend.com/docs/api-reference/introduction)——`RESEND_API_KEY` 的用法
+- [beehiiv Create an API Key](https://developers.beehiiv.com/welcome/create-an-api-key)——`BEEHIIV_API_KEY` 的申请
+- [Discord Webhooks](https://docs.discord.com/developers/resources/webhook)——`DISCORD_WEBHOOK_URL` 的创建
+- [飞书自定义机器人](https://open.feishu.cn/document/ukTMukTMukTM/ucTM5YjL3ETO24yNxkjN)——`FEISHU_WEBHOOK_URL` 的创建
+- [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/)——`VITE_TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`
 
 ## 下一步
 

@@ -4,7 +4,7 @@ description: Wiring Resend / Cloudflare Email and the contact form
 locale: en
 order: 6
 group: features
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 `src/mail/index.ts` looks up an instance by provider name from the current request's registry. `sendMail()` retries up to 3 times (250ms, increasing), and returns the last error if all attempts fail.
@@ -34,6 +34,11 @@ Delivery path (`src/contact/notifications.ts`):
 ```ts
 contact: { enabled: true },
 ```
+
+## References
+
+- [Resend API](https://resend.com/docs/api-reference/introduction) — `RESEND_API_KEY` usage and rate limits
+- [Cloudflare Email Service Workers API](https://developers.cloudflare.com/email-service/api/send-emails/workers-api/) — `send_email` binding and `send()`
 
 ## Next steps
 

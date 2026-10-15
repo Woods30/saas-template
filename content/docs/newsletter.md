@@ -4,7 +4,7 @@ description: Wiring Resend / Beehiiv subscriptions and rate limits
 locale: en
 order: 7
 group: features
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 | Provider | Required config |
@@ -21,6 +21,11 @@ newsletter: { enabled: true, provider: 'resend' },
 ```
 
 > **Note**: `/api/newsletter` has its own rate limit of 5 requests per IP per minute.
+
+## References
+
+- [beehiiv Create an API Key](https://developers.beehiiv.com/welcome/create-an-api-key) — getting a `BEEHIIV_API_KEY`
+- [Resend API](https://resend.com/docs/api-reference/introduction) — `RESEND_API_KEY` and `RESEND_AUDIENCE_ID`
 
 ## Next steps
 

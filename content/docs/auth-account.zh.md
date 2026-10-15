@@ -4,7 +4,7 @@ description: 受保护路由的会话守卫，以及资料 / 安全 / 登录设�
 locale: zh
 order: 12
 group: features
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 登录后的账号管理区域，位于 `/{locale}/settings/*`。从导航栏用户菜单的「个人中心」进入。
@@ -50,7 +50,7 @@ beforeLoad: async ({ params }) => {
 server function 在 SSR 阶段就地执行（无网络往返），客户端导航时降级为一次 RPC，两条路径
 都拿到真实会话。这与 `fetchAuthProviderAvailability` 的理由相同。
 
-返回值**只取页面要用的字段**（`id` / `name` / `email` / `emailVerified`），不回传整个
+返回值**只取页面要用的字段**（`id` / `name` / `email` / `emailVerified` / `image`），不回传整个
 session。子页经 `Route.useRouteContext()` 取到它。
 
 ## 四个板块
@@ -82,10 +82,39 @@ session。子页经 `Route.useRouteContext()` 取到它。
 与 `DocsLayout` 自建的侧栏**不共用**：docs 侧栏有自己的 cookie 与折叠语义，强行合并只会
 互相牵制。
 
+侧栏自底向上分三段：
+
+| 段 | 内容 |
+|---|---|
+| `SidebarHeader` | 站点 logo，点击回首页；深色主题下加白底片（与营销站 Navbar 同一处理） |
+| `SidebarContent` | 上文所述的板块菜单，文案来自 `getSettingsSections` |
+| `SidebarFooter` | 用户卡片（`SettingsUserCard`）：头像 + 名字 + 邮箱，展开后登出 |
+
+用户卡片是个人中心内**唯一**的登出入口——`settings` 是 `_layout` 路由，不渲染营销导航栏，
+`UserMenu` 在这里不可见。头像取 `SessionInfo.user.image`（`users.image` 列，Google 登录
+会写入）；为空时回退到 `name` 或邮箱的首字母。
+
+顶栏（`SidebarInset` 内的 `header`）放三样东西，从左到右：
+
+1. `SidebarTrigger`——折叠按钮，点击把侧栏收成图标窄条，再点展开；宽窄屏都常驻，
+   窄屏下侧栏是 `Sheet` 抽屉，同样靠它打开。
+2. 三级面包屑——`首页 › 个人中心 › 当前板块`，前两级是 `BreadcrumbLink`，末级是
+   `BreadcrumbPage`（带 `aria-current="page"`）。
+3. `ThemeToggle`——右上角。放侧栏头会和 logo 抢位（折叠后侧栏只剩约 3rem），
+   且营销站 Navbar 就在这个位置，用户预期一致。
+
+顶栏**没有** `<h1>`：面包屑末级已是页面标题，再放一个会让同一个词在屏幕与无障碍树里
+各出现一次。也**没有**「返回站点」链接——logo 就是回站点入口。
+
 ## 页面元数据
 
 每个子页的 `head()` 走 `seo()` 生成 meta 与 canonical，并追加 `robots: noindex`——
 个人页不应被搜索引擎索引。
+
+## 参考资料
+
+- [Better Auth 配置选项](https://www.better-auth.com/docs/reference/options)——账户相关字段与会话配置
+- [TanStack Start 认证指南](https://tanstack.com/start/latest/docs/framework/react/guide/authentication)——`beforeLoad` 守卫与整页跳转的取舍
 
 ## 下一步
 

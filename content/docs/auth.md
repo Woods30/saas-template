@@ -4,7 +4,7 @@ description: Email/password and Google sign-in, email flows, session guards, and
 locale: en
 order: 11
 group: features
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 Email/password plus Google OAuth, built on Better Auth v1.7.7 with the Drizzle adapter
@@ -144,6 +144,13 @@ Check each before touching auth code:
 - Email callbacks must never throw; a throw takes sign-up/sign-in down with it.
 - Protected routes check the session in `beforeLoad` with `fetchSession()` and `redirect` to
   the login page when signed out.
+
+## References
+
+- [Better Auth options](https://www.better-auth.com/docs/reference/options) — `BETTER_AUTH_SECRET` and other settings
+- [Better Auth Google provider](https://www.better-auth.com/docs/authentication/google) — Google credentials and setup
+- [Google OAuth 2.0 for web server applications](https://developers.google.com/identity/protocols/oauth2/web-server) — the authorization code flow
+- [TanStack Start authentication guide](https://tanstack.com/start/latest/docs/framework/react/guide/authentication) — sessions, protected routes, server functions
 
 ## Next steps
 

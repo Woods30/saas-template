@@ -4,7 +4,7 @@ description: 从零跑起 Jerbix：环境准备、资源配置与部署检查
 locale: zh
 order: 1
 group: start
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 ## 准备开发环境
@@ -72,6 +72,15 @@ pnpm deploy
 `pnpm deploy` 会依次做生产 env 校验、构建、客户端 bundle 检查，最后执行 `wrangler deploy`。
 
 > 本地 `.env` **不会**自动成为生产环境的 secret。部署前须另行用 `wrangler secret put` 配置，且**不得**把 secret 放进 `VITE_` 变量——它们会进入浏览器 bundle。
+
+## 参考资料
+
+- [Cloudflare Wrangler 配置](https://developers.cloudflare.com/workers/wrangler/configuration/)——`wrangler.jsonc` 的字段与 binding 声明
+- [Cloudflare D1](https://developers.cloudflare.com/d1/)——数据库创建与迁移
+- [Cloudflare Workers KV 快速开始](https://developers.cloudflare.com/kv/get-started/)——KV namespace 与 binding
+- [Cloudflare R2 Workers API](https://developers.cloudflare.com/r2/get-started/workers-api/)——从 Worker 读写对象存储
+- [Cloudflare Workers Secrets](https://developers.cloudflare.com/workers/configuration/secrets/)——生产环境 secret 的配置方式
+- [Drizzle <> Cloudflare D1](https://orm.drizzle.team/docs/connect-cloudflare-d1)——Drizzle 连接 D1 的驱动与初始化
 
 ## 下一步
 

@@ -4,7 +4,7 @@ description: GA / Plausible / Umami / Clarity 的启用与脚本注入
 locale: zh
 order: 10
 group: features
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 | provider | 必要配置 |
@@ -21,6 +21,13 @@ analytics: { enabled: true, providers: ['ga', 'plausible'] },
 ```
 
 > **注意事项**：选中但缺少 ID 的 provider 不注册也不注入脚本；`track()` / `page()` 在无 provider 时为空操作。Umami 额外要求脚本地址为无凭据的 HTTPS URL。本模块只负责启用过滤与脚本注入，**不**代表采集端点已可用。
+
+## 参考资料
+
+- [Google Analytics Measurement ID](https://support.google.com/analytics/answer/12270356?hl=en)——`VITE_GA_ID` 的获取位置
+- [Plausible tracking script](https://plausible.io/docs/plausible-script)——`VITE_PLAUSIBLE_DOMAIN` 与脚本注入
+- [Umami Collect data](https://docs.umami.is/docs/collect-data)——`VITE_UMAMI_WEBSITE_ID` 与 `VITE_UMAMI_SCRIPT_URL`
+- [Microsoft Clarity Setup](https://learn.microsoft.com/en-us/clarity/setup-and-installation/)——`VITE_CLARITY_PROJECT_ID` 的获取位置
 
 ## 下一步
 

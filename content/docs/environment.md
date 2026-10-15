@@ -4,7 +4,7 @@ description: Two-layer env validation, the VITE_ rule, and production checks
 locale: en
 order: 4
 group: config
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 Environment variables come in two layers, validated by two Zod schemas:
@@ -122,6 +122,23 @@ pnpm check:env
 `pnpm run setup` interactively creates D1 / R2 / KV resources, generates an auth secret, and writes `.env` and `wrangler.jsonc`.
 
 > **Note**: A local `.env` does **not** become production secrets — configure them separately with `wrangler secret put` before deploying.
+
+## References
+
+- [Better Auth options](https://www.better-auth.com/docs/reference/options) — `BETTER_AUTH_SECRET` and other settings
+- [Stripe API keys](https://docs.stripe.com/keys) — key types and webhook signing secrets
+- [Google OAuth 2.0 for web server applications](https://developers.google.com/identity/protocols/oauth2/web-server) — `GOOGLE_CLIENT_ID` / `SECRET`
+- [Cloudflare Workers Secrets](https://developers.cloudflare.com/workers/configuration/secrets/) — production secrets and local `.dev.vars`
+- [Cloudflare Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/) — binding declarations
+- [Cloudflare D1](https://developers.cloudflare.com/d1/) — the resource behind the `DB` binding
+- [Cloudflare Workers KV get started](https://developers.cloudflare.com/kv/get-started/) — the resource behind the `CACHE` binding
+- [Cloudflare R2 Workers API](https://developers.cloudflare.com/r2/get-started/workers-api/) — the resource behind the `BUCKET` binding
+- [Drizzle <> Cloudflare D1](https://orm.drizzle.team/docs/connect-cloudflare-d1) — connecting the ORM
+- [Resend API](https://resend.com/docs/api-reference/introduction) — `RESEND_API_KEY` usage
+- [beehiiv Create an API Key](https://developers.beehiiv.com/welcome/create-an-api-key) — getting a `BEEHIIV_API_KEY`
+- [Discord Webhooks](https://docs.discord.com/developers/resources/webhook) — creating a `DISCORD_WEBHOOK_URL`
+- [Feishu custom bot](https://open.feishu.cn/document/client-docs/bot-v3/add-custom-bot) — creating a `FEISHU_WEBHOOK_URL`
+- [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/) — `VITE_TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`
 
 ## Next steps
 

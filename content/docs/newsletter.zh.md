@@ -4,7 +4,7 @@ description: Resend / Beehiiv 订阅的接线与限流
 locale: zh
 order: 7
 group: features
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 | provider | 必要配置 |
@@ -21,6 +21,11 @@ newsletter: { enabled: true, provider: 'resend' },
 ```
 
 > **注意事项**：`/api/newsletter` 有独立限流，每 IP 每分钟 5 次。
+
+## 参考资料
+
+- [beehiiv Create an API Key](https://developers.beehiiv.com/welcome/create-an-api-key)——`BEEHIIV_API_KEY` 的申请与权限
+- [Resend API](https://resend.com/docs/api-reference/introduction)——`RESEND_API_KEY` 与 `RESEND_AUDIENCE_ID` 的用法
 
 ## 下一步
 

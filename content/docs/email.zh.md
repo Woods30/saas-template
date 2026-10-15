@@ -4,7 +4,7 @@ description: Resend / Cloudflare Email 与联系表单的接线
 locale: zh
 order: 6
 group: features
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 `src/mail/index.ts` 按 provider 名称从当前请求的注册表取实例。`sendMail()` 带最多 3 次重试（间隔 250ms 递增），全部失败时返回最后一次错误。
@@ -34,6 +34,11 @@ mail: { enabled: true, provider: 'resend', supportEmail: 'support@your-domain.co
 ```ts
 contact: { enabled: true },
 ```
+
+## 参考资料
+
+- [Resend API](https://resend.com/docs/api-reference/introduction)——`RESEND_API_KEY` 的用法与限流
+- [Cloudflare Email Service Workers API](https://developers.cloudflare.com/email-service/api/send-emails/workers-api/)——`send_email` binding 的声明与 `send()` 调用
 
 ## 下一步
 
