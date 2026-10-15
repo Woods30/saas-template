@@ -16,7 +16,7 @@
     "check:env:prod": "tsx scripts/check-env-prod.ts",
     "check:client-bundle": "tsx scripts/check-client-bundle.ts",
     "check:locale": "pnpm run locale:compile && pnpm run locale:check",
-    "locale:compile": "paraglide-js compile --project ./project.inlang",
+    "locale:compile": "tsx scripts/locale-compile.ts",
     "locale:sort": "tsx scripts/locale-sort.ts",
     "locale:check": "tsx scripts/check-locale.ts",
     "typecheck": "pnpm run locale:compile && tsc --noEmit",
