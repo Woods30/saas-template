@@ -79,7 +79,9 @@ curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUN
 
 > **注意事项**：子域**创建后无法经 API 修改**——`PUT` 返回 `code 10036 Account already has an associated subdomain`，`PATCH` 返回 `code 10405`。改名只能在 Dashboard 的 Workers & Pages → **Your subdomain** → **Change** 操作。**所以第一次就取一个满意的名字。**
 
-子域是**单层标签**（`jerbix`），不是多层。`demo.jerbix.workers.dev` 这种地址拆开是「worker 名 = `demo`」+「账号子域 = `jerbix`」，二者在 `wrangler.jsonc` 与账号设置里分别配置。
+子域是**单层标签**（如 `saas-template-demo`），不是多层。`demo.saas-template-demo.workers.dev`
+这种地址拆开是「worker 名 = `demo`」+「账号子域 = `saas-template-demo`」，二者在 `wrangler.jsonc`
+与账号设置里分别配置。
 
 ### 配置项目名
 
@@ -87,7 +89,7 @@ curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUN
 
 ```jsonc
 {
-  // 配账号子域 jerbix → https://demo.jerbix.workers.dev
+  // 配账号子域 saas-template-demo → https://demo.saas-template-demo.workers.dev
   "name": "demo"
 }
 ```
@@ -118,7 +120,7 @@ printf '%s' "$BETTER_AUTH_SECRET" | pnpm exec wrangler secret put BETTER_AUTH_SE
 
 ```
 Deployed demo triggers
-  https://demo.jerbix.workers.dev
+  https://demo.saas-template-demo.workers.dev
 ```
 
 ### 自定义域名

@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   // Worker 名决定线上地址：`<name>.<账号 workers.dev 子域>.workers.dev`。
-  // 当前为 `demo`，配账号子域 `jerbix` → https://demo.jerbix.workers.dev
+  // 当前为 `demo`，配账号子域 `saas-template-demo` → https://demo.saas-template-demo.workers.dev
   // 注意：与 package.json 的 `name` 是两个独立字段，后者只是 npm 包名。
   "name": "demo",
   "compatibility_date": "2026-10-01",
