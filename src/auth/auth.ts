@@ -1,3 +1,4 @@
+import { apiKey } from '@better-auth/api-key'
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import { betterAuth } from 'better-auth/minimal'
 import { sendAuthEmailForRequest } from '@/auth/emails'
@@ -52,8 +53,12 @@ export function getAuth(env: Env) {
         session: schema.sessions,
         account: schema.accounts,
         verification: schema.verifications,
+        // apiKey 插件的表必须显式登记：adapter 经 `config.schema[model]` 解析模型名，
+        // 漏登记会在运行时「找不到 apikey 表」。
+        apikey: schema.apikey,
       },
     }),
+    plugins: [apiKey({ defaultPrefix: 'key_' })],
     emailAndPassword: {
       enabled: true,
       // 安全控制，读显式配置（`auth.requireEmailVerification`），**不**随 `mail.enabled`
