@@ -45,6 +45,9 @@ export function getPublicLinkOptions(target: PublicTarget, locale: Locale, hash?
 
 export type MenuVisibility = {
   module?: SiteModule
+  // 功能开关（`features.*`）与服务模块（`mail`/`docs`/...）是两套：后者有 `.enabled`
+  // 字段，前者本身就是布尔值。菜单项按功能开关过滤时必须走 `features[flag]`。
+  feature?: keyof WebsiteConfig['features']
   authenticated?: boolean
   roles?: readonly string[]
 }
@@ -74,6 +77,7 @@ export function filterMenuItems(items: readonly MenuItem[], ctx: MenuContext): M
   for (const item of items) {
     const rule = item.visibility
     if (rule?.module && !ctx.config[rule.module].enabled) continue
+    if (rule?.feature && !ctx.config.features[rule.feature]) continue
     if (rule?.authenticated !== undefined && rule.authenticated !== ctx.authenticated) continue
     if (rule?.roles && (!ctx.authenticated || !ctx.role || !rule.roles.includes(ctx.role))) continue
     const next = item.kind === 'group' ? { ...item, items: filterMenuItems(item.items, ctx) } : item

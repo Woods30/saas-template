@@ -14,3 +14,17 @@ import { type SiteModule, type WebsiteConfig, websiteConfig } from '@/config/web
 export function assertPageEnabled(module: SiteModule, config: WebsiteConfig = websiteConfig) {
   if (!config[module].enabled) throw notFound()
 }
+
+/**
+ * 功能开关（`features.*`）门禁。
+ *
+ * 与服务模块门禁分开：服务模块是 `config[module].enabled`，功能开关本身就是布尔值。
+ * 用于 API key 管理页等「按 flag 开关的能力」，关闭时页面以 404 呈现，与服务模块
+ * 门禁语义一致。
+ */
+export function assertFeatureEnabled(
+  feature: keyof WebsiteConfig['features'],
+  config: WebsiteConfig = websiteConfig,
+) {
+  if (!config.features[feature]) throw notFound()
+}

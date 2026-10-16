@@ -288,6 +288,18 @@ describe('菜单过滤', () => {
       ),
     ).toEqual(ids)
   })
+
+  // 功能开关（features.*）与服务模块（mail/docs/...）是两套开关：前者没有 `.enabled`
+  // 字段，必须走 `ctx.config.features[flag]`，不能复用 `rule.module` 的写法。
+  it('features 开关关闭时隐藏菜单项，开启时保留', () => {
+    const items = [homeLink('keys', { feature: 'enableApiKeys' })]
+    const off = createConfig()
+    off.features.enableApiKeys = false
+    const on = createConfig()
+    on.features.enableApiKeys = true
+    expect(filterMenuItems(items, { config: off, authenticated: true })).toEqual([])
+    expect(filterMenuItems(items, { config: on, authenticated: true })).toEqual(items)
+  })
 })
 
 describe('社交配置', () => {
