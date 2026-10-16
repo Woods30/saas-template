@@ -37,6 +37,18 @@ updated: 2026-10-14
 
 > **注意事项**：Stripe webhook（`/api/webhooks/stripe`）**不受** `payment.enabled` 门禁，以便模块关闭后仍能处理存量订阅的合法事件。
 
+`/api/auth/*` 下有两组前缀在 `auth` 之外还受**功能开关**约束，关闭时在进入 Better Auth
+之前即返回 404（不只是 UI 消失）：
+
+| 前缀 | 开关 | 关闭后 |
+|---|---|---|
+| `/api/auth/api-key/*` | `features.enableApiKeys` | 创建 / 列表 / 删除密钥的 HTTP 端点整体停用 |
+| `/api/auth/admin/*` | `features.enableAdmin` | 用户管理的 HTTP 端点整体停用 |
+
+门禁落在 `src/routes/api/auth/$.ts` 的路由层。**角色判定不在此处**：非 admin 调用 admin
+端点由插件自身返回 403。服务端直接函数调用（如 `auth.api.verifyApiKey`）不经路由，不受
+这两道开关影响。详见[API 密钥](./api-keys)与[用户管理](./user-management)。
+
 `auth` 不声明任何**字段级**必要配置，`BETTER_AUTH_SECRET` 改由 `check:env:prod` 在部署前强制校验；本地开发时 Better Auth 会退回自带的开发密钥，在门禁处判失败只会无谓地挡住本地开发。
 
 但它有一条**矛盾规则**会触发 503：`auth.requireEmailVerification` 为 `true` 而 `mail` 未配置完整时，`auth` 报告 `incomplete`。要求邮箱验证却发不出验证邮件，等于让新用户永远无法登录——这是部署事故，不是可接受的降级。详见[认证邮件](#认证邮件经由邮件模块发送)。

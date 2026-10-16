@@ -75,10 +75,11 @@
   通知 / D1）、营销页面与内容站（C：8 个营销 blocks + 文档站 / 博客 / 更新日志）、测试与
   部署（D：E2E / CI / CSP）、品牌化与 Landing 单页、网站源码配置与公共菜单（模块开关、
   菜单契约、服务状态、配置文档）、工作台（`/{locale}/dashboard/*`：资料 / 安全 / 登录设备 /
-  通知偏好，含 `fetchSession` 守卫）与表单统一（TanStack Form + Zod + shadcn `Field`）。
-- **尚未实现**：账单与订阅设置（账户工作台仅完成资料 / 安全 / 设备 / 通知四块）、管理后台、
-  文件上传、API 密钥、AI 网关、PWA。`websiteConfig.features` 中对应的开关是能力边界标记，
-  不注册路由。
+  通知偏好 / API 密钥 / 用户管理，含 `fetchSession` 守卫）与表单统一（TanStack Form +
+  Zod + shadcn `Field`）。
+- **尚未实现**：账单与订阅设置（账户工作台仅完成资料 / 安全 / 设备 / 通知 / API 密钥 /
+  用户管理六块）、文件上传、AI 网关、PWA。`websiteConfig.features` 中对应的开关是能力边界
+  标记，不注册路由。
 - **Node 下限**：`package.json` 的 `engines.node` 为 `^22.12.0 || ^24.0.0 || >=26.0.0`（`vitest@5`
   排除奇数大版本 23 / 25，故为精确 union 而非简单 `>=`；`wrangler` 要求 ≥22、
   `@tanstack/react-start` 要求 ≥22.12.0）。

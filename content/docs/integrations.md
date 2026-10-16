@@ -37,6 +37,19 @@ The response carries only a stable error code — never the missing field or a c
 
 > **Note**: The Stripe webhook (`/api/webhooks/stripe`) is **not** gated by `payment.enabled`, so existing subscriptions keep processing valid events after the module is turned off.
 
+Two prefixes under `/api/auth/*` are additionally bound by a **feature flag**; when it is off they
+return 404 before ever reaching Better Auth (not merely a disappearing UI):
+
+| Prefix | Flag | When off |
+|---|---|---|
+| `/api/auth/api-key/*` | `features.enableApiKeys` | The create / list / delete key HTTP endpoints are disabled entirely |
+| `/api/auth/admin/*` | `features.enableAdmin` | The user-management HTTP endpoints are disabled entirely |
+
+The gate lives in the route layer at `src/routes/api/auth/$.ts`. **The role check is not there**:
+a non-admin calling the admin endpoints gets 403 from the plugin itself. Direct server-side
+function calls (such as `auth.api.verifyApiKey`) do not go through the router and are unaffected
+by either flag. See [API Keys](./api-keys) and [User Management](./user-management).
+
 `auth` declares no **field-level** required config, so `BETTER_AUTH_SECRET` is enforced by `check:env:prod` at deploy time instead; locally Better Auth falls back to its own development secret, and failing the gate there would block local development for no gain.
 
 It does have one **conflict rule** that yields a 503: when `auth.requireEmailVerification` is `true` and `mail` is not fully configured, `auth` reports `incomplete`. Requiring verification while the verification mail cannot be sent means no new user can ever sign in — a deployment accident, not an acceptable degradation. See [Auth mail through the mail module](#auth-mail-through-the-mail-module).
