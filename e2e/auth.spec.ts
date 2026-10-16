@@ -88,7 +88,9 @@ test.describe('Auth pages', () => {
   })
 
   test('注册 → 自动登录 → 用户菜单显示邮箱 → 登出', async ({ page }) => {
-    const email = `e2e-${Date.now()}@example.com`
+    // 后缀加随机段：`fullyParallel` 下同一文件多个 test 会在同一毫秒起步，
+    // 仅用 `Date.now()` 会撞邮箱，后到的注册撞 UNIQUE 约束而永不跳转。
+    const email = `e2e-${Date.now()}-${crypto.randomUUID().slice(0, 8)}@example.com`
     await page.goto('/zh/auth/register')
 
     await waitForForm(page)

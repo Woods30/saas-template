@@ -8,6 +8,10 @@ import { expect, test } from '@playwright/test'
  * 菜单随模块门禁收敛，而不是写死四个入口。
  *
  * 注册邮箱带随机后缀：本地 D1 跨多次运行保留数据，固定邮箱会命中「已存在」。
+ *
+ * 后缀必须是**跨 worker 唯一**的，不能只用 `Date.now()`：`fullyParallel: true` 会把同一
+ * 文件里的多个 test 分给不同 worker，它们在同一毫秒起步，`Date.now()` 会撞成同一个邮箱，
+ * 后到的注册撞上 `UNIQUE constraint failed: users.email` 而永远不跳转。
  */
 
 const PASSWORD = 'e2e-password-12345'
@@ -19,7 +23,7 @@ async function waitForForm(page: import('@playwright/test').Page) {
 
 /** 注册并回到首页，返回使用的邮箱。 */
 async function register(page: import('@playwright/test').Page) {
-  const email = `settings-${Date.now()}@example.com`
+  const email = `settings-${Date.now()}-${crypto.randomUUID().slice(0, 8)}@example.com`
   await page.goto('/zh/auth/register')
   await waitForForm(page)
   await page.getByLabel('昵称').fill('设置用户')
