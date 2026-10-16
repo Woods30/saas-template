@@ -371,9 +371,7 @@ describe('getServiceStatuses — notification', () => {
       serverEnv: parseServerEnv({}),
     })
     expect(statuses.notification.state).toBe('incomplete')
-    expect(statuses.notification.issues.map((i) => i.key)).toContain(
-      'DISCORD_WEBHOOK_URL / FEISHU_WEBHOOK_URL',
-    )
+    expect(statuses.notification.issues.map((i) => i.key)).toContain('DISCORD_WEBHOOK_URL')
   })
 
   it('仅 Discord webhook 时 configured', () => {
@@ -387,10 +385,11 @@ describe('getServiceStatuses — notification', () => {
     expect(statuses.notification.state).toBe('configured')
   })
 
-  it('仅 Feishu webhook 时 configured', () => {
+  it('provider = feishu 且配了 Feishu webhook 时 configured', () => {
     const statuses = getServiceStatuses({
       config: makeConfig((c) => {
         c.notification.enabled = true
+        c.notification.provider = 'feishu'
       }),
       publicEnv: parsePublicEnv({}),
       serverEnv: parseServerEnv({
@@ -398,6 +397,19 @@ describe('getServiceStatuses — notification', () => {
       }),
     })
     expect(statuses.notification.state).toBe('configured')
+  })
+
+  it('provider = feishu 但只配了 Discord webhook 时 incomplete', () => {
+    const statuses = getServiceStatuses({
+      config: makeConfig((c) => {
+        c.notification.enabled = true
+        c.notification.provider = 'feishu'
+      }),
+      publicEnv: parsePublicEnv({}),
+      serverEnv: parseServerEnv({ DISCORD_WEBHOOK_URL: 'https://discord.com/api/webhooks/1/abc' }),
+    })
+    expect(statuses.notification.state).toBe('incomplete')
+    expect(statuses.notification.issues.map((i) => i.key)).toContain('FEISHU_WEBHOOK_URL')
   })
 })
 

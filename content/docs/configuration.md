@@ -133,7 +133,7 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
     contact: { enabled: false },
     newsletter: { enabled: false, provider: 'resend' },
     payment: { enabled: false, provider: 'stripe', allowedPriceIds: [] },
-    notification: { enabled: false },
+    notification: { enabled: false, provider: 'discord' },
     analytics: { enabled: false, providers: [] },
     auth: { enabled: true, requireEmailVerification: false },
     social: {},

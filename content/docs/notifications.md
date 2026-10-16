@@ -12,10 +12,10 @@ updated: 2026-10-15
 | `discord` | `DISCORD_WEBHOOK_URL`, must start with `https://discord.com/api/webhooks/` |
 | `feishu` | `FEISHU_WEBHOOK_URL`, must start with `https://open.feishu.cn/open-apis/bot/v2/hook/` |
 
-The URL prefix is enforced by the Zod schema.
+The URL prefix is enforced by the Zod schema. `provider` must match the webhook you configured — selecting `feishu` while only `DISCORD_WEBHOOK_URL` is set leaves the service status at `incomplete`.
 
 ```ts
-notification: { enabled: true },
+notification: { enabled: true, provider: 'discord' },
 ```
 
 > **Note**: When the provider is unregistered, delivery fails, or it throws, `notify()` only logs `console.warn` and returns `false` — a failed notification never blocks the business flow. Discord embeds are length-capped: titles truncate at 200 chars, bodies at 1000.

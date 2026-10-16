@@ -31,20 +31,20 @@ export async function deliverContactNotification(input: ContactInput): Promise<v
     console.warn(`[contact] 邮件通知失败: ${mailResult.error?.split('\n')[0] ?? 'unknown'}`)
   }
 
-  // 2. Discord 通知（仅当 enabled；失败不阻塞）
+  // 2. Webhook 通知（按 notification.provider；仅当 enabled；失败不阻塞）
   // Discord embed title limited to 200 chars, description to 1000 chars.
-  if (websiteConfig.notification?.enabled) {
+  if (websiteConfig.notification.enabled) {
     const truncatedSubject =
       input.subject.length > 200 ? `${input.subject.slice(0, 197)}...` : input.subject
     const truncatedMessage =
       input.message.length > 1000 ? `${input.message.slice(0, 997)}...` : input.message
-    const ok = await notify('discord', {
+    const ok = await notify(websiteConfig.notification.provider, {
       title: `新的联系消息：${truncatedSubject}`,
       message: truncatedMessage,
       meta: { from: `${input.name} <${input.fromEmail}>` },
     })
     if (!ok) {
-      console.warn('[contact] Discord 通知失败')
+      console.warn('[contact] 通知失败')
     }
   }
 }

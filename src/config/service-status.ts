@@ -147,13 +147,10 @@ export function getServiceStatuses(input: {
     ],
   ])
 
-  check('notification', [
-    [
-      'DISCORD_WEBHOOK_URL / FEISHU_WEBHOOK_URL',
-      !!(env.DISCORD_WEBHOOK_URL || env.FEISHU_WEBHOOK_URL),
-      'env',
-    ],
-  ])
+  // 只校验当前选中 provider 对应的 webhook：配了 Discord 却选 feishu 仍是 incomplete。
+  const notificationWebhookKey =
+    config.notification.provider === 'discord' ? 'DISCORD_WEBHOOK_URL' : 'FEISHU_WEBHOOK_URL'
+  check('notification', [[notificationWebhookKey, !!env[notificationWebhookKey], 'env']])
 
   const analytics: Array<[string, boolean, ConfigIssue['location']]> = [
     ['analytics.providers', config.analytics.providers.length > 0, 'src/config/website.ts'],

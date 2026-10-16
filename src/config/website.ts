@@ -37,7 +37,7 @@ export interface WebsiteConfig {
   contact: { enabled: boolean }
   newsletter: { enabled: boolean; provider: 'resend' | 'beehiiv' }
   payment: { enabled: boolean; provider: 'stripe'; allowedPriceIds: string[] }
-  notification: { enabled: boolean }
+  notification: { enabled: boolean; provider: 'discord' | 'feishu' }
   analytics: { enabled: boolean; providers: AnalyticsName[] }
   auth: {
     enabled: boolean
@@ -96,7 +96,7 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
     contact: { enabled: false },
     newsletter: { enabled: false, provider: 'resend' },
     payment: { enabled: false, provider: 'stripe', allowedPriceIds: [] },
-    notification: { enabled: false },
+    notification: { enabled: false, provider: 'discord' },
     analytics: { enabled: false, providers: [] },
     // auth 默认开启：模板自带登录 / 注册，关闭时对应页面与 API 一律 404。
     // `requireEmailVerification` 默认 false：默认未接邮件，要求验证会让整条邮箱密码

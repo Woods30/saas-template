@@ -166,7 +166,7 @@ describe('deliverContactNotification', () => {
     vi.doMock('@/config/website', () => ({
       websiteConfig: {
         mail: { supportEmail: 'support@example.com' },
-        notification: { enabled: true },
+        notification: { enabled: true, provider: 'discord' },
       },
     }))
     vi.doMock('@/lib/server-context', () => ({
@@ -216,7 +216,7 @@ describe('deliverContactNotification', () => {
     vi.doMock('@/config/website', () => ({
       websiteConfig: {
         mail: { supportEmail: 'support@example.com' },
-        notification: { enabled: true },
+        notification: { enabled: true, provider: 'discord' },
       },
     }))
     vi.doMock('@/lib/server-context', () => ({
@@ -255,7 +255,7 @@ describe('deliverContactNotification', () => {
     vi.doMock('@/config/website', () => ({
       websiteConfig: {
         mail: { supportEmail: 'support@example.com' },
-        notification: { enabled: true },
+        notification: { enabled: true, provider: 'discord' },
       },
     }))
     vi.doMock('@/lib/server-context', () => ({
@@ -303,7 +303,7 @@ describe('deliverContactNotification', () => {
     vi.doMock('@/config/website', () => ({
       websiteConfig: {
         mail: { supportEmail: 'support@example.com' },
-        notification: { enabled: true },
+        notification: { enabled: true, provider: 'discord' },
       },
     }))
     vi.doMock('@/lib/server-context', () => ({
@@ -341,5 +341,47 @@ describe('deliverContactNotification', () => {
         title: `新的联系消息：${'b'.repeat(197)}...`,
       }),
     )
+  })
+
+  it('notification.provider = feishu 时 notify 收到 feishu 渠道', async () => {
+    mockSendTemplate.mockResolvedValue({ ok: true })
+    mockNotify.mockResolvedValue(true)
+
+    vi.resetModules()
+    vi.doMock('@/config/website', () => ({
+      websiteConfig: {
+        mail: { supportEmail: 'support@example.com' },
+        notification: { enabled: true, provider: 'feishu' },
+      },
+    }))
+    vi.doMock('@/lib/server-context', () => ({
+      getServerContext: () => ({
+        env: {},
+        mailProviderRegistry: mockMailProviderRegistry,
+        notificationProviderRegistry: mockNotificationProviderRegistry,
+      }),
+      als: {
+        getStore: () => ({
+          mailProviderRegistry: mockMailProviderRegistry,
+          notificationProviderRegistry: mockNotificationProviderRegistry,
+        }),
+      },
+    }))
+    vi.doMock('@/mail', () => ({
+      sendMail: (...args: unknown[]) => mockSendTemplate(...args),
+    }))
+    vi.doMock('@/notification', () => ({
+      notify: (...args: unknown[]) => mockNotify(...args),
+    }))
+
+    const { deliverContactNotification: reimportedDeliver } = await import(
+      '@/contact/notifications'
+    )
+
+    mockNotificationProviderRegistry.feishu = () => ({ send: async () => true })
+
+    await reimportedDeliver(validInput)
+
+    expect(mockNotify).toHaveBeenCalledWith('feishu', expect.anything())
   })
 })
