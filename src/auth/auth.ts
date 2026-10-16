@@ -10,7 +10,7 @@ import { parseServerEnv } from '@/env/server'
 import { sendMail } from '@/mail'
 
 /**
- * Better Auth v1.7.7 + Drizzle adapter（D1）。
+ * Better Auth v1.7.10 + Drizzle adapter（D1）。
  *
  * 关键设计：
  * 1. 走 `better-auth/minimal`（无 Node-only 依赖，专为 Workers 优化）。
