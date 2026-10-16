@@ -1,9 +1,13 @@
 import {
   IconActivity,
+  IconArchive,
   IconBell,
   type IconBook,
+  IconBrandCloudflare,
   IconChartBar,
+  IconCloud,
   IconCreditCard,
+  IconDatabase,
   IconFileText,
   IconMail,
   IconPlugConnected,
@@ -30,6 +34,10 @@ export const DOC_ICON: Record<string, typeof IconBook> = {
   payment: IconCreditCard,
   notifications: IconBell,
   analytics: IconChartBar,
+  cloudflare: IconBrandCloudflare,
+  database: IconDatabase,
+  storage: IconArchive,
+  cache: IconCloud,
 }
 
 /** 未在 {@link DOC_ICON} 中登记时的通用文档图标。 */

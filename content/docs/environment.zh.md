@@ -62,6 +62,7 @@ export function parseServerEnv(raw: unknown): ServerEnv
 | 变量 | 约束 | 说明 |
 |---|---|---|
 | `BETTER_AUTH_SECRET` | ≥ 32 字符 | 认证密钥；**生产环境必填** |
+| `BETTER_AUTH_URL` | URL | 站点根地址，用于生成回调与重定向的绝对 URL；留空时从请求 origin 推断 |
 | `STRIPE_SECRET_KEY` | — | Stripe 密钥 |
 | `STRIPE_WEBHOOK_SECRET` | — | Stripe webhook 验签密钥 |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Google OAuth |
@@ -122,6 +123,28 @@ pnpm check:env
 `pnpm run setup` 会交互式创建 D1 / R2 / KV 资源、生成认证密钥并写入 `.env` 与 `wrangler.jsonc`。
 
 > **注意事项**：本地 `.env` **不会**自动成为生产环境的 secret——部署前须另行用 `wrangler secret put` 配置。
+
+## 生产配置：`.env.production`
+
+本地 `.env` 装的是开发值（`VITE_BASE_URL=http://localhost:3000`），生产值另放一份 `.env.production`：
+
+```bash
+cp .env.example .env.production
+# 至少改两处：VITE_BASE_URL 设为真实 HTTPS 域名、BETTER_AUTH_SECRET 填生产密钥
+```
+
+该文件已被 `.gitignore` 忽略，**不得入库**。
+
+| 谁读它 | 用途 |
+|---|---|
+| `scripts/check-env-prod.ts` | `pnpm deploy` 的第一步，生产校验 |
+| Vite（`vite build`） | 把 `VITE_*` 内联进客户端 bundle |
+
+两处读同一份文件是刻意的：若校验读 `.env` 而构建读 `.env.production`，就会出现「校验过的值」与「实际打进 bundle 的值」不一致。
+
+优先级（高 → 低）：**进程 env → `.env.production` → `.env`**。因此 CI 里不必创建该文件，直接把值放进 workflow 的 `env:` 块即可。
+
+> **注意事项**：`check-env-prod.ts` 在 `.env.production` **存在**时以它为准，不回退到 `.env`——否则生产配置写错会被本地合法值掩盖。回退只发生在该文件不存在时。
 
 ## 参考资料
 

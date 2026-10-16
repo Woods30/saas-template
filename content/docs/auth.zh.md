@@ -109,6 +109,52 @@ RPC。若改用普通函数，从导航栏点进登录页时按钮会静默消�
 
 表单本身统一用 TanStack Form + Zod，见 [表单约定](./forms)。
 
+## 生产环境
+
+### `BETTER_AUTH_SECRET`
+
+生产用 `wrangler secret put`，不要写进 `.env`：
+
+```bash
+printf '%s' "$BETTER_AUTH_SECRET" | pnpm exec wrangler secret put BETTER_AUTH_SECRET
+```
+
+`BETTER_AUTH_SECRET` 需 ≥ 32 字符，可用 `openssl rand -base64 32` 生成。生产环境下缺失或
+过短会被 `validateProdServerEnv` 拒绝，`pnpm deploy` 第一步就失败。
+
+> **注意事项**：`.env.production` 里也有一份同名值，但那**只为让生产校验通过**——运行时读的是
+> Worker secret。两者必须是同一个值。详见[环境变量](./environment)。
+
+### `BETTER_AUTH_URL`
+
+用于生成回调与重定向的**绝对** URL。留空时 better-auth 从请求 origin 推断，单域名部署下
+等价，但会打印警告：
+
+```
+WARN [Better Auth]: Base URL is not set. Set the baseURL option or BETTER_AUTH_URL env...
+Without it the origin is derived from the incoming request, and callbacks and redirects
+may not work correctly.
+```
+
+**接 Google OAuth 或邮件验证时必须显式设置**——否则推断出的 origin 随请求变化，回调地址
+会跟着漂移，OAuth 回跳与邮件里的验证链接都可能指向错误的域名。生产环境填真实 HTTPS 域名，
+与 `VITE_BASE_URL` 保持一致。
+
+### Google OAuth 的回调地址
+
+在 Google Cloud Console 的 OAuth 客户端里，授权来源与重定向 URI 都要填生产域名：
+
+| 字段 | 值 |
+|---|---|
+| 授权的 JavaScript 来源 | `https://your-domain.com` |
+| 授权的重定向 URI | `https://your-domain.com/api/auth/callback/google` |
+
+本地开发另加 `http://localhost:3000` 与 `http://localhost:3000/api/auth/callback/google`。
+同一个 OAuth 客户端可以同时登记本地与生产两组。
+
+未接 Google 登录时，`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` 留空即可——两个都不填时
+Better Auth 不注册该 provider，登录页也不渲染按钮。
+
 ## 改动时的关键不变量
 
 改认证相关代码前逐条核对：
@@ -136,3 +182,4 @@ RPC。若改用普通函数，从导航栏点进登录页时按钮会静默消�
 - [表单约定](./forms)——TanStack Form + Zod + `Field` 的最小可复制写法
 - [邮件](./email)——邮件 provider 与联系表单
 - [环境变量](./environment)——全部变量及其读取层级
+- [Cloudflare](./cloudflare)——部署与运行时 secret 的配置
