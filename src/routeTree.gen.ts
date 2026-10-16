@@ -30,6 +30,7 @@ import { Route as Char123LocaleChar125AuthRegisterRouteImport } from './routes/{
 import { Route as Char123LocaleChar125AuthResetPasswordRouteImport } from './routes/{-$locale}/auth/reset-password'
 import { Route as Char123LocaleChar125AuthVerifyEmailRouteImport } from './routes/{-$locale}/auth/verify-email'
 import { Route as Char123LocaleChar125LayoutDashboardIndexRouteImport } from './routes/{-$locale}/_layout/dashboard/index'
+import { Route as Char123LocaleChar125LayoutDashboardApiKeysRouteImport } from './routes/{-$locale}/_layout/dashboard/api-keys'
 import { Route as Char123LocaleChar125LayoutDashboardNotificationsRouteImport } from './routes/{-$locale}/_layout/dashboard/notifications'
 import { Route as Char123LocaleChar125LayoutDashboardProfileRouteImport } from './routes/{-$locale}/_layout/dashboard/profile'
 import { Route as Char123LocaleChar125LayoutDashboardSecurityRouteImport } from './routes/{-$locale}/_layout/dashboard/security'
@@ -162,6 +163,12 @@ const Char123LocaleChar125LayoutDashboardIndexRoute =
     path: '/',
     getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
   } as any)
+const Char123LocaleChar125LayoutDashboardApiKeysRoute =
+  Char123LocaleChar125LayoutDashboardApiKeysRouteImport.update({
+    id: '/api-keys',
+    path: '/api-keys',
+    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
+  } as any)
 const Char123LocaleChar125LayoutDashboardNotificationsRoute =
   Char123LocaleChar125LayoutDashboardNotificationsRouteImport.update({
     id: '/notifications',
@@ -262,6 +269,7 @@ export interface FileRoutesByFullPath {
   '/{-$locale}/auth/register': typeof Char123LocaleChar125AuthRegisterRoute
   '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
   '/{-$locale}/auth/verify-email': typeof Char123LocaleChar125AuthVerifyEmailRoute
+  '/{-$locale}/dashboard/api-keys': typeof Char123LocaleChar125LayoutDashboardApiKeysRoute
   '/{-$locale}/dashboard/notifications': typeof Char123LocaleChar125LayoutDashboardNotificationsRoute
   '/{-$locale}/dashboard/profile': typeof Char123LocaleChar125LayoutDashboardProfileRoute
   '/{-$locale}/dashboard/security': typeof Char123LocaleChar125LayoutDashboardSecurityRoute
@@ -295,6 +303,7 @@ export interface FileRoutesByTo {
   '/{-$locale}/auth/register': typeof Char123LocaleChar125AuthRegisterRoute
   '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
   '/{-$locale}/auth/verify-email': typeof Char123LocaleChar125AuthVerifyEmailRoute
+  '/{-$locale}/dashboard/api-keys': typeof Char123LocaleChar125LayoutDashboardApiKeysRoute
   '/{-$locale}/dashboard/notifications': typeof Char123LocaleChar125LayoutDashboardNotificationsRoute
   '/{-$locale}/dashboard/profile': typeof Char123LocaleChar125LayoutDashboardProfileRoute
   '/{-$locale}/dashboard/security': typeof Char123LocaleChar125LayoutDashboardSecurityRoute
@@ -332,6 +341,7 @@ export interface FileRoutesById {
   '/{-$locale}/auth/register': typeof Char123LocaleChar125AuthRegisterRoute
   '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
   '/{-$locale}/auth/verify-email': typeof Char123LocaleChar125AuthVerifyEmailRoute
+  '/{-$locale}/_layout/dashboard/api-keys': typeof Char123LocaleChar125LayoutDashboardApiKeysRoute
   '/{-$locale}/_layout/dashboard/notifications': typeof Char123LocaleChar125LayoutDashboardNotificationsRoute
   '/{-$locale}/_layout/dashboard/profile': typeof Char123LocaleChar125LayoutDashboardProfileRoute
   '/{-$locale}/_layout/dashboard/security': typeof Char123LocaleChar125LayoutDashboardSecurityRoute
@@ -370,6 +380,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/auth/register'
     | '/{-$locale}/auth/reset-password'
     | '/{-$locale}/auth/verify-email'
+    | '/{-$locale}/dashboard/api-keys'
     | '/{-$locale}/dashboard/notifications'
     | '/{-$locale}/dashboard/profile'
     | '/{-$locale}/dashboard/security'
@@ -403,6 +414,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/auth/register'
     | '/{-$locale}/auth/reset-password'
     | '/{-$locale}/auth/verify-email'
+    | '/{-$locale}/dashboard/api-keys'
     | '/{-$locale}/dashboard/notifications'
     | '/{-$locale}/dashboard/profile'
     | '/{-$locale}/dashboard/security'
@@ -439,6 +451,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/auth/register'
     | '/{-$locale}/auth/reset-password'
     | '/{-$locale}/auth/verify-email'
+    | '/{-$locale}/_layout/dashboard/api-keys'
     | '/{-$locale}/_layout/dashboard/notifications'
     | '/{-$locale}/_layout/dashboard/profile'
     | '/{-$locale}/_layout/dashboard/security'
@@ -627,6 +640,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardIndexRouteImport
       parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
     }
+    '/{-$locale}/_layout/dashboard/api-keys': {
+      id: '/{-$locale}/_layout/dashboard/api-keys'
+      path: '/api-keys'
+      fullPath: '/{-$locale}/dashboard/api-keys'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardApiKeysRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
+    }
     '/{-$locale}/_layout/dashboard/notifications': {
       id: '/{-$locale}/_layout/dashboard/notifications'
       path: '/notifications'
@@ -722,6 +742,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface Char123LocaleChar125LayoutDashboardRouteChildren {
+  Char123LocaleChar125LayoutDashboardApiKeysRoute: typeof Char123LocaleChar125LayoutDashboardApiKeysRoute
   Char123LocaleChar125LayoutDashboardNotificationsRoute: typeof Char123LocaleChar125LayoutDashboardNotificationsRoute
   Char123LocaleChar125LayoutDashboardProfileRoute: typeof Char123LocaleChar125LayoutDashboardProfileRoute
   Char123LocaleChar125LayoutDashboardSecurityRoute: typeof Char123LocaleChar125LayoutDashboardSecurityRoute
@@ -731,6 +752,8 @@ interface Char123LocaleChar125LayoutDashboardRouteChildren {
 
 const Char123LocaleChar125LayoutDashboardRouteChildren: Char123LocaleChar125LayoutDashboardRouteChildren =
   {
+    Char123LocaleChar125LayoutDashboardApiKeysRoute:
+      Char123LocaleChar125LayoutDashboardApiKeysRoute,
     Char123LocaleChar125LayoutDashboardNotificationsRoute:
       Char123LocaleChar125LayoutDashboardNotificationsRoute,
     Char123LocaleChar125LayoutDashboardProfileRoute:

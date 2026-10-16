@@ -1,6 +1,7 @@
 import {
   IconBell,
   IconDeviceLaptop,
+  IconKey,
   IconShieldLock,
   IconUser,
   type TablerIcon,
@@ -11,7 +12,7 @@ import { m } from '@/locale/paraglide/messages.js'
 import { filterMenuItems, type MenuContext, type MenuLinkItem } from './navigation'
 
 /** 个人中心板块的标识，同时作为路由段与菜单 id。 */
-export type SettingsSection = 'profile' | 'security' | 'sessions' | 'notifications'
+export type SettingsSection = 'profile' | 'security' | 'sessions' | 'notifications' | 'api-keys'
 
 /**
  * 个人中心侧边栏的导航项工厂。
@@ -63,6 +64,18 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext) {
         options: linkOptions({ to: '/{-$locale}/dashboard/notifications', params: { locale } }),
       },
     },
+    {
+      kind: 'link',
+      id: 'api-keys',
+      title: m.settings_nav_api_keys(),
+      icon: IconKey,
+      // 功能开关，非服务模块：关闭时入口消失（页面与 API 另有门禁）。
+      visibility: { feature: 'enableApiKeys' },
+      destination: {
+        kind: 'internal',
+        options: linkOptions({ to: '/{-$locale}/dashboard/api-keys', params: { locale } }),
+      },
+    },
   ]
   return filterMenuItems(items, ctx) as MenuLinkItem[]
 }
@@ -97,6 +110,12 @@ export function getSettingsSectionMeta(section: SettingsSection): {
         title: m.settings_notifications_title(),
         description: m.settings_notifications_description(),
         icon: IconBell,
+      }
+    case 'api-keys':
+      return {
+        title: m.settings_api_keys_title(),
+        description: m.settings_api_keys_description(),
+        icon: IconKey,
       }
   }
 }

@@ -10,9 +10,13 @@ afterEach(() => {
   overwriteGetLocale(originalGetLocale)
 })
 
-function createConfig(overrides: { newsletter?: boolean } = {}) {
+function createConfig(overrides: { newsletter?: boolean; apiKeys?: boolean } = {}) {
   const config = createWebsiteConfig(parsePublicEnv({}))
-  return { ...config, newsletter: { ...config.newsletter, enabled: overrides.newsletter ?? false } }
+  return {
+    ...config,
+    newsletter: { ...config.newsletter, enabled: overrides.newsletter ?? false },
+    features: { ...config.features, enableApiKeys: overrides.apiKeys ?? false },
+  }
 }
 
 function ctx(config: ReturnType<typeof createConfig>) {
@@ -39,8 +43,28 @@ describe('个人中心导航', () => {
     ])
   })
 
+  it('enableApiKeys 开启时含「API 密钥」，且该项按 feature 门禁', () => {
+    const config = createConfig({ apiKeys: true })
+    const items = getSettingsSections('en', ctx(config))
+    const apiKeys = items.find((item) => item.id === 'api-keys')
+    expect(apiKeys).toBeDefined()
+    expect(apiKeys?.visibility?.feature).toBe('enableApiKeys')
+    expect(apiKeys?.destination).toEqual({
+      kind: 'internal',
+      options: expect.objectContaining({
+        to: '/{-$locale}/dashboard/api-keys',
+        params: { locale: 'en' },
+      }),
+    })
+  })
+
+  it('enableApiKeys 关闭时不含「API 密钥」', () => {
+    const config = createConfig({ apiKeys: false })
+    expect(getSettingsSections('en', ctx(config)).map((item) => item.id)).not.toContain('api-keys')
+  })
+
   it('链接指向对应板块，且都带 locale 参数', () => {
-    const config = createConfig({ newsletter: true })
+    const config = createConfig({ newsletter: true, apiKeys: true })
     const destinations = getSettingsSections('en', ctx(config)).map((item) =>
       item.destination.kind === 'internal' ? item.destination.options : null,
     )
@@ -52,6 +76,7 @@ describe('个人中心导航', () => {
         to: '/{-$locale}/dashboard/notifications',
         params: { locale: 'en' },
       }),
+      expect.objectContaining({ to: '/{-$locale}/dashboard/api-keys', params: { locale: 'en' } }),
     ])
   })
 
@@ -76,7 +101,13 @@ describe('个人中心导航', () => {
 
 describe('板块标题元数据', () => {
   it('每个板块都有标题、说明与图标', () => {
-    for (const section of ['profile', 'security', 'sessions', 'notifications'] as const) {
+    for (const section of [
+      'profile',
+      'security',
+      'sessions',
+      'notifications',
+      'api-keys',
+    ] as const) {
       const meta = getSettingsSectionMeta(section)
       expect(meta.title).toBeTruthy()
       expect(meta.description).toBeTruthy()
