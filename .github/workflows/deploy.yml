@@ -1,0 +1,72 @@
+name: Deploy
+
+# 触发条件：CI 在 main 上**成功**之后。
+#
+# 用 `workflow_run` 而不是独立的 `push` 触发器，是为了让「CI 绿」成为部署的硬前置。
+# 两个 workflow 各自监听 push 时，CI 红了部署照样会发——生产上跑的就是未经测试的代码。
+# `branches: [main]` 限定只在 main 上触发；`conclusion == 'success'` 排除失败与取消。
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+# 串行部署：两次 push 快速连续触发时，若并发运行会互相覆盖。
+# 不设 cancel-in-progress——部署被中途打断可能留下半新半旧的状态。
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # workflow_run 的 `on.branches` 只过滤了被触发 workflow 的分支，
+    # 这里再确认其结论为 success。两者缺一不可。
+    if: github.event.workflow_run.conclusion == 'success'
+    timeout-minutes: 20
+    env:
+      # 生产环境变量直接经 env 注入，**不创建 `.env.production` 文件**：
+      # `check-env-prod.ts` 在文件不存在时回退到进程 env，而进程 env 优先级最高。
+      # 这样 secret 不会落到 CI 磁盘上，也就没有「构建产物里残留 .env」的风险。
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      VITE_BASE_URL: ${{ secrets.VITE_BASE_URL }}
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 部署 workflow_run 的 head_sha，即通过 CI 的那个提交。
+          # 默认 checkout 的是默认分支最新提交，可能已包含 CI 未验证的后续提交。
+          ref: ${{ github.event.workflow_run.head_sha }}
+      # pnpm 版本来自 package.json 的 packageManager，不在此硬编码。
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # content:build 产出 .content-collections/，是构建的前置。
+      - run: pnpm run content:build
+      # pnpm deploy = 生产 env 校验 → 构建 → 客户端 bundle 泄漏检查 → wrangler deploy
+      - run: pnpm run deploy
+      # 冒烟检查：首页与文档站必须 200。部署成功但页面 500 是最常见的静默故障
+      # （如运行时 secret 缺失），只检查 wrangler 退出码抓不到。
+      - name: Smoke test
+        env:
+          BASE_URL: ${{ secrets.VITE_BASE_URL }}
+        run: |
+          for path in / /docs/getting-started; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL$path")
+            echo "$path → $code"
+            if [ "$code" != "200" ]; then
+              echo "::error::冒烟检查失败：$BASE_URL$path 返回 $code"
+              exit 1
+            fi
+          done
+          # 认证端点返回 500 说明运行时 secret 或 D1 绑定有问题。
+          # 无会话时正确响应是 200 + null，故只拒绝 5xx。
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL/api/auth/get-session")
+          echo "/api/auth/get-session → $code"
+          case "$code" in
+            5*) echo "::error::认证端点返回 $code，检查 BETTER_AUTH_SECRET 与 D1 绑定"; exit 1 ;;
+          esac
