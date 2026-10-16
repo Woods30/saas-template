@@ -33,6 +33,38 @@ export default [
     }
   },
   {
+    "title": "API Keys",
+    "description": "Self-service API key creation and revocation",
+    "locale": "en",
+    "order": 18,
+    "group": "features",
+    "updated": "2026-10-16",
+    "content": "API keys are built on better-auth's `@better-auth/api-key` plugin. Users create and revoke\ntheir own keys in the dashboard; your server code verifies them with the same plugin.\n\n## Data model\n\nKeys live in the `apikey` table (`src/db/schema.ts`). Its columns follow the plugin's built-in\n`apiKeySchema`: 21 declared fields plus the automatic `id`, with indexes on `config_id` /\n`reference_id` / `key`.\n\n**Plaintext never reaches the database.** The plugin hashes the full key with SHA-256, encodes\nit as base64url (no padding), and stores that in the `key` column. The list endpoint returns\nonly `start` (the first few characters), so an issued key can never be read back.\n\n> The `key` column carries **no** unique constraint — it is a hash, collisions are negligible,\n> and the plugin itself creates only a plain index.\n\n## Settings page\n\n`/dashboard/api-keys` (`src/routes/{-$locale}/_layout/dashboard/api-keys.tsx`). Its entry\nappears in the dashboard sidebar and is governed by the `features.enableApiKeys` flag.\n\n- **Create**: enter a name → `authClient.apiKey.create({ name })`. The response contains the\n  **plaintext `key`**; the page shows it once in a second dialog and tells the user to save it.\n- **List**: `authClient.apiKey.list()` → `{ apiKeys, total, limit, offset }`. Entries carry no\n  plaintext; the mask uses `start`.\n- **Delete**: `authClient.apiKey.delete({ keyId })` → `{ success }`.\n\n## Server-side verification\n\n`verifyApiKey` is a **server-only** endpoint and can only be called on the server:\n\n```ts\nconst result = await getAuth(env).api.verifyApiKey({ body: { key } })\nif (!result.valid) return new Response('Unauthorized', { status: 401 })\n```\n\n`result` looks like `{ valid: boolean; key: { id, referenceId, ... } | null; error?: { message, code } }`.\nOn failure `valid` is `false` and `key` is `null`, with the reason in `error.code` (such as\n`KEY_NOT_FOUND` / `KEY_EXPIRED` / `KEY_DISABLED`).\n\nRequests use the `x-api-key` header by default.\n\n> **Notes**: `defaultPrefix` is `key_`, so every new key carries that prefix.\n>\n> **Turning `features.enableApiKeys` off makes the whole `/api/auth/api-key/*` HTTP surface\n> return 404** — this is not just the UI disappearing, it is the create / list / delete\n> management capability shutting down: users can no longer manage keys through the plugin\n> endpoints. The gate lives in the route layer at `src/routes/api/auth/$.ts`.\n>\n> But **a direct server-side call is unaffected**: `getAuth(env).api.verifyApiKey({ body: { key } })`\n> is a function call, not an HTTP route, so it bypasses that gate. Whether an issued key keeps\n> working is therefore **the caller's decision**: if you want the flag to disable verification\n> too, check `websiteConfig.features.enableApiKeys` in your own route.\n>\n> **Plaintext appears only in the create response** and is never returned again — a user who\n> did not save it must delete the key and create a new one.\n\n## References\n\n- [better-auth API Key plugin](https://www.better-auth.com/docs/plugins/api-key) — options, rate limiting, and refill\n- [`@better-auth/api-key`](https://www.npmjs.com/package/@better-auth/api-key) — endpoints such as `verifyApiKey`\n\n## Next steps\n\n- [Authentication](./auth) — sessions and the email/password path\n- [Database](./database) — the `apikey` table and migrations",
+    "_meta": {
+      "filePath": "api-keys.md",
+      "fileName": "api-keys.md",
+      "directory": ".",
+      "extension": "md",
+      "path": "api-keys"
+    }
+  },
+  {
+    "title": "API 密钥",
+    "description": "用户自助创建与撤销 API 密钥",
+    "locale": "zh",
+    "order": 18,
+    "group": "features",
+    "updated": "2026-10-16",
+    "content": "API 密钥基于 better-auth 的 `@better-auth/api-key` 插件。用户在个人中心自助创建与撤销，\n业务代码用同一插件在服务端校验。\n\n## 数据模型\n\n密钥存在 `apikey` 表（`src/db/schema.ts`）。表结构以插件内置的 `apiKeySchema` 为准：\n21 个声明字段 + 自动 `id`，索引在 `config_id` / `reference_id` / `key`。\n\n**明文从不入库。** 插件对完整密钥做 SHA-256，base64url 编码（去 padding）后写入\n`key` 列；列表接口只返回 `start`（前几位），因此已签发的密钥无法再次读出。\n\n> `key` 列**不加**唯一约束——它是哈希，碰撞概率可忽略，且插件本身只建普通索引。\n\n## 设置页\n\n`/dashboard/api-keys`（`src/routes/{-$locale}/_layout/dashboard/api-keys.tsx`）。\n入口在个人中心侧边栏，受功能开关 `features.enableApiKeys` 控制。\n\n- **创建**：输入名称 → `authClient.apiKey.create({ name })`。返回体含**明文 `key`**，\n  页面在第二个弹窗里一次性展示并提示立即保存。\n- **列表**：`authClient.apiKey.list()` → `{ apiKeys, total, limit, offset }`。条目不含\n  明文，掩码用 `start`。\n- **删除**：`authClient.apiKey.delete({ keyId })` → `{ success }`。\n\n## 服务端校验\n\n`verifyApiKey` 是 **server-only** 端点，只能在服务端调用：\n\n```ts\nconst result = await getAuth(env).api.verifyApiKey({ body: { key } })\nif (!result.valid) return new Response('Unauthorized', { status: 401 })\n```\n\n`result` 形如 `{ valid: boolean; key: { id, referenceId, ... } | null; error?: { message, code } }`。\n校验失败时 `valid` 为 `false`、`key` 为 `null`，具体原因在 `error.code`（如\n`KEY_NOT_FOUND` / `KEY_EXPIRED` / `KEY_DISABLED`）。\n\n请求头默认用 `x-api-key`。\n\n> **注意事项**：`defaultPrefix` 设为 `key_`，新建密钥都带此前缀。\n>\n> **关闭 `features.enableApiKeys` 时，`/api/auth/api-key/*` 这一组 HTTP 端点整体返回\n> 404**——这不只是 UI 消失，而是「创建 / 列表 / 删除」的管理能力停用：用户无法再通过\n> 插件端点自助管理密钥。门禁落在 `src/routes/api/auth/$.ts` 的路由层。\n>\n> 但**服务端直接调用不受影响**：`getAuth(env).api.verifyApiKey({ body: { key } })` 走的是\n> 函数调用而非 HTTP 路由，绕过了该门禁。因此已签发密钥的既有用途由**调用方自行决定**：\n> 若你希望 flag 关闭后连校验也一并停用，需在自己的业务路由里额外判一次\n> `websiteConfig.features.enableApiKeys`。\n>\n> **明文只在创建响应里出现一次**，之后任何接口都不再返回，用户若未保存只能删除重建。\n\n## 参考资料\n\n- [better-auth API Key 插件](https://www.better-auth.com/docs/plugins/api-key)——配置项、限流与 refill\n- [`@better-auth/api-key`](https://www.npmjs.com/package/@better-auth/api-key)——`verifyApiKey` 等端点\n\n## 下一步\n\n- [身份认证](./auth)——会话与邮箱密码路径\n- [数据库](./database)——`apikey` 表与迁移",
+    "_meta": {
+      "filePath": "api-keys.zh.md",
+      "fileName": "api-keys.zh.md",
+      "directory": ".",
+      "extension": "md",
+      "path": "api-keys.zh"
+    }
+  },
+  {
     "title": "Account center",
     "description": "The session guard on protected routes, plus the profile, security, sessions, and notifications sections",
     "locale": "en",
