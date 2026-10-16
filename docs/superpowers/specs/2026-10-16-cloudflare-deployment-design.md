@@ -76,9 +76,18 @@
 - `wrangler kv namespace create` / `wrangler d1 create` 均支持 `--update-config`，
   可直接把 ID 写回配置文件；但本仓 `wrangler.jsonc` 带注释，**不使用**该选项，
   改为手工回填以免注释被 JSON 序列化抹掉。
-- `wrangler whoami` 不显示 workers.dev 子域。子域需经 API 查：
-  `GET /accounts/{account_id}/workers/subdomain`。这解决了「先要有 URL 才能过
-  `check:env:prod`，但 URL 要部署后才知道」的先后矛盾。
+- `wrangler whoami` 不显示 workers.dev 子域。子域经 API 读写：
+  `GET` 查询、`PUT /accounts/{account_id}/workers/subdomain` 创建/改名。
+  这解决了「先要有 URL 才能过 `check:env:prod`，但 URL 要部署后才知道」的先后矛盾。
+- **本账号尚未开通 workers.dev 子域**（`GET` 返回 `code 10007`）。已在实测中经
+  `PUT` 创建，故该步骤在实施时是「创建」而非「查询」。**Dashboard 不是必需的**。
+- **R2 必须先在 Dashboard 开通一次**，API 无法代劳：`POST /r2/buckets` 返回
+  `code 10042 Please enable R2 through the Cloudflare Dashboard`，`wrangler r2 bucket
+  list` 同样失败。开通需绑支付方式（免费额度内不收费）。本次用户选择**先跳过 R2**。
+- D1 权限正常：实测 `POST /d1/database` 成功创建（探测库已删除）。
+- `GET /user/tokens/verify` 对 Account-scoped Token 返回 `code 1000 Invalid API Token`
+  —— **这是预期行为，不代表 Token 无效**。验证 Token 应用 `wrangler whoami` 或
+  实际调用某个 account-scoped 端点。
 
 ## 3. 全局约束
 
@@ -137,14 +146,22 @@ const raw = existsSync('.env.production') ? resolveRawEnv('.env.production') : r
 
 ### 5.1 要创建的资源
 
-| 资源 | 名称 | 绑定 | 写入位置 |
-|---|---|---|---|
-| D1 | `saas-template-db` | `DB` | `d1_databases[0].database_id` |
-| KV | `saas-template-cache` | `CACHE` | `kv_namespaces[0].id` |
-| R2 | `saas-template-uploads` | `BUCKET` | 已是真实名，无需改 |
+| 资源 | 名称 | 绑定 | 写入位置 | 本次 |
+|---|---|---|---|---|
+| D1 | `saas-template-db` | `DB` | `d1_databases[0].database_id` | 创建 |
+| KV | `saas-template-cache` | `CACHE` | `kv_namespaces[0].id` | 创建 |
+| R2 | `saas-template-uploads` | `BUCKET` | 已是真实名，无需改 | **跳过**（见下） |
 
 名称沿用 `wrangler.jsonc` 现值，不新造命名。创建前先 `wrangler d1 list` /
 `wrangler kv namespace list` 查重，已存在则复用其 ID 而非重复创建。
+实测确认两处列表当前均为空，故本次全是新建。
+
+**R2 本次跳过**（用户决定）：账号未开通 R2，开通需在 Dashboard 绑支付方式，API 无法代劳。
+处理方式为**注释掉 `wrangler.jsonc` 的 `r2_buckets` 块**，而不是删掉——保留原值以便开通后
+一行取消注释即可恢复。运行时不受影响：`src/server.ts:98` 的
+`new R2StorageProvider(env.BUCKET as unknown as R2Bucket)` 在无绑定时得到 `undefined`，
+而 `features.enableFileUpload` 本就是 `false`，文件上传路径不会被执行。
+`src/storage/index.ts` 的 `getStorageProvider()` 在无 ALS provider 时抛错，属预期的降级行为。
 
 ### 5.2 `send_email` 块
 
@@ -157,10 +174,13 @@ const raw = existsSync('.env.production') ? resolveRawEnv('.env.production') : r
 
 ### 5.3 部署顺序
 
-1. `wrangler whoami` 确认身份与账号。
-2. 经 API 查 workers.dev 子域，拼出 `VITE_BASE_URL=https://saas-template.<子域>.workers.dev`。
-3. 创建 D1 / KV / R2，解析出 ID。
-4. 回填 `wrangler.jsonc`。
+1. `wrangler whoami` 确认身份与账号。**已完成**：账号
+   `7d368169bd845cee4f1dfa6de1c8873f`，与 `.env` 的 `CLOUDFLARE_ACCOUNT_ID` 一致。
+2. 确认 workers.dev 子域。**已完成**：原账号无子域，已经 API `PUT` 创建为
+   `saas-template-demo`（用户选择改名，**待定名**）。最终
+   `VITE_BASE_URL=https://saas-template.<子域>.workers.dev`。
+3. 创建 D1 / KV（R2 跳过），解析出 ID。
+4. 回填 `wrangler.jsonc`；注释 `r2_buckets` 与 `send_email` 两块。
 5. `pnpm run db:migrate:remote` 应用两个迁移（`0000_nosy_smasher`、`0001_orange_sue_storm`）。
 6. `wrangler secret put BETTER_AUTH_SECRET`（值取 `.env` 里已有的那个，保证两侧一致）。
 7. 写 `.env.production`。
@@ -205,7 +225,7 @@ const raw = existsSync('.env.production') ? resolveRawEnv('.env.production') : r
 |---|---|---|---|---|
 | `content/docs/cloudflare.zh.md` | `cloudflare` | 14 | `config` | 账号、Scoped API Token 权限清单、Worker 部署、自动部署流水线、workers.dev 与自定义域名 |
 | `content/docs/database.zh.md` | `database` | 15 | `config` | D1 创建、远程迁移、Drizzle 接线、`db:generate` / `studio` 命令 |
-| `content/docs/storage.zh.md` | `storage` | 16 | `config` | R2 创建与绑定、`uploadFile` / `deleteFile` / `listUserFiles` 用法、限制 |
+| `content/docs/storage.zh.md` | `storage` | 16 | `config` | R2 创建与绑定（含**必须先 Dashboard 开通**）、`uploadFile` / `deleteFile` / `listUserFiles` 用法、限制 |
 | `content/docs/cache.zh.md` | `cache` | 17 | `config` | KV 创建与绑定、`getOrSetCache` / `deleteCache` / `deleteCacheByPrefix`、TTL 常量 |
 
 `order` 接在 `forms`(13) 之后；`group` 用既有的 `config`，**不新增消息键**，
@@ -291,7 +311,8 @@ const raw = existsSync('.env.production') ? resolveRawEnv('.env.production') : r
 | 风险 | 应对 |
 |---|---|
 | Worker 名 `saas-template` 在账号下已被占用 | 部署前先查；冲突则改名并同步更新文档 |
-| D1 / KV 同名资源已存在 | 先 list 查重，复用已有 ID 而非重复创建 |
+| D1 / KV 同名资源已存在 | 已实测两处列表为空，本次均为新建 |
+| **R2 未开通导致部署失败** | 已通过注释 `r2_buckets` 规避；开通后取消注释重部署 |
 | 首次部署失败 | 不改动任何既有资源；创建出的资源可 `wrangler d1 delete` / `kv namespace delete` / `r2 bucket delete` 回收 |
 | 改了 `wrangler.jsonc`（核心区）触发全量回归 | 属预期；本地先跑 `pnpm test` 与 `pnpm test:e2e` 再提交 |
 | `.env.production` 被误提交 | 已加入 `.gitignore`；提交前 `git status` 复核 |
