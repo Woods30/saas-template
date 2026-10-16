@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 // Better Auth 自动生成的表（与 better-auth CLI 输出一致）
 export const users = sqliteTable('users', {
@@ -26,6 +26,8 @@ export const sessions = sqliteTable('sessions', {
   expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
+  // better-auth admin 插件：记录「被谁 impersonate」的管理员 id（可空）。
+  impersonatedBy: text('impersonated_by'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 })
 
@@ -114,22 +116,40 @@ export const files = sqliteTable('files', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 })
 
-export const apiKeys = sqliteTable(
-  'api_keys',
+// Better Auth `@better-auth/api-key` 插件生成的表。
+// 列以插件内置的 `apiKeySchema`（node_modules/@better-auth/api-key）为唯一依据：
+// 21 个声明字段 + 自动 id = 22 列；索引在 config_id / reference_id / key（均为普通索引，非 unique）。
+export const apikey = sqliteTable(
+  'apikey',
   {
     id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(),
-    hashedKey: text('hashed_key').notNull(),
-    prefix: text('prefix').notNull(),
-    lastUsedAt: integer('last_used_at', { mode: 'timestamp' }),
+    configId: text('config_id').notNull().default('default'),
+    name: text('name'),
+    start: text('start'),
+    referenceId: text('reference_id').notNull(),
+    prefix: text('prefix'),
+    key: text('key').notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }),
+    refillInterval: integer('refill_interval'),
+    refillAmount: integer('refill_amount'),
+    lastRefillAt: integer('last_refill_at', { mode: 'timestamp' }),
+    rateLimitEnabled: integer('rate_limit_enabled', { mode: 'boolean' }),
+    rateLimitTimeWindow: integer('rate_limit_time_window'),
+    rateLimitMax: integer('rate_limit_max'),
+    requestCount: integer('request_count'),
+    remaining: integer('remaining'),
+    lastRequest: integer('last_request', { mode: 'timestamp' }),
     expiresAt: integer('expires_at', { mode: 'timestamp' }),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    // 插件 schema 里 createdAt / updatedAt 为 required 且无默认值，故此处 notNull() 不加 default。
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+    permissions: text('permissions'),
+    metadata: text('metadata'),
   },
   (table) => ({
-    hashedKeyUnique: uniqueIndex('api_keys_hashed_key_unique').on(table.hashedKey),
+    configIdIdx: index('apikey_config_id_idx').on(table.configId),
+    referenceIdIdx: index('apikey_reference_id_idx').on(table.referenceId),
+    keyIdx: index('apikey_key_idx').on(table.key),
   }),
 )
 

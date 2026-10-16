@@ -52,6 +52,16 @@ pnpm run db:migrate:remote   # 远程生产库
 
 远程迁移会要求确认，非交互环境自动跳过。每个迁移成功后输出 ✅。
 
+> **含 `DROP TABLE` 的迁移先查数据**：`0002` 用 `apikey` 表替换了旧的 `api_keys`，会
+> `DROP TABLE api_keys`。上远程前先确认该表无数据，否则会丢：
+>
+> ```bash
+> pnpm exec wrangler d1 execute DB --remote --command "SELECT COUNT(*) FROM api_keys;"
+> ```
+>
+> **若非 0，先停止并备份**（`wrangler d1 export DB --remote --output backup.sql`），
+> 再决定是否迁移。旧的 `api_keys` 是模板占位表，正常从未写入过数据。
+
 验证表结构：
 
 ```bash
@@ -59,8 +69,10 @@ pnpm exec wrangler d1 execute DB --remote \
   --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
 ```
 
-应看到 `users`、`sessions`、`accounts`、`verifications`、`api_keys`、`files`、`payments`、
+应看到 `users`、`sessions`、`accounts`、`verifications`、`apikey`、`files`、`payments`、
 `subscriptions`、`newsletter_subscriptions`、`webhook_events` 十张业务表。
+
+`sessions` 表含 `impersonated_by` 列（better-auth admin 插件记录 impersonate 发起者）。
 
 ### 本地开发库
 
