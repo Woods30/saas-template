@@ -120,6 +120,11 @@ function writeDotEnv(dir: string, content: string): void {
   writeFileSync(join(dir, '.env'), content, 'utf-8')
 }
 
+/** 写入 `.env.production`；生产校验应优先读它，缺省才回退 `.env`。 */
+function writeDotEnvProduction(dir: string, content: string): void {
+  writeFileSync(join(dir, '.env.production'), content, 'utf-8')
+}
+
 /** 在 `dist/client` 下写入一个相对路径文件。 */
 function writeBundleFile(dir: string, relativePath: string, content: string): void {
   const full = join(dir, 'dist', 'client', relativePath)
@@ -227,6 +232,36 @@ describe('check-env-prod.ts（生产校验）', () => {
     const result = runScript(dir, checkEnvProd)
     expect(result.code).toBe(1)
     expect(result.stderr).toContain('VITE_BASE_URL')
+  })
+
+  it('存在 `.env.production` 时优先读它，忽略 `.env` 的本地值', () => {
+    // 生产部署的约定：`pnpm deploy` 校验的是 `.env.production`，而不是开发用的 `.env`。
+    // 若仍读 `.env`，本地 localhost 会让校验失败——即使生产配置本身完全正确。
+    const dir = makeWorkspace()
+    writeDotEnv(dir, 'VITE_BASE_URL=http://localhost:3000\n')
+    writeDotEnvProduction(dir, `BETTER_AUTH_SECRET=${VALID_SECRET}\nVITE_BASE_URL=${VALID_URL}\n`)
+    const result = runScript(dir, checkEnvProd)
+    expect(result.stderr).toBe('')
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('生产环境变量校验通过')
+  })
+
+  it('`.env.production` 非法时不回退到合法的 `.env`', () => {
+    // 有 `.env.production` 就以它为准：回退会让「生产配置写错了」被本地值悄悄掩盖。
+    const dir = makeWorkspace()
+    writeDotEnv(dir, `BETTER_AUTH_SECRET=${VALID_SECRET}\nVITE_BASE_URL=${VALID_URL}\n`)
+    writeDotEnvProduction(dir, 'VITE_BASE_URL=http://localhost:3000\n')
+    const result = runScript(dir, checkEnvProd)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('VITE_BASE_URL')
+  })
+
+  it('无 `.env.production` 时回退读 `.env`（保持既有行为）', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(dir, `BETTER_AUTH_SECRET=${VALID_SECRET}\nVITE_BASE_URL=${VALID_URL}\n`)
+    const result = runScript(dir, checkEnvProd)
+    expect(result.stderr).toBe('')
+    expect(result.code).toBe(0)
   })
 
   it('`.env` 的 NODE_ENV=development 无法绕过生产校验（缺少 secret 即失败）', () => {

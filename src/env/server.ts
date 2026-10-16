@@ -3,6 +3,16 @@ import { treatEmptyAsUndefined } from './normalize'
 
 const schema = z.object({
   BETTER_AUTH_SECRET: z.string().min(32, 'BETTER_AUTH_SECRET 必须 ≥ 32 字符').optional(),
+  /**
+   * Better Auth 的站点根地址，用于生成回调与重定向的**绝对** URL。
+   *
+   * 未设时 better-auth 从请求 origin 推断——单域名部署下等价。但**多域名或
+   * 接了 OAuth / 邮件验证时必须显式设置**：推断出的 origin 随请求变化，
+   * 回调地址会跟着漂移（better-auth 会打印 `Base URL is not set` 警告）。
+   *
+   * 这是服务端字段而非 `VITE_` 公开值：它只参与服务端生成链接，不进客户端 bundle。
+   */
+  BETTER_AUTH_URL: z.url().optional(),
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),

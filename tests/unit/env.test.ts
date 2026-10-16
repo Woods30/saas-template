@@ -82,6 +82,22 @@ describe('parseServerEnv', () => {
       expect(() => parseServerEnv(raw)).toThrow()
     },
   )
+
+  it('BETTER_AUTH_URL 可省略或留空', () => {
+    // 未设时 better-auth 回退到请求 origin；设了则用于生成回调与重定向的绝对地址。
+    expect(parseServerEnv({}).BETTER_AUTH_URL).toBeUndefined()
+    expect(parseServerEnv({ BETTER_AUTH_URL: '' }).BETTER_AUTH_URL).toBeUndefined()
+  })
+
+  it('接受合法的 BETTER_AUTH_URL', () => {
+    const url = 'https://demo.jerbix.workers.dev'
+    expect(parseServerEnv({ BETTER_AUTH_URL: url }).BETTER_AUTH_URL).toBe(url)
+  })
+
+  it('拒绝非 URL 的 BETTER_AUTH_URL', () => {
+    // 必须是绝对 URL：better-auth 用它拼回调地址，相对路径拼出来的链接无法访问。
+    expect(() => parseServerEnv({ BETTER_AUTH_URL: 'not-a-url' })).toThrow(/BETTER_AUTH_URL/)
+  })
 })
 
 describe('validateProdServerEnv', () => {

@@ -39,6 +39,10 @@ export function getAuth(env: Env) {
 
   return betterAuth({
     secret: parsed.BETTER_AUTH_SECRET,
+    // 显式传入站点根地址，避免 better-auth 从请求 origin 推断时打印
+    // `Base URL is not set` 警告，并让回调 / 重定向地址在多域名部署下保持稳定。
+    // 未配置时传 `undefined`，better-auth 退回请求 origin（单域名部署等价）。
+    baseURL: parsed.BETTER_AUTH_URL,
     plugins: [
       drizzleAdapter(db, {
         provider: 'sqlite',
