@@ -1,6 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "saas-template",
+  // Worker 名决定线上地址：`<name>.<账号 workers.dev 子域>.workers.dev`。
+  // 当前为 `demo`，配账号子域 `jerbix` → https://demo.jerbix.workers.dev
+  // 注意：与 package.json 的 `name` 是两个独立字段，后者只是 npm 包名。
+  "name": "demo",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   // `main` 指向自定义 server entry：它用 Paraglide 的 `paraglideMiddleware` 包住
@@ -11,25 +14,38 @@
     "NODE_ENV": "production"
   },
   "observability": { "enabled": true },
-  // D1 数据库（auth + 业务表）；REPLACE_ME 由 `pnpm run setup` 替换。
+  // D1 数据库（auth + 业务表）。ID 由 `wrangler d1 create` 产出后手工回填——
+  // 不用 `--update-config`，那会经 JSON 序列化抹掉本文件的注释。
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "saas-template-db",
-      "database_id": "REPLACE_ME",
+      "database_id": "f0aed9d8-0cca-4cb7-9ec6-be6b67ce7e69",
       "migrations_dir": "./src/db/migrations"
     }
   ],
   // R2 对象存储（用户上传文件）。
-  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "saas-template-uploads" }],
+  //
+  // 暂未启用：R2 必须先在 Cloudflare Dashboard 开通一次（免费额度内不收费，
+  // 但需绑支付方式），API 无法代劳——`wrangler r2 bucket list` 与
+  // `POST /r2/buckets` 均返回 code 10042。开通后取消下面注释并重新部署即可。
+  //
+  // 运行时不依赖它：`features.enableFileUpload` 为 false，文件上传路径不会执行；
+  // `src/server.ts` 在无该 binding 时得到 `undefined`，storage provider 相应降级。
+  // "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "saas-template-uploads" }],
   // KV 命名空间（cache + newsletter status + rate limit）。
-  "kv_namespaces": [{ "binding": "CACHE", "id": "REPLACE_ME" }],
+  "kv_namespaces": [{ "binding": "CACHE", "id": "42041d2cc3e84a378f3e264591790a3b" }]
   // Cloudflare Email Service binding（事务邮件）。
-  // REPLACE_ME 必须是 DNS MX 记录指向的地址。
-  "send_email": [
-    {
-      "name": "EMAIL",
-      "destination_address": "REPLACE_ME"
-    }
-  ]
+  //
+  // 暂未启用：`mail.enabled` 为 false，且原先的 `destination_address` 是占位符
+  // `REPLACE_ME`——它不是合法投递地址。重新启用需要：
+  //   1. 账号下有 DNS MX 记录指向的已验证收件地址；
+  //   2. Dashboard → Email → Email Routing 完成配置；
+  //   3. 把下面的地址换成真实地址并取消注释。
+  // "send_email": [
+  //   {
+  //     "name": "EMAIL",
+  //     "destination_address": "REPLACE_ME"
+  //   }
+  // ]
 }
