@@ -22,6 +22,16 @@ mail: { enabled: true, provider: 'resend', supportEmail: 'support@your-domain.co
 
 > **注意事项**：Cloudflare Email binding 只能发往已验证的收件地址。部署时须自行核对账户收件限制；`pnpm check` 会列为 manual 核对项，但不参与 completeness 判定。`/api/email` 除门禁外还要求有效会话，且收件人必须在 `ADMIN_EMAILS` 白名单内。
 
+## 本地预览
+
+模板位于 `src/mail/templates/`（React Email）。用 `pnpm email:dev` 启动预览服务，端口 **3001**（与 `pnpm dev` 的 3000 区分），浏览器打开后可在四个模板间切换并实时热更新：
+
+```bash
+pnpm email:dev
+```
+
+预览依赖 `@react-email/ui`（devDependency，须与 `react-email` 版本一致）。
+
 ## 联系表单
 
 `contact` 依赖 `mail` 配置完整——`contact.enabled` 为 `true` 但 `mail` 未配置齐备时，状态为 `incomplete`，`/api/contact` 返回 503，避免用户提交后消息无处投递。
@@ -29,7 +39,7 @@ mail: { enabled: true, provider: 'resend', supportEmail: 'support@your-domain.co
 投递路径（`src/contact/notifications.ts`）：
 
 1. **邮件**——核心通道，发往 `mail.supportEmail`，失败写 `console.warn`；
-2. **Discord**——仅当 `notification.enabled` 为 `true`，失败不阻塞主流程。
+2. **Webhook**——仅当 `notification.enabled` 为 `true`，按 `notification.provider` 选择 Discord 或飞书，失败不阻塞主流程。
 
 ```ts
 contact: { enabled: true },
