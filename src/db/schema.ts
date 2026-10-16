@@ -29,6 +29,9 @@ export const sessions = sqliteTable('sessions', {
   // better-auth admin 插件：记录「被谁 impersonate」的管理员 id（可空）。
   impersonatedBy: text('impersonated_by'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  // better-auth 1.7.10 的 session 模型要求 updatedAt（required，onUpdate）。
+  // 缺列会让 drizzle 适配器在运行时报 `SchemaMismatchError: Missing columns: session.updatedAt`。
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 })
 
 export const accounts = sqliteTable(

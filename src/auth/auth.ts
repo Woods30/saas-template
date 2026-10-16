@@ -1,5 +1,4 @@
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
-import type { BetterAuthPlugin } from 'better-auth'
 import { betterAuth } from 'better-auth/minimal'
 import { sendAuthEmailForRequest } from '@/auth/emails'
 import { requiresEmailVerification } from '@/auth/flow'
@@ -13,8 +12,11 @@ import { sendMail } from '@/mail'
  *
  * 关键设计：
  * 1. 走 `better-auth/minimal`（无 Node-only 依赖，专为 Workers 优化）。
- * 2. `drizzleAdapter` 来自独立包 `@better-auth/drizzle-adapter`，负责所有
- *    数据库读写；无需再设 `database:` 顶层字段（adapter 即为数据源）。
+ * 2. `drizzleAdapter(db, config)` 是**适配器工厂**，必须作为顶层 `database:` 传入。
+ *    放进 `plugins:` 是错的：better-auth 在 `createAuthContext` 之前就调用
+ *    `getBaseAdapter(options)`，而该函数只读 `options.database`——插件 `init`
+ *    那时还没跑。放错位置会让 `options.database` 为 undefined，better-auth
+ *    静默回退到内存适配器（注册/登录看似成功，实际不落库）。
  * 3. env 从调用方注入，不读取 `process.env`，保证 SSR/client bundle 行为一致。
  * 4. re-entrant：每次调用用当次请求的 env，创建独立的 BetterAuth instance。
  * 5. 邮件回调（验证 / 重置 / 欢迎）统一走 `src/auth/emails.ts`，该模块内部捕获所有
@@ -43,17 +45,15 @@ export function getAuth(env: Env) {
     // `Base URL is not set` 警告，并让回调 / 重定向地址在多域名部署下保持稳定。
     // 未配置时传 `undefined`，better-auth 退回请求 origin（单域名部署等价）。
     baseURL: parsed.BETTER_AUTH_URL,
-    plugins: [
-      drizzleAdapter(db, {
-        provider: 'sqlite',
-        schema: {
-          user: schema.users,
-          session: schema.sessions,
-          account: schema.accounts,
-          verification: schema.verifications,
-        },
-      }) as unknown as BetterAuthPlugin,
-    ],
+    database: drizzleAdapter(db, {
+      provider: 'sqlite',
+      schema: {
+        user: schema.users,
+        session: schema.sessions,
+        account: schema.accounts,
+        verification: schema.verifications,
+      },
+    }),
     emailAndPassword: {
       enabled: true,
       // 安全控制，读显式配置（`auth.requireEmailVerification`），**不**随 `mail.enabled`
