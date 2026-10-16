@@ -7,6 +7,9 @@ src/locale/paraglide
 *.log
 .env
 .env.local
+# 生产环境变量：含真实域名与生产 secret，绝不入库。
+# `pnpm deploy` 与 `vite build` 都读它（见 scripts/check-env-prod.ts）。
+.env.production
 .DS_Store
 .tanstack
 playwright-report
