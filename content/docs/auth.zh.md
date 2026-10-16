@@ -8,7 +8,7 @@ updated: 2026-10-15
 ---
 
 邮箱密码 + Google OAuth，基于 Better Auth v1.7.7 与 Drizzle adapter（D1 / SQLite）。
-页面在 `/{locale}/auth/*`，API 在 `/api/auth/*`，个人中心在 `/{locale}/settings/*`。
+页面在 `/{locale}/auth/*`，API 在 `/api/auth/*`，工作台在 `/{locale}/dashboard/*`。
 
 ## 启用
 

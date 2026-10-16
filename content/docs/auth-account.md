@@ -7,29 +7,29 @@ group: features
 updated: 2026-10-15
 ---
 
-The account management area behind sign-in, at `/{locale}/settings/*`. Reach it from
+The account management area behind sign-in, at `/{locale}/dashboard/*`. Reach it from
 "Account settings" in the navbar user menu.
 
 ## Route structure
 
-`settings.tsx` is a pathless layout route (the same technique as `docs`): it holds only the
-guard and the shell, no page content, so `/settings` itself is not a content page.
+`dashboard.tsx` is a pathless layout route (the same technique as `docs`): it holds only the
+guard and the shell, no page content, so `/dashboard` itself is not a content page.
 
 ```
-src/routes/{-$locale}/_layout/settings.tsx              # guard + session + shell + <Outlet/>
-src/routes/{-$locale}/_layout/settings/index.tsx        # /settings → redirect to profile
-src/routes/{-$locale}/_layout/settings/profile.tsx      # Profile
-src/routes/{-$locale}/_layout/settings/security.tsx     # Security
-src/routes/{-$locale}/_layout/settings/sessions.tsx     # Sessions
-src/routes/{-$locale}/_layout/settings/notifications.tsx # Notifications (needs newsletter)
+src/routes/{-$locale}/_layout/dashboard.tsx              # guard + session + shell + <Outlet/>
+src/routes/{-$locale}/_layout/dashboard/index.tsx        # /dashboard → redirect to profile
+src/routes/{-$locale}/_layout/dashboard/profile.tsx      # Profile
+src/routes/{-$locale}/_layout/dashboard/security.tsx     # Security
+src/routes/{-$locale}/_layout/dashboard/sessions.tsx     # Sessions
+src/routes/{-$locale}/_layout/dashboard/notifications.tsx # Notifications (needs newsletter)
 ```
 
-To add a section: add a nav entry in `src/config/settings.ts`, add a page under `settings/`,
+To add a section: add a nav entry in `src/config/settings.ts`, add a page under `dashboard/`,
 and add a title in `getSettingsSectionMeta`. The shell renders it automatically.
 
 ## Session guard
 
-`beforeLoad` in `settings.tsx` does two things:
+`beforeLoad` in `dashboard.tsx` does two things:
 
 ```ts
 beforeLoad: async ({ params }) => {
@@ -82,7 +82,7 @@ Conventions:
 
 ## Sidebar
 
-The shell (`src/components/settings/SettingsLayout.tsx`) **uses shadcn's `sidebar` (Base UI
+The shell (`src/components/dashboard/DashboardLayout.tsx`) **uses shadcn's `sidebar` (Base UI
 variant) directly** rather than reimplementing collapse, cookie persistence, or the mobile
 drawer — `SidebarProvider` and `Sidebar` already provide those, switching to a `Sheet` on
 narrow screens. This file only assembles them.
@@ -98,7 +98,7 @@ The sidebar has three sections, bottom-up:
 | `SidebarContent` | The section menu described above, copy from `getSettingsSections` |
 | `SidebarFooter` | User card (`SettingsUserCard`): avatar + name + email, expand to sign out |
 
-The user card is the **only** sign-out entry inside the account area — `settings` is a
+The user card is the **only** sign-out entry inside the account area — `dashboard` is a
 `_layout` route that does not render the marketing Navbar, so `UserMenu` is not visible
 here. The avatar comes from `SessionInfo.user.image` (the `users.image` column, written by
 Google sign-in); when empty it falls back to the first letter of `name` or email.

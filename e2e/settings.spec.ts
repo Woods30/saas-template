@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 /**
- * E2E: 个人中心 `/settings/*`
+ * E2E: 工作台 `/dashboard/*`
  *
  * 覆盖三条真实路径：未登录被守卫拦下、登录后可改昵称且刷新后仍生效、登出后重新被拦。
  * 默认配置下 `newsletter` 模块关闭，因此「通知偏好」入口不出现——本套件据此断言
@@ -32,20 +32,20 @@ async function register(page: import('@playwright/test').Page) {
 
 test.describe('Settings', () => {
   test('未登录访问个人中心被重定向到登录页', async ({ page }) => {
-    await page.goto('/zh/settings/profile')
+    await page.goto('/zh/dashboard/profile')
     await page.waitForURL(/\/zh\/auth\/login/)
     await expect(page.getByRole('heading', { name: '登录' })).toBeVisible()
   })
 
-  test('/settings 直接落到资料板块', async ({ page }) => {
+  test('/dashboard 直接落到资料板块', async ({ page }) => {
     await register(page)
-    await page.goto('/zh/settings')
-    await page.waitForURL(/\/zh\/settings\/profile/)
+    await page.goto('/zh/dashboard')
+    await page.waitForURL(/\/zh\/dashboard\/profile/)
   })
 
   test('个人中心展示资料板块，并随模块门禁收敛导航', async ({ page }) => {
     await register(page)
-    await page.goto('/zh/settings/profile')
+    await page.goto('/zh/dashboard/profile')
     // 昵称输入框带出当前会话的昵称。
     await expect(page.getByRole('textbox', { name: '昵称' })).toHaveValue('设置用户')
     // 默认未接 newsletter，「通知偏好」入口不应出现；其余三项恒在。
@@ -56,7 +56,7 @@ test.describe('Settings', () => {
 
   test('改昵称后刷新仍为新值', async ({ page }) => {
     await register(page)
-    await page.goto('/zh/settings/profile')
+    await page.goto('/zh/dashboard/profile')
     await waitForForm(page)
 
     // 昵称输入框用 `role` 定位而非 `getByLabel`：侧栏用户卡片的触发按钮带
@@ -75,9 +75,9 @@ test.describe('Settings', () => {
     await register(page)
     await expect(page).toHaveURL(/\/zh$|\/$/)
 
-    // 登出入口在侧栏底部用户卡片，得先离开首页进个人中心：`settings` 是 `_layout`
+    // 登出入口在侧栏底部用户卡片，得先离开首页进工作台：`dashboard` 是 `_layout`
     // 路由、不渲染营销导航栏，首页顶栏的 `UserMenu` 在这里并不存在。
-    await page.goto('/zh/settings/profile')
+    await page.goto('/zh/dashboard/profile')
     // 等 hydration 完成再点卡片：与折叠用例同一约定——React 刚接管首帧时点下去，
     // 事件处理器还没绑定上，弹窗不会出现。
     await page.waitForLoadState('networkidle')
@@ -99,13 +99,13 @@ test.describe('Settings', () => {
       page.getByRole('navigation').first().getByRole('link', { name: '登录', exact: true }),
     ).toBeVisible()
 
-    await page.goto('/zh/settings/profile')
+    await page.goto('/zh/dashboard/profile')
     await page.waitForURL(/\/zh\/auth\/login/)
   })
 
   test('顶栏折叠按钮收起侧栏再展开', async ({ page }) => {
     await register(page)
-    await page.goto('/zh/settings/profile')
+    await page.goto('/zh/dashboard/profile')
     // 等 hydration 完成再点折叠按钮：此时 React 刚接管，若在首帧上直接点，
     // 事件处理器还没绑定上，`toggleSidebar` 不会执行，`data-state` 仍是 expanded。
     await page.waitForLoadState('networkidle')

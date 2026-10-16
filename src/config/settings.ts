@@ -29,7 +29,7 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext) {
       icon: IconUser,
       destination: {
         kind: 'internal',
-        options: linkOptions({ to: '/{-$locale}/settings/profile', params: { locale } }),
+        options: linkOptions({ to: '/{-$locale}/dashboard/profile', params: { locale } }),
       },
     },
     {
@@ -39,7 +39,7 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext) {
       icon: IconShieldLock,
       destination: {
         kind: 'internal',
-        options: linkOptions({ to: '/{-$locale}/settings/security', params: { locale } }),
+        options: linkOptions({ to: '/{-$locale}/dashboard/security', params: { locale } }),
       },
     },
     {
@@ -49,7 +49,7 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext) {
       icon: IconDeviceLaptop,
       destination: {
         kind: 'internal',
-        options: linkOptions({ to: '/{-$locale}/settings/sessions', params: { locale } }),
+        options: linkOptions({ to: '/{-$locale}/dashboard/sessions', params: { locale } }),
       },
     },
     {
@@ -60,7 +60,7 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext) {
       visibility: { module: 'newsletter' },
       destination: {
         kind: 'internal',
-        options: linkOptions({ to: '/{-$locale}/settings/notifications', params: { locale } }),
+        options: linkOptions({ to: '/{-$locale}/dashboard/notifications', params: { locale } }),
       },
     },
   ]

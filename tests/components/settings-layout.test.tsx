@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionInfo } from '@/auth/session'
-import { SettingsLayout } from '@/components/settings/SettingsLayout'
+import { DashboardLayout } from '@/components/dashboard/DashboardLayout'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
 /**
@@ -16,13 +16,13 @@ import { setLocale } from '@/locale/paraglide/runtime.js'
  *   （`role="navigation"` + `aria-label="breadcrumb"`）而非手写等价物。
  */
 const routerMocks = vi.hoisted(() => ({
-  pathname: '/en/settings/profile',
+  pathname: '/en/dashboard/profile',
 }))
 
 // 只替换路由边界（`Link` / `useRouterState`）；`linkOptions` 等其他导出走真实实现
 // ——`linkOptions` 是纯对象包装，不依赖 Router 上下文，而 `getSettingsSections`
 // 在调用时就会用到它。mock 的 `Link` 必须还原真实 `Link` 的 `params` → `href`
-// 拼接，否则断言写死的 `/zh`、`/zh/settings/profile` 测的是 mock 而不是组件。
+// 拼接，否则断言写死的 `/zh`、`/zh/dashboard/profile` 测的是 mock 而不是组件。
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
@@ -51,7 +51,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 beforeEach(() => {
   clearCookies()
   setLocale('zh', { reload: false })
-  routerMocks.pathname = '/en/settings/profile'
+  routerMocks.pathname = '/en/dashboard/profile'
 })
 
 function clearCookies() {
@@ -67,13 +67,13 @@ function clearCookies() {
 /** 渲染外壳；session 由路由 beforeLoad 的守卫取到后透传进来。 */
 function renderLayout() {
   return render(
-    <SettingsLayout locale="zh" session={sessionWith()}>
+    <DashboardLayout locale="zh" session={sessionWith()}>
       <div>内容区</div>
-    </SettingsLayout>,
+    </DashboardLayout>,
   )
 }
 
-/** 夹具：与 `settings-user-card.test.tsx` 同形的会话（守卫已确认登录，此处只喂给用户卡片）。 */
+/** 夹具：与 `dashboard-user-card.test.tsx` 同形的会话（守卫已确认登录，此处只喂给用户卡片）。 */
 function sessionWith(): SessionInfo {
   return {
     user: {
@@ -105,7 +105,7 @@ describe('SettingsLayout 顶栏', () => {
     expect(screen.getByRole('link', { name: '首页' })).toHaveAttribute('href', '/zh')
     expect(screen.getByRole('link', { name: '个人中心' })).toHaveAttribute(
       'href',
-      '/zh/settings/profile',
+      '/zh/dashboard/profile',
     )
     // 末级是当前页，不是链接。
     const page = within(breadcrumb()).getByText('资料')
@@ -114,7 +114,7 @@ describe('SettingsLayout 顶栏', () => {
   })
 
   it('末级文案随 pathname 变化（安全板块 → 安全）', () => {
-    routerMocks.pathname = '/zh/settings/security'
+    routerMocks.pathname = '/zh/dashboard/security'
     renderLayout()
     const page = within(breadcrumb()).getByText('安全')
     expect(page.tagName).toBe('SPAN')
@@ -122,7 +122,7 @@ describe('SettingsLayout 顶栏', () => {
   })
 
   it('pathname 不是已知板块时只渲染前两级，不渲染空末级', () => {
-    routerMocks.pathname = '/zh/settings/unknown-future'
+    routerMocks.pathname = '/zh/dashboard/unknown-future'
     renderLayout()
     expect(screen.getByRole('link', { name: '首页' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '个人中心' })).toBeInTheDocument()

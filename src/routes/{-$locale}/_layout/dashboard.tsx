@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
 import { fetchSession } from '@/auth/session'
-import { SettingsLayout } from '@/components/settings/SettingsLayout'
+import { DashboardLayout } from '@/components/dashboard/DashboardLayout'
 import { getRequestLocale } from '@/lib/locale'
 import { assertPageEnabled } from '@/lib/module-access'
 
@@ -14,7 +14,7 @@ import { assertPageEnabled } from '@/lib/module-access'
  * 会话经 `fetchSession`（server function）读取：SSR 阶段就地求值，客户端导航时降级为
  * 一次 RPC。cookie 是 httpOnly 的，客户端读不到，`getAuth` 也需要每请求 env。
  */
-export const Route = createFileRoute('/{-$locale}/_layout/settings')({
+export const Route = createFileRoute('/{-$locale}/_layout/dashboard')({
   beforeLoad: async ({ params }) => {
     assertPageEnabled('auth')
     const session = await fetchSession()
@@ -23,14 +23,14 @@ export const Route = createFileRoute('/{-$locale}/_layout/settings')({
     }
     return { session }
   },
-  component: SettingsLayoutRoute,
+  component: DashboardLayoutRoute,
 })
 
-function SettingsLayoutRoute() {
+function DashboardLayoutRoute() {
   const { session } = Route.useRouteContext()
   return (
-    <SettingsLayout locale={getRequestLocale()} session={session}>
+    <DashboardLayout locale={getRequestLocale()} session={session}>
       <Outlet />
-    </SettingsLayout>
+    </DashboardLayout>
   )
 }

@@ -57,7 +57,7 @@ export type MenuLinkItem = Common &
       | {
           kind: 'internal'
           // 不写死为 `getPublicLinkOptions` 的返回类型：那是公共导航目标的封闭联合，
-          // 个人中心等区域导航（如 `/settings/*`）同样是站内链接，却不在该联合里。
+          // 工作台等区域导航（如 `/dashboard/*`）同样是站内链接，却不在该联合里。
           // `LinkOptions` 是 `Link` 的 props 类型，`linkOptions()` 的返回值可赋给它。
           options: LinkOptions
         }

@@ -45,11 +45,11 @@ describe('个人中心导航', () => {
       item.destination.kind === 'internal' ? item.destination.options : null,
     )
     expect(destinations).toEqual([
-      expect.objectContaining({ to: '/{-$locale}/settings/profile', params: { locale: 'en' } }),
-      expect.objectContaining({ to: '/{-$locale}/settings/security', params: { locale: 'en' } }),
-      expect.objectContaining({ to: '/{-$locale}/settings/sessions', params: { locale: 'en' } }),
+      expect.objectContaining({ to: '/{-$locale}/dashboard/profile', params: { locale: 'en' } }),
+      expect.objectContaining({ to: '/{-$locale}/dashboard/security', params: { locale: 'en' } }),
+      expect.objectContaining({ to: '/{-$locale}/dashboard/sessions', params: { locale: 'en' } }),
       expect.objectContaining({
-        to: '/{-$locale}/settings/notifications',
+        to: '/{-$locale}/dashboard/notifications',
         params: { locale: 'en' },
       }),
     ])

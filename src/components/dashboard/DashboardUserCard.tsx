@@ -17,7 +17,7 @@ import { m } from '@/locale/paraglide/messages.js'
  *
  * 登出委托 `signOutAndRedirect`，本组件不碰 `location`。
  */
-export function SettingsUserCard({ session }: { session: SessionInfo }) {
+export function DashboardUserCard({ session }: { session: SessionInfo }) {
   const { name, email, image } = session.user
   const initial = (name.trim() || email).charAt(0).toUpperCase()
 

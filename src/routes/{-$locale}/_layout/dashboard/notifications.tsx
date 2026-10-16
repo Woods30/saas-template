@@ -9,11 +9,11 @@ import { assertPageEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
-export const Route = createFileRoute('/{-$locale}/_layout/settings/notifications')({
+export const Route = createFileRoute('/{-$locale}/_layout/dashboard/notifications')({
   // 通知偏好整块依赖 newsletter 模块：模块关闭时该页与菜单项一并消失。
   beforeLoad: () => assertPageEnabled('newsletter'),
   head: () => {
-    const base = seo('/settings/notifications', {
+    const base = seo('/dashboard/notifications', {
       title: m.settings_notifications_title(),
       description: m.settings_notifications_description(),
       locale: getRequestLocale(),
