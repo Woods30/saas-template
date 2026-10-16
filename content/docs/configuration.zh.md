@@ -104,7 +104,7 @@ social: {
 | `features.enableI18n` | `boolean` | `true` | 多语言 |
 | `features.enableFileUpload` | `boolean` | `false` | 文件上传（依赖存储模块） |
 | `features.enableApiKeys` | `boolean` | `true` | API 密钥管理 |
-| `features.enableAdmin` | `boolean` | `false` | 管理后台 |
+| `features.enableAdmin` | `boolean` | `true` | 管理后台 |
 | `features.enableAIGateway` | `boolean` | `false` | AI 网关 |
 
 这些开关标记能力边界，本身不注册路由——路由文件始终存在，开关控制的是行为：`enableApiKeys` 关闭时 `/api/auth/api-key/*` 返回 404，相关菜单项也不再渲染。
@@ -141,7 +141,7 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       enableI18n: true,
       enableFileUpload: false,
       enableApiKeys: true,
-      enableAdmin: false,
+      enableAdmin: true,
       enableAIGateway: false,
     },
   }

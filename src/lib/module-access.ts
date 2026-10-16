@@ -28,3 +28,14 @@ export function assertFeatureEnabled(
 ) {
   if (!config.features[feature]) throw notFound()
 }
+
+/**
+ * 角色门禁：非 admin 抛 `notFound()`。
+ *
+ * 用 404 而非 403，与 `assertFeatureEnabled` 同源——不向非管理员泄漏「这个页面存在」
+ * 这一事实。只认精确的 `'admin'`，不做大小写或前缀模糊匹配；`undefined`（未登录或
+ * 字段缺失）一律拒绝。
+ */
+export function assertAdminRole(role: string | undefined): void {
+  if (role !== 'admin') throw notFound()
+}

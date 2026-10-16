@@ -300,6 +300,23 @@ describe('菜单过滤', () => {
     expect(filterMenuItems(items, { config: off, authenticated: true })).toEqual([])
     expect(filterMenuItems(items, { config: on, authenticated: true })).toEqual(items)
   })
+
+  // 管理入口同时受 role 与 feature 约束：两者**都**满足才显示。
+  it('role 与 feature 联合约束：任一不满足即隐藏', () => {
+    const items = [homeLink('admin', { roles: ['admin'], feature: 'enableAdmin' })]
+    const on = createConfig()
+    on.features.enableAdmin = true
+    const off = createConfig()
+    off.features.enableAdmin = false
+
+    expect(filterMenuItems(items, { config: on, authenticated: true, role: 'admin' })).toEqual(
+      items,
+    )
+    // 角色不符
+    expect(filterMenuItems(items, { config: on, authenticated: true, role: 'user' })).toEqual([])
+    // flag 关闭
+    expect(filterMenuItems(items, { config: off, authenticated: true, role: 'admin' })).toEqual([])
+  })
 })
 
 describe('社交配置', () => {

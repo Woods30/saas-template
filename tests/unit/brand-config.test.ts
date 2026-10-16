@@ -54,7 +54,7 @@ describe('websiteConfig 品牌信息', () => {
       enableI18n: true,
       enableFileUpload: false,
       enableApiKeys: true,
-      enableAdmin: false,
+      enableAdmin: true,
       enableAIGateway: false,
     })
   })

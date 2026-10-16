@@ -107,7 +107,7 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       enableI18n: true,
       enableFileUpload: false,
       enableApiKeys: true,
-      enableAdmin: false,
+      enableAdmin: true,
       enableAIGateway: false,
     },
   }
