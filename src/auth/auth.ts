@@ -1,6 +1,7 @@
 import { apiKey } from '@better-auth/api-key'
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import { betterAuth } from 'better-auth/minimal'
+import { admin } from 'better-auth/plugins/admin'
 import { sendAuthEmailForRequest } from '@/auth/emails'
 import { requiresEmailVerification } from '@/auth/flow'
 import { websiteConfig } from '@/config/website'
@@ -58,7 +59,9 @@ export function getAuth(env: Env) {
         apikey: schema.apikey,
       },
     }),
-    plugins: [apiKey({ defaultPrefix: 'key_' })],
+    // admin 用默认配置即可：defaultRole 'user'、adminRoles ['admin']，与本仓
+    // `users.role` 的取值一致，无需 options。
+    plugins: [apiKey({ defaultPrefix: 'key_' }), admin()],
     emailAndPassword: {
       enabled: true,
       // 安全控制，读显式配置（`auth.requireEmailVerification`），**不**随 `mail.enabled`

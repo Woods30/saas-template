@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getAuth } from '@/auth/auth'
+import { authClient } from '@/auth/client'
 import { schema } from '@/db'
 
 /**
@@ -42,5 +43,20 @@ describe('getAuth 数据库接线', () => {
 
   it('sessions 表含 better-auth 要求的 updatedAt 列', () => {
     expect(schema.sessions.updatedAt).toBeDefined()
+  })
+})
+
+describe('auth 插件注册', () => {
+  it('服务端注册 admin 插件（/api/auth/admin/* 端点由它提供）', async () => {
+    const auth = getAuth(env())
+    const ctx = await auth.$context
+    const ids = (ctx.options.plugins ?? []).map((plugin) => plugin.id)
+    expect(ids).toContain('admin')
+    expect(ids).toContain('api-key')
+  })
+
+  it('客户端暴露 admin 命名空间与 apiKey 命名空间', () => {
+    expect(typeof authClient.admin.listUsers).toBe('function')
+    expect(typeof authClient.apiKey.list).toBe('function')
   })
 })

@@ -81,6 +81,7 @@ function sessionWith(overrides: Partial<SessionInfo['user']> = {}): SessionInfo 
       email: 'woods@example.com',
       emailVerified: true,
       image: null,
+      role: 'user',
       ...overrides,
     },
   }

@@ -82,6 +82,7 @@ function sessionWith(): SessionInfo {
       email: 'woods@example.com',
       emailVerified: true,
       image: null,
+      role: 'user',
     },
   }
 }
