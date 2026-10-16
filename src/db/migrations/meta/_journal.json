@@ -8,6 +8,27 @@
       "when": 1791810350157,
       "tag": "0000_nosy_smasher",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1791810350158,
+      "tag": "0001_orange_sue_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792139045222,
+      "tag": "0002_ambiguous_mathemanic",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1792147739421,
+      "tag": "0003_natural_silk_fever",
+      "breakpoints": true
     }
   ]
 }

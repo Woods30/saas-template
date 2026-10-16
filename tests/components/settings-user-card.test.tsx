@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionInfo } from '@/auth/session'
-import { SettingsUserCard } from '@/components/settings/SettingsUserCard'
+import { DashboardUserCard } from '@/components/dashboard/DashboardUserCard'
 import { Sidebar, SidebarFooter, SidebarProvider } from '@/components/ui/sidebar'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
@@ -66,7 +66,7 @@ function renderCard(session: SessionInfo) {
     <SidebarProvider>
       <Sidebar>
         <SidebarFooter>
-          <SettingsUserCard session={session} />
+          <DashboardUserCard session={session} />
         </SidebarFooter>
       </Sidebar>
     </SidebarProvider>,
@@ -81,6 +81,7 @@ function sessionWith(overrides: Partial<SessionInfo['user']> = {}): SessionInfo 
       email: 'woods@example.com',
       emailVerified: true,
       image: null,
+      role: 'user',
       ...overrides,
     },
   }
@@ -124,7 +125,7 @@ function textSlot() {
   return slot
 }
 
-describe('SettingsUserCard', () => {
+describe('DashboardUserCard', () => {
   it('有 image 时渲染头像图片', async () => {
     renderCard(sessionWith({ image: 'https://example.com/a.png' }))
     await waitFor(() => expect(avatarImage()).not.toBeNull())

@@ -103,11 +103,11 @@ social: {
 |---|---|---|---|
 | `features.enableI18n` | `boolean` | `true` | Internationalization |
 | `features.enableFileUpload` | `boolean` | `false` | File upload (depends on the storage module) |
-| `features.enableApiKeys` | `boolean` | `false` | API key management |
-| `features.enableAdmin` | `boolean` | `false` | Admin dashboard |
+| `features.enableApiKeys` | `boolean` | `true` | API key management |
+| `features.enableAdmin` | `boolean` | `true` | Admin dashboard |
 | `features.enableAIGateway` | `boolean` | `false` | AI gateway |
 
-These flags only mark capability boundaries for your business code to check; they do not register routes.
+These flags mark capability boundaries. They do not register routes — the route files always exist. Instead they gate behaviour: with `enableApiKeys` off, `/api/auth/api-key/*` returns 404 and its menu entries stop rendering.
 
 ## Full example
 
@@ -133,15 +133,15 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
     contact: { enabled: false },
     newsletter: { enabled: false, provider: 'resend' },
     payment: { enabled: false, provider: 'stripe', allowedPriceIds: [] },
-    notification: { enabled: false },
+    notification: { enabled: false, provider: 'discord' },
     analytics: { enabled: false, providers: [] },
     auth: { enabled: true, requireEmailVerification: false },
     social: {},
     features: {
       enableI18n: true,
       enableFileUpload: false,
-      enableApiKeys: false,
-      enableAdmin: false,
+      enableApiKeys: true,
+      enableAdmin: true,
       enableAIGateway: false,
     },
   }

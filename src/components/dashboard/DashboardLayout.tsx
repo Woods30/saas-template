@@ -1,7 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import type { SessionInfo } from '@/auth/session'
-import { SettingsUserCard } from '@/components/settings/SettingsUserCard'
+import { DashboardUserCard } from '@/components/dashboard/DashboardUserCard'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import {
   Breadcrumb,
@@ -46,10 +46,10 @@ import { m } from '@/locale/paraglide/messages.js'
  * （`aria-current="page"`）承担，因此这里不再渲染 `<h1>`；回站点的出口在侧栏头的
  * logo 上，因此也不需要单独的「返回站点」链接。
  *
- * 侧栏底部的 `SettingsUserCard` 是个人中心内**唯一**的登出入口——本路由是 `_layout`，
+ * 侧栏底部的 `DashboardUserCard` 是工作台内**唯一**的登出入口——本路由是 `_layout`，
  * 不渲染营销导航栏，导航栏 `UserMenu` 里的登出在这里不可见。
  */
-export function SettingsLayout({
+export function DashboardLayout({
   locale,
   session,
   children,
@@ -59,15 +59,18 @@ export function SettingsLayout({
   children: ReactNode
 }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
-  const sections = getSettingsSections(locale, {
+  const groups = getSettingsSections(locale, {
     config: websiteConfig,
     authenticated: true,
+    role: session.user.role,
   })
-  // 当前板块：取 `/settings/` 之后的一段，与侧栏高亮用的是同一个 pathname。
+  // 当前板块：取 `/dashboard/` 之后的一段，与侧栏高亮用的是同一个 pathname。
   // 未注册的新板块（未来加了路由但工厂还没补）匹配不到，此时面包屑退化为两级，
   // 不渲染一个空的末级。
-  const currentSection = pathname.split('/settings/')[1]?.split('/')[0]
-  const currentMeta = sections.find((item) => item.id === currentSection)
+  const currentSection = pathname.split('/dashboard/')[1]?.split('/')[0]
+  const currentMeta = groups.some(
+    (group) => group.kind === 'group' && group.items.some((item) => item.id === currentSection),
+  )
     ? getSettingsSectionMeta(currentSection as Parameters<typeof getSettingsSectionMeta>[0])
     : null
 
@@ -91,36 +94,43 @@ export function SettingsLayout({
           </Link>
         </SidebarHeader>
         <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>{m.settings_title()}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {sections.map((item) => {
-                  const options =
-                    item.destination.kind === 'internal' ? item.destination.options : null
-                  // 高亮当前板块：子页路径以该项的目标路径为前缀。
-                  const isActive =
-                    options !== null && 'to' in options && pathname.endsWith(`/settings/${item.id}`)
-                  const Icon = item.icon
-                  return (
-                    <SidebarMenuItem key={item.id}>
-                      <SidebarMenuButton
-                        render={options ? <Link {...options} /> : undefined}
-                        isActive={isActive}
-                        tooltip={item.title}
-                      >
-                        {Icon && <Icon aria-hidden />}
-                        <span>{item.title}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          {groups.map((group) => {
+            if (group.kind !== 'group') return null
+            return (
+              <SidebarGroup key={group.id}>
+                <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {group.items.map((item) => {
+                      if (item.kind !== 'link') return null
+                      const options =
+                        item.destination.kind === 'internal' ? item.destination.options : null
+                      // 高亮当前板块：与 `currentSection` 用同一段 pathname 比较，
+                      // 因此 `/dashboard/admin/users` 下 `id: 'admin'` 也能点亮。
+                      const isActive =
+                        options !== null && 'to' in options && currentSection === item.id
+                      const Icon = item.icon
+                      return (
+                        <SidebarMenuItem key={item.id}>
+                          <SidebarMenuButton
+                            render={options ? <Link {...options} /> : undefined}
+                            isActive={isActive}
+                            tooltip={item.title}
+                          >
+                            {Icon && <Icon aria-hidden />}
+                            <span>{item.title}</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      )
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )
+          })}
         </SidebarContent>
         <SidebarFooter>
-          <SettingsUserCard session={session} />
+          <DashboardUserCard session={session} />
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
@@ -141,7 +151,7 @@ export function SettingsLayout({
               <BreadcrumbSeparator />
               <BreadcrumbItem>
                 <BreadcrumbLink
-                  render={<Link to="/{-$locale}/settings/profile" params={{ locale }} />}
+                  render={<Link to="/{-$locale}/dashboard/profile" params={{ locale }} />}
                 >
                   {m.settings_title()}
                 </BreadcrumbLink>

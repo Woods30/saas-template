@@ -109,6 +109,12 @@ jobs:
       # 该 binding，且 optional 字段留空即可通过 `pnpm check:env`，故直接照抄。
       - name: Create .env
         run: cp .env.example .env
+      # CI 的 D1 是全新空库（runner 每次都是干净文件系统，且本 workflow 此前从未执行过
+      # 迁移）。不建表的话每个走会话的用例都 500——`sign-up` 打 `users` 表直接
+      # `D1_ERROR: no such table: users`，注册不跳转，auth / settings 套件整片超时。
+      # 历史上这些用例能过只是因为空库恰好在部分 runner 上带缓存，属于隐性依赖。
+      - name: Apply D1 migrations
+        run: pnpm run db:migrate:local
       # 启动 dev server；playwright.config.ts 的 webServer.command 接管生命周期
       - name: Start server
         run: pnpm run dev --port 3000 &

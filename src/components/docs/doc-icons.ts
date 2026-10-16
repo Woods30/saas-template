@@ -9,11 +9,13 @@ import {
   IconCreditCard,
   IconDatabase,
   IconFileText,
+  IconKey,
   IconMail,
   IconPlugConnected,
   IconRocket,
   IconSettings,
   IconSitemap,
+  IconUsers,
 } from '@tabler/icons-react'
 
 /**
@@ -38,6 +40,8 @@ export const DOC_ICON: Record<string, typeof IconBook> = {
   database: IconDatabase,
   storage: IconArchive,
   cache: IconCloud,
+  'api-keys': IconKey,
+  'user-management': IconUsers,
 }
 
 /** 未在 {@link DOC_ICON} 中登记时的通用文档图标。 */

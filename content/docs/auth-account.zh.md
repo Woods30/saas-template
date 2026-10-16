@@ -7,28 +7,28 @@ group: features
 updated: 2026-10-15
 ---
 
-登录后的账号管理区域，位于 `/{locale}/settings/*`。从导航栏用户菜单的「个人中心」进入。
+登录后的账号管理区域，位于 `/{locale}/dashboard/*`。从导航栏用户菜单的「个人中心」进入。
 
 ## 路由结构
 
-`settings.tsx` 是 pathless layout 路由（与 `docs` 同一手法）：它只做守卫与外壳，不含页面
-内容，因此 `/settings` 自身不是内容页。
+`dashboard.tsx` 是 pathless layout 路由（与 `docs` 同一手法）：它只做守卫与外壳，不含页面
+内容，因此 `/dashboard` 自身不是内容页。
 
 ```
-src/routes/{-$locale}/_layout/settings.tsx              # 守卫 + 会话 + 外壳 + <Outlet/>
-src/routes/{-$locale}/_layout/settings/index.tsx        # /settings → 重定向到 profile
-src/routes/{-$locale}/_layout/settings/profile.tsx      # 资料
-src/routes/{-$locale}/_layout/settings/security.tsx     # 安全
-src/routes/{-$locale}/_layout/settings/sessions.tsx     # 登录设备
-src/routes/{-$locale}/_layout/settings/notifications.tsx # 通知偏好（依赖 newsletter）
+src/routes/{-$locale}/_layout/dashboard.tsx              # 守卫 + 会话 + 外壳 + <Outlet/>
+src/routes/{-$locale}/_layout/dashboard/index.tsx        # /dashboard → 重定向到 profile
+src/routes/{-$locale}/_layout/dashboard/profile.tsx      # 资料
+src/routes/{-$locale}/_layout/dashboard/security.tsx     # 安全
+src/routes/{-$locale}/_layout/dashboard/sessions.tsx     # 登录设备
+src/routes/{-$locale}/_layout/dashboard/notifications.tsx # 通知偏好（依赖 newsletter）
 ```
 
-新增板块时：在 `src/config/settings.ts` 加一条导航项、在 `settings/` 下加一个页面、
+新增板块时：在 `src/config/settings.ts` 加一条导航项、在 `dashboard/` 下加一个页面、
 在 `getSettingsSectionMeta` 补一段标题文案即可，外壳会自动渲染。
 
 ## 会话守卫
 
-`settings.tsx` 的 `beforeLoad` 做两件事：
+`dashboard.tsx` 的 `beforeLoad` 做两件事：
 
 ```ts
 beforeLoad: async ({ params }) => {
@@ -75,7 +75,7 @@ session。子页经 `Route.useRouteContext()` 取到它。
 
 ## 侧边栏
 
-外壳（`src/components/settings/SettingsLayout.tsx`）**直接用 shadcn 的 `sidebar`（Base UI 版）**，
+外壳（`src/components/dashboard/DashboardLayout.tsx`）**直接用 shadcn 的 `sidebar`（Base UI 版）**，
 不自己实现折叠、cookie 持久化或移动端抽屉——`SidebarProvider` 与 `Sidebar` 已提供这些，
 窄屏自动切为 `Sheet`。这里只做组装。
 
@@ -90,7 +90,7 @@ session。子页经 `Route.useRouteContext()` 取到它。
 | `SidebarContent` | 上文所述的板块菜单，文案来自 `getSettingsSections` |
 | `SidebarFooter` | 用户卡片（`SettingsUserCard`）：头像 + 名字 + 邮箱，展开后登出 |
 
-用户卡片是个人中心内**唯一**的登出入口——`settings` 是 `_layout` 路由，不渲染营销导航栏，
+用户卡片是工作台内**唯一**的登出入口——`dashboard` 是 `_layout` 路由，不渲染营销导航栏，
 `UserMenu` 在这里不可见。头像取 `SessionInfo.user.image`（`users.image` 列，Google 登录
 会写入）；为空时回退到 `name` 或邮箱的首字母。
 

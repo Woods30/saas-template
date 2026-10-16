@@ -53,8 +53,8 @@ describe('websiteConfig 品牌信息', () => {
     expect(config.features).toEqual({
       enableI18n: true,
       enableFileUpload: false,
-      enableApiKeys: false,
-      enableAdmin: false,
+      enableApiKeys: true,
+      enableAdmin: true,
       enableAIGateway: false,
     })
   })

@@ -49,7 +49,7 @@ export function UserMenu({ guestFallback }: UserMenuProps) {
             <Menu.Item
               render={
                 <Link
-                  to="/{-$locale}/settings/profile"
+                  to="/{-$locale}/dashboard/profile"
                   params={{ locale: getRequestLocale() }}
                   className="mt-1 flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-muted"
                 />

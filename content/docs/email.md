@@ -22,6 +22,16 @@ mail: { enabled: true, provider: 'resend', supportEmail: 'support@your-domain.co
 
 > **Note**: The Cloudflare Email binding can only send to verified recipients. Check your account's limits before deploying; `pnpm check` lists this as a manual check but does not factor it into the completeness verdict. Beyond the gate, `/api/email` requires a valid session and the recipient must be in the `ADMIN_EMAILS` allowlist.
 
+## Local preview
+
+Templates live in `src/mail/templates/` (React Email). Start the preview server with `pnpm email:dev` on port **3001** (distinct from `pnpm dev` on 3000); open it in a browser to switch between the four templates with live hot reload:
+
+```bash
+pnpm email:dev
+```
+
+The preview requires `@react-email/ui` (a devDependency, version-matched to `react-email`).
+
 ## Contact form
 
 `contact` depends on `mail` being fully configured — when `contact.enabled` is `true` but `mail` is incomplete, the status is `incomplete` and `/api/contact` returns 503, so a submission is never left with nowhere to go.
@@ -29,7 +39,7 @@ mail: { enabled: true, provider: 'resend', supportEmail: 'support@your-domain.co
 Delivery path (`src/contact/notifications.ts`):
 
 1. **Email** — the primary channel, sent to `mail.supportEmail`; failures log `console.warn`;
-2. **Discord** — only when `notification.enabled` is `true`; failures do not block the main flow.
+2. **Webhook** — only when `notification.enabled` is `true`, routed by `notification.provider` to Discord or Feishu; failures do not block the main flow.
 
 ```ts
 contact: { enabled: true },

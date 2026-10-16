@@ -14,3 +14,12 @@ minimumReleaseAgeExclude:
   - zod@4.6.6
   - '@inlang/plugin-message-format@4.5.2'
   - '@inlang/sdk@4.0.2'
+  - '@better-auth/api-key@1.7.10'
+  - '@better-auth/core@1.7.10'
+  - '@better-auth/drizzle-adapter@1.7.10'
+  - '@better-auth/kysely-adapter@1.7.10'
+  - '@better-auth/memory-adapter@1.7.10'
+  - '@better-auth/mongo-adapter@1.7.10'
+  - '@better-auth/prisma-adapter@1.7.10'
+  - '@better-auth/telemetry@1.7.10'
+  - better-auth@1.7.10

@@ -9,6 +9,8 @@ export interface SessionInfo {
     emailVerified: boolean
     /** OAuth 头像地址；邮箱密码注册用户为 `null`，UI 侧回退到首字母。 */
     image: string | null
+    /** 角色（`users.role`）；admin 插件据此判定权限，默认 `'user'`。 */
+    role: string
   }
 }
 
@@ -41,6 +43,9 @@ export const fetchSession = createServerFn({ method: 'GET' }).handler(
         email: session.user.email,
         emailVerified: session.user.emailVerified,
         image: session.user.image ?? null,
+        // admin 插件把 role 声明为可空；数据库侧 `users.role` notNull default 'user'，
+        // 但类型上仍需兜底，避免把 `undefined` 传成 `role`。
+        role: session.user.role ?? 'user',
       },
     }
   },

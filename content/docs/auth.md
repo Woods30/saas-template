@@ -9,7 +9,7 @@ updated: 2026-10-15
 
 Email/password plus Google OAuth, built on Better Auth v1.7.7 with the Drizzle adapter
 (D1 / SQLite). Pages live at `/{locale}/auth/*`, the API at `/api/auth/*`, and the account
-center at `/{locale}/settings/*`.
+center at `/{locale}/dashboard/*`.
 
 ## Enabling
 

@@ -288,6 +288,35 @@ describe('菜单过滤', () => {
       ),
     ).toEqual(ids)
   })
+
+  // 功能开关（features.*）与服务模块（mail/docs/...）是两套开关：前者没有 `.enabled`
+  // 字段，必须走 `ctx.config.features[flag]`，不能复用 `rule.module` 的写法。
+  it('features 开关关闭时隐藏菜单项，开启时保留', () => {
+    const items = [homeLink('keys', { feature: 'enableApiKeys' })]
+    const off = createConfig()
+    off.features.enableApiKeys = false
+    const on = createConfig()
+    on.features.enableApiKeys = true
+    expect(filterMenuItems(items, { config: off, authenticated: true })).toEqual([])
+    expect(filterMenuItems(items, { config: on, authenticated: true })).toEqual(items)
+  })
+
+  // 管理入口同时受 role 与 feature 约束：两者**都**满足才显示。
+  it('role 与 feature 联合约束：任一不满足即隐藏', () => {
+    const items = [homeLink('admin', { roles: ['admin'], feature: 'enableAdmin' })]
+    const on = createConfig()
+    on.features.enableAdmin = true
+    const off = createConfig()
+    off.features.enableAdmin = false
+
+    expect(filterMenuItems(items, { config: on, authenticated: true, role: 'admin' })).toEqual(
+      items,
+    )
+    // 角色不符
+    expect(filterMenuItems(items, { config: on, authenticated: true, role: 'user' })).toEqual([])
+    // flag 关闭
+    expect(filterMenuItems(items, { config: off, authenticated: true, role: 'admin' })).toEqual([])
+  })
 })
 
 describe('社交配置', () => {
