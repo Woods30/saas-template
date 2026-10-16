@@ -36,6 +36,8 @@
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "db:studio:local": "drizzle-kit studio --config=drizzle.config.local.ts",
     "db:studio:remote": "drizzle-kit studio --config=drizzle.config.ts",
+    "db:admin:local": "tsx scripts/set-admin.ts --local",
+    "db:admin:remote": "tsx scripts/set-admin.ts --remote",
     "setup": "tsx scripts/setup.ts",
     "content:build": "content-collections build && tsx scripts/normalize-content-collections.ts",
     "email:dev": "email dev --dir src/mail/templates --port 3001"
