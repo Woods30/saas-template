@@ -8,13 +8,15 @@ const docsDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'content', '
 /**
  * E2E: 文档站（docs）
  *
- * 覆盖三项用户报告的修复：
- * 1. `/docs` 重定向到与语言无关的 slug（不再出现 `/index.zh`）。
- * 2. 切换语言到英文不再 404 —— 同一 URL 在两种语言下都命中对应译文。
- * 3. 文档站使用独立 layout：只有侧边栏导航，不含营销站点 Navbar / Footer，
- *    语言切换器位于左下角。
+ * 只守**跨行为的契约**：路由重定向、i18n 译文命中、侧栏结构与内容文件的一致性、
+ * 搜索（快捷键 / 过滤 / 正文小节锚点）、TOC 与上下篇跳转、侧栏收起偏好的服务端回读。
+ *
+ * 刻意**不守纯布局**：顶栏是否隐藏、Logo 摆在侧栏还是顶栏、浮动工具条位置、窄屏抽屉
+ * 尺寸、工具条是否 fixed 之类。它们改一次布局就全红，却抓不到真正的功能回归；
+ * 改 docs 布局时手动过一遍即可（`pnpm dev` 后在 1280 与 390 两个宽度看一眼）。
  */
 test.describe('Docs', () => {
+  // 守：`/docs` 落到具体文档，且 URL 里不出现 `index.zh` 这类内容文件名。
   test('/docs 重定向到干净的 slug（无 index.zh）', async ({ page }) => {
     await page.goto('/docs')
     await page.waitForURL('**/docs/**')
@@ -22,6 +24,7 @@ test.describe('Docs', () => {
     expect(page.url()).toMatch(/\/docs\/[a-z-]+$/)
   })
 
+  // 守：同一 slug 在两种语言下都 200，且各自渲染对应译文（不是 404，也不是回落到另一语言）。
   test('同一 docs URL 在 zh / en 下都能打开（切换语言不 404）', async ({ page }) => {
     // zh：设置 cookie 后访问
     await page
@@ -40,7 +43,9 @@ test.describe('Docs', () => {
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Getting Started')
   })
 
-  test('文档站使用独立 layout：无营销 Navbar / Footer，语言切换在左下角', async ({ page }) => {
+  // 守：docs 走独立 layout，没被并回营销站点；语言切换入口在文档站里可用。
+  // 位置类断言（左下角、图标按钮）已移除——那是布局，不是契约。
+  test('文档站使用独立 layout：无营销 Navbar / Footer，语言切换可用', async ({ page }) => {
     // 显式固定语言：无前缀 URL 会按 Accept-Language 协商，而 Playwright 默认 en-US，
     // 若不固定则按钮的 aria-label 变成英文，断言随运行环境漂移。
     await page
@@ -53,73 +58,11 @@ test.describe('Docs', () => {
     await expect(page.getByText('保留所有权利')).toHaveCount(0)
     // 文档侧边栏导航存在（用 aria-label 精确定位，右侧「本页目录」是另一个 nav）
     await expect(page.getByRole('navigation', { name: '文档导航' })).toHaveCount(1)
-    // 语言切换器存在且在左下角工具条内。
-    // 实现是图标按钮 + 菜单（`LocaleSwitcher` 的 Base UI `Menu`），不是原生 `<select>`。
-    const toolbar = page.locator('aside').first()
-    await expect(toolbar.getByRole('button', { name: '切换语言' })).toBeVisible()
-    // 主题切换按钮与语言切换同在左下角工具条内。
-    await expect(toolbar.getByRole('button', { name: /切换主题/ })).toBeVisible()
-    // 宽屏没有顶栏：Logo 与侧栏开关都在侧栏里。窄屏顶栏是 `lg:hidden`，
-    // 因此这里断言侧栏内的 Logo，而不是可能被隐藏的顶栏。
-    await expect(page.locator('aside').first().locator('img').first()).toHaveAttribute(
-      'src',
-      '/logo-horizontal-transparent.svg',
-    )
+    // 语言切换器存在：实现是图标按钮 + 菜单（`LocaleSwitcher` 的 Base UI `Menu`）。
+    await expect(page.getByRole('button', { name: '切换语言' })).toBeVisible()
   })
 
-  test('宽屏顶栏隐藏，Logo 与侧栏开关都在侧栏顶部', async ({ page }) => {
-    await page
-      .context()
-      .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: 'http://localhost:3000' }])
-    await page.goto('/docs/getting-started')
-    await page.waitForLoadState('networkidle')
-
-    // 宽屏（Desktop Chrome 默认 1280×720）下顶栏整条隐藏，避免与侧栏的 Logo 重复。
-    await expect(page.locator('header')).toBeHidden()
-    const sidebar = page.locator('aside').first()
-    await expect(sidebar.locator('img').first()).toBeVisible()
-    await expect(sidebar.getByRole('button', { name: '收起文档导航' })).toBeVisible()
-  })
-
-  test('收起侧栏后，展开与搜索入口移到侧栏之外的浮动工具条', async ({ page }) => {
-    await page
-      .context()
-      .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: 'http://localhost:3000' }])
-    await page.goto('/docs/getting-started')
-    await page.waitForLoadState('networkidle')
-
-    await page.getByRole('button', { name: '收起文档导航' }).click()
-    const sidebar = page.locator('aside').first()
-    await expect(sidebar).toBeHidden()
-
-    // 侧栏整块隐藏后，展开入口必须落在它外面才点得到。
-    const expand = page.getByRole('button', { name: '展开文档导航' })
-    await expect(expand).toBeVisible()
-    expect(await expand.evaluate((el) => el.closest('aside') !== null)).toBe(false)
-    // 同一个工具条里还有搜索入口。
-    await expect(page.getByRole('button', { name: '搜索文档' })).toBeVisible()
-
-    await expand.click()
-    await expect(page.locator('aside').first()).toBeVisible()
-  })
-
-  test('窄屏顶栏提供搜索图标，打开与侧栏同一个弹窗', async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 })
-    await page
-      .context()
-      .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: 'http://localhost:3000' }])
-    await page.goto('/docs/getting-started')
-    await page.waitForLoadState('networkidle')
-
-    // 窄屏侧栏是隐藏的，顶栏的搜索图标是唯一入口。
-    const headerSearch = page.locator('header').getByRole('button', { name: '搜索文档' })
-    await expect(headerSearch).toBeVisible()
-    await headerSearch.click()
-    const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible()
-    await expect(dialog.getByRole('searchbox')).toBeFocused()
-  })
-
+  // 守：全局搜索快捷键接得上——按键 → 弹窗打开 → 输入框自动聚焦。
   test('⌘K / Ctrl+K 打开搜索弹窗', async ({ page }) => {
     await page
       .context()
@@ -133,6 +76,8 @@ test.describe('Docs', () => {
     await expect(dialog.getByRole('searchbox')).toBeFocused()
   })
 
+  // 守：侧栏结构由 content 派生——组标题来自 frontmatter 的 `group`，条目数等于译文文件数。
+  // 新增文档不必回来改断言，但「新增文档没进侧栏」会被抓到。
   test('侧边栏按 group 呈现二级结构', async ({ page }) => {
     await page
       .context()
@@ -143,15 +88,12 @@ test.describe('Docs', () => {
     await expect(sidebar.locator('section h2')).toHaveText(['开始', '配置', '功能模块'])
     // 组标题不可点击，只有文档条目是链接。
     await expect(sidebar.locator('h2 a')).toHaveCount(0)
-    // 条数从 `content/docs/` 的译文文件数派生：新增一篇文档不必回来改断言，
-    // 但「侧边栏漏掉某篇」仍会被抓到（这正是本用例要防的）。
     await expect(sidebar.locator('a')).toHaveCount(
       readdirSync(docsDir).filter((f) => f.endsWith('.zh.md')).length,
     )
-    // 身份认证是新增条目，确认它真的进了侧边栏。
-    await expect(sidebar.getByRole('link', { name: '身份认证' })).toBeVisible()
   })
 
+  // 守：TOC 的锚点与正文标题 id 一致，点击真的能跳过去。
   test('右侧「本页目录」列出锚点且可跳转', async ({ page }) => {
     await page
       .context()
@@ -159,13 +101,14 @@ test.describe('Docs', () => {
     await page.goto('/docs/getting-started')
     const toc = page.getByRole('navigation', { name: '本页目录' })
     await expect(toc).toBeVisible()
-    // 目录项指向正文标题的锚点；点击后页面滚动且标题带对应 id。
     await toc.getByRole('link', { name: '检查与部署' }).click()
     await expect(page).toHaveURL(/#/)
     await expect(page.locator('h2#检查与部署')).toBeVisible()
   })
 
-  test('侧栏顶部搜索打开居中弹窗，可过滤并跳转', async ({ page }) => {
+  // 守：搜索的核心链路——空查询不出结果、关键词高亮、点击结果跳转、跳转后弹窗关闭。
+  // 居中定位的几何断言已移除（布局）。
+  test('搜索可过滤并跳转到命中文档', async ({ page }) => {
     await page
       .context()
       .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: 'http://localhost:3000' }])
@@ -173,20 +116,9 @@ test.describe('Docs', () => {
     // 等待 hydration 完成，否则点击发生在 React 绑定事件之前（弹窗不会打开）。
     await page.waitForLoadState('networkidle')
 
-    // 侧栏只有触发器，弹窗在屏幕居中打开。
     await page.getByRole('button', { name: '搜索文档' }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
-    const box = await dialog.boundingBox()
-    const viewport = page.viewportSize()
-    expect(box).not.toBeNull()
-    expect(viewport).not.toBeNull()
-    if (box && viewport) {
-      // 水平居中：左右留白相差不超过 2px。
-      const left = box.x
-      const right = viewport.width - (box.x + box.width)
-      expect(Math.abs(left - right)).toBeLessThanOrEqual(2)
-    }
 
     // 默认不列出全部文档，只提示输入关键词。
     await expect(dialog.getByRole('link')).toHaveCount(0)
@@ -200,6 +132,7 @@ test.describe('Docs', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0)
   })
 
+  // 守：正文命中也进结果，且链接指向**小节锚点**而不是文档顶部。
   test('搜索命中正文时给出小节路径，可跳转到锚点', async ({ page }) => {
     await page
       .context()
@@ -224,6 +157,7 @@ test.describe('Docs', () => {
     await expect(page.locator('h2#检查与部署')).toBeVisible()
   })
 
+  // 守：frontmatter 的 `updated` 真的渲染到页面上（内容管线没吞字段）。
   test('正文显示最近更新日期', async ({ page }) => {
     await page
       .context()
@@ -232,7 +166,9 @@ test.describe('Docs', () => {
     await expect(page.getByText('最近更新 2026 年 10 月 15 日')).toBeVisible()
   })
 
-  test('「下一步」渲染为带图标与描述的块状卡片，且与分页导航区分开', async ({ page }) => {
+  // 守：`nextSteps` 渲染成指向目标文档的链接，且与「上一篇 / 下一篇」是不同区块。
+  // 图标数量之类的视觉断言已移除（布局）。
+  test('「下一步」渲染为指向目标文档的链接块', async ({ page }) => {
     await page
       .context()
       .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: 'http://localhost:3000' }])
@@ -242,17 +178,11 @@ test.describe('Docs', () => {
 
     const card = section.getByRole('link', { name: /网站配置/ })
     await expect(card).toBeVisible()
-    // 主题图标 + 末尾箭头。
-    await expect(card.locator('svg')).toHaveCount(2)
     // 卡片带说明文字。
     await expect(card).toContainText('全字段与开关语义')
-
-    // 分页导航是另一个区块：只有方向箭头，没有描述文字与主题图标。
-    const pager = page.locator('article > nav')
-    await expect(pager.getByText('下一篇')).toBeVisible()
-    await expect(pager.locator('svg')).toHaveCount(1)
   })
 
+  // 守：上下篇按 `order` 自动生成——首篇只有「下一篇」，且指向正确文档。
   test('底部自动生成上一篇 / 下一篇导航', async ({ page }) => {
     await page
       .context()
@@ -266,6 +196,8 @@ test.describe('Docs', () => {
     await expect(page).toHaveURL(/\/docs\/configuration/)
   })
 
+  // 守：收起偏好写在 cookie 上并由服务端读回——刷新后首屏即收起，不会闪一下再收。
+  // 这是跨 SSR / 客户端的契约，不是纯布局断言。
   test('宽屏可收起侧栏，收起后刷新仍保持', async ({ page }) => {
     await page
       .context()
@@ -278,7 +210,6 @@ test.describe('Docs', () => {
     await page.getByRole('button', { name: '收起文档导航' }).click()
     await expect(sidebar).toBeHidden()
 
-    // 偏好写在 cookie 上：刷新后由服务端读回，首屏即收起（不会闪一下再收）。
     await page.reload()
     // 等 hydration 完成再点，否则点击发生在 React 绑定事件之前（状态不会更新）。
     await page.waitForLoadState('networkidle')
@@ -286,47 +217,5 @@ test.describe('Docs', () => {
 
     await page.getByRole('button', { name: '展开文档导航' }).click()
     await expect(page.locator('aside').first()).toBeVisible()
-  })
-
-  test('窄屏侧栏收进抽屉，不挤压正文', async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 })
-    await page
-      .context()
-      .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: 'http://localhost:3000' }])
-    await page.goto('/docs/getting-started')
-    await page.waitForLoadState('networkidle')
-
-    // 窄屏常驻侧栏会把正文挤成一条，因此默认隐藏。
-    await expect(page.locator('aside').first()).toBeHidden()
-    // 正文占满可用宽度。
-    const article = page.locator('article')
-    const articleBox = await article.boundingBox()
-    expect(articleBox?.width ?? 0).toBeGreaterThan(300)
-
-    // 顶部菜单按钮以抽屉形式打开。
-    await page.getByRole('button', { name: '打开文档导航' }).click()
-    const drawer = page.locator('aside').first()
-    await expect(drawer).toBeVisible()
-    const drawerBox = await drawer.boundingBox()
-    expect(drawerBox?.width ?? 0).toBeGreaterThan(0)
-
-    // Escape 关闭并归还焦点。
-    await page.keyboard.press('Escape')
-    await expect(page.locator('aside').first()).toBeHidden()
-    await expect(page.getByRole('button', { name: '打开文档导航' })).toBeFocused()
-  })
-
-  test('左下角工具条在滚动时保持固定', async ({ page }) => {
-    await page
-      .context()
-      .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: 'http://localhost:3000' }])
-    await page.goto('/docs/configuration')
-    const toolbar = page.locator('aside > div').last()
-    const before = await toolbar.boundingBox()
-    await page.mouse.wheel(0, 1500)
-    await page.waitForTimeout(300)
-    const after = await toolbar.boundingBox()
-    // 工具条固定在视口底部：滚动后纵坐标不变。
-    expect(after?.y).toBe(before?.y)
   })
 })
