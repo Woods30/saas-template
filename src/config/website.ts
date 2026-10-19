@@ -134,7 +134,9 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
     contact: { enabled: false },
     newsletter: { enabled: false, provider: 'resend' },
     payment: {
-      enabled: false,
+      // 本仓当前用于本地联调：支付 / 通知 / 分析三模块默认打开。
+      // 模板发布给他人时改回 false，让未配置凭据的部署保持「模块关闭」而非「503」。
+      enabled: true,
       provider: 'stripe',
       // `allowedPriceIds` 与 `priceMap` **必须同源**：前者是 /api/payment 的白名单，
       // 后者是定价页的取价依据。分成两个手写字段时，常见配置是白名单填了 A、
@@ -144,8 +146,8 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       allowedPriceIds: collectPriceIds(buildPriceMap(env)),
       priceMap: buildPriceMap(env),
     },
-    notification: { enabled: false, provider: 'discord' },
-    analytics: { enabled: false, providers: [] },
+    notification: { enabled: true, provider: 'discord' },
+    analytics: { enabled: true, providers: ['ga'] },
     // auth 默认开启：模板自带登录 / 注册，关闭时对应页面与 API 一律 404。
     // `requireEmailVerification` 默认 false：默认未接邮件，要求验证会让整条邮箱密码
     // 路径不可用（注册不自动登录、登录被拒）。接上邮件后应改为 true。

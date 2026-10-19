@@ -62,7 +62,7 @@ vi.mock('@/auth/providers', () => ({
 }))
 
 import { notFound } from '@tanstack/react-router'
-import { createWebsiteConfig, type WebsiteConfig, websiteConfig } from '@/config/website'
+import { createWebsiteConfig, type WebsiteConfig } from '@/config/website'
 import { type PublicEnv, parsePublicEnv } from '@/env/public'
 import type { ServerEnv } from '@/env/server'
 import { parseServerEnv } from '@/env/server'
@@ -270,8 +270,13 @@ describe('getSitemapPaths', () => {
     expect(locs).toContain(`${base}/en/marketing/changelog`)
   })
 
-  it('默认配置不含关闭模块的 pricing / contact', () => {
-    const locs = getSitemapPaths(makeConfig(), 'en').map((p) => p.loc)
+  it('关闭模块的 pricing / contact 不进 sitemap', () => {
+    // 显式关闭而不是依赖出厂默认值：`website.ts` 的模块开关随部署场景调整
+    // （本仓本地联调期会打开 payment），依赖默认值的断言会随开关变更静默失效。
+    const locs = getSitemapPaths(
+      makeConfig({ payment: { ...makeConfig().payment, enabled: false } }),
+      'en',
+    ).map((p) => p.loc)
     expect(locs).not.toContain(`${base}/en/pricing`)
     expect(locs).not.toContain(`${base}/en/contact`)
   })
@@ -417,8 +422,14 @@ describe('getSitemapPaths', () => {
     expect(locs.every((l) => l.startsWith('https://example.org/'))).toBe(true)
   })
 
-  it('路由 GET handler 序列化真实配置的 XML（默认关闭模块不含 pricing）', async () => {
-    const { Route } = await import('@/routes/sitemap[.]xml')
+  it('路由 GET handler 序列化真实配置的 XML（关闭模块不含 pricing）', async () => {
+    // 显式关闭 payment 后重新导入：本仓默认打开 payment，直接断言「不含 pricing」
+    // 会把部署开关当成被测行为。
+    const { Route } = (await importRouteWithConfig(
+      { payment: { ...makeConfig().payment, enabled: false } },
+      {},
+      '@/routes/sitemap[.]xml',
+    )) as { Route: unknown }
     const handlers = (
       Route as unknown as {
         options?: { server?: { handlers?: Record<string, unknown> } }
@@ -463,11 +474,27 @@ describe('renderSitemapXml', () => {
 // 页面路由接线 — beforeLoad 最前处门禁
 // ---------------------------------------------------------------------------
 describe('页面路由门禁接线', () => {
-  it('pricing 与 contact 默认关闭时 beforeLoad 抛 notFound', async () => {
-    const { Route: pricing } = await import('@/routes/{-$locale}/pricing')
-    const { Route: contact } = await import('@/routes/{-$locale}/contact')
-    const pricingBeforeLoad = pricing.options.beforeLoad as () => unknown
-    const contactBeforeLoad = contact.options.beforeLoad as () => unknown
+  beforeEach(() => {
+    // 前面的用例可能用 `vi.doMock('@/config/website')` 覆盖过配置；模块级替身会
+    // 跨用例残留，导致这里改真实 `websiteConfig` 的开关对已替换的模块不生效。
+    vi.doUnmock('@/config/website')
+    vi.resetModules()
+  })
+
+  it('pricing 与 contact 关闭时 beforeLoad 抛 notFound', async () => {
+    // 显式关闭：本仓为本地联调把 payment 默认打开，门禁本身仍需被验证。
+    const { Route: pricing } = (await importRouteWithConfig(
+      { payment: { ...makeConfig().payment, enabled: false } },
+      {},
+      '@/routes/{-$locale}/pricing',
+    )) as { Route: { options: { beforeLoad: () => unknown } } }
+    const { Route: contact } = (await importRouteWithConfig(
+      { contact: { enabled: false } },
+      {},
+      '@/routes/{-$locale}/contact',
+    )) as { Route: { options: { beforeLoad: () => unknown } } }
+    const pricingBeforeLoad = pricing.options.beforeLoad
+    const contactBeforeLoad = contact.options.beforeLoad
     expectNotFound(() => pricingBeforeLoad())
     expectNotFound(() => contactBeforeLoad())
   })
@@ -488,14 +515,22 @@ describe('页面路由门禁接线', () => {
   })
 
   it('auth 关闭时每个 auth 页面 beforeLoad 都抛 notFound', async () => {
-    const modules = await importAuthRoutes()
-    websiteConfig.auth.enabled = false
-    try {
-      for (const beforeLoad of modules) {
-        await expectNotFoundAsync(beforeLoad)
-      }
-    } finally {
-      websiteConfig.auth.enabled = true
+    // 用 `importRouteWithConfig` 而不是改已导入的 `websiteConfig`：`vi.resetModules()`
+    // 之后路由持有的是新的模块实例，改旧实例上的字段不会生效。
+    for (const path of [
+      '@/routes/{-$locale}/auth/login',
+      '@/routes/{-$locale}/auth/register',
+      '@/routes/{-$locale}/auth/forgot-password',
+      '@/routes/{-$locale}/auth/reset-password',
+      '@/routes/{-$locale}/auth/verify-email',
+      '@/routes/{-$locale}/auth/error',
+    ]) {
+      const { Route } = (await importRouteWithConfig(
+        { auth: { ...makeConfig().auth, enabled: false } },
+        {},
+        path,
+      )) as { Route: { options: { beforeLoad: () => unknown } } }
+      await expectNotFoundAsync(Route.options.beforeLoad)
     }
   })
 })
@@ -569,7 +604,11 @@ describe('API handler 门禁（默认服务全关）', () => {
   })
 
   it('contact POST 返回 404，且不读取 body / 不调用通知 / 不调用 rate-limit', async () => {
-    const { Route } = await import('@/routes/api/contact/$')
+    const { Route } = (await importRouteWithConfig(
+      { contact: { enabled: false } },
+      {},
+      '@/routes/api/contact/$',
+    )) as { Route: unknown }
     const handler = getHandler(Route, 'POST')
     const request = new Request('https://jerbix.dev/api/contact/submit', {
       method: 'POST',
@@ -584,7 +623,12 @@ describe('API handler 门禁（默认服务全关）', () => {
   })
 
   it('payment POST 返回 404，且不调用 auth / rate-limit / provider', async () => {
-    const { Route } = await import('@/routes/api/payment/$')
+    // 本仓默认打开 payment；门禁分支用显式关闭的配置验证。
+    const { Route } = (await importRouteWithConfig(
+      { payment: { ...makeConfig().payment, enabled: false } },
+      {},
+      '@/routes/api/payment/$',
+    )) as { Route: unknown }
     const handler = getHandler(Route, 'POST')
     const request = new Request('https://jerbix.dev/api/payment/checkout', {
       method: 'POST',
@@ -600,7 +644,11 @@ describe('API handler 门禁（默认服务全关）', () => {
   })
 
   it('payment DELETE 返回 404，且不调用 auth / DB', async () => {
-    const { Route } = await import('@/routes/api/payment/$')
+    const { Route } = (await importRouteWithConfig(
+      { payment: { ...makeConfig().payment, enabled: false } },
+      {},
+      '@/routes/api/payment/$',
+    )) as { Route: unknown }
     const handler = getHandler(Route, 'DELETE')
     const request = new Request('https://jerbix.dev/api/payment/portal', {
       method: 'DELETE',

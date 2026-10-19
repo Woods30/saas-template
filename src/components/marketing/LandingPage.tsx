@@ -19,6 +19,8 @@ import { Link } from '@tanstack/react-router'
 import { type PointerEvent, useEffect, useId, useRef, useState } from 'react'
 import { Cta, Faq, Features, Hero } from '@/components/blocks/marketing'
 import { homeBlocks } from '@/config/blocks/home'
+import { getPricingPlans } from '@/config/blocks/pricing'
+import { websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 
@@ -383,6 +385,73 @@ function Workflow() {
   )
 }
 
+/**
+ * 首页定价模块。
+ *
+ * 只在 `payment.enabled` 时渲染：模块关闭时首页不该出现付不了钱的方案卡片。
+ * 完整能力（周期切换、结账）在独立定价页，这里只做概览与导流——链接也指向
+ * `/pricing`，那条路由自带同一道门禁，关闭时为 404 而不是死链。
+ *
+ * CTA 直接是「查看完整方案」而不是「立即购买」：首页不承担结账，进入定价页再选
+ * 周期与付款，路径少一层歧义。
+ */
+function HomePricing() {
+  if (!websiteConfig.payment.enabled) return null
+  const plans = getPricingPlans().filter((plan) => plan.id !== 'free')
+  return (
+    <section id="plans" className="lab-reveal mx-auto max-w-6xl scroll-mt-16 px-6 py-16 md:py-24">
+      <p className="text-xs font-semibold tracking-widest text-primary">
+        {m.home_pricing_eyebrow()}
+      </p>
+      <h2 className="mt-4 max-w-2xl text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
+        {m.home_pricing_title()}
+      </h2>
+      <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
+        {m.home_pricing_description()}
+      </p>
+      <ul className="mt-8 grid gap-4 md:grid-cols-3">
+        {plans.map((plan) => {
+          const price = plan.prices[0]
+          return (
+            <li
+              key={plan.id}
+              className="lab-feature-card flex min-w-0 flex-col rounded-2xl border border-border bg-card p-6"
+            >
+              <h3 className="text-lg font-semibold">{plan.name}</h3>
+              {plan.description && (
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  {plan.description}
+                </p>
+              )}
+              <p className="mt-5 text-2xl font-bold">
+                {price
+                  ? (price.amount / 100).toLocaleString('en-US', {
+                      style: 'currency',
+                      currency: price.currency.toUpperCase(),
+                    })
+                  : '—'}
+                {price?.label && (
+                  <span className="ml-1 text-sm font-normal text-muted-foreground">
+                    {price.label}
+                  </span>
+                )}
+              </p>
+            </li>
+          )
+        })}
+      </ul>
+      <Link
+        to="/{-$locale}/pricing"
+        params={{ locale: getLocale() }}
+        className="mt-7 inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-4 py-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring motion-reduce:transition-none"
+      >
+        {m.home_pricing_view_all()}
+        <IconArrowUpRight size={17} aria-hidden="true" />
+      </Link>
+    </section>
+  )
+}
+
 function SourceOverview() {
   const items = [
     { title: m.home_source_code_title(), description: m.home_source_code_description() },
@@ -618,6 +687,7 @@ export function LandingPage() {
       <div className="lab-reveal">
         <Workflow />
       </div>
+      <HomePricing />
       <div className="lab-reveal">
         <SourceOverview />
       </div>

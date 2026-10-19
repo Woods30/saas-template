@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  availableIntervals,
   buildPriceMap,
   findOrphanPlanIds,
+  findPlanIdByPriceId,
   isPlanPurchasable,
   resolveMode,
   resolvePriceId,
@@ -113,6 +115,56 @@ describe('isPlanPurchasable', () => {
 
   it('映射里全是空串时不可购买', () => {
     expect(isPlanPurchasable('pro_monthly', { pro_monthly: { month: '' } })).toBe(false)
+  })
+})
+
+describe('availableIntervals', () => {
+  it('按月付与年付都配好时按固定顺序返回', () => {
+    const map = buildPriceMap({
+      VITE_STRIPE_PRICE_PRO_MONTHLY: 'price_m',
+      VITE_STRIPE_PRICE_PRO_YEARLY: 'price_y',
+    })
+    expect(availableIntervals(map, 'pro_monthly')).toEqual(['month', 'year'])
+  })
+
+  it('只配月付时不返回 year —— 定价页不应出现点了就 502 的选项', () => {
+    const map = buildPriceMap({ VITE_STRIPE_PRICE_PRO_MONTHLY: 'price_m' })
+    expect(availableIntervals(map, 'pro_monthly')).toEqual(['month'])
+  })
+
+  it('一次性方案只返回 one_time', () => {
+    const map = buildPriceMap({ VITE_STRIPE_PRICE_LIFETIME: 'price_life' })
+    expect(availableIntervals(map, 'lifetime')).toEqual(['one_time'])
+  })
+
+  it('空串 Price 不计入可用周期', () => {
+    expect(availableIntervals({ pro_monthly: { month: '' } }, 'pro_monthly')).toEqual([])
+  })
+
+  it('未知 plan 返回空数组', () => {
+    const map = buildPriceMap({ VITE_STRIPE_PRICE_PRO_MONTHLY: 'price_m' })
+    expect(availableIntervals(map, 'unknown_plan')).toEqual([])
+  })
+})
+
+describe('findPlanIdByPriceId', () => {
+  const map = buildPriceMap({
+    VITE_STRIPE_PRICE_PRO_MONTHLY: 'price_m',
+    VITE_STRIPE_PRICE_PRO_YEARLY: 'price_y',
+    VITE_STRIPE_PRICE_LIFETIME: 'price_life',
+  })
+
+  it('月付与年付都映射回同一个 plan', () => {
+    expect(findPlanIdByPriceId(map, 'price_m')).toBe('pro_monthly')
+    expect(findPlanIdByPriceId(map, 'price_y')).toBe('pro_monthly')
+  })
+
+  it('一次性 Price 映射回 lifetime', () => {
+    expect(findPlanIdByPriceId(map, 'price_life')).toBe('lifetime')
+  })
+
+  it('映射里没有的 Price 返回 undefined —— 不假装认识手工创建的 Price', () => {
+    expect(findPlanIdByPriceId(map, 'price_unknown')).toBeUndefined()
   })
 })
 

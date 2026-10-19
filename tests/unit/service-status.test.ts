@@ -14,6 +14,25 @@ function makeConfig(mutate?: (config: WebsiteConfig) => void): WebsiteConfig {
   return config
 }
 
+/**
+ * 显式关闭全部服务模块的配置。
+ *
+ * `website.ts` 的开关随部署场景调整（本仓本地联调期打开了 payment / notification /
+ * analytics），而本文件测的是 `getServiceStatuses` 的**分支逻辑**，不是出厂默认值。
+ * 依赖默认值的「关闭时为 disabled」用例会随开关变更无谓变红，故显式关闭。
+ */
+function makeAllDisabledConfig(mutate?: (config: WebsiteConfig) => void): WebsiteConfig {
+  const config = createWebsiteConfig(parsePublicEnv({}))
+  config.mail.enabled = false
+  config.contact.enabled = false
+  config.newsletter.enabled = false
+  config.payment.enabled = false
+  config.notification.enabled = false
+  config.analytics.enabled = false
+  mutate?.(config)
+  return config
+}
+
 // ---------------------------------------------------------------------------
 // getMailFrom —— provider 与 sender 归一化
 // ---------------------------------------------------------------------------
@@ -302,7 +321,7 @@ describe('getServiceStatuses — newsletter', () => {
 describe('getServiceStatuses — payment', () => {
   it('关闭时为 disabled', () => {
     const statuses = getServiceStatuses({
-      config: makeConfig(),
+      config: makeAllDisabledConfig(),
       publicEnv: parsePublicEnv({}),
       serverEnv: parseServerEnv({}),
     })
@@ -355,7 +374,7 @@ describe('getServiceStatuses — payment', () => {
 describe('getServiceStatuses — notification', () => {
   it('关闭时为 disabled', () => {
     const statuses = getServiceStatuses({
-      config: makeConfig(),
+      config: makeAllDisabledConfig(),
       publicEnv: parsePublicEnv({}),
       serverEnv: parseServerEnv({}),
     })
@@ -419,7 +438,7 @@ describe('getServiceStatuses — notification', () => {
 describe('getServiceStatuses — analytics', () => {
   it('关闭时为 disabled', () => {
     const statuses = getServiceStatuses({
-      config: makeConfig(),
+      config: makeAllDisabledConfig(),
       publicEnv: parsePublicEnv({}),
       serverEnv: parseServerEnv({}),
     })
@@ -430,6 +449,8 @@ describe('getServiceStatuses — analytics', () => {
     const statuses = getServiceStatuses({
       config: makeConfig((c) => {
         c.analytics.enabled = true
+        // 默认配置已选中 ga；本用例要验证「选中为空」这一分支。
+        c.analytics.providers = []
       }),
       publicEnv: parsePublicEnv({}),
       serverEnv: parseServerEnv({}),
@@ -712,9 +733,9 @@ describe('getServiceStatuses — 完整配置判断（数据驱动）', () => {
   it.each(cases)('$name：关闭 disabled / 缺字段 incomplete / 齐全 configured', (testCase) => {
     const moduleName = testCase.name.split('（')[0] as keyof ReturnType<typeof getServiceStatuses>
 
-    // 关闭时：即便字段齐全也 disabled。
+    // 关闭时：即便字段齐全也 disabled（显式关闭，不依赖出厂默认值）。
     const disabled = getServiceStatuses({
-      config: makeConfig(),
+      config: makeAllDisabledConfig(),
       publicEnv: parsePublicEnv(testCase.completePublic),
       serverEnv: parseServerEnv(testCase.completeEnv),
     })
@@ -768,7 +789,7 @@ describe('formatServiceDiagnostics', () => {
         // auth 默认要求邮箱验证，因而默认配置下它必然 incomplete（缺 mail）——这正是
         // 该规则的目的。本用例只关心「无 incomplete 时的输出与脱敏」，故显式关掉验证，
         // 把 auth 也变成 configured；auth 与 mail 的死锁组合由上面的 auth 分支用例覆盖。
-        config: makeConfig((c) => {
+        config: makeAllDisabledConfig((c) => {
           c.auth.requireEmailVerification = false
         }),
         publicEnv: parsePublicEnv({}),
@@ -782,7 +803,7 @@ describe('formatServiceDiagnostics', () => {
   it('manual 项标注「部署核对」且不计入 incomplete', () => {
     const result = formatServiceDiagnostics(
       statusesOf({
-        config: makeConfig((c) => {
+        config: makeAllDisabledConfig((c) => {
           c.mail.enabled = true
           c.mail.provider = 'cloudflare'
         }),
@@ -797,7 +818,7 @@ describe('formatServiceDiagnostics', () => {
   it('配置齐全时 configured 且不含 secret 值', () => {
     const result = formatServiceDiagnostics(
       statusesOf({
-        config: makeConfig((c) => {
+        config: makeAllDisabledConfig((c) => {
           c.payment.enabled = true
           c.payment.allowedPriceIds = ['price_1']
           // 同上一用例：本用例只验证「齐全时 configured 且不泄漏 secret」，

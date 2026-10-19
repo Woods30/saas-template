@@ -47,14 +47,18 @@ describe('websiteConfig 品牌信息', () => {
     expect(config.newsletter).toEqual({ enabled: false, provider: 'resend' })
     // `priceMap` 由 `VITE_STRIPE_PRICE_*` 派生：未配置时为空，`allowedPriceIds`
     // 随之也为空（两者同源）。
+    //
+    // 三个服务模块的开关是**部署场景**的决定，不是 env 派生的：本仓本地联调期
+    // 打开 payment / notification / analytics，模板发布时应改回 false。断言跟着
+    // 当前默认值走，避免开关调整后这条用例变成无意义的红灯。
     expect(config.payment).toEqual({
-      enabled: false,
+      enabled: true,
       provider: 'stripe',
       allowedPriceIds: [],
       priceMap: {},
     })
-    expect(config.notification.enabled).toBe(false)
-    expect(config.analytics).toEqual({ enabled: false, providers: [] })
+    expect(config.notification).toEqual({ enabled: true, provider: 'discord' })
+    expect(config.analytics).toEqual({ enabled: true, providers: ['ga'] })
     expect(config.social).toEqual({})
     expect(config.ui).toEqual({
       defaultTheme: 'system',
