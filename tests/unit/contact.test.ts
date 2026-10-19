@@ -139,12 +139,23 @@ describe('deliverContactNotification', () => {
     )
   })
 
-  it('sendMail failure only logs, does not throw', async () => {
+  it('sendMail failure only logs, and reports not delivered when nothing else succeeds', async () => {
     mockSendTemplate.mockResolvedValue({ ok: false, error: 'SMTP error\ndetails' })
     const warnSpy = vi.spyOn(console, 'warn').mockReturnValue(undefined)
 
-    await expect(deliverContactNotification(validInput)).resolves.toBeUndefined()
+    // 邮件失败、通知未启用 → 没有任何通道成功，调用方需要据此回 503。
+    await expect(deliverContactNotification(validInput)).resolves.toEqual({ delivered: false })
 
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[contact]'))
+    warnSpy.mockRestore()
+  })
+
+  it('sendMail 抛异常时被接住，不让 500 冒到路由层', async () => {
+    // provider 未注册 / 模板校验失败时 `sendMail` 直接 throw（只对 `{ok:false}` 重试）。
+    mockSendTemplate.mockRejectedValue(new Error('provider not registered'))
+    const warnSpy = vi.spyOn(console, 'warn').mockReturnValue(undefined)
+
+    await expect(deliverContactNotification(validInput)).resolves.toEqual({ delivered: false })
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[contact]'))
     warnSpy.mockRestore()
   })
@@ -243,8 +254,8 @@ describe('deliverContactNotification', () => {
       '@/contact/notifications'
     )
 
-    // Should not throw even when notify returns false
-    await expect(reimportedDeliverMixed(validInput)).resolves.toBeUndefined()
+    // 通知失败但邮件成功 → 仍算已送达；不抛错。
+    await expect(reimportedDeliverMixed(validInput)).resolves.toEqual({ delivered: true })
   })
 
   it('notify receives truncated message when over 1000 chars', async () => {

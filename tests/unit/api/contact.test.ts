@@ -121,3 +121,67 @@ describe('POST /api/contact 门禁', () => {
     expect(read).not.toHaveBeenCalled()
   })
 })
+
+// ------------------------------------------------------------------------------------------------
+// 投递失败必须报告失败（旧实现一律回 200，访客以为消息已送达）
+// ------------------------------------------------------------------------------------------------
+
+describe('submitContact — 投递失败', () => {
+  const validData = {
+    name: '张三',
+    fromEmail: 'zhangsan@example.com',
+    subject: '测试主题',
+    message: '这是一条超过十个字符的测试消息内容。',
+  }
+
+  beforeEach(() => {
+    mockCheckRateLimit.mockReset()
+    mockCheckRateLimit.mockResolvedValue(true)
+  })
+
+  /** 默认配置里 `notification.enabled` 为 false，需要单独打开才能走到 notify。 */
+  async function enableNotification() {
+    vi.resetModules()
+    vi.doMock('@/config/website', async () => {
+      const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
+      const { parsePublicEnv } =
+        await vi.importActual<typeof import('@/env/public')>('@/env/public')
+      const base = actual.createWebsiteConfig(
+        parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' }),
+      )
+      return {
+        ...actual,
+        websiteConfig: {
+          ...base,
+          mail: { ...base.mail, supportEmail: 'support@example.com' },
+          notification: { enabled: true, provider: 'discord' },
+        },
+      }
+    })
+    return import('@/routes/api/contact/$')
+  }
+
+  it('邮件与通知都失败时返回 503，而不是假装成功', async () => {
+    const { submitContact: submit } = await enableNotification()
+    const { sendMail } = await import('@/mail')
+    const { notify } = await import('@/notification')
+    vi.mocked(sendMail).mockResolvedValueOnce({ ok: false, error: 'SMTP down' })
+    vi.mocked(notify).mockResolvedValueOnce(false)
+
+    const result = await submit('1.2.3.4', validData)
+
+    expect(result).toEqual({ error: 'Delivery failed', status: 503 })
+  })
+
+  it('邮件失败但通知成功时仍返回 ok', async () => {
+    const { submitContact: submit } = await enableNotification()
+    const { sendMail } = await import('@/mail')
+    const { notify } = await import('@/notification')
+    vi.mocked(sendMail).mockResolvedValueOnce({ ok: false, error: 'SMTP down' })
+    vi.mocked(notify).mockResolvedValueOnce(true)
+
+    const result = await submit('1.2.3.4', validData)
+
+    expect(result).toEqual({ ok: true })
+  })
+})

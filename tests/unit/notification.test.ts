@@ -79,7 +79,10 @@ describe('FeishuNotificationProvider', () => {
   })
 
   it('send returns true on success', async () => {
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true })
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ code: 0 }),
+    })
     vi.stubGlobal('fetch', mockFetch)
 
     const provider = new FeishuNotificationProvider(
@@ -100,6 +103,87 @@ describe('FeishuNotificationProvider', () => {
     )
     const result = await provider.send({ title: 'Test', message: 'Hello' })
     expect(result).toBe(false)
+
+    vi.unstubAllGlobals()
+  })
+
+  it('HTTP 200 但 code 非 0 时返回 false（飞书的业务错误藏在响应体里）', async () => {
+    // 签名 / 关键词 / IP 白名单校验失败都是 HTTP 200 + 非 0 code。
+    // 只看 `res.ok` 会把失败当成功，`notify()` 也不会告警。
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ code: 19021, msg: 'sign match fail' }),
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const provider = new FeishuNotificationProvider(
+      'https://open.feishu.cn/open-apis/bot/v2/hook/abc-123',
+    )
+    const result = await provider.send({ title: 'Test', message: 'Hello' })
+    expect(result).toBe(false)
+
+    vi.unstubAllGlobals()
+  })
+
+  it('code 为 0 时算成功', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ code: 0, msg: 'success' }),
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const provider = new FeishuNotificationProvider(
+      'https://open.feishu.cn/open-apis/bot/v2/hook/abc-123',
+    )
+    expect(await provider.send({ title: 'T', message: 'M' })).toBe(true)
+
+    vi.unstubAllGlobals()
+  })
+
+  it('响应体不是 JSON 时按 HTTP 状态判断，不当失败', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockRejectedValue(new Error('not json')),
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const provider = new FeishuNotificationProvider(
+      'https://open.feishu.cn/open-apis/bot/v2/hook/abc-123',
+    )
+    expect(await provider.send({ title: 'T', message: 'M' })).toBe(true)
+
+    vi.unstubAllGlobals()
+  })
+
+  it('请求带超时信号，避免 webhook 挂住整个请求', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue({}) })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const provider = new FeishuNotificationProvider(
+      'https://open.feishu.cn/open-apis/bot/v2/hook/abc-123',
+    )
+    await provider.send({ title: 'T', message: 'M' })
+
+    const init = mockFetch.mock.calls[0]?.[1] as { signal?: AbortSignal }
+    expect(init?.signal).toBeDefined()
+
+    vi.unstubAllGlobals()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// DiscordNotificationProvider — 超时
+// ---------------------------------------------------------------------------
+describe('DiscordNotificationProvider', () => {
+  it('请求带超时信号', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const provider = new DiscordNotificationProvider('https://discord.com/api/webhooks/1/abc')
+    expect(await provider.send({ title: 'T', message: 'M' })).toBe(true)
+
+    const init = mockFetch.mock.calls[0]?.[1] as { signal?: AbortSignal }
+    expect(init?.signal).toBeDefined()
 
     vi.unstubAllGlobals()
   })

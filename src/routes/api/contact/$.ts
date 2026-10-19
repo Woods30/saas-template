@@ -25,7 +25,13 @@ export async function submitContact(
   if (!allowed) {
     return { error: 'Too Many Requests', status: 429 }
   }
-  await deliverContactNotification(data)
+  // 两条通道都失败时必须报告失败：旧实现无论投递结果一律回 200，访客会以为
+  // 消息已送达，实际已丢失。
+  const { delivered } = await deliverContactNotification(data)
+  if (!delivered) {
+    console.error('[contact] 邮件与通知通道均失败，消息未送达')
+    return { error: 'Delivery failed', status: 503 }
+  }
   return { ok: true }
 }
 
