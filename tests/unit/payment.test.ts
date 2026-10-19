@@ -1,3 +1,4 @@
+import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseServerEnv } from '@/env/server'
 import { buildPaymentProviderRegistry } from '@/payment'
@@ -108,6 +109,7 @@ const mockSchema = {
     userId: makeCol('subscriptions.userId'),
     customerId: makeCol('subscriptions.customerId'),
     subscriptionId: makeCol('subscriptions.subscriptionId'),
+    status: makeCol('subscriptions.status'),
   },
   payments: {
     id: makeCol('payments.id'),
@@ -241,9 +243,18 @@ describe('getPaymentProvider', () => {
 })
 
 // ------------------------------------------------------------------------------------------------
-// POST /api/payment 配置门禁（payment 默认关闭）
+// POST /api/payment 配置门禁
+//
+// `website.ts` 的 `payment.enabled` 现在默认为 true（本仓用于本地联调），因此门禁用例
+// **显式**关掉开关，而不是依赖出厂默认值。依赖默认值的断言会在开关调整时静默失效。
 // ------------------------------------------------------------------------------------------------
 describe('POST /api/payment 门禁', () => {
+  beforeEach(() => {
+    // `vi.doMock` 注册的模块级替身会跨用例残留；每个用例从真实配置重新开始。
+    vi.doUnmock('@/config/website')
+    vi.resetModules()
+  })
+
   function getHandler(method: 'POST' | 'DELETE') {
     return async (route: unknown, request: Request): Promise<Response> => {
       const handlers = (route as { options?: { server?: { handlers?: Record<string, unknown> } } })
@@ -254,8 +265,23 @@ describe('POST /api/payment 门禁', () => {
     }
   }
 
+  /** 以 `payment.enabled: false` 重新加载路由。 */
+  async function importRouteWithPaymentDisabled() {
+    vi.resetModules()
+    vi.doMock('@/config/website', async () => {
+      const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
+      const { parsePublicEnv } =
+        await vi.importActual<typeof import('@/env/public')>('@/env/public')
+      const base = actual.createWebsiteConfig(
+        parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' }),
+      )
+      return { ...actual, websiteConfig: { ...base, payment: { ...base.payment, enabled: false } } }
+    })
+    return import('@/routes/api/payment/$')
+  }
+
   it('payment 关闭时 POST 返回 404，且不调用 auth / rate-limit / provider', async () => {
-    const { Route } = await import('@/routes/api/payment/$')
+    const { Route } = await importRouteWithPaymentDisabled()
     const request = new Request('https://jerbix.dev/api/payment/checkout', {
       method: 'POST',
       body: '{}',
@@ -271,7 +297,7 @@ describe('POST /api/payment 门禁', () => {
   })
 
   it('payment 关闭时 DELETE 返回 404', async () => {
-    const { Route } = await import('@/routes/api/payment/$')
+    const { Route } = await importRouteWithPaymentDisabled()
     const request = new Request('https://jerbix.dev/api/payment/portal', {
       method: 'DELETE',
       body: '{}',
@@ -282,6 +308,181 @@ describe('POST /api/payment 门禁', () => {
     expect(response.status).toBe(404)
     expect(await response.json()).toEqual({ error: 'MODULE_DISABLED' })
     expect(mockCheckoutProvider.createCustomerPortalLink).not.toHaveBeenCalled()
+  })
+})
+
+// ------------------------------------------------------------------------------------------------
+// 重复订阅守卫：已生效中的订阅不得创建第二份
+//
+// 用户重复购买会得到两条并存订阅、两边同时扣款，而账单页只能显示一份。因此
+// `mode: 'subscription'` 的结账在创建 session 之前查一次库，命中即 409。
+// ------------------------------------------------------------------------------------------------
+describe('POST /api/payment 重复订阅守卫', () => {
+  beforeEach(() => {
+    // 三个替身都要清：`@/config/website` 残留着门禁用例里 `payment.enabled: false`
+    // 的那份，不清理的话这里全都会返回 404 而不是预期的 200 / 409。
+    vi.doUnmock('@/config/website')
+    vi.doUnmock('@/auth/auth')
+    vi.doUnmock('@/lib/rate-limit')
+    vi.resetModules()
+  })
+
+  /** 已登录用户 + 限流放行，两个返回同时控制（命中 / 未命中已有订阅）。 */
+  async function importPostRoute(subscriptionRows: unknown[]) {
+    // 服务端 env 与上下文：门禁与服务状态判断都要从这里读 Stripe 凭据。
+    // 单测 env 里没有 `STRIPE_SECRET_KEY`，不注入的话 payment 会被判为
+    // `incomplete` 而返回 503，根本走不到重复订阅判断。
+    vi.doMock('@/lib/server-context', () => ({
+      getServerContext: () => ({
+        env: { STRIPE_SECRET_KEY: 'sk_test', STRIPE_WEBHOOK_SECRET: 'whsec_test' },
+      }),
+      als: {
+        getStore: () => ({
+          paymentProviderRegistry: {},
+          mailProviderRegistry: {},
+          notificationProviderRegistry: {},
+        }),
+      },
+    }))
+    vi.doMock('@/auth/auth', () => ({
+      getAuth: () => ({ api: { getSession: async () => ({ user: { id: 'user_1' } }) } }),
+    }))
+    // 用一份配齐 Price 的配置覆盖模块默认值：`allowedPriceIds` 为空时
+    // `/api/payment` 会放行任意 priceId，白名单分支就测不到；而测试 env 没有
+    // `VITE_STRIPE_PRICE_*`，直接请求一个假 priceId 会先撞上白名单的 400。
+    vi.doMock('@/config/website', async () => {
+      const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
+      const { parsePublicEnv } =
+        await vi.importActual<typeof import('@/env/public')>('@/env/public')
+      const base = actual.createWebsiteConfig(
+        parsePublicEnv({
+          VITE_BASE_URL: 'https://jerbix.dev',
+          VITE_STRIPE_PRICE_PRO_MONTHLY: 'price_month',
+          VITE_STRIPE_PRICE_PRO_YEARLY: 'price_year',
+          VITE_STRIPE_PRICE_LIFETIME: 'price_life',
+        }),
+      )
+      return { ...actual, websiteConfig: base }
+    })
+    vi.doMock('@/lib/rate-limit', () => ({ checkRateLimit: async () => true }))
+    // 只劫持 subscriptions 查询；users / payments / webhookEvents 走默认链。
+    // 返回值必须是完整的 `select().from().where().limit()` 链，路由不只是调用
+    // `selectMock` 本身。
+    mockDb.select = vi.fn().mockImplementation((fields: Record<string, unknown>) => {
+      const first = fields ? Object.values(fields)[0] : undefined
+      const name = (first as { name?: string } | undefined)?.name
+      return makeSelectChain(name === 'subscriptions.id' ? subscriptionRows : []).selectMock()
+    })
+
+    return import('@/routes/api/payment/$')
+  }
+
+  const subscribeBody = {
+    // 与上面 mock 的配置一致：必须落在 `allowedPriceIds` 白名单里。
+    priceId: 'price_month',
+    successUrl: 'https://jerbix.dev/dashboard/billing?checkout=success',
+    cancelUrl: 'https://jerbix.dev/pricing?checkout=cancelled',
+    mode: 'subscription' as const,
+  }
+
+  it('已有 active 订阅时返回 409，且不创建 Checkout Session', async () => {
+    const { Route } = await importPostRoute([{ id: 'sub_existing' }])
+    const handlers = (
+      Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+    ).options.server.handlers
+    const handler = handlers.POST as (ctx: { request: Request }) => Promise<Response>
+
+    const request = new Request('https://jerbix.dev/api/payment', {
+      method: 'POST',
+      body: JSON.stringify(subscribeBody),
+    })
+
+    const response = await handler({ request })
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'ALREADY_SUBSCRIBED' })
+    expect(mockCheckoutProvider.createCheckoutSession).not.toHaveBeenCalled()
+  })
+
+  it('没有订阅时照常创建 Checkout Session', async () => {
+    const { Route } = await importPostRoute([])
+    const handlers = (
+      Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+    ).options.server.handlers
+    const handler = handlers.POST as (ctx: { request: Request }) => Promise<Response>
+
+    const request = new Request('https://jerbix.dev/api/payment', {
+      method: 'POST',
+      body: JSON.stringify(subscribeBody),
+    })
+
+    const response = await handler({ request })
+
+    expect(response.status).toBe(200)
+    expect(mockCheckoutProvider.createCheckoutSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('一次性支付不受已有订阅影响（买断没有「已有即重复」）', async () => {
+    const { Route } = await importPostRoute([{ id: 'sub_existing' }])
+    const handlers = (
+      Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+    ).options.server.handlers
+    const handler = handlers.POST as (ctx: { request: Request }) => Promise<Response>
+
+    const request = new Request('https://jerbix.dev/api/payment', {
+      method: 'POST',
+      body: JSON.stringify({ ...subscribeBody, mode: 'payment' }),
+    })
+
+    const response = await handler({ request })
+
+    expect(response.status).toBe(200)
+    expect(mockCheckoutProvider.createCheckoutSession).toHaveBeenCalledTimes(1)
+  })
+
+  // 挡住哪些状态是**可观测行为**：只挡 `active` 会让「扣款失败但订阅仍在」的用户
+  // 再买一份。这里把 where 条件交给真实的 SQLite dialect 渲染，状态集合改了就红。
+  describe('挡住的状态集合', () => {
+    it('同时挡住扣款失败与暂停中的订阅，不挡已结束的', async () => {
+      const { Route } = await importPostRoute([])
+      const handlers = (
+        Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+      ).options.server.handlers
+      const handler = handlers.POST as (ctx: { request: Request }) => Promise<Response>
+
+      await handler({
+        request: new Request('https://jerbix.dev/api/payment', {
+          method: 'POST',
+          body: JSON.stringify(subscribeBody),
+        }),
+      })
+
+      // 守卫那次查询的调用链：select() → from() → where(cond) → limit()。
+      // 条件是 `and(eq(userId), inArray(status, [...]))`，先取到 `where` 的入参。
+      const selectResult = mockDb.select.mock.results.at(-1)?.value as {
+        from: { mock: { results: Array<{ value: { where: { mock: { calls: unknown[][] } } } }> } }
+      }
+      const whereMock = selectResult.from.mock.results.at(-1)?.value.where
+      const cond = whereMock?.mock.calls.at(-1)?.[0]
+      expect(cond, '守卫应带 where 条件').toBeDefined()
+
+      // 用真实 SQLite dialect 渲染：状态集合改了、少写一个、或者写成 `eq(status,'active')`
+      // 都会在这里变红。
+      const dialect = new SQLiteSyncDialect()
+      const rendered = dialect.sqlToQuery(cond as never)
+      // 参数顺序：`[userId 列, userId 值, status 列, ...状态值]`。
+      const [userIdCol, userIdValue, statusCol, ...statusArgs] = rendered.params as Array<
+        { name?: string } | string
+      >
+
+      expect(userIdCol).toMatchObject({ name: 'subscriptions.userId' })
+      expect(userIdValue).toBe('user_1')
+      expect(statusCol).toMatchObject({ name: 'subscriptions.status' })
+      expect(statusArgs).toEqual(['active', 'trialing', 'past_due', 'unpaid', 'paused'])
+      // 已结束的状态必须不在集合里：否则取消过的用户再也订不回来。
+      expect(statusArgs).not.toContain('canceled')
+      expect(statusArgs).not.toContain('incomplete_expired')
+    })
   })
 })
 
@@ -649,5 +850,101 @@ describe('handleSubscriptionUpsert — 周期字段读取自订阅项', () => {
     })
 
     expect(capturedSet.value?.cancelAtPeriodEnd).toBe(false)
+  })
+
+  // 金额与周期落库：账单页的金额列显示 `—` 正是因为这三个列此前从不被写入。
+  it('把 price 的金额、币种与周期写入订阅行', async () => {
+    const { handleSubscriptionUpsert } = await import('@/routes/api/webhooks/stripe')
+    await handleSubscriptionUpsert(mockDb as never, {
+      id: 'sub_with_price',
+      status: 'active',
+      items: {
+        data: [
+          {
+            price: {
+              id: 'price_1USEaeK7geIdVnsajOAqUpyJ',
+              currency: 'usd',
+              unit_amount: 599,
+              recurring: { interval: 'month' },
+            },
+            current_period_start: 1700000000,
+            current_period_end: 1702598400,
+          },
+        ],
+      },
+    })
+
+    expect(capturedSet.value).toMatchObject({
+      amount: 599,
+      currency: 'usd',
+      interval: 'month',
+    })
+  })
+
+  it('年付 Price 写入 year 周期', async () => {
+    const { handleSubscriptionUpsert } = await import('@/routes/api/webhooks/stripe')
+    await handleSubscriptionUpsert(mockDb as never, {
+      id: 'sub_yearly',
+      status: 'active',
+      items: {
+        data: [
+          {
+            price: {
+              id: 'price_yearly',
+              currency: 'USD',
+              unit_amount: 28100,
+              recurring: { interval: 'year' },
+            },
+            current_period_start: 1700000000,
+            current_period_end: 1734067200,
+          },
+        ],
+      },
+    })
+
+    expect(capturedSet.value).toMatchObject({ interval: 'year', amount: 28100 })
+  })
+
+  it('一次性 Price（无 recurring）不写 interval 列', async () => {
+    const { handleSubscriptionUpsert } = await import('@/routes/api/webhooks/stripe')
+    await handleSubscriptionUpsert(mockDb as never, {
+      id: 'sub_one_time',
+      status: 'active',
+      items: {
+        data: [
+          {
+            price: { id: 'price_lifetime', currency: 'usd', unit_amount: 1400 },
+            current_period_start: 1700000000,
+            current_period_end: 1702598400,
+          },
+        ],
+      },
+    })
+
+    expect(capturedSet.value).toMatchObject({ amount: 1400, currency: 'usd' })
+    // 没有 recurring 就整列不写：写 `null` 与「不知道」同义，会把已正确的值擦掉。
+    expect(capturedSet.value).not.toHaveProperty('interval')
+  })
+
+  it('price 缺少金额细节时不写这三个列，而不是写 undefined', async () => {
+    const { handleSubscriptionUpsert } = await import('@/routes/api/webhooks/stripe')
+    await handleSubscriptionUpsert(mockDb as never, {
+      id: 'sub_incomplete',
+      // 中间态订阅（如 `incomplete`）可能还没有定价细节。
+      status: 'incomplete',
+      items: {
+        data: [
+          {
+            price: { id: 'price_pending', unit_amount: null },
+            current_period_start: 1700000000,
+            current_period_end: 1702598400,
+          },
+        ],
+      },
+    })
+
+    expect(capturedSet.value).not.toHaveProperty('amount')
+    expect(capturedSet.value).not.toHaveProperty('currency')
+    expect(capturedSet.value).not.toHaveProperty('interval')
   })
 })
