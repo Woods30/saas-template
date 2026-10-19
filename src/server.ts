@@ -19,10 +19,16 @@ import {
 import { KVCacheProvider } from './cache/provider/kv'
 import { getMailFrom } from './config/service-status'
 import { websiteConfig } from './config/website'
+import { publicEnv } from './env/public'
 import { parseServerEnv, type ServerEnv } from './env/server'
 import { DOCS_SIDEBAR_COOKIE_NAME, parseSidebarCollapsed, setServerSidebarGetter } from './lib/docs'
 import { LOCALE_COOKIE_NAME, readCookieValue, readLocaleCookie } from './lib/locale'
-import { addNonceToInlineScripts, buildCspHeader, generateNonce } from './lib/security'
+import {
+  addNonceToInlineScripts,
+  buildCspHeader,
+  generateNonce,
+  getAnalyticsScriptOrigins,
+} from './lib/security'
 import { als, getServerContext } from './lib/server-context'
 import { defaultTheme, parseTheme, setServerThemeGetter, THEME_COOKIE_NAME } from './lib/theme'
 import { registerServerLocaleStrategy } from './locale/middleware'
@@ -145,7 +151,11 @@ function buildMailProviderRegistry(
  *
  * CSP:
  * - Uses a per-request nonce injected into inline script tags.
- * - Restricts script-src to 'self' + nonce; no unsafe-inline.
+ * - Restricts script-src to 'self' + nonce + the analytics origins enabled for
+ *   this request; no unsafe-inline. External analytics scripts are injected at
+ *   runtime by `injectScript()` (after the nonce is serialised), so their origin
+ *   must be allowed explicitly — otherwise every production analytics script is
+ *   blocked by the browser.
  * - Applies frame-ancestors 'none' to prevent clickjacking.
  *
  * Locale cookie: same behaviour as the prior persistLocaleCookie — write
@@ -169,8 +179,16 @@ function applySecurityHeaders(
 
   const headers = new Headers(withNonce.headers)
 
+  // Only the analytics providers that will actually inject a script get their
+  // origin into script-src; a disabled or unconfigured module keeps the strict
+  // `'self' 'nonce-…'` policy.
+  const analyticsScriptOrigins = getAnalyticsScriptOrigins({
+    analytics: websiteConfig.analytics,
+    publicEnv,
+  })
+
   // Always set CSP — nonce is regenerated per request so caching is safe.
-  headers.set('Content-Security-Policy', buildCspHeader(nonce))
+  headers.set('Content-Security-Policy', buildCspHeader(nonce, analyticsScriptOrigins))
 
   // 与 `readLocaleCookie` 共用同一解析（含百分号解码），保证对同一 cookie 的
   // 「比较」与「解析」得出一致结论，避免编码值时每个请求都重复下发 Set-Cookie。

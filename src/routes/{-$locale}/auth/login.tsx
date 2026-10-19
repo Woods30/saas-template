@@ -9,6 +9,7 @@ import { AuthLayout } from '@/components/auth/AuthLayout'
 import { authFormMessages } from '@/components/auth/formMessages'
 import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons'
 import { SubmitButton } from '@/components/auth/SubmitButton'
+import { trackLogin } from '@/lib/analytics/events'
 import { assertPageEnabled } from '@/lib/module-access'
 import { m } from '@/locale/paraglide/messages.js'
 
@@ -19,10 +20,20 @@ export const Route = createFileRoute('/{-$locale}/auth/login')({
     // SSR 阶段就地执行，客户端导航时降级为一次 RPC，两条路径结果一致。
     return fetchAuthProviderAvailability()
   },
+  // 定价页在未登录时把用户送到这里并带上 `?redirect=/pricing`，登录后回到原处
+  // 继续结账。只接受站内相对路径，避免开放重定向。
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => {
+    const value = search.redirect
+    if (typeof value !== 'string') return {}
+    // 拒绝 `//evil.com`、`https://…` 与反斜杠变体（浏览器会把它当成 `//`）。
+    if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return {}
+    return { redirect: value }
+  },
   component: LoginPage,
 })
 
 function LoginPage() {
+  const { redirect } = Route.useSearch()
   const { google } = Route.useRouteContext()
   // 字段值、字段级校验错误、提交态全部由 TanStack Form 持有；`serverError` 是**页面级**提示，
   // 不是字段状态，TanStack Form 1.33 也没有「设置任意页面级错误」的类型安全入口
@@ -38,13 +49,21 @@ function LoginPage() {
         setServerError(error.message?.split('\n')[0] ?? m.auth_error_generic())
         return
       }
-      window.location.assign('/')
+      trackLogin()
+      // 登录后回来源页（定价页的结账引导会带 `?redirect=/pricing`）。
+      // `validateSearch` 已挡掉 `//host` 之类的跨站路径，这里再判一次是纵深防御。
+      window.location.assign(
+        redirect?.startsWith('/') && !redirect.startsWith('//') ? redirect : '/',
+      )
     },
   })
 
   function onGoogleClick() {
     // 失败时 better-auth 会带 `error` 查询参数重定向回本站；这里只在发起阶段兜底复位。
-    void signIn.social({ provider: 'google', callbackURL: '/' })
+    void signIn.social({
+      provider: 'google',
+      callbackURL: redirect?.startsWith('/') ? redirect : '/',
+    })
   }
 
   return (

@@ -29,6 +29,31 @@ const KNOWN_THIRD_PARTY_ORIGINS = [
   'https://www.clarity.ms',
   // Umami — self-hosted or cloud.umami.is; *.umami.is covers cloud
   'https://*.umami.is',
+  // GA / GTM measurement uploads (RegExp-based allowlist rules additionally match
+  // https://*.google-analytics.com and https://*.analytics.google.com below).
+] as const
+
+/**
+ * Script origins loaded by `initAnalytics()`.
+ *
+ * These must appear in `script-src` — the injected `<script src>` tags are external
+ * (`document.createElement('script')` in `injectScript`), so they are covered by the
+ * origin expression in `script-src`, not by the nonce. Under the previous
+ * `script-src 'self' 'nonce-…'` policy every production analytics script was
+ * blocked by the browser, which no test caught because only `connect-src` was
+ * asserted.
+ *
+ * Umami is self-hosted, so its script URL comes from `VITE_UMAMI_SCRIPT_URL` and
+ * cannot be enumerated here; see the per-request CSP assembly in `getCspScriptSrc`
+ * for how that case is handled.
+ */
+const ANALYTICS_SCRIPT_ORIGINS = [
+  // Google Analytics / GTM — gtag/js
+  'https://www.googletagmanager.com',
+  // Plausible
+  'https://plausible.io',
+  // Microsoft Clarity
+  'https://www.clarity.ms',
 ] as const
 
 /**
@@ -36,7 +61,7 @@ const KNOWN_THIRD_PARTY_ORIGINS = [
  *
  * Directives:
  *   default-src    — fallback for unset directives ('self' only, no inline/bync default)
- *   script-src     — 'self' + nonce (SSR inline scripts use nonce); excludes 'unsafe-inline'
+ *   script-src     — 'self' + nonce + analytics script origins
  *   style-src      — 'self' + 'unsafe-inline' (Tailwind per-element style injection)
  *   img-src        — 'self' + data: + https://*.googleusercontent.com (profile photos)
  *   font-src       — 'self' + https://fonts.gstatic.com (Google Fonts)
@@ -52,8 +77,15 @@ const KNOWN_THIRD_PARTY_ORIGINS = [
  * - frame-ancestors 'none' matches modern browser default; explicit for defense-in-depth.
  *
  * @param nonce - Unique per-request base64-encoded value from generateNonce()
+ * @param analyticsScriptOrigins - Extra origins appended to `script-src` for the
+ *   analytics providers enabled on this request. Must be built from
+ *   `getAnalyticsScriptOrigins()` so only actually-injected scripts are allowed;
+ *   an empty list yields the strict `'self' 'nonce-…'` policy.
  */
-export function buildCspHeader(nonce: string): string {
+export function buildCspHeader(
+  nonce: string,
+  analyticsScriptOrigins: readonly string[] = [],
+): string {
   const self = `'self'`
   const nonceSrc = `'nonce-${nonce}'`
   const unsafeInline = "'unsafe-inline'"
@@ -67,10 +99,23 @@ export function buildCspHeader(nonce: string): string {
     'blob:',
   ].join(' ')
 
+  // Externally-loaded analytics scripts need their origin in script-src. The nonce
+  // cannot cover them: `injectScript()` creates the element imperatively at
+  // runtime, well after the server serialised the nonce into the HTML document.
+  const scriptSrc = [
+    self,
+    nonceSrc,
+    ...ANALYTICS_SCRIPT_ORIGINS,
+    ...analyticsScriptOrigins.filter(
+      (origin) => !ANALYTICS_SCRIPT_ORIGINS.includes(origin as never),
+    ),
+  ].join(' ')
+
   return [
     `default-src ${self}`,
     // Inline scripts (SSR hydration, analytics init) use the nonce; no raw unsafe-inline.
-    `script-src ${self} ${nonceSrc}`,
+    // External analytics script origins are added per request — see above.
+    `script-src ${scriptSrc}`,
     // Tailwind v4 injects per-element style attributes; 'unsafe-inline' is required for
     // Tailwind's CSS-in-JS approach to function. This is scoped to style-src, not script-src.
     `style-src ${self} ${unsafeInline}`,
@@ -252,4 +297,64 @@ function rewriteScriptTag(tag: string, nonce: string): string {
       return `${head} ${attrPart}${nonceAttr}${close}`
     },
   )
+}
+
+/**
+ * 计算本次请求需要放进 `script-src` 的分析脚本 origin。
+ *
+ * 与 `initAnalytics()` 的注入清单保持一致：只给**真的会注入脚本**的 provider 放行，
+ * 不为未启用的 provider 预留。Umami 是自托管的，脚本地址来自
+ * `VITE_UMAMI_SCRIPT_URL`，因此这里要显式取出其 origin——写在
+ * `ANALYTICS_SCRIPT_ORIGINS` 里只会是占位域名。
+ *
+ * 本函数在 CSP 拼装处（`src/server.ts`）调用，不需要浏览器环境。
+ */
+export function getAnalyticsScriptOrigins(input: {
+  analytics: { enabled: boolean; providers: readonly string[] }
+  publicEnv: {
+    VITE_GA_ID?: string
+    VITE_PLAUSIBLE_DOMAIN?: string
+    VITE_UMAMI_WEBSITE_ID?: string
+    VITE_UMAMI_ID?: string
+    VITE_UMAMI_SCRIPT_URL?: string
+    VITE_CLARITY_PROJECT_ID?: string
+    VITE_CLARITY_ID?: string
+  }
+}): string[] {
+  const { analytics, publicEnv } = input
+  if (!analytics.enabled) return []
+
+  const selected = new Set(analytics.providers)
+  const origins: string[] = []
+
+  // GA 选中且有 ID → 会注入 googletagmanager.com/gtag/js
+  if (selected.has('ga') && publicEnv.VITE_GA_ID) {
+    origins.push('https://www.googletagmanager.com')
+  }
+  // Plausible 选中且有 domain → 会注入 plausible.io/js/script.js
+  if (selected.has('plausible') && publicEnv.VITE_PLAUSIBLE_DOMAIN) {
+    origins.push('https://plausible.io')
+  }
+  // Umami 选中且 ID 与脚本 URL 都齐 → 注入该 URL（origin 自托管，逐请求推导）
+  if (
+    selected.has('umami') &&
+    (publicEnv.VITE_UMAMI_WEBSITE_ID ?? publicEnv.VITE_UMAMI_ID) &&
+    publicEnv.VITE_UMAMI_SCRIPT_URL
+  ) {
+    try {
+      const url = new URL(publicEnv.VITE_UMAMI_SCRIPT_URL)
+      origins.push(url.origin)
+    } catch {
+      // URL 非法时 `publicEnv` 的 Zod 校验早已在更早的阶段失败；这里静默跳过，
+      // 不向 CSP 写入来源不明的字符串。
+    }
+  }
+  // Clarity 选中且有 project ID → 会注入 clarity.ms/tag/…
+  if (selected.has('clarity') && (publicEnv.VITE_CLARITY_PROJECT_ID ?? publicEnv.VITE_CLARITY_ID)) {
+    origins.push('https://www.clarity.ms')
+  }
+
+  // 去重：同一 origin 可能由多个 provider 命中（例如 GA 与 Clarity 都启用时不会有，
+  // 但自托管 Umami 的 origin 理论上可能与其他项重合）。
+  return [...new Set(origins)]
 }

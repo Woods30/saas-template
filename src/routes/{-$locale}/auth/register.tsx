@@ -10,6 +10,7 @@ import { AuthLayout } from '@/components/auth/AuthLayout'
 import { authFormMessages } from '@/components/auth/formMessages'
 import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons'
 import { SubmitButton } from '@/components/auth/SubmitButton'
+import { trackSignUp } from '@/lib/analytics/events'
 import { assertPageEnabled } from '@/lib/module-access'
 import { m } from '@/locale/paraglide/messages.js'
 
@@ -18,6 +19,11 @@ export const Route = createFileRoute('/{-$locale}/auth/register')({
     assertPageEnabled('auth')
     return fetchAuthProviderAvailability()
   },
+  // 定价页会把选中的方案带过来（`?plan=pro_monthly`）。注册页本身不消费它——
+  // 注册成功后回到定价页继续结账；但必须声明，否则 `router.navigate` 带 search
+  // 时类型不通过，且刷新页面会丢参数。
+  validateSearch: (search: Record<string, unknown>): { plan?: string } =>
+    typeof search.plan === 'string' ? { plan: search.plan } : {},
   component: RegisterPage,
 })
 
@@ -48,9 +54,13 @@ function RegisterPage() {
       // - 不要求验证（邮件模块关闭）：better-auth 已经自动登录并下发会话，跳首页才是事实，
       //   此时提示「请查收邮件」会让用户去等一封永远不会到的信。
       if (signUpOutcome() === 'awaiting_verification') {
+        // 埋点在两个分支之前发： waiting for verification 也算完成注册，
+        // 漏斗要能看出「注册了但没验证」这一段流失。
+        trackSignUp()
         setSubmitted(true)
         return
       }
+      trackSignUp()
       window.location.assign('/')
     },
   })

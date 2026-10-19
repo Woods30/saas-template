@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { addNonceToInlineScripts, buildCspHeader, generateNonce } from '@/lib/security'
+import {
+  addNonceToInlineScripts,
+  buildCspHeader,
+  generateNonce,
+  getAnalyticsScriptOrigins,
+} from '@/lib/security'
 
 describe('buildCspHeader', () => {
   it('包含 default-src self', () => {
@@ -47,6 +52,165 @@ describe('buildCspHeader', () => {
     const header1 = buildCspHeader('nonce1')
     const header2 = buildCspHeader('nonce2')
     expect(header1).not.toBe(header2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// script-src 允许分析脚本（生产环境必须，否则浏览器全部拦截）
+// ---------------------------------------------------------------------------
+
+describe('buildCspHeader — script-src 允许分析脚本', () => {
+  it('未启用分析时 script-src 仍是 self + nonce + 固定分析源，绝不放 unsafe-inline', () => {
+    const header = buildCspHeader('n')
+    // 取 script-src 指令本身，避免误匹配 connect-src 里的同名 origin。
+    const scriptSrc = header
+      .split('; ')
+      .find((d) => d.startsWith('script-src'))
+      ?.trim()
+    expect(scriptSrc).toBe(
+      "script-src 'self' 'nonce-n' https://www.googletagmanager.com https://plausible.io https://www.clarity.ms",
+    )
+  })
+
+  it('显式传入的 analysis origin 出现在 script-src', () => {
+    const header = buildCspHeader('n', ['https://plausible.io'])
+    const scriptSrc = header.split('; ').find((d) => d.startsWith('script-src'))
+    expect(scriptSrc).toContain('https://plausible.io')
+    // 不会因为加了一个 origin 就放宽成 unsafe-inline。
+    expect(scriptSrc).not.toContain("'unsafe-inline'")
+  })
+
+  it('默认包含三家固定域名的分析脚本', () => {
+    // GA / Plausible / Clarity 的脚本 origin 是写死的，启用时直接放行。
+    const header = buildCspHeader('n')
+    const scriptSrc = header.split('; ').find((d) => d.startsWith('script-src'))
+    expect(scriptSrc).toContain('https://www.googletagmanager.com')
+    expect(scriptSrc).toContain('https://plausible.io')
+    expect(scriptSrc).toContain('https://www.clarity.ms')
+  })
+
+  it('重复传入同一 origin 不产生重复项', () => {
+    const header = buildCspHeader('n', ['https://plausible.io', 'https://plausible.io'])
+    const scriptSrc = header.split('; ').find((d) => d.startsWith('script-src'))
+    const occurrences = scriptSrc?.match(/https:\/\/plausible\.io/g)?.length ?? 0
+    expect(occurrences).toBe(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// getAnalyticsScriptOrigins — 只放行真的会注入脚本的 provider
+// ---------------------------------------------------------------------------
+
+describe('getAnalyticsScriptOrigins', () => {
+  const base = {
+    VITE_GA_ID: 'G-XXX',
+    VITE_PLAUSIBLE_DOMAIN: 'jerbix.dev',
+    VITE_UMAMI_WEBSITE_ID: 'site-1',
+    VITE_UMAMI_SCRIPT_URL: 'https://stats.jerbix.dev/script.js',
+    VITE_CLARITY_PROJECT_ID: 'clarity-1',
+  }
+
+  it('analytics 关闭时返回空数组', () => {
+    expect(
+      getAnalyticsScriptOrigins({
+        analytics: { enabled: false, providers: ['ga', 'plausible', 'umami', 'clarity'] },
+        publicEnv: base,
+      }),
+    ).toEqual([])
+  })
+
+  it('未选中任何 provider 时返回空数组', () => {
+    expect(
+      getAnalyticsScriptOrigins({
+        analytics: { enabled: true, providers: [] },
+        publicEnv: base,
+      }),
+    ).toEqual([])
+  })
+
+  it('GA 选中但有 ID 缺失时不放行', () => {
+    expect(
+      getAnalyticsScriptOrigins({
+        analytics: { enabled: true, providers: ['ga'] },
+        publicEnv: { ...base, VITE_GA_ID: undefined },
+      }),
+    ).toEqual([])
+  })
+
+  it('Plausible 选中且有 domain 时放行', () => {
+    expect(
+      getAnalyticsScriptOrigins({
+        analytics: { enabled: true, providers: ['plausible'] },
+        publicEnv: base,
+      }),
+    ).toEqual(['https://plausible.io'])
+  })
+
+  it('Clarity 选中且有 project ID 时放行', () => {
+    expect(
+      getAnalyticsScriptOrigins({
+        analytics: { enabled: true, providers: ['clarity'] },
+        publicEnv: base,
+      }),
+    ).toEqual(['https://www.clarity.ms'])
+  })
+
+  it('Umami 的自托管脚本 URL 取 origin，不含路径', () => {
+    expect(
+      getAnalyticsScriptOrigins({
+        analytics: { enabled: true, providers: ['umami'] },
+        publicEnv: base,
+      }),
+    ).toEqual(['https://stats.jerbix.dev'])
+  })
+
+  it('Umami 缺脚本 URL 时不放行', () => {
+    expect(
+      getAnalyticsScriptOrigins({
+        analytics: { enabled: true, providers: ['umami'] },
+        publicEnv: { ...base, VITE_UMAMI_SCRIPT_URL: undefined },
+      }),
+    ).toEqual([])
+  })
+
+  it('Umami 的兼容字段 VITE_UMAMI_ID 同样有效', () => {
+    expect(
+      getAnalyticsScriptOrigins({
+        analytics: { enabled: true, providers: ['umami'] },
+        publicEnv: { ...base, VITE_UMAMI_WEBSITE_ID: undefined, VITE_UMAMI_ID: 'legacy-site' },
+      }),
+    ).toEqual(['https://stats.jerbix.dev'])
+  })
+
+  it('Clarity 的兼容字段 VITE_CLARITY_ID 同样有效', () => {
+    expect(
+      getAnalyticsScriptOrigins({
+        analytics: { enabled: true, providers: ['clarity'] },
+        publicEnv: { ...base, VITE_CLARITY_PROJECT_ID: undefined, VITE_CLARITY_ID: 'legacy' },
+      }),
+    ).toEqual(['https://www.clarity.ms'])
+  })
+
+  it('Umami 脚本 URL 非法时静默跳过，不写入来源不明字符串', () => {
+    expect(
+      getAnalyticsScriptOrigins({
+        analytics: { enabled: true, providers: ['umami'] },
+        publicEnv: { ...base, VITE_UMAMI_SCRIPT_URL: 'not a url' },
+      }),
+    ).toEqual([])
+  })
+
+  it('多个 provider 同时启用时去重且顺序稳定', () => {
+    const origins = getAnalyticsScriptOrigins({
+      analytics: { enabled: true, providers: ['ga', 'plausible', 'umami', 'clarity'] },
+      publicEnv: base,
+    })
+    expect(origins).toEqual([
+      'https://www.googletagmanager.com',
+      'https://plausible.io',
+      'https://stats.jerbix.dev',
+      'https://www.clarity.ms',
+    ])
   })
 })
 
