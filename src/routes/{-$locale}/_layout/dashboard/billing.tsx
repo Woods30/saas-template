@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { websiteConfig } from '@/config/website'
 import { trackPurchase } from '@/lib/analytics/events'
 import { getRequestLocale } from '@/lib/locale'
 import { assertPageEnabled } from '@/lib/module-access'
@@ -23,7 +24,11 @@ import {
   type PaymentRecord,
   type SubscriptionRecord,
 } from '@/payment/billing'
-import { subscriptionStatusMessageKey } from '@/payment/billing-query'
+import {
+  planNameForSubscription,
+  subscriptionIntervalMessageKey,
+  subscriptionStatusMessageKey,
+} from '@/payment/billing-query'
 
 /**
  * 账单与订阅页。
@@ -110,7 +115,14 @@ function BillingPage() {
         return
       }
       const body = (await response.json()) as { url?: string }
-      if (body.url) window.location.assign(body.url)
+      if (!body.url) {
+        setError(m.settings_error_generic())
+        return
+      }
+      // 新标签页打开：Stripe Billing Portal 里「返回商户」的按钮用的是同一 URL，
+      // 若在本标签跳转，用户回到的账单页就是离开时的那个状态——刚才的加载与筛选
+      // 都得重来。新标签页让原页面保持不动，关掉门户即可继续。
+      window.open(body.url, '_blank', 'noopener')
     } catch {
       setError(m.settings_error_generic())
     } finally {
@@ -164,7 +176,7 @@ function BillingPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{m.settings_billing_manage()}</TableHead>
+                  <TableHead>{m.settings_billing_plan()}</TableHead>
                   <TableHead>{m.settings_billing_status()}</TableHead>
                   <TableHead>{m.settings_billing_renews_on()}</TableHead>
                   <TableHead>{m.settings_billing_amount()}</TableHead>
@@ -173,16 +185,25 @@ function BillingPage() {
               <TableBody>
                 {subscriptions.map((sub) => (
                   <TableRow key={sub.id}>
-                    <TableCell className="font-mono text-xs">
-                      {sub.priceId || sub.subscriptionId || sub.id}
+                    <TableCell>
+                      <PlanName sub={sub} />
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">
                         {m[subscriptionStatusMessageKey(sub.status)]()}
                       </Badge>
                     </TableCell>
-                    <TableCell>{formatDate(sub.currentPeriodEnd)}</TableCell>
-                    <TableCell>{formatAmount(sub.amount, sub.currency)}</TableCell>
+                    {/* 具体时间而非只有日期：续费多发生在本地时区的白天，
+                        只写「2026/10/24」看不出是当天什么时候。 */}
+                    <TableCell>{formatDateTime(sub.currentPeriodEnd)}</TableCell>
+                    <TableCell>
+                      <span className="flex flex-wrap items-center gap-2">
+                        {formatAmount(sub.amount, sub.currency)}
+                        <Badge variant="outline">
+                          {m[subscriptionIntervalMessageKey(sub.interval)]()}
+                        </Badge>
+                      </span>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -244,12 +265,40 @@ function BillingPage() {
   )
 }
 
+/**
+ * 订阅行的套餐名。
+ *
+ * 优先显示定价页上的方案名（「专业版」），用户看得懂；Price 不在映射里时退回显示
+ * Price id——它至少是真实数据，且能看出这是 Stripe 后台手工创建的那一笔。
+ *
+ * 独立成组件而不是一行三元：读的是 `websiteConfig.payment.priceMap`（模块级常量），
+ * 放在渲染函数里每次遍历都会重算，而组件只在 props 变化时重渲染。
+ */
+function PlanName({ sub }: { sub: SubscriptionRecord }) {
+  const plan = planNameForSubscription(sub.priceId, websiteConfig.payment.priceMap)
+  if (plan) return <>{plan}</>
+  return <span className="font-mono text-xs">{sub.priceId || sub.subscriptionId || sub.id}</span>
+}
+
 /** `Date | string | null` → 本地日期；空值显示 `—`。 */
 function formatDate(value: Date | string | null | undefined): string {
   if (!value) return '—'
   const date = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
   return date.toLocaleDateString()
+}
+
+/**
+ * `Date | string | null` → 本地日期 + 时间。
+ *
+ * 续费日期用这个而不是 `formatDate`：同一天的续费时刻跨时区会差出十几小时，
+ * 只给日期不足以支持「今天会不会被扣款」这种判断。
+ */
+function formatDateTime(value: Date | string | null | undefined): string {
+  if (!value) return '—'
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleString()
 }
 
 /**

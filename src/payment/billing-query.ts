@@ -1,3 +1,6 @@
+import { getPricingPlans } from '@/config/blocks'
+import { findPlanIdByPriceId } from '@/config/payment'
+
 /**
  * 账单页的行数据形状。
  *
@@ -9,6 +12,9 @@
  * function 的序列化边界会变成 ISO 字符串，客户端渲染时两种都可能出现。
  */
 
+/** 订阅记录的计费周期；来自 Stripe Price 的 `recurring.interval`。 */
+export type BillingInterval = 'month' | 'year' | 'one_time' | (string & {})
+
 export interface SubscriptionRecord {
   id: string
   customerId?: string | null
@@ -17,7 +23,7 @@ export interface SubscriptionRecord {
   priceId?: string | null
   amount?: number | null
   currency?: string | null
-  interval?: string | null
+  interval?: BillingInterval | null
   currentPeriodStart?: Date | string | null
   currentPeriodEnd?: Date | string | null
   cancelAtPeriodEnd?: boolean | null
@@ -68,5 +74,48 @@ export function subscriptionStatusMessageKey(
     default:
       // `paused` 等未单独设计文案的状态，显示原始值比编一个模糊词更利于排障。
       return 'settings_billing_status'
+  }
+}
+
+/**
+ * 订阅 → 展示用套餐名。
+ *
+ * 反向查 `priceMap`（同一份「定价页 plan ↔ Stripe Price」映射）：新增 plan 或换
+ * Price ID 时账单页自动跟上，不需要再维护一张对照表。
+ *
+ * 查不到时返回 `undefined` 而不是猜测：Price 可能是在 Stripe 后台手工创建的，
+ * 调用方据此退回显示 Price id——看起来不像站内套餐，但至少是真实数据。
+ */
+export function planNameForSubscription(
+  priceId: string | null | undefined,
+  priceMap: import('@/config/payment').PriceMap,
+): string | undefined {
+  if (!priceId) return undefined
+  const planId = findPlanIdByPriceId(priceMap, priceId)
+  if (!planId) return undefined
+  return getPricingPlans().find((plan) => plan.id === planId)?.name
+}
+
+/**
+ * 计费周期 → 展示文案的消息键。
+ *
+ * Stripe 的 `recurring.interval` 取值域是 `day` / `week` / `month` / `year`；本模板
+ * 只提供月、年与一次性三种，其余（如在 Stripe 后台改成了按周）落到原始值显示，
+ * 不把「按周」硬说成「按月」。
+ */
+export function subscriptionIntervalMessageKey(
+  interval: string | null | undefined,
+):
+  | 'settings_billing_interval_month'
+  | 'settings_billing_interval_year'
+  | 'settings_billing_interval_lifetime' {
+  switch (interval) {
+    case 'month':
+      return 'settings_billing_interval_month'
+    case 'year':
+      return 'settings_billing_interval_year'
+    default:
+      // 空值与 `one_time` 都归为终身：一次性买断没有「下一期」。
+      return 'settings_billing_interval_lifetime'
   }
 }
