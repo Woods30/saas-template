@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { PublicEnv } from '@/env/public'
 import type { ServerEnv } from '@/env/server'
+import { findOrphanPlanIds } from './payment'
 import type { ServiceModule, WebsiteConfig } from './website'
 
 /**
@@ -140,6 +141,8 @@ export function getServiceStatuses(input: {
   check('payment', [
     ['STRIPE_SECRET_KEY', !!env.STRIPE_SECRET_KEY, 'env'],
     ['STRIPE_WEBHOOK_SECRET', !!env.STRIPE_WEBHOOK_SECRET, 'env'],
+    // `allowedPriceIds` 与 `priceMap` 同源，因此「配齐了 Price」与「白名单非空」
+    // 是同一件事。空白名单会让 /api/payment 放行任意 priceId，故仍然作为必需项。
     [
       'payment.allowedPriceIds',
       config.payment.allowedPriceIds.some((id) => id.trim().length > 0),
@@ -242,6 +245,15 @@ export function validateWebsiteConfig(config: WebsiteConfig): ConfigIssue[] {
         reason: '图片路径必须为 root-relative 或 protocol-relative',
       })
     }
+  }
+
+  // 配了 Price 但定价页上没有对应方案：用户永远买不到，而配置校验却是「完整」。
+  for (const planId of findOrphanPlanIds(config.payment.priceMap)) {
+    issues.push({
+      key: `payment.priceMap.${planId}`,
+      location,
+      reason: '该 plan id 在定价页方案中不存在，配了 Price 也无法购买',
+    })
   }
 
   return issues

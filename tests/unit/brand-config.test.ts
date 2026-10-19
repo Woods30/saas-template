@@ -45,7 +45,14 @@ describe('websiteConfig 品牌信息', () => {
     expect(config.mail).toEqual({ enabled: false, provider: 'resend', supportEmail: '' })
     expect(config.contact.enabled).toBe(false)
     expect(config.newsletter).toEqual({ enabled: false, provider: 'resend' })
-    expect(config.payment).toEqual({ enabled: false, provider: 'stripe', allowedPriceIds: [] })
+    // `priceMap` 由 `VITE_STRIPE_PRICE_*` 派生：未配置时为空，`allowedPriceIds`
+    // 随之也为空（两者同源）。
+    expect(config.payment).toEqual({
+      enabled: false,
+      provider: 'stripe',
+      allowedPriceIds: [],
+      priceMap: {},
+    })
     expect(config.notification.enabled).toBe(false)
     expect(config.analytics).toEqual({ enabled: false, providers: [] })
     expect(config.social).toEqual({})

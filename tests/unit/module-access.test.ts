@@ -153,7 +153,9 @@ describe('assertPageEnabled', () => {
     expectNotFound(() =>
       assertPageEnabled(
         'payment',
-        makeConfig({ payment: { enabled: false, provider: 'stripe', allowedPriceIds: [] } }),
+        makeConfig({
+          payment: { enabled: false, provider: 'stripe', allowedPriceIds: [], priceMap: {} },
+        }),
       ),
     )
   })
@@ -241,7 +243,7 @@ describe('getModuleUnavailableResponse', () => {
   it('payment 已启用但缺少 allowedPriceIds 返回 503', () => {
     const res = getModuleUnavailableResponse('payment', {
       config: makeConfig({
-        payment: { enabled: true, provider: 'stripe', allowedPriceIds: [] },
+        payment: { enabled: true, provider: 'stripe', allowedPriceIds: [], priceMap: {} },
       }),
       publicEnv,
       serverEnv: creds,
@@ -276,7 +278,12 @@ describe('getSitemapPaths', () => {
 
   it('模块开启时补上 pricing / contact', () => {
     const config = makeConfig({
-      payment: { enabled: true, provider: 'stripe', allowedPriceIds: ['price_1'] },
+      payment: {
+        enabled: true,
+        provider: 'stripe',
+        allowedPriceIds: ['price_1'],
+        priceMap: { pro_monthly: { month: 'price_1' } },
+      },
       contact: { enabled: true },
     })
     const locs = getSitemapPaths(config, 'en').map((p) => p.loc)

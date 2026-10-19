@@ -1,5 +1,7 @@
 import { type PublicEnv, publicEnv } from '@/env/public'
+import { buildPriceMap, collectPriceIds, type PriceMap } from './payment'
 
+export type PaymentProviderName = 'stripe'
 export type AnalyticsName = 'ga' | 'plausible' | 'umami' | 'clarity'
 export type SocialPlatform =
   | 'github'
@@ -48,7 +50,26 @@ export interface WebsiteConfig {
   mail: { enabled: boolean; provider: 'resend' | 'cloudflare'; supportEmail: string }
   contact: { enabled: boolean }
   newsletter: { enabled: boolean; provider: 'resend' | 'beehiiv' }
-  payment: { enabled: boolean; provider: 'stripe'; allowedPriceIds: string[] }
+  /**
+   * 支付模块。
+   *
+   * `provider` 是**可选配置之一**而非唯一实现：本模板的支付链路（API 路由、webhook、
+   * 数据表）都以 provider 为边界，新增 Creem / Waffo 时只需在 `PaymentProviderName`
+   * 里加成员并实现该接口，页面与数据库无需改动。`src/db/schema.ts` 的
+   * `subscriptions` / `payments` 表用 `customerId` / `subscriptionId` / `invoiceId`
+   * 这类**供应商中立**列名，也是为了同一目的。
+   *
+   * `priceMap` 由 `VITE_STRIPE_PRICE_*` 派生（`src/config/payment.ts`），把定价页的
+   * plan id 映射到外部 Price ID；`allowedPriceIds` 从同一份映射汇总，作为
+   * `/api/payment` 的白名单。两者同源，避免「白名单里有、映射里没有」这种会让结账
+   * 502 的配置。
+   */
+  payment: {
+    enabled: boolean
+    provider: PaymentProviderName
+    allowedPriceIds: string[]
+    priceMap: PriceMap
+  }
   notification: { enabled: boolean; provider: 'discord' | 'feishu' }
   analytics: { enabled: boolean; providers: AnalyticsName[] }
   auth: {
@@ -112,7 +133,17 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
     mail: { enabled: false, provider: 'resend', supportEmail: '' },
     contact: { enabled: false },
     newsletter: { enabled: false, provider: 'resend' },
-    payment: { enabled: false, provider: 'stripe', allowedPriceIds: [] },
+    payment: {
+      enabled: false,
+      provider: 'stripe',
+      // `allowedPriceIds` 与 `priceMap` **必须同源**：前者是 /api/payment 的白名单，
+      // 后者是定价页的取价依据。分成两个手写字段时，常见配置是白名单填了 A、
+      // 映射指向 B，结账阶段 502 且现场看不出原因。这里由同一个映射汇总。
+      // 汇总结果为空时 /api/payment 放行任意 priceId——`getServiceStatuses()`
+      // 会因此把 payment 报为 incomplete，部署校验直接拦下。
+      allowedPriceIds: collectPriceIds(buildPriceMap(env)),
+      priceMap: buildPriceMap(env),
+    },
     notification: { enabled: false, provider: 'discord' },
     analytics: { enabled: false, providers: [] },
     // auth 默认开启：模板自带登录 / 注册，关闭时对应页面与 API 一律 404。

@@ -73,39 +73,79 @@ export const verifications = sqliteTable('verifications', {
 })
 
 // 业务表
-export const subscriptions = sqliteTable('subscriptions', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  customerId: text('customer_id'),
-  subscriptionId: text('subscription_id'),
-  status: text('status').notNull(),
-  priceId: text('price_id'),
-  amount: integer('amount'),
-  currency: text('currency'),
-  interval: text('interval'),
-  currentPeriodStart: integer('current_period_start', { mode: 'timestamp' }),
-  currentPeriodEnd: integer('current_period_end', { mode: 'timestamp' }),
-  cancelAtPeriodEnd: integer('cancel_at_period_end', { mode: 'boolean' }).default(false),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-})
+/**
+ * 订阅。
+ *
+ * `customerId` / `subscriptionId` 是**外部系统主键**，列名不绑定供应商（见
+ * `payments` 的说明）。`subscription_id` / `customer_id` / `user_id` 三列各建一个
+ * 普通索引：webhook 每个事件都按 subscription_id 更新、按 customer_id 反查用户，
+ * 而工作台与 portal 端点都按 user_id 取当前订阅。此前三者都无索引，是整表扫描。
+ *
+ * 不建唯一索引：Stripe 允许同一用户有多个订阅（历史遗留、升降级并存），
+ * 强行唯一会在合法场景下让 webhook 写入失败。
+ */
+export const subscriptions = sqliteTable(
+  'subscriptions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    customerId: text('customer_id'),
+    subscriptionId: text('subscription_id'),
+    status: text('status').notNull(),
+    priceId: text('price_id'),
+    amount: integer('amount'),
+    currency: text('currency'),
+    interval: text('interval'),
+    currentPeriodStart: integer('current_period_start', { mode: 'timestamp' }),
+    currentPeriodEnd: integer('current_period_end', { mode: 'timestamp' }),
+    cancelAtPeriodEnd: integer('cancel_at_period_end', { mode: 'boolean' }).default(false),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    userIdx: index('subscriptions_user_idx').on(table.userId),
+    customerIdx: index('subscriptions_customer_idx').on(table.customerId),
+    subscriptionIdx: index('subscriptions_subscription_idx').on(table.subscriptionId),
+  }),
+)
 
-export const payments = sqliteTable('payments', {
-  id: text('id').primaryKey(),
-  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
-  type: text('type').notNull(),
-  stripeInvoiceId: text('stripe_invoice_id'),
-  stripeChargeId: text('stripe_charge_id'),
-  status: text('status').notNull(),
-  amount: integer('amount').notNull(),
-  currency: text('currency').notNull(),
-  description: text('description'),
-  paidAt: integer('paid_at', { mode: 'timestamp' }),
-  refundedAt: integer('refunded_at', { mode: 'timestamp' }),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-})
+/**
+ * 支付流水。
+ *
+ * 列名刻意保持**供应商中立**（`provider` / `invoiceId` / `chargeId` 而非
+ * `stripeInvoiceId`）：Stripe 是当前唯一的 provider，但模板的 provider 注册表允许
+ * 接入 Creem / Waffo 等。若把供应商写进列名，新增 provider 时要么改表、要么在新列
+ * 里重复同一语义，两种做法都会让「一个用户的所有流水」查询变成按 provider 分支。
+ *
+ * `subscriptionId` / `customerId` 同理：它们是外部系统的主键，语义跨供应商一致。
+ */
+export const payments = sqliteTable(
+  'payments',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** 产生该流水的 provider（`stripe` / 未来的 `creem` 等）。 */
+    provider: text('provider').notNull().default('stripe'),
+    type: text('type').notNull(),
+    invoiceId: text('invoice_id'),
+    chargeId: text('charge_id'),
+    status: text('status').notNull(),
+    amount: integer('amount').notNull(),
+    currency: text('currency').notNull(),
+    description: text('description'),
+    paidAt: integer('paid_at', { mode: 'timestamp' }),
+    refundedAt: integer('refunded_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    // 退款按 chargeId 回写、对账按 invoiceId 查询，两者都走点查。
+    invoiceIdx: index('payments_invoice_idx').on(table.invoiceId),
+    chargeIdx: index('payments_charge_idx').on(table.chargeId),
+    userIdx: index('payments_user_idx').on(table.userId),
+  }),
+)
 
 export const files = sqliteTable('files', {
   id: text('id').primaryKey(),
@@ -170,11 +210,20 @@ export const newsletterSubscriptions = sqliteTable('newsletter_subscriptions', {
 // 幂等表：所有外部 webhook 统一落点，避免重投/乱序造成重复副作用。
 // 业务 handler 在 transaction 中先 INSERT event id，成功后 UPDATE processedAt；
 // 失败 DELETE 整行让源端重投。
-export const webhookEvents = sqliteTable('webhook_events', {
-  id: text('id').primaryKey(), // source event id (e.g. `evt_xxx` for Stripe)
-  source: text('source').notNull(), // 'stripe' / 'github' / ...
-  type: text('type').notNull(),
-  payload: text('payload').notNull(), // raw JSON for replay
-  receivedAt: integer('received_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-  processedAt: integer('processed_at', { mode: 'timestamp' }),
-})
+export const webhookEvents = sqliteTable(
+  'webhook_events',
+  {
+    id: text('id').primaryKey(), // source event id (e.g. `evt_xxx` for Stripe)
+    source: text('source').notNull(), // 'stripe' / 'github' / ...
+    type: text('type').notNull(),
+    payload: text('payload').notNull(), // raw JSON for replay
+    receivedAt: integer('received_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    processedAt: integer('processed_at', { mode: 'timestamp' }),
+  },
+  (table) => ({
+    // 补处理：扫描「已收未处理」的事件（进程在 UPDATE processedAt 前崩溃会留下这类行）。
+    processedIdx: index('webhook_events_processed_idx').on(table.processedAt),
+    // 排障按来源 + 类型过滤。
+    sourceTypeIdx: index('webhook_events_source_type_idx').on(table.source, table.type),
+  }),
+)
