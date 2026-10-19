@@ -294,6 +294,56 @@ Vitest + Playwright。
   （`max-w-48 truncate`），点击展开。不要用原生 `title`——触屏上不出现，长文本也不
   换行；也不要单开一列，原因只对已封禁用户有值，会留下整列 `—`。只在
   `banned && banReason` 时渲染：插件解封时不清空 `banReason`，单看字段会误报。
+- **用户列表的筛选走服务端**：admin 插件的 `listUsers` 只有一组
+  `filterField` / `filterValue`，表达不了「邮箱 + 角色 + 封禁状态」三者同时生效。
+  检索在 `src/auth/admin-users-query.ts`（只依赖 drizzle，可单测），排序必须带
+  `asc(users.id)` 作 tiebreaker——同一秒注册的用户不少，只按时间排序时翻页会重复
+  或漏项。搜索用 `like` + 显式转义，不用 `contains`（后者不转义 `%` / `_`）。
+- **CSP 的 `script-src` 必须放行分析脚本 origin**。分析脚本是运行时 `injectScript()`
+  插入的外部 `<script src>`，CSP nonce 只覆盖服务端序列化进 HTML 的内联脚本，覆盖
+  不到它们。GA / Plausible / Clarity 的 origin 固定写在 `ANALYTICS_SCRIPT_ORIGINS`；
+  Umami 是自托管的，origin 由 `getAnalyticsScriptOrigins()` 从
+  `VITE_UMAMI_SCRIPT_URL` 逐请求推导。曾经的实现只放行了 `connect-src`，生产环境
+  脚本全被拦截而测试全绿——**新增外部脚本时 `script-src` 与 `connect-src` 都要看**。
+- **分析只在生产构建中注入**（`import.meta.env.PROD`）。本地开发把分析打开会污染
+  真实账号数据；验证注入链路用 `pnpm build && pnpm preview`。
+- **业务埋点集中在 `src/lib/analytics/events.ts`**，事件名是外部契约，不得在调用处
+  写字面量。参数只放非 PII 值（id / 金额 / 枚举），邮箱与姓名一律不进参数。
+- **`initAnalytics()` 的幂等标记不能提前置位**。放在所有早退条件之前会让 SSR 或
+  模块关闭状态下的首次调用永久占位，同一进程内再也初始化不了。早期实现即是如此。
+
+### 支付
+
+- **Price ID 映射与白名单必须同源**。`payment.priceMap`（plan id → 周期 → Price）
+  由 `VITE_STRIPE_PRICE_*` 派生，`payment.allowedPriceIds` 从同一份映射汇总。
+  分成两个手写字段时，常见配置是白名单填 A、映射指向 B，结账阶段 502 且现场看不出
+  原因。映射在 `src/config/payment.ts`，纯函数、可单测。
+- **没有 Price 的 plan 不得给可点的结账按钮**。定价页面用 `isPlanPurchasable()`
+  降级为「先注册」，不要让用户点出一个 502。`getServiceStatuses()` 会把空白名单
+  报为 `incomplete`，`validateWebsiteConfig()` 会把定价页上不存在的 plan 报成孤儿。
+- **Stripe API 版本锁定 `2025-09-30.clover`（`stripe@23`）**，与旧版相比有三处破坏性
+  字段迁移，webhook 按新结构读取：
+  - `Invoice.subscription` → `Invoice.parent.subscription_details.subscription`
+  - `Invoice.charge` → `Invoice.payments.data[].payment.charge`
+  - `Subscription.current_period_start/end` → `Subscription.items.data[].current_period_*`
+
+  按旧字段读**不会抛错**——值是 `undefined`，于是 `chargeId` 恒为 `null`、周期写成
+  `Invalid Date`，webhook 返回 200 而数据库是错数据。测试夹具必须用新结构，否则
+  掩盖这类漂移。时间戳经 `toDate()` 转换，缺失时整列不写而不是写 `Invalid Date`。
+- **一次性支付必须落 `payments` 行**。`mode: 'payment'`（终身版）没有 subscription，
+  早期实现直接跳过 INSERT，导致 `payments.userId` 恒为 null、无法判断谁买了终身版。
+  现在写一条 `type: 'one_time'` 的行，userId 取自 checkout metadata。
+- **数据库列名保持供应商中立**：`subscriptions` / `payments` 用 `provider` /
+  `customerId` / `subscriptionId` / `invoiceId` / `chargeId`，**不写** `stripeXxx`。
+  模板的 provider 注册表允许接入第二个支付渠道，列名里写死 Stripe 会让新增 provider
+  时要么改表、要么另起同义列。
+- **webhook 的三张表都要有索引**：`subscriptions` 的 `subscription_id` /
+  `customer_id` / `user_id`，`payments` 的 `invoice_id` / `charge_id` / `user_id`。
+  少了它们，每个事件都是整表扫描。
+- **portal 端点只信数据库里的 customerId**。`DELETE /api/payment` 按会话 userId 反查
+  `subscriptions.customerId`，绝不接受客户端传入的 id（否则可以打开他人的账单门户）。
+- **通知失败不阻塞 webhook**：`notify()` 自身吞掉异常并返回 `false`，webhook 的返回值
+  只决定 Stripe 是否重投，与通知成败无关。
 
 ### 文档站
 

@@ -1,10 +1,10 @@
 ---
 title: Analytics
-description: Enabling GA / Plausible / Umami / Clarity and script injection
+description: Enabling GA / Plausible / Umami / Clarity, CSP, and business events
 locale: en
 order: 10
 group: features
-updated: 2026-10-15
+updated: 2026-10-19
 ---
 
 | Provider | Required config |
@@ -14,13 +14,60 @@ updated: 2026-10-15
 | `umami` | `VITE_UMAMI_WEBSITE_ID` (or the legacy `VITE_UMAMI_ID`) + `VITE_UMAMI_SCRIPT_URL` |
 | `clarity` | `VITE_CLARITY_PROJECT_ID` (or the legacy `VITE_CLARITY_ID`) |
 
-`initAnalytics()` registers the selected adapters only in the browser and only when `analytics.enabled` is `true`.
-
 ```ts
 analytics: { enabled: true, providers: ['ga', 'plausible'] },
 ```
 
-> **Note**: A provider that is selected but missing its ID is neither registered nor script-injected; `track()` / `page()` are no-ops with no provider. Umami additionally requires a credential-free HTTPS script URL. This module only handles enable-filtering and script injection — it does **not** mean the collection endpoint is reachable.
+## Enable conditions
+
+`initAnalytics()` registers providers and injects scripts only when **all three** hold:
+the browser context, a production build, and `analytics.enabled`. Nothing is reported
+from a dev server — that would pollute real account data.
+
+To verify the injection path locally, run the production artifact:
+`pnpm build && pnpm preview`.
+
+A provider that is selected but missing its ID is neither registered nor script-injected.
+Umami additionally requires a credential-free HTTPS script URL.
+
+## CSP (important)
+
+Analytics scripts are **external** (`<script src>`) and are created at runtime by
+`injectScript()`. The CSP nonce only covers inline scripts serialized into the HTML by
+the server; it cannot cover tags inserted afterwards. So `script-src` in
+`src/lib/security.ts` must allow script origins explicitly:
+
+- GA / Plausible / Clarity have fixed origins, always present in `script-src`;
+- Umami is self-hosted, so its origin is derived per request from
+  `VITE_UMAMI_SCRIPT_URL` (`getAnalyticsScriptOrigins()`).
+
+With no provider enabled, `connect-src` still lists common analytics domains (for data
+reporting), but `script-src` never relaxes to `unsafe-inline`.
+
+> An earlier version put analytics origins only in `connect-src`, so every production
+> analytics script was blocked by the browser. Tests only asserted `connect-src`, so
+> the suite stayed green while the feature did not work.
+
+## Business events
+
+Page views are reported explicitly on first paint and on route change by
+`AnalyticsProvider`. Business events are declared in one place,
+`src/lib/analytics/events.ts`:
+
+| Event | Fires when |
+|---|---|
+| `sign_up` | registration succeeds (including the "awaiting verification" branch) |
+| `login` | email/password login succeeds |
+| `begin_checkout` | the pricing page starts checkout, before the Stripe redirect |
+| `purchase` | returning to the billing page from Stripe Checkout |
+
+Event params carry only non-PII values (plan id, amount, currency, mode). Email and
+names never enter params: raw analytics data lands with a third party, and sending PII
+runs into both GDPR and the platform's own terms.
+
+Add new events to `ANALYTICS_EVENTS` rather than writing strings at the call site —
+event names are an external contract, and scattered literals produce `sign_up` /
+`signup` spellings that split the reports.
 
 ## References
 
