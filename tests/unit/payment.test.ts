@@ -111,8 +111,8 @@ const mockSchema = {
   },
   payments: {
     id: makeCol('payments.id'),
-    stripeChargeId: makeCol('payments.stripe_charge_id'),
-    stripeInvoiceId: makeCol('payments.stripe_invoice_id'),
+    chargeId: makeCol('payments.charge_id'),
+    invoiceId: makeCol('payments.invoice_id'),
     userId: makeCol('payments.user_id'),
   },
   webhookEvents: { id: makeCol('webhook_events.id') },
@@ -355,7 +355,9 @@ describe('handleCheckoutCompleted — Fix 3 (userId validation) + Fix 5 (missing
     expect(mockDb.insert).not.toHaveBeenCalled()
   })
 
-  it('skips INSERT when subscription id is missing (Fix 5)', async () => {
+  it('INSERTs a payment row for one-time purchases (mode: payment has no subscription)', async () => {
+    const { whereMock } = makeSelectChain([{ id: 'user_lifetime' }])
+    mockDb.select.mockReturnValue({ from: vi.fn().mockReturnValue({ where: whereMock }) })
     mockDb.insert.mockReturnValue({
       values: vi.fn().mockImplementation((v: Record<string, unknown>) => {
         captured.checkoutValues = v
@@ -369,18 +371,30 @@ describe('handleCheckoutCompleted — Fix 3 (userId validation) + Fix 5 (missing
 
     const { handleCheckoutCompleted } = await import('@/routes/api/webhooks/stripe')
     await handleCheckoutCompleted(mockDb as never, {
-      id: 'evt_no_sub',
+      id: 'evt_lifetime',
       data: {
         object: {
-          id: 'cs_no_sub',
-          customer: 'cus_no_sub',
-          metadata: {},
-          // no subscription field
+          id: 'cs_lifetime',
+          mode: 'payment',
+          customer: 'cus_lifetime',
+          amount_total: 29900,
+          currency: 'usd',
+          metadata: { userId: 'user_lifetime' },
+          // 一次性支付没有 subscription 字段
         },
       },
     })
 
-    expect(mockDb.insert).not.toHaveBeenCalled()
+    // 旧实现在没有 subscription 时直接 return，导致 payments.userId 恒为 null、
+    // 无法判断谁买了终身版。
+    expect(mockDb.insert).toHaveBeenCalled()
+    expect(captured.checkoutValues).toMatchObject({
+      id: 'checkout_cs_lifetime',
+      userId: 'user_lifetime',
+      type: 'one_time',
+      status: 'paid',
+      amount: 29900,
+    })
   })
 
   it('INSERTs subscription when userId exists and subscription id is present', async () => {
@@ -426,7 +440,7 @@ describe('handleInvoicePaid — Fix 4 (charge ID + userId lookup)', () => {
     mockInsertFns.invoicePaid.mockClear()
   })
 
-  it('persists stripeChargeId from invoice event', async () => {
+  it('persists chargeId from the new invoice.payments structure', async () => {
     const { whereMock } = makeSelectChain([{ userId: 'user_from_sub' }])
     mockDb.select.mockReturnValue({ from: vi.fn().mockReturnValue({ where: whereMock }) })
     mockDb.insert.mockReturnValue({
@@ -447,8 +461,10 @@ describe('handleInvoicePaid — Fix 4 (charge ID + userId lookup)', () => {
         object: {
           id: 'in_123',
           customer: 'cus_abc',
-          charge: 'ch_def',
-          subscription: 'sub_ghi',
+          // API 2025-09-30.clover：订阅挂在 parent.subscription_details，
+          // 支付记录在 payments.data[].payment，顶层已无 charge / subscription。
+          parent: { subscription_details: { subscription: 'sub_ghi' } },
+          payments: { data: [{ payment: { charge: 'ch_def' } }] },
           amount_paid: 999,
           currency: 'usd',
           created: 1700000000,
@@ -457,7 +473,41 @@ describe('handleInvoicePaid — Fix 4 (charge ID + userId lookup)', () => {
     })
 
     expect(mockDb.insert).toHaveBeenCalled()
-    expect(captured.invoiceValues?.stripeChargeId).toBe('ch_def')
+    expect(captured.invoiceValues?.chargeId).toBe('ch_def')
+    expect(captured.invoiceValues?.type).toBe('subscription')
+  })
+
+  it('falls back to payment_intent id when no charge is present', async () => {
+    const { whereMock } = makeSelectChain([{ userId: 'user_pi' }])
+    mockDb.select.mockReturnValue({ from: vi.fn().mockReturnValue({ where: whereMock }) })
+    mockDb.insert.mockReturnValue({
+      values: vi.fn().mockImplementation((v: Record<string, unknown>) => {
+        captured.invoiceValues = v
+        return {
+          onConflictDoNothing: vi
+            .fn()
+            .mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+        }
+      }),
+    })
+
+    const { handleInvoicePaid } = await import('@/routes/api/webhooks/stripe')
+    await handleInvoicePaid(mockDb as never, {
+      id: 'evt_inv_pi',
+      data: {
+        object: {
+          id: 'in_pi',
+          customer: 'cus_pi',
+          parent: { subscription_details: { subscription: 'sub_pi' } },
+          payments: { data: [{ payment: { payment_intent: 'pi_123' } }] },
+          amount_paid: 500,
+          currency: 'usd',
+          created: 1700000002,
+        },
+      },
+    })
+
+    expect(captured.invoiceValues?.chargeId).toBe('pi_123')
   })
 
   it('looks up userId from subscriptions via customerId', async () => {
@@ -481,8 +531,8 @@ describe('handleInvoicePaid — Fix 4 (charge ID + userId lookup)', () => {
         object: {
           id: 'in_456',
           customer: 'cus_lookup',
-          charge: null,
-          subscription: 'sub_789',
+          parent: { subscription_details: { subscription: 'sub_789' } },
+          payments: { data: [{ payment: { charge: null } }] },
           amount_paid: 1999,
           currency: 'usd',
           created: 1700000001,
@@ -492,5 +542,112 @@ describe('handleInvoicePaid — Fix 4 (charge ID + userId lookup)', () => {
 
     expect(mockDb.insert).toHaveBeenCalled()
     expect(captured.invoiceValues?.userId).toBe('user_found')
+  })
+
+  it('never writes Invalid Date when the timestamp is missing', async () => {
+    const { whereMock } = makeSelectChain([{ userId: 'user_no_ts' }])
+    mockDb.select.mockReturnValue({ from: vi.fn().mockReturnValue({ where: whereMock }) })
+    mockDb.insert.mockReturnValue({
+      values: vi.fn().mockImplementation((v: Record<string, unknown>) => {
+        captured.invoiceValues = v
+        return {
+          onConflictDoNothing: vi
+            .fn()
+            .mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+        }
+      }),
+    })
+
+    const { handleInvoicePaid } = await import('@/routes/api/webhooks/stripe')
+    await handleInvoicePaid(mockDb as never, {
+      id: 'evt_inv_no_ts',
+      data: {
+        object: {
+          id: 'in_no_ts',
+          customer: 'cus_no_ts',
+          parent: null,
+          payments: null,
+          amount_paid: 100,
+          currency: 'usd',
+          // created 缺失
+        },
+      },
+    })
+
+    // 缺时间戳时整列不写，而不是写入 `new Date(undefined * 1000)`。
+    expect(captured.invoiceValues).not.toHaveProperty('paidAt')
+  })
+})
+
+// ------------------------------------------------------------------------------------------------
+// customer.subscription.created / updated — 周期字段在 items.data[] 上（API 2025-09-30）
+// ------------------------------------------------------------------------------------------------
+
+describe('handleSubscriptionUpsert — 周期字段读取自订阅项', () => {
+  const capturedSet: { value: Record<string, unknown> | null } = { value: null }
+
+  beforeEach(() => {
+    capturedSet.value = null
+    mockDb.update.mockReturnValue({
+      set: vi.fn().mockImplementation((v: Record<string, unknown>) => {
+        capturedSet.value = v
+        return { where: vi.fn().mockResolvedValue([]) }
+      }),
+    })
+  })
+
+  it('从 items.data[0] 读取周期与 price', async () => {
+    const { handleSubscriptionUpsert } = await import('@/routes/api/webhooks/stripe')
+    await handleSubscriptionUpsert(mockDb as never, {
+      id: 'sub_new',
+      status: 'active',
+      cancel_at_period_end: false,
+      items: {
+        data: [
+          {
+            price: { id: 'price_pro_monthly' },
+            current_period_start: 1700000000,
+            current_period_end: 1702598400,
+          },
+        ],
+      },
+    })
+
+    expect(capturedSet.value).toMatchObject({
+      status: 'active',
+      priceId: 'price_pro_monthly',
+      cancelAtPeriodEnd: false,
+    })
+    // 周期必须是有效 Date，不是 `new Date(undefined * 1000)` 产生的 Invalid Date。
+    const start = capturedSet.value?.currentPeriodStart as Date
+    expect(start).toBeInstanceOf(Date)
+    expect(Number.isNaN(start.getTime())).toBe(false)
+    expect(start.toISOString()).toBe(new Date(1700000000 * 1000).toISOString())
+  })
+
+  it('items 为空时不写周期列，也不写 Invalid Date', async () => {
+    const { handleSubscriptionUpsert } = await import('@/routes/api/webhooks/stripe')
+    await handleSubscriptionUpsert(mockDb as never, {
+      id: 'sub_empty_items',
+      status: 'trialing',
+      items: { data: [] },
+    })
+
+    expect(capturedSet.value).toMatchObject({ status: 'trialing', priceId: '' })
+    expect(capturedSet.value).not.toHaveProperty('currentPeriodStart')
+    expect(capturedSet.value).not.toHaveProperty('currentPeriodEnd')
+  })
+
+  it('cancel_at_period_end 缺失时按 false 处理', async () => {
+    const { handleSubscriptionUpsert } = await import('@/routes/api/webhooks/stripe')
+    await handleSubscriptionUpsert(mockDb as never, {
+      id: 'sub_no_cancel',
+      status: 'active',
+      items: {
+        data: [{ price: { id: 'price_x' }, current_period_start: 1, current_period_end: 2 }],
+      },
+    })
+
+    expect(capturedSet.value?.cancelAtPeriodEnd).toBe(false)
   })
 })

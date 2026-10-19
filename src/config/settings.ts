@@ -1,5 +1,6 @@
 import {
   IconBell,
+  IconCreditCard,
   IconDeviceLaptop,
   IconKey,
   IconShieldLock,
@@ -19,6 +20,7 @@ export type SettingsSection =
   | 'sessions'
   | 'notifications'
   | 'api-keys'
+  | 'billing'
   | 'admin'
 
 /**
@@ -75,6 +77,18 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
           destination: {
             kind: 'internal',
             options: linkOptions({ to: '/{-$locale}/dashboard/notifications', params: { locale } }),
+          },
+        },
+        {
+          kind: 'link',
+          id: 'billing',
+          title: m.settings_billing_nav(),
+          icon: IconCreditCard,
+          // 支付模块关闭时入口消失（页面与 API 另有门禁，page 走 `payment` 模块判断）。
+          visibility: { module: 'payment' },
+          destination: {
+            kind: 'internal',
+            options: linkOptions({ to: '/{-$locale}/dashboard/billing', params: { locale } }),
           },
         },
         {
@@ -150,6 +164,12 @@ export function getSettingsSectionMeta(section: SettingsSection): {
         title: m.settings_api_keys_title(),
         description: m.settings_api_keys_description(),
         icon: IconKey,
+      }
+    case 'billing':
+      return {
+        title: m.settings_billing_title(),
+        description: m.settings_billing_description(),
+        icon: IconCreditCard,
       }
     case 'admin':
       return {

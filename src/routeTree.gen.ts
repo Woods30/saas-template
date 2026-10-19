@@ -31,6 +31,7 @@ import { Route as Char123LocaleChar125AuthResetPasswordRouteImport } from './rou
 import { Route as Char123LocaleChar125AuthVerifyEmailRouteImport } from './routes/{-$locale}/auth/verify-email'
 import { Route as Char123LocaleChar125LayoutDashboardIndexRouteImport } from './routes/{-$locale}/_layout/dashboard/index'
 import { Route as Char123LocaleChar125LayoutDashboardApiKeysRouteImport } from './routes/{-$locale}/_layout/dashboard/api-keys'
+import { Route as Char123LocaleChar125LayoutDashboardBillingRouteImport } from './routes/{-$locale}/_layout/dashboard/billing'
 import { Route as Char123LocaleChar125LayoutDashboardNotificationsRouteImport } from './routes/{-$locale}/_layout/dashboard/notifications'
 import { Route as Char123LocaleChar125LayoutDashboardProfileRouteImport } from './routes/{-$locale}/_layout/dashboard/profile'
 import { Route as Char123LocaleChar125LayoutDashboardSecurityRouteImport } from './routes/{-$locale}/_layout/dashboard/security'
@@ -170,6 +171,12 @@ const Char123LocaleChar125LayoutDashboardApiKeysRoute =
     path: '/api-keys',
     getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
   } as any)
+const Char123LocaleChar125LayoutDashboardBillingRoute =
+  Char123LocaleChar125LayoutDashboardBillingRouteImport.update({
+    id: '/billing',
+    path: '/billing',
+    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
+  } as any)
 const Char123LocaleChar125LayoutDashboardNotificationsRoute =
   Char123LocaleChar125LayoutDashboardNotificationsRouteImport.update({
     id: '/notifications',
@@ -277,6 +284,7 @@ export interface FileRoutesByFullPath {
   '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
   '/{-$locale}/auth/verify-email': typeof Char123LocaleChar125AuthVerifyEmailRoute
   '/{-$locale}/dashboard/api-keys': typeof Char123LocaleChar125LayoutDashboardApiKeysRoute
+  '/{-$locale}/dashboard/billing': typeof Char123LocaleChar125LayoutDashboardBillingRoute
   '/{-$locale}/dashboard/notifications': typeof Char123LocaleChar125LayoutDashboardNotificationsRoute
   '/{-$locale}/dashboard/profile': typeof Char123LocaleChar125LayoutDashboardProfileRoute
   '/{-$locale}/dashboard/security': typeof Char123LocaleChar125LayoutDashboardSecurityRoute
@@ -312,6 +320,7 @@ export interface FileRoutesByTo {
   '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
   '/{-$locale}/auth/verify-email': typeof Char123LocaleChar125AuthVerifyEmailRoute
   '/{-$locale}/dashboard/api-keys': typeof Char123LocaleChar125LayoutDashboardApiKeysRoute
+  '/{-$locale}/dashboard/billing': typeof Char123LocaleChar125LayoutDashboardBillingRoute
   '/{-$locale}/dashboard/notifications': typeof Char123LocaleChar125LayoutDashboardNotificationsRoute
   '/{-$locale}/dashboard/profile': typeof Char123LocaleChar125LayoutDashboardProfileRoute
   '/{-$locale}/dashboard/security': typeof Char123LocaleChar125LayoutDashboardSecurityRoute
@@ -351,6 +360,7 @@ export interface FileRoutesById {
   '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
   '/{-$locale}/auth/verify-email': typeof Char123LocaleChar125AuthVerifyEmailRoute
   '/{-$locale}/_layout/dashboard/api-keys': typeof Char123LocaleChar125LayoutDashboardApiKeysRoute
+  '/{-$locale}/_layout/dashboard/billing': typeof Char123LocaleChar125LayoutDashboardBillingRoute
   '/{-$locale}/_layout/dashboard/notifications': typeof Char123LocaleChar125LayoutDashboardNotificationsRoute
   '/{-$locale}/_layout/dashboard/profile': typeof Char123LocaleChar125LayoutDashboardProfileRoute
   '/{-$locale}/_layout/dashboard/security': typeof Char123LocaleChar125LayoutDashboardSecurityRoute
@@ -391,6 +401,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/auth/reset-password'
     | '/{-$locale}/auth/verify-email'
     | '/{-$locale}/dashboard/api-keys'
+    | '/{-$locale}/dashboard/billing'
     | '/{-$locale}/dashboard/notifications'
     | '/{-$locale}/dashboard/profile'
     | '/{-$locale}/dashboard/security'
@@ -426,6 +437,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/auth/reset-password'
     | '/{-$locale}/auth/verify-email'
     | '/{-$locale}/dashboard/api-keys'
+    | '/{-$locale}/dashboard/billing'
     | '/{-$locale}/dashboard/notifications'
     | '/{-$locale}/dashboard/profile'
     | '/{-$locale}/dashboard/security'
@@ -464,6 +476,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/auth/reset-password'
     | '/{-$locale}/auth/verify-email'
     | '/{-$locale}/_layout/dashboard/api-keys'
+    | '/{-$locale}/_layout/dashboard/billing'
     | '/{-$locale}/_layout/dashboard/notifications'
     | '/{-$locale}/_layout/dashboard/profile'
     | '/{-$locale}/_layout/dashboard/security'
@@ -660,6 +673,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardApiKeysRouteImport
       parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
     }
+    '/{-$locale}/_layout/dashboard/billing': {
+      id: '/{-$locale}/_layout/dashboard/billing'
+      path: '/billing'
+      fullPath: '/{-$locale}/dashboard/billing'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardBillingRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
+    }
     '/{-$locale}/_layout/dashboard/notifications': {
       id: '/{-$locale}/_layout/dashboard/notifications'
       path: '/notifications'
@@ -763,6 +783,7 @@ declare module '@tanstack/react-router' {
 
 interface Char123LocaleChar125LayoutDashboardRouteChildren {
   Char123LocaleChar125LayoutDashboardApiKeysRoute: typeof Char123LocaleChar125LayoutDashboardApiKeysRoute
+  Char123LocaleChar125LayoutDashboardBillingRoute: typeof Char123LocaleChar125LayoutDashboardBillingRoute
   Char123LocaleChar125LayoutDashboardNotificationsRoute: typeof Char123LocaleChar125LayoutDashboardNotificationsRoute
   Char123LocaleChar125LayoutDashboardProfileRoute: typeof Char123LocaleChar125LayoutDashboardProfileRoute
   Char123LocaleChar125LayoutDashboardSecurityRoute: typeof Char123LocaleChar125LayoutDashboardSecurityRoute
@@ -775,6 +796,8 @@ const Char123LocaleChar125LayoutDashboardRouteChildren: Char123LocaleChar125Layo
   {
     Char123LocaleChar125LayoutDashboardApiKeysRoute:
       Char123LocaleChar125LayoutDashboardApiKeysRoute,
+    Char123LocaleChar125LayoutDashboardBillingRoute:
+      Char123LocaleChar125LayoutDashboardBillingRoute,
     Char123LocaleChar125LayoutDashboardNotificationsRoute:
       Char123LocaleChar125LayoutDashboardNotificationsRoute,
     Char123LocaleChar125LayoutDashboardProfileRoute:
