@@ -1,10 +1,18 @@
-import { Menu } from '@base-ui/react/menu'
 import { IconLogout, IconSettings, IconUser } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { useSession } from '@/auth/client'
 import { signOutAndRedirect } from '@/auth/sign-out'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { getRequestLocale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
 
@@ -35,39 +43,32 @@ export function UserMenu({ guestFallback }: UserMenuProps) {
   const label = session.user.name ?? session.user.email
 
   return (
-    <Menu.Root>
-      <Menu.Trigger render={<Button variant="ghost" size="icon" aria-label={label} />}>
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label={label} />}>
         <IconUser aria-hidden />
-      </Menu.Trigger>
-      <Menu.Portal>
-        <Menu.Positioner align="end" sideOffset={8} className="z-50">
-          <Menu.Popup className="min-w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
-            <div className="border-b border-border px-2 py-1.5">
-              <p className="text-xs text-muted-foreground">{m.auth_menu_account()}</p>
-              <p className="truncate text-sm font-medium">{session.user.email}</p>
-            </div>
-            <Menu.Item
-              render={
-                <Link
-                  to="/{-$locale}/dashboard/profile"
-                  params={{ locale: getRequestLocale() }}
-                  className="mt-1 flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-muted"
-                />
-              }
-            >
-              <IconSettings size={16} aria-hidden />
-              {m.settings_user_menu()}
-            </Menu.Item>
-            <Menu.Item
-              onClick={() => void signOutAndRedirect()}
-              className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-muted"
-            >
-              <IconLogout size={16} aria-hidden />
-              {m.auth_logout()}
-            </Menu.Item>
-          </Menu.Popup>
-        </Menu.Positioner>
-      </Menu.Portal>
-    </Menu.Root>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" sideOffset={8} className="min-w-48">
+        {/* `DropdownMenuLabel` 是 Base UI 的 GroupLabel，必须包在 Group 内。 */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>
+            <p className="text-xs text-muted-foreground">{m.auth_menu_account()}</p>
+            <p className="truncate text-sm font-medium">{session.user.email}</p>
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          render={
+            <Link to="/{-$locale}/dashboard/profile" params={{ locale: getRequestLocale() }} />
+          }
+        >
+          <IconSettings size={16} aria-hidden />
+          {m.settings_user_menu()}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => void signOutAndRedirect()}>
+          <IconLogout size={16} aria-hidden />
+          {m.auth_logout()}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

@@ -83,7 +83,7 @@ function LeapJourney({ paused }: { paused: boolean }) {
       onPointerLeave={resetTilt}
     >
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="size-2 rounded-full bg-accent" />
+        <span className="size-2 rounded-full bg-highlight" />
         {m.home_visual_label()}
       </p>
       <div className="leap-scene" data-step={selected}>
@@ -95,12 +95,25 @@ function LeapJourney({ paused }: { paused: boolean }) {
           <circle cx="369" cy="112" r="5" />
         </svg>
         <span className="leap-horizon" aria-hidden="true" />
+        {/* 深色主题单独一份 mascot：浅色版是在白底上抠的，边缘残留一圈近白
+            抗锯齿像素（实测 79% 的边缘像素接近纯白），深色下看起来像描了一圈
+            发光的边。深色版边缘是干净的，只有 0.2% 近白。
+            两份同画幅（1032×714）同构图，切换时不跳变。 */}
         <img
           src="/mascot.png"
           alt={m.home_mascot_alt()}
           width={1032}
           height={714}
           className="leap-mascot"
+          decoding="async"
+        />
+        <img
+          src="/mascot-dark.png"
+          alt=""
+          aria-hidden="true"
+          width={1032}
+          height={714}
+          className="leap-mascot leap-mascot-on-dark"
           decoding="async"
         />
       </div>
@@ -329,16 +342,16 @@ function Workflow() {
           className="lab-terminal"
           data-ambient
         >
-          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4 text-xs">
+          <div className="lab-terminal-rule flex items-center justify-between gap-3 border-b px-5 py-4 text-xs">
             <span className="flex gap-1.5" aria-hidden>
-              <span className="size-2 rounded-full bg-accent" />
-              <span className="size-2 rounded-full bg-white/30" />
-              <span className="size-2 rounded-full bg-white/20" />
+              <span className="size-2 rounded-full bg-highlight" />
+              <span className="lab-terminal-dot size-2 rounded-full" />
+              <span className="lab-terminal-dot-faint size-2 rounded-full" />
             </span>
             <span>{m.home_workflow_preview()}</span>
           </div>
           <div className="p-6 sm:p-8">
-            <p className="mb-6 text-xs text-white/60">{m.home_demo_label()}</p>
+            <p className="lab-terminal-muted mb-6 text-xs">{m.home_demo_label()}</p>
             <div key={selected} className="space-y-4 font-mono text-sm">
               {workflowPreviews[selected]?.map((line, index) => (
                 <p
@@ -346,7 +359,7 @@ function Workflow() {
                   className="lab-terminal-line flex gap-3"
                   style={{ animationDelay: `${index * 80}ms` }}
                 >
-                  <span className="text-white/35" aria-hidden>
+                  <span className="lab-terminal-faint" aria-hidden>
                     {String(index + 1).padStart(2, '0')}
                   </span>
                   <code className="break-words">{line}</code>
@@ -354,7 +367,7 @@ function Workflow() {
               ))}
             </div>
             <div className="lab-signal-line my-8" aria-hidden />
-            <p className="text-sm leading-relaxed text-white/70">
+            <p className="lab-terminal-muted text-sm leading-relaxed">
               {
                 [
                   m.home_workflow_resources_note(),
@@ -402,7 +415,7 @@ function SourceOverview() {
           {items.map(({ title, description }) => (
             <div key={title} className="py-5 first:pt-0 last:pb-0">
               <dt className="flex items-center gap-3 font-semibold">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-highlight" />
                 {title}
               </dt>
               <dd className="mt-2 pl-[18px] text-sm leading-relaxed text-muted-foreground">

@@ -53,10 +53,10 @@ export function NewsletterCta({
         </Button>
       </form>
       {status === 'success' && (
-        <p className="mt-3 text-sm text-green-600">{successMessage ?? m.newsletter_success()}</p>
+        <p className="mt-3 text-sm text-success">{successMessage ?? m.newsletter_success()}</p>
       )}
       {status === 'error' && (
-        <p className="mt-3 text-sm text-red-600">
+        <p className="mt-3 text-sm text-destructive">
           {m.newsletter_error()}: {error}
         </p>
       )}

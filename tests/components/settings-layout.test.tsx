@@ -9,7 +9,7 @@ import { setLocale } from '@/locale/paraglide/runtime.js'
  * 个人中心外壳。
  *
  * 关键行为：
- * - 顶栏是「折叠按钮 + 三级面包屑 + 右上角主题切换」：不放 `<h1>`（面包屑末级
+ * - 顶栏是「折叠按钮 + 三级面包屑」：不放 `<h1>`（面包屑末级
  *   带 `aria-current="page"`，就是页面标题），也不放「返回站点」（侧栏头 logo 已是出口）；
  * - 面包屑前两级是链接、末级是当前页；末级文案由 pathname 派生；
  * - `Breadcrumb` 等三组 shadcn 件在此第一次被消费，测试同时确认用的是现成件
@@ -84,6 +84,7 @@ function sessionWith(): SessionInfo {
       image: null,
       role: 'user',
     },
+    impersonating: false,
   }
 }
 
@@ -142,9 +143,61 @@ describe('SettingsLayout 顶栏', () => {
     expect(screen.queryByRole('link', { name: '返回站点' })).toBeNull()
   })
 
-  it('右上角渲染主题切换按钮', () => {
+  it('主题切换只出现在窄屏顶栏（md 以上交给用户菜单）', () => {
     renderLayout()
-    expect(screen.getByRole('button', { name: /主题/ })).toBeInTheDocument()
+    const header = document.querySelector('main > header')
+    expect(header).not.toBeNull()
+    const themeButton = within(header as HTMLElement).getByRole('button', { name: /主题/ })
+    // 侧栏常驻时入口在用户菜单里，顶栏这个按钮只在窄屏（抽屉模式）出现。
+    expect(themeButton.closest('.md\\:hidden')).not.toBeNull()
+  })
+})
+
+/**
+ * 侧栏的收起态（icon rail）。
+ *
+ * 两条都会在「看起来还行」的情况下静默回退：
+ * - 横版 logo（1400×380）直接缩到 3rem 宽只剩 18×5px，必须换成方形图标；
+ * - shadcn 原件的收起态图标是 16px，在窄条里偏小，调用处放大到 20px。
+ * 断言类名而不是渲染尺寸：jsdom 不做布局，计算宽度恒为 0。
+ */
+describe('SettingsLayout 收起态侧栏', () => {
+  it('侧栏头同时提供横版 logo 与方形图标，按折叠状态切换', () => {
+    renderLayout()
+    const header = document.querySelector('[data-slot="sidebar-header"]')
+    expect(header).not.toBeNull()
+    const images = [...(header as HTMLElement).querySelectorAll('img')]
+    // v4 的横版 logo 是内联 SVG（由 `--jbx-*` 变量上色，不分浅深两份资产），
+    // 因此这里只有一个 `<img>`：收起状态的方形图标。
+    expect(images.map((img) => img.getAttribute('src'))).toEqual(['/icon-jerboa.svg'])
+    // 横版 logo 是内联 SVG，断言它带「收起态隐藏」的类名而不是 img 的 src。
+    expect(header?.querySelector('svg')).not.toBeNull()
+    expect(header?.querySelector('svg')?.getAttribute('width')).toBe('100%')
+    // 方形图标只在收起态出现。
+    expect(images[0]?.className).toContain('group-data-[collapsible=icon]:block')
+    expect(images[0]?.className).toContain('hidden')
+  })
+
+  it('菜单项放大：展开态 40px 行 + 18px 图标，收起态 36px + 20px 图标', () => {
+    renderLayout()
+    const buttons = [...document.querySelectorAll('[data-slot="sidebar-menu-button"]')]
+    expect(buttons.length).toBeGreaterThan(0)
+    for (const button of buttons) {
+      // 展开态：shadcn 原件的 32px 行高 / 16px 图标在 240px 侧栏里偏挤。
+      expect(button.className).toContain('h-10')
+      expect(button.className).toContain('[&_svg]:size-[1.125rem]')
+      // 收起态：原件 `size-8!` 带 important，覆盖必须同样带 `!`。
+      expect(button.className).toContain('group-data-[collapsible=icon]:size-9!')
+      expect(button.className).toContain('group-data-[collapsible=icon]:[&_svg]:size-5')
+    }
+  })
+
+  it('侧栏底部不再单列主题行（已收进用户菜单）', () => {
+    renderLayout()
+    const footer = document.querySelector('[data-slot="sidebar-footer"]')
+    expect(footer).not.toBeNull()
+    // footer 里只有一个按钮：用户卡片。主题是它的菜单项，不是并列的按钮。
+    expect(within(footer as HTMLElement).queryByRole('button', { name: /主题/ })).toBeNull()
   })
 })
 
@@ -174,5 +227,32 @@ describe('SettingsLayout 侧栏底部的用户卡片', () => {
     // 卡片内容必须落在 footer 里：只证明 footer 存在不等于卡片装对了地方。
     expect(within(footer).getByText('woods@example.com')).toBeInTheDocument()
     expect(within(footer).getByRole('button', { name: 'woods' })).toBeInTheDocument()
+  })
+})
+
+/**
+ * 内容区的宽度契约。
+ *
+ * 这些类名看起来像「样式细节」，实际守的是两条会静默回退的布局不变量：
+ * - `max-w-3xl` 是设置页式的窄栏，表格（登录设备 / API 密钥 / 用户管理）会被挤到
+ *   列间无空隙；宽度回退不会让任何测试变红，只会让宽屏下看起来「很窄」。
+ * - `SidebarInset` 缺 `min-w-0` 时，宽表格的 min-content 会把它撑出视口，
+ *   整页横向滚动（768px 下实测过）。
+ */
+describe('SettingsLayout 内容区宽度', () => {
+  it('内容区用宽容器而非表单窄栏', () => {
+    renderLayout()
+    const inner = screen.getByText('内容区').parentElement
+    expect(inner).not.toBeNull()
+    expect(inner?.className).toContain('max-w-6xl')
+    expect(inner?.className).not.toContain('max-w-3xl')
+    // 允许 flex 收缩，否则宽表格会把面板撑破视口。
+    expect(inner?.className).toContain('min-w-0')
+  })
+
+  it('SidebarInset 允许收缩（表格超宽时由 Table 内部滚动）', () => {
+    renderLayout()
+    const inset = document.querySelector('[data-slot="sidebar-inset"]')
+    expect(inset?.className).toContain('min-w-0')
   })
 })

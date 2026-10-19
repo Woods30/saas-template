@@ -24,7 +24,7 @@ pnpm exec wrangler d1 create saas-template-db
 
 输出里的 `database_id` 要回填到 `wrangler.jsonc`：
 
-```jsonc
+```jsonc title="wrangler.jsonc"
 {
   "d1_databases": [
     {

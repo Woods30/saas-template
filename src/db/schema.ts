@@ -12,7 +12,9 @@ export const users = sqliteTable('users', {
   banned: integer('banned', { mode: 'boolean' }).default(false),
   banReason: text('ban_reason'),
   banExpires: integer('ban_expires', { mode: 'timestamp' }),
-  deletedAt: integer('deleted_at', { mode: 'timestamp' }),
+  // 注意：这里**没有**软删除列。admin 插件的 `removeUser` 是硬删除（连同会话与账号
+  // 一并级联），写任何软删除字段都不会有人读；需要「可恢复删除」时应改用自定义
+  // 插件或 `adminUpdateUser` + 自有字段，而不是留一个永远为 null 的列。
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 })

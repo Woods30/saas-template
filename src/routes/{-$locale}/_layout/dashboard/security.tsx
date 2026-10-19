@@ -42,8 +42,8 @@ function SecurityPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">{m.settings_security_title()}</h2>
-        <p className="text-sm text-muted-foreground">{m.settings_security_description()}</p>
+        <h2 className="text-2xl font-semibold tracking-tight">{m.settings_security_title()}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{m.settings_security_description()}</p>
       </div>
       <ChangePasswordCard />
       <ChangeEmailCard currentEmail={session.user.email} />

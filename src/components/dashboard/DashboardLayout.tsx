@@ -1,7 +1,9 @@
 import { Link, useRouterState } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
+import { authClient } from '@/auth/client'
 import type { SessionInfo } from '@/auth/session'
 import { DashboardUserCard } from '@/components/dashboard/DashboardUserCard'
+import { BrandLogo } from '@/components/layout/BrandLogo'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import {
   Breadcrumb,
@@ -11,6 +13,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
+import { Button } from '@/components/ui/button'
 import {
   Sidebar,
   SidebarContent,
@@ -49,6 +52,20 @@ import { m } from '@/locale/paraglide/messages.js'
  * 侧栏底部的 `DashboardUserCard` 是工作台内**唯一**的登出入口——本路由是 `_layout`，
  * 不渲染营销导航栏，导航栏 `UserMenu` 里的登出在这里不可见。
  */
+/**
+ * 侧栏菜单项的尺寸覆盖（展开态 + 收起态）。
+ *
+ * shadcn 原件给的是 32px 行高 + 16px 图标 + 14px 字号，在本仓 240px 宽的侧栏里偏小、
+ * 偏挤：行与行之间几乎没有呼吸，图标也压不住文字。这里在**调用处**统一放大——
+ *
+ * - 展开态：40px 行高 + 18px 图标 + 15px 字号；
+ * - 收起态：36px 按钮 + 20px 图标（原件的 `size-8!` 带 important，必须同样带 `!`）。
+ *
+ * 不改 `src/components/ui/sidebar.tsx`（上游原件不本地修改）。
+ */
+const SIDEBAR_ITEM_CLASS =
+  'h-10 text-[0.9375rem] [&_svg]:size-[1.125rem] group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:p-2! group-data-[collapsible=icon]:[&_svg]:size-5'
+
 export function DashboardLayout({
   locale,
   session,
@@ -76,20 +93,31 @@ export function DashboardLayout({
 
   return (
     <SidebarProvider>
-      <Sidebar collapsible="icon">
+      {/* `variant="inset"` 与 tweakcn 的 dashboard 示例一致：内容区是一块从侧栏
+          旁浮起的面板（8px 外边距 + `rounded-xl` + `shadow-sm`），顶栏贴着面板顶部
+          并带一条 `border-b`，两者共同构成面板的上边缘。
+
+          本主题下 `--sidebar` 与 `--background` 同值，面板没有底色差，边界全靠
+          `shadow-sm`（浅色档为 8% 品牌紫）与顶栏那条 `--border` 细线来读。这不是
+          缺陷——tweakcn 的预览也是同一套 token、同样的视觉效果，照抄即可。 */}
+      <Sidebar variant="inset" collapsible="icon">
+        {/* 侧栏头：展开态是横向 logo，收起态换成方形图标。
+            横版 logo 的宽高比是 1400:380（≈3.7:1），塞进 3rem 宽的收起态只有 18×5px，
+            形同噪点。收起态改用 `icon`（128×128 正方形），并按容器宽度撑满。 */}
         <SidebarHeader>
           <Link
             to="/{-$locale}"
             params={{ locale }}
             aria-label={websiteConfig.metadata.name}
-            className="flex items-center rounded-lg px-2 py-1 transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+            className="flex items-center rounded-lg bg-logo-plate px-2 py-1 transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
           >
+            <BrandLogo className="w-36 group-data-[collapsible=icon]:hidden" />
             <img
-              src={websiteConfig.metadata.images.logoLight}
+              src={websiteConfig.metadata.images.icon}
               alt=""
-              width={1400}
-              height={380}
-              className="h-auto w-28 dark:bg-white"
+              width={128}
+              height={128}
+              className="hidden size-8 group-data-[collapsible=icon]:block"
             />
           </Link>
         </SidebarHeader>
@@ -116,6 +144,7 @@ export function DashboardLayout({
                             render={options ? <Link {...options} /> : undefined}
                             isActive={isActive}
                             tooltip={item.title}
+                            className={SIDEBAR_ITEM_CLASS}
                           >
                             {Icon && <Icon aria-hidden />}
                             <span>{item.title}</span>
@@ -130,11 +159,22 @@ export function DashboardLayout({
           })}
         </SidebarContent>
         <SidebarFooter>
+          {/* 主题切换不在这里单列一行：它已收进用户菜单（见 `DashboardUserCard`），
+              与「进入个人中心 / 退出登录」同组才对齐，也不额外占一条菜单高度。 */}
           <DashboardUserCard session={session} />
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset>
-        <header className="flex h-14 items-center gap-2 border-b border-border px-4">
+      {/* `min-w-0` 不能省：`SidebarInset` 是 flex item，默认 `min-width: auto`，
+          宽表格的 min-content 宽度会把它撑出视口（768px 下实测撑到 760px，整页横向滚动）。
+          允许收缩后，表格由 `Table` 自带的 `overflow-x-auto` 容器内部滚动。
+
+          inset 变体的 `m-2` / `rounded-xl` / `shadow-sm` 由 `ui/sidebar` 原件按
+          `data-variant=inset` 自动给出，这里不再重复写。 */}
+      <SidebarInset className="min-w-0">
+        {/* 顶栏与 tweakcn 的 dashboard 示例同高同宽：`h-12`（48px），左右留白
+            `px-4` / `md:px-6`，底边一条 `--border` 细线——inset 面板的上边缘
+            就由这条线与面板阴影共同界定，不加这条线，浮起的面板在浅色下读不出顶边。 */}
+        <header className="flex h-12 items-center gap-2 border-b px-4 md:px-6">
           {/* 折叠按钮：点击收起侧栏为图标窄条，再点展开。宽窄屏都常驻——
               窄屏下侧栏是 Sheet 抽屉，同样需要它打开。 */}
           <SidebarTrigger />
@@ -166,14 +206,53 @@ export function DashboardLayout({
               )}
             </BreadcrumbList>
           </Breadcrumb>
-          {/* 主题切换放顶栏右上角而非侧栏头：侧栏折叠后只剩约 3rem，
-              按钮会和 logo 抢位；这里与营销站 Navbar 的位置一致。 */}
-          <div className="ml-auto">
+          {/* 窄屏（`md` 以下）顶栏单独放主题切换。
+              侧栏在窄屏是 Sheet 抽屉，主题收在抽屉底部的用户菜单里要点三次才够到；
+              顶栏放一个图标按钮，一步可达。`md` 以上侧栏常驻，入口回到用户菜单，
+              这里隐藏，避免两处重复。 */}
+          <div className="ml-auto md:hidden">
             <ThemeToggle />
           </div>
         </header>
-        <div className="mx-auto w-full max-w-3xl px-4 py-6">{children}</div>
+        {session.impersonating && <ImpersonationBanner />}
+        {/* 内容区宽度：`max-w-6xl`（1152px）而非表单页常用的 `max-w-3xl`。
+            本区既有单列表单（资料 / 安全），也有 5–6 列的表格（登录设备 / API 密钥 /
+            用户管理）；3xl 会让表格列挤在一起、操作按钮换行。6xl 在 1440px 屏上留出
+            合理边距，在更宽的屏上也不会拉成难读的长行。 */}
+        <div className="mx-auto w-full min-w-0 max-w-6xl px-4 py-6 md:px-6">{children}</div>
       </SidebarInset>
     </SidebarProvider>
+  )
+}
+
+/**
+ * 模拟登录提示条。
+ *
+ * 管理员 impersonate 后浏览器里的身份就是被模拟用户，界面本身看不出差别；没有这条
+ * 提示，管理员很容易忘记自己在「别人身上」操作。退出走插件的 `stopImpersonating`，
+ * 它会恢复原管理员会话——不要自己删 cookie，插件还维护着 `admin_session` 备份。
+ */
+function ImpersonationBanner() {
+  const [busy, setBusy] = useState(false)
+
+  async function stop() {
+    setBusy(true)
+    const { error } = await authClient.admin.stopImpersonating()
+    setBusy(false)
+    if (error) return
+    // 身份已切回管理员，整页刷新让所有路由上下文按新会话重算。
+    window.location.reload()
+  }
+
+  return (
+    <div
+      role="status"
+      className="flex items-center justify-center gap-3 border-b border-warning/30 bg-warning/10 px-4 py-2 text-sm text-warning"
+    >
+      <span>{m.settings_impersonating_banner()}</span>
+      <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void stop()}>
+        {m.settings_impersonating_stop()}
+      </Button>
+    </div>
   )
 }

@@ -16,7 +16,7 @@ export function Hero(props: HeroProps) {
       <div className="min-w-0">
         {props.eyebrow && (
           <p className="mb-6 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />
+            <span className="h-2 w-2 shrink-0 rounded-full bg-highlight" />
             {props.eyebrow}
           </p>
         )}

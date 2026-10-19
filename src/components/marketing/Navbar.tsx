@@ -1,6 +1,7 @@
 import { IconArrowUpRight, IconMenu2, IconX } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { BrandLogo } from '@/components/layout/BrandLogo'
 import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher'
 import { MenuItems } from '@/components/layout/MenuItems'
 import { MenuLink } from '@/components/layout/MenuLink'
@@ -56,15 +57,9 @@ export function Navbar() {
           params={{ locale }}
           onClick={closeMenus}
           aria-label={websiteConfig.metadata.name}
-          className="flex shrink-0 items-center rounded-lg px-2 py-1 transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring dark:bg-white"
+          className="flex shrink-0 items-center rounded-lg bg-logo-plate px-2 py-1 transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
         >
-          <img
-            src={websiteConfig.metadata.images.logoLight}
-            alt=""
-            width={1400}
-            height={380}
-            className="h-auto w-32 sm:w-40"
-          />
+          <BrandLogo className="w-32 sm:w-40" />
         </Link>
         <div className="hidden items-center lg:flex">
           <MenuItems

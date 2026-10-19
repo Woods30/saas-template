@@ -11,6 +11,7 @@ import {
 import type { ReactNode } from 'react'
 import { AnalyticsProvider } from '@/components/AnalyticsProvider'
 import { JsonLd } from '@/components/JsonLd'
+import { websiteConfig } from '@/config/website'
 import { organizationJsonLd } from '@/lib/json-ld'
 import { htmlLang } from '@/lib/locale'
 import { getTheme } from '@/lib/theme'
@@ -23,15 +24,27 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { name: 'theme-color', content: '#FDF9F3', media: '(prefers-color-scheme: light)' },
-      { name: 'theme-color', content: '#0B0E20', media: '(prefers-color-scheme: dark)' },
+      {
+        name: 'theme-color',
+        content: websiteConfig.ui.themeColor.light,
+        media: '(prefers-color-scheme: light)',
+      },
+      {
+        name: 'theme-color',
+        content: websiteConfig.ui.themeColor.dark,
+        media: '(prefers-color-scheme: dark)',
+      },
       { title: m.site_name() },
       { name: 'description', content: m.site_description() },
     ],
     links: [
       { rel: 'stylesheet', href: globalsCss },
       { rel: 'manifest', href: '/manifest.json' },
+      // 图标按浏览器能力分级：SVG 优先（矢量、随系统深浅色切换），
+      // 不认 SVG 的退回 ICO，iOS 主屏用 180px PNG（它不读 manifest 的 icons）。
       { rel: 'icon', href: '/icon.svg', type: 'image/svg+xml' },
+      { rel: 'icon', href: '/favicon.ico', sizes: '16x16 32x32 48x48 64x64' },
+      { rel: 'apple-touch-icon', href: '/favicon-180.png', sizes: '180x180' },
     ],
   }),
   shellComponent: RootDocument,

@@ -87,7 +87,7 @@ curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUN
 
 `wrangler.jsonc` 的 `name` 决定 Worker 名，进而决定线上地址：
 
-```jsonc
+```jsonc title="wrangler.jsonc"
 {
   // 配账号子域 saas-template-demo → https://demo.saas-template-demo.workers.dev
   "name": "demo"
@@ -127,7 +127,7 @@ Deployed demo triggers
 
 `workers.dev` 适合验证与演示；正式站点建议绑自己的域名。域名需已托管在 Cloudflare（NS 指向 Cloudflare），然后在 `wrangler.jsonc` 加：
 
-```jsonc
+```jsonc title="wrangler.jsonc"
 "routes": [
   {
     "pattern": "your-domain.com",
@@ -144,8 +144,8 @@ Deployed demo triggers
 
 `main` 分支的 CI 通过后自动部署。
 
-```yaml
-# .github/workflows/deploy.yml（节选）
+```yaml title=".github/workflows/deploy.yml"
+# 节选（完整文件见仓库 .github/workflows/deploy.yml）
 on:
   workflow_run:
     workflows: [CI]

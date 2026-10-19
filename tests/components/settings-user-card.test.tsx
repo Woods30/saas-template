@@ -1,8 +1,10 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
+import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionInfo } from '@/auth/session'
 import { DashboardUserCard } from '@/components/dashboard/DashboardUserCard'
 import { Sidebar, SidebarFooter, SidebarProvider } from '@/components/ui/sidebar'
+import { websiteConfig } from '@/config/website'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
 /**
@@ -24,6 +26,30 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/auth/sign-out', () => ({
   signOutAndRedirect: (...args: unknown[]) => mocks.signOutAndRedirect(...args),
 }))
+
+/**
+ * 菜单里的「个人中心」是 `Link`。这里只替换 `Link`：`useLinkProps` 需要 Router
+ * 上下文，jsdom 里没有；其余导出（`linkOptions` 等纯函数）走真实实现。
+ */
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return {
+    ...actual,
+    Link: ({
+      children,
+      to,
+      params,
+      ...props
+    }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+      to?: string
+      params?: { locale?: string }
+    }) => (
+      <a {...props} href={`${(to ?? '').replace('/{-$locale}', `/${params?.locale ?? ''}`)}`}>
+        {children}
+      </a>
+    ),
+  }
+})
 
 /**
  * jsdom 不带 `canvas` 包，`new window.Image()` 既不解析也不报错——jsdom 的
@@ -84,6 +110,7 @@ function sessionWith(overrides: Partial<SessionInfo['user']> = {}): SessionInfo 
       role: 'user',
       ...overrides,
     },
+    impersonating: false,
   }
 }
 
@@ -162,5 +189,61 @@ describe('DashboardUserCard', () => {
     await waitFor(() => expect(screen.getByText('退出登录')).toBeInTheDocument())
     screen.getByText('退出登录').click()
     await waitFor(() => expect(mocks.signOutAndRedirect).toHaveBeenCalled())
+  })
+})
+
+/**
+ * 用户菜单里的主题子菜单。
+ *
+ * 主题从侧栏里单独一行挪进账号菜单后，有两件事必须守住：
+ * - 它和其它账号项同组（不再是侧栏里一个图标对不齐的孤立行）；
+ * - 点选后写 `THEME` cookie 并更新 `<html data-theme>`，与独立按钮走同一套逻辑
+ *   （`useTheme`），不能出现「菜单里切了但下次刷新又回去」。
+ */
+describe('DashboardUserCard 主题子菜单', () => {
+  afterEach(() => {
+    document.documentElement.removeAttribute('data-theme')
+  })
+
+  /** 打开用户菜单并展开主题子菜单。 */
+  async function openThemeSubmenu() {
+    screen.getByRole('button', { name: /woods/ }).click()
+    const trigger = await screen.findByRole('menuitem', { name: '切换主题' })
+    // Base UI 的子菜单在 hover / 点击 trigger 时展开；点击在 jsdom 下最稳。
+    trigger.click()
+    return trigger
+  }
+
+  it('菜单里有主题子菜单，而不是侧栏里单独一行', async () => {
+    renderCard(sessionWith())
+    const trigger = await openThemeSubmenu()
+    expect(trigger).toBeInTheDocument()
+    // 子菜单 trigger 自带展开指示（chevron），说明用的是 `DropdownMenuSub`。
+    expect(trigger.querySelector('svg')).not.toBeNull()
+  })
+
+  it('点选主题后更新 data-theme 与 cookie', async () => {
+    document.documentElement.dataset.theme = 'system'
+    renderCard(sessionWith())
+    await openThemeSubmenu()
+
+    const dark = await screen.findByRole('menuitemradio', { name: '深色' })
+    dark.click()
+
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'))
+    expect(document.cookie).toContain('THEME=dark')
+  })
+
+  it('主题切换被禁用时整项不渲染', async () => {
+    const original = websiteConfig.ui.enableThemeSwitch
+    websiteConfig.ui.enableThemeSwitch = false
+    try {
+      renderCard(sessionWith())
+      screen.getByRole('button', { name: /woods/ }).click()
+      await screen.findByText('退出登录')
+      expect(screen.queryByText('切换主题')).toBeNull()
+    } finally {
+      websiteConfig.ui.enableThemeSwitch = original
+    }
   })
 })

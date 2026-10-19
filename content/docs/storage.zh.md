@@ -47,7 +47,7 @@ pnpm exec wrangler r2 bucket create saas-template-uploads
 
 在 `wrangler.jsonc` 声明：
 
-```jsonc
+```jsonc title="wrangler.jsonc"
 {
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "saas-template-uploads" }]
 }

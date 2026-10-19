@@ -1,5 +1,6 @@
+import { IconKey } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { authClient } from '@/auth/client'
 import {
   AlertDialog,
@@ -12,7 +13,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogClose,
@@ -22,6 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
@@ -66,6 +67,8 @@ interface ApiKeyEntry {
 function ApiKeysPage() {
   const [keys, setKeys] = useState<ApiKeyEntry[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // 名称过滤：与 admin 用户管理同一套做法——输入即时回显，过滤在渲染时本地生效。
+  const [searchValue, setSearchValue] = useState('')
 
   // 创建弹窗：输入名称 → 提交；成功后切到「一次性展示」弹窗。
   const [createOpen, setCreateOpen] = useState(false)
@@ -116,76 +119,121 @@ function ApiKeysPage() {
     await load()
   }
 
+  // 名称过滤：本地过滤（`apiKey.list` 没有查询参数，也没有分页），
+  // 空关键词等于不过滤，显示全部。
+  const visibleKeys: ApiKeyEntry[] | null = useMemo(() => {
+    const needle = searchValue.trim().toLowerCase()
+    if (keys === null) return null
+    if (!needle) return keys
+    return keys.filter((entry) => (entry.name ?? '').toLowerCase().includes(needle))
+  }, [keys, searchValue])
+
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">{m.settings_api_keys_title()}</h2>
-        <p className="text-sm text-muted-foreground">{m.settings_api_keys_description()}</p>
+        <h2 className="text-2xl font-semibold tracking-tight">{m.settings_api_keys_title()}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{m.settings_api_keys_description()}</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{m.settings_api_keys_title()}</CardTitle>
-          <CardDescription>{m.settings_api_keys_description()}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          {keys === null ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner />
-            </div>
-          ) : keys.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{m.settings_api_keys_empty()}</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{m.settings_api_keys_table_name()}</TableHead>
-                  <TableHead>{m.settings_api_keys_table_key()}</TableHead>
-                  <TableHead>{m.settings_api_keys_table_created_at()}</TableHead>
-                  <TableHead>{m.settings_api_keys_table_expires_at()}</TableHead>
-                  <TableHead className="text-right">
-                    {m.settings_api_keys_table_actions()}
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {keys.map((entry) => (
-                  <TableRow key={entry.id}>
-                    {/* 名称由用户输入，React 默认转义，无需手工处理。 */}
-                    <TableCell>{entry.name ?? '—'}</TableCell>
-                    <TableCell className="font-mono text-xs">{maskKey(entry)}</TableCell>
-                    <TableCell>{formatDate(entry.createdAt)}</TableCell>
-                    <TableCell>
-                      {entry.expiresAt
-                        ? formatDate(entry.expiresAt)
-                        : m.settings_api_keys_never_expires()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPendingDelete(entry)}
-                      >
-                        {m.settings_api_keys_delete()}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+      {/* 表格直接放在内容区，外面不再套 `Card`。
 
+          按 shadcn `dashboard-01` 示例的写法，表格自带外框就够：`Table` 的滚动容器
+          （`data-slot="table-container"`）由 globals.css 统一给了边框 + 圆角，
+          `TableHeader` 给 `sticky top-0 bg-muted`，页面再套一层 `Card` 就出现
+          「框里套框」的双边框——一圈是卡片的，一圈是表格的，两侧间距还不一致。
+
+          同理，工具行（搜索 + 创建按钮）与分页行都贴在表格外侧、用 `flex justify-between`
+          与表格共享同一套留白，不另起一张卡。 */}
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Input
+            value={searchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
+            placeholder={m.settings_api_keys_search_placeholder()}
+            aria-label={m.settings_api_keys_search_placeholder()}
+            className="max-w-sm flex-1"
+          />
           <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
             {m.settings_api_keys_create()}
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+
+        {visibleKeys === null ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Spinner />
+          </div>
+        ) : visibleKeys.length === 0 ? (
+          /* 空态自带主操作：按 shadcn `Empty` 的组合约定，操作按钮放 `EmptyContent`，
+             与图标 / 文案一起垂直居中。不要留在 `Empty` 外面——`Empty` 带 `flex-1`，
+             外面再放一个按钮会被挤到下一行左侧。 */
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <IconKey aria-hidden />
+              </EmptyMedia>
+              <EmptyTitle>{m.settings_api_keys_empty()}</EmptyTitle>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
+                {m.settings_api_keys_create()}
+              </Button>
+            </EmptyContent>
+          </Empty>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {/* 窄屏只留「名称 / 密钥 / 操作」，时间列按断点放出；
+                    理由同 sessions 页：横向滚动会把「删除」推出可视区。 */}
+                <TableHead>{m.settings_api_keys_table_name()}</TableHead>
+                <TableHead>{m.settings_api_keys_table_key()}</TableHead>
+                <TableHead className="hidden sm:table-cell">
+                  {m.settings_api_keys_table_created_at()}
+                </TableHead>
+                <TableHead className="hidden lg:table-cell">
+                  {m.settings_api_keys_table_expires_at()}
+                </TableHead>
+                <TableHead className="text-right">{m.settings_api_keys_table_actions()}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visibleKeys.map((entry) => (
+                <TableRow key={entry.id}>
+                  {/* 名称由用户输入，React 默认转义，无需手工处理。 */}
+                  {/* 密钥用等宽：掩码里的 `••••••` 与前后缀需要字符对齐，这是唯一
+                      有语义的等宽场景。字号不缩小，与同行其它单元格保持一致。 */}
+                  <TableCell className="w-40 truncate">{entry.name ?? '—'}</TableCell>
+                  <TableCell className="font-mono">{maskKey(entry)}</TableCell>
+                  <TableCell className="hidden sm:table-cell">
+                    {formatDate(entry.createdAt)}
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">
+                    {entry.expiresAt
+                      ? formatDate(entry.expiresAt)
+                      : m.settings_api_keys_never_expires()}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPendingDelete(entry)}
+                    >
+                      {m.settings_api_keys_delete()}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
 
       {/* 创建：输入名称 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

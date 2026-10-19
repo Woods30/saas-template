@@ -40,8 +40,15 @@ Image paths must be root-relative (`/logo.svg`) or protocol-relative (`//cdn/log
 |---|---|---|---|
 | `ui.defaultTheme` | `'light' \| 'dark' \| 'system'` | `'system'` | Theme when no `THEME` cookie is present |
 | `ui.enableThemeSwitch` | `boolean` | `true` | Hide the theme toggle when `false` |
+| `ui.themeColor.light` | `string` | `'#FCFAFF'` | Browser UI / PWA background in the light theme |
+| `ui.themeColor.dark` | `string` | `'#0A0A0F'` | Same, in the dark theme |
 
 `ui.defaultTheme` is read by both SSR and the client, so the first paint does not flicker.
+
+`ui.themeColor` must match the light/dark values of `--background` in `src/styles/globals.css`.
+Browsers paint these outside the page, where CSS variables are unavailable. Change both
+together; `tests/unit/theme-colors.test.ts` fails if they drift, and also checks
+`background_color` in `public/manifest.json`.
 
 ## Site base URL
 
@@ -121,11 +128,15 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       images: {
         ogImage: '/logo.png',
         logoLight: '/logo-horizontal-transparent.svg',
-        logoDark: '/logo-horizontal-transparent.svg',
+        logoDark: '/logo-horizontal-dark.svg',
         icon: '/icon-jerboa.svg',
       },
     },
-    ui: { defaultTheme: 'system', enableThemeSwitch: true },
+    ui: {
+      defaultTheme: 'system',
+      enableThemeSwitch: true,
+      themeColor: { light: '#FCFAFF', dark: '#0A0A0F' },
+    },
     docs: { enabled: true },
     blog: { enabled: true },
     changelog: { enabled: true },

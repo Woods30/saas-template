@@ -83,10 +83,15 @@ function open() {
   return screen.getByRole('dialog')
 }
 
-/** 在弹窗的输入框里输入。 */
+/**
+ * 在弹窗的输入框里输入。
+ *
+ * `CommandInput`（cmdk）渲染的是 `role="combobox"` 的输入框，而非原生 `searchbox`；
+ * 这是命令面板的标准可访问性结构（配合 listbox / option 一起用）。
+ */
 function type(value: string) {
   const dialog = screen.getByRole('dialog')
-  fireEvent.change(within(dialog).getByRole('searchbox'), { target: { value } })
+  fireEvent.change(within(dialog).getByRole('combobox'), { target: { value } })
 }
 
 describe('DocsSearch', () => {
@@ -99,14 +104,14 @@ describe('DocsSearch', () => {
   it('点击触发器打开居中的搜索弹窗', () => {
     render(<DocsSearch docs={DOCS} locale="zh" />)
     const dialog = open()
-    expect(within(dialog).getByRole('searchbox')).toHaveAccessibleName()
+    expect(within(dialog).getByRole('combobox')).toHaveAccessibleName()
   })
 
   it('打开后自动聚焦输入框', async () => {
     render(<DocsSearch docs={DOCS} locale="zh" />)
     const dialog = open()
     // Base UI 在弹窗挂载后异步移动焦点，需等一拍。
-    await waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole('searchbox')))
+    await waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole('combobox')))
   })
 
   it('按标题过滤并给出匹配结果', () => {

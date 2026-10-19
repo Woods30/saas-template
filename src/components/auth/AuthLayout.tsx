@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
+import { BrandLogo } from '@/components/layout/BrandLogo'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
@@ -24,15 +25,9 @@ export function AuthLayout({ title, description, children }: AuthLayoutProps) {
         to="/{-$locale}"
         params={{ locale: getLocale() }}
         aria-label={websiteConfig.metadata.name}
-        className="mx-auto mb-6 flex items-center rounded-lg px-2 py-1 transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring dark:bg-white"
+        className="mx-auto mb-6 flex items-center rounded-lg bg-logo-plate px-2 py-1 transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
       >
-        <img
-          src={websiteConfig.metadata.images.logoLight}
-          alt=""
-          width={1400}
-          height={380}
-          className="h-auto w-32"
-        />
+        <BrandLogo className="w-32" />
       </Link>
       <Card>
         <CardHeader>

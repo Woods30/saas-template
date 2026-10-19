@@ -27,7 +27,7 @@ describe('websiteConfig 品牌信息', () => {
     expect(websiteConfig.metadata.images).toEqual({
       ogImage: '/logo.png',
       logoLight: '/logo-horizontal-transparent.svg',
-      logoDark: '/logo-horizontal-transparent.svg',
+      logoDark: '/logo-horizontal-dark.svg',
       icon: '/icon-jerboa.svg',
     })
     for (const path of Object.values(websiteConfig.metadata.images)) {
@@ -49,7 +49,11 @@ describe('websiteConfig 品牌信息', () => {
     expect(config.notification.enabled).toBe(false)
     expect(config.analytics).toEqual({ enabled: false, providers: [] })
     expect(config.social).toEqual({})
-    expect(config.ui).toEqual({ defaultTheme: 'system', enableThemeSwitch: true })
+    expect(config.ui).toEqual({
+      defaultTheme: 'system',
+      enableThemeSwitch: true,
+      themeColor: { light: '#FCFAFF', dark: '#0A0A0F' },
+    })
     expect(config.features).toEqual({
       enableI18n: true,
       enableFileUpload: false,

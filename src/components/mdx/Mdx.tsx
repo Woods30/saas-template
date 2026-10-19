@@ -1,5 +1,14 @@
+import { IconFile, IconTerminal2 } from '@tabler/icons-react'
 import { Fragment, useMemo } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  CodeBlock,
+  CodeBlockActions,
+  CodeBlockContent,
+  CodeBlockCopyButton,
+  CodeBlockHeader,
+  CodeBlockTitle,
+} from '@/components/ui/code-block'
 import {
   TableBody,
   TableCell,
@@ -9,6 +18,7 @@ import {
   Table as UITable,
 } from '@/components/ui/table'
 import { headingId } from '@/lib/docs'
+import { m } from '@/locale/paraglide/messages.js'
 import '@/styles/mdx.css'
 
 /**
@@ -25,53 +35,142 @@ export function Mdx({ source }: { source: string }) {
   // 正文开头的 `# 标题` 与 frontmatter 的 `title` 重复（调用方都已用
   // frontmatter 标题渲染页面 `<h1>`），丢弃首个 h1 块避免页面出现两个标题。
   const blocks = useMemo(() => stripLeadingHeading(parseBlocks(source)), [source])
+  // 连续的 `###` 小节包成时间线（见 `groupSteps`）。
+  const sections = useMemo(() => groupSteps(blocks), [blocks])
+
   return (
     <div className="mdx prose">
-      {blocks.map((b, idx) => {
-        const key = `block-${idx}`
-        if (b.kind === 'h1') return <h1 key={key}>{b.text}</h1>
-        // h2 / h3 带锚点 id，供右侧目录的 `#id` 链接跳转（id 由 headingId 统一生成）。
-        if (b.kind === 'h2')
-          return (
-            <h2 key={key} id={headingId(b.text)}>
-              {b.text}
-            </h2>
-          )
-        if (b.kind === 'h3')
-          return (
-            <h3 key={key} id={headingId(b.text)}>
-              {b.text}
-            </h3>
-          )
-        if (b.kind === 'code')
-          return (
-            <pre key={key}>
-              <code>{b.text}</code>
-            </pre>
-          )
-        if (b.kind === 'table') return <Table key={key} table={b} />
-        if (b.kind === 'quote')
-          return isNoteQuote(b.text) ? (
-            <Alert key={key} className="not-prose my-4">
-              <AlertDescription>{renderInline(b.text)}</AlertDescription>
-            </Alert>
-          ) : (
-            <blockquote key={key} className="mdx-quote">
-              {renderInline(b.text)}
-            </blockquote>
-          )
-        if (b.kind === 'list') {
-          const ListTag = b.ordered ? 'ol' : 'ul'
-          return (
-            <ListTag key={key}>
-              {b.items.map((item) => (
-                // 列表项为纯文本，内容本身即可作为稳定 key。
-                <li key={item}>{renderInline(item)}</li>
-              ))}
-            </ListTag>
-          )
+      {sections.map((section) =>
+        section.kind === 'steps' ? (
+          <Steps key={section.key} steps={section.steps} />
+        ) : (
+          <BlockView key={section.key} block={section.block} />
+        ),
+      )}
+    </div>
+  )
+}
+
+/** 单个块级元素的渲染。抽出来是因为时间线内部要复用同一套渲染。 */
+function BlockView({ block: b }: { block: AnyBlock }) {
+  if (b.kind === 'h1') return <h1>{b.text}</h1>
+  // h2 / h3 带锚点 id，供右侧目录的 `#id` 链接跳转（id 由 headingId 统一生成）。
+  if (b.kind === 'h2') return <h2 id={headingId(b.text)}>{b.text}</h2>
+  if (b.kind === 'h3') return <h3 id={headingId(b.text)}>{b.text}</h3>
+  if (b.kind === 'code') return <Code block={b} />
+  if (b.kind === 'table') return <Table table={b} />
+  if (b.kind === 'quote')
+    return isNoteQuote(b.text) ? (
+      <Alert className="not-prose my-4">
+        <AlertDescription>{renderInline(b.text)}</AlertDescription>
+      </Alert>
+    ) : (
+      <blockquote className="mdx-quote">{renderInline(b.text)}</blockquote>
+    )
+  if (b.kind === 'list') {
+    const ListTag = b.ordered ? 'ol' : 'ul'
+    return (
+      <ListTag>
+        {b.items.map((item) => (
+          // 列表项为纯文本，内容本身即可作为稳定 key。
+          <li key={item}>{renderInline(item)}</li>
+        ))}
+      </ListTag>
+    )
+  }
+  return <p>{renderInline(b.text)}</p>
+}
+
+/** 渲染单元：一个普通块，或一组连续的步骤小节。 */
+type RenderSection =
+  | { kind: 'block'; key: string; block: AnyBlock }
+  | { kind: 'steps'; key: string; steps: Array<{ block: AnyBlock; body: AnyBlock[] }> }
+
+/**
+ * 把连续的 `###` 小节收拢成时间线。
+ *
+ * 判定条件：某个 `##` 标题之后紧跟至少两个 `###`，就把这些 `###`（以及各自的正文）
+ * 当作一组步骤，渲染成带编号与竖线的序列。
+ *
+ * 为什么不是「所有 `###` 都变成步骤」：`###` 在文档里也用来划分同级小节（如
+ * `auth.zh.md` 的「验证链接 / 重置链接」）。只有**成组出现**时才是操作序列；
+ * 孤立的 `###` 保持普通标题。这条规则不需要内容作者额外标注，也不会误伤。
+ */
+function groupSteps(blocks: AnyBlock[]): RenderSection[] {
+  const sections: RenderSection[] = []
+  let i = 0
+
+  while (i < blocks.length) {
+    const block = blocks[i]
+    if (!block) break
+
+    if (block.kind !== 'h3') {
+      sections.push({ kind: 'block', key: `block-${i}`, block })
+      i++
+      continue
+    }
+
+    // 收集连续的 `###` 小节：每个小节 = 标题 + 直到下一个 h2/h3 的正文。
+    const steps: Array<{ block: AnyBlock; body: AnyBlock[] }> = []
+    while (i < blocks.length && blocks[i]?.kind === 'h3') {
+      const heading = blocks[i] as Block
+      const body: AnyBlock[] = []
+      i++
+      while (i < blocks.length) {
+        const next = blocks[i]
+        if (!next || next.kind === 'h3' || next.kind === 'h2' || next.kind === 'h1') break
+        body.push(next)
+        i++
+      }
+      steps.push({ block: heading, body })
+    }
+
+    // 只有一个小节不构成序列——退回普通标题渲染，避免给单个小节套一条孤立竖线。
+    if (steps.length < 2) {
+      const [only] = steps
+      if (only) {
+        sections.push({ kind: 'block', key: `block-${i}-h3`, block: only.block })
+        for (const [offset, item] of only.body.entries()) {
+          sections.push({ kind: 'block', key: `block-${i}-${offset}`, block: item })
         }
-        return <p key={key}>{renderInline(b.text)}</p>
+      }
+      continue
+    }
+
+    sections.push({ kind: 'steps', key: `steps-${i}`, steps })
+  }
+
+  return sections
+}
+
+/**
+ * 步骤时间线：左侧编号圆点 + 贯穿竖线，右侧是小节标题与正文。
+ *
+ * 参照 docs.tanstarter.dev 的 `fd-steps`。用「编号 + 竖线」而不是普通小标题，是因为
+ * 配置类文档的 `###` 是**有先后顺序的操作**（先建 bucket 才能绑 binding），
+ * 平铺的小标题读起来像并列选项，容易跳步。
+ *
+ * 标题仍保留 `h3` 与锚点 id：右侧目录、`#锚点` 深链、读屏软件的标题导航都依赖它。
+ */
+function Steps({ steps }: { steps: Array<{ block: AnyBlock; body: AnyBlock[] }> }) {
+  return (
+    <div className="mdx-steps">
+      {steps.map((step, index) => {
+        const heading = step.block as Block
+        return (
+          <section key={headingId(heading.text)} className="mdx-step">
+            <div className="mdx-step-marker" aria-hidden>
+              <span className="mdx-step-number">{index + 1}</span>
+            </div>
+            <div className="mdx-step-body">
+              <h3 id={headingId(heading.text)}>{heading.text}</h3>
+              {step.body.map((item, offset) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: 静态正文，位置即身份且从不重排。
+                <BlockView key={`${headingId(heading.text)}-${offset}`} block={item} />
+              ))}
+            </div>
+          </section>
+        )
       })}
     </div>
   )
@@ -80,6 +179,10 @@ export function Mdx({ source }: { source: string }) {
 interface Block {
   kind: 'h1' | 'h2' | 'h3' | 'code' | 'p'
   text: string
+  /** 代码块的围栏语言（```` ```ts ```` 里的 `ts`）；无语言时为空串。 */
+  lang?: string
+  /** 围栏语言之后的其余标记（如 `title="wrangler.jsonc"`）；无则为空串。 */
+  meta?: string
 }
 
 /** 表格：`header` 为表头单元格，`rows` 为数据行；分隔行已在解析阶段丢弃。 */
@@ -104,20 +207,74 @@ interface QuoteBlock {
 
 type AnyBlock = Block | TableBlock | ListBlock | QuoteBlock
 
+/**
+ * 代码块的标题栏文案：优先显示文件名，其次语言名，都没有时显示「代码」。
+ *
+ * 围栏支持两种写法（与 fumadocs 一致）：
+ * - ```` ```ts ````：语言名，标题栏显示 `ts`；
+ * - ```` ```ts title="wrangler.jsonc" ````：带文件名，标题栏显示文件名。
+ *
+ * 文件名对配置类文档很关键：读者要知道这段 JSON 该粘进哪个文件。
+ */
+function codeTitle(lang: string, meta: string): string {
+  const file = /title="([^"]+)"/.exec(meta)?.[1]
+  if (file) return file
+  if (lang !== '') return lang
+  return m.docs_code_block()
+}
+
+/** 终端类语言用终端图标，其余用文件图标——与参考站一致，让读者一眼分辨「命令」与「文件内容」。 */
+const TERMINAL_LANGS = new Set(['bash', 'sh', 'shell', 'zsh', 'console', 'powershell', 'cmd'])
+
+/**
+ * 代码块：文件图标 + 文件名标题栏 + 复制按钮。
+ *
+ * 用 shadcn 的 `CodeBlock` 系列而不是裸 `<pre>`：复制按钮、`copied` 反馈、
+ * `aria-live` 播报都在原件里，自己写一份只会漏掉其中几项。
+ *
+ * **标题栏始终渲染**（参照 docs.tanstarter.dev）：它同时承担「这是哪个文件 / 哪门语言」
+ * 与「和正文分割开」两个职责。没有标题栏时，代码块与段落只靠一圈细边框区分，
+ * 长文档里很容易看混。
+ */
+function Code({ block }: { block: Block }) {
+  const lang = block.lang ?? ''
+  const meta = block.meta ?? ''
+  const FileIcon = TERMINAL_LANGS.has(lang) ? IconTerminal2 : IconFile
+
+  return (
+    <CodeBlock className="not-prose my-4">
+      {/* 头部定高 38px 并居中（参照站是 `h-9.5`）。原件只给了 `pt-3` 没有 `pb`，
+          内容因此贴着下边框，看起来「偏下」——这里补成对称内边距。
+          标题颜色压到 `muted-foreground`：原件默认用 `text-foreground`，和正文代码
+          同色，会抢走对代码本身的注意力。文件名是辅助信息，弱一档更合适。 */}
+      <CodeBlockHeader className="h-9.5 items-center border-b border-border bg-muted/60 px-4 pt-0">
+        <FileIcon className="size-3.5 shrink-0" aria-hidden />
+        <CodeBlockTitle className="text-xs font-normal text-muted-foreground">
+          {codeTitle(lang, meta)}
+        </CodeBlockTitle>
+        <CodeBlockActions>
+          <CodeBlockCopyButton value={block.text} aria-label={m.docs_code_copy()} />
+        </CodeBlockActions>
+      </CodeBlockHeader>
+      <CodeBlockContent>
+        <code>{block.text}</code>
+      </CodeBlockContent>
+    </CodeBlock>
+  )
+}
+
 function Table({ table }: { table: TableBlock }) {
   return (
     // `not-prose`：表格样式由 ui/table 提供，不叠加 typography 的表格排版。
-    // ui/table 上游不含表头底色与外框，故在调用处补：外层容器给 `border` + `rounded-lg`，
-    // 每个 TableHead 给 `bg-muted/50`（表头行的下边框由 TableHeader 的 `[&_tr]:border-b` 提供）。
-    <div className="not-prose mb-4 overflow-hidden rounded-lg border border-border">
+    // 外框、圆角、表头底色都由 globals.css 的 `[data-slot='table-*']` 规则统一给，
+    // 调用处不重复写。
+    <div className="not-prose mb-4">
       <UITable>
         <TableHeader>
           <TableRow>
             {table.header.map((cell, column) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: 静态表格，位置即身份
-              <TableHead key={`h-${column}`} className="bg-muted/50">
-                {renderInline(cell)}
-              </TableHead>
+              <TableHead key={`h-${column}`}>{renderInline(cell)}</TableHead>
             ))}
           </TableRow>
         </TableHeader>
@@ -182,6 +339,8 @@ function parseBlocks(source: string): AnyBlock[] {
   const lines = source.split('\n')
   let inCode = false
   let codeBuf: string[] = []
+  let codeLang = ''
+  let codeMeta = ''
   let paraBuf: string[] = []
 
   function flushPara() {
@@ -195,12 +354,19 @@ function parseBlocks(source: string): AnyBlock[] {
 
     if (line.startsWith('```')) {
       if (inCode) {
-        out.push({ kind: 'code', text: codeBuf.join('\n') })
+        out.push({ kind: 'code', text: codeBuf.join('\n'), lang: codeLang, meta: codeMeta })
         codeBuf = []
+        codeLang = ''
+        codeMeta = ''
         inCode = false
       } else {
         flushPara()
         inCode = true
+        // 围栏信息串：```` ```ts title="a.jsonc" ```` → 语言 `ts` + 其余标记。
+        // 只用于标题栏标注，不做语法高亮。
+        const info = line.slice(3).trim()
+        codeLang = info.split(/\s+/)[0] ?? ''
+        codeMeta = info.slice(codeLang.length).trim()
       }
       continue
     }

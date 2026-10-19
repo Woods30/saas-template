@@ -1,4 +1,14 @@
 @import "tailwindcss";
+/*
+ * 主题字体（tweakcn 导出稿的 Inter / Quicksand / JetBrains Mono）自托管，
+ * 不走 Google Fonts：CSP 的 `font-src` 因此不必放开第三方源，也没有首屏外链。
+ * 三套字体都不含中日韩字形，中文由 `--font-sans` 里的系统字体栈接管。
+ *
+ * `@import` 必须排在所有其他 at-rule 之前（CSS 规范要求），因此放在 `@plugin` 之上。
+ */
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/quicksand";
+@import "@fontsource-variable/jetbrains-mono";
 @plugin "@tailwindcss/typography";
 
 /*
@@ -13,7 +23,21 @@
  * 每个 token 用 `light-dark(明, 暗)` 一次声明两值，由 color-scheme 决定取哪一个，
  * 因此不存在重复的明暗声明块。`light-dark()` 自 2024 起为现代浏览器基线特性。
  *
- * 配色取自 Jerbix 品牌（主紫、海军蓝、暖橙、奶油底），取值均通过 WCAG AA 对比度校验。
+ * 配色取自 **tweakcn 主题 `cmvd8fl4i000104l4ctz6amjc`**（为 Jerbix Logo 定制的紫系）。
+ * 该主题以 `.dark` 类导出，本仓改用 `light-dark()` 单声明；数值按下面的规则校准过，
+ * 与导出稿的差异全部记在各 token 注释里。品牌稿（`jerbix-brand-v4`）仍是 Logo 的
+ * 唯一色源，站点 `--primary` 与品牌紫 `#6948FF` 几乎同值（`#6B46FF`），两套紫不打架。
+ *
+ * **紫只出现在强调位**：主色、链接、选中态、`--accent` 面。正文区、代码块、边框
+ * 仍是中性灰（C ≤ 0.02）。tweakcn 稿里 `--secondary` / `--accent` 带明显紫调
+ * （C ≈ 0.02–0.04），只作**小面积**的菜单面与高亮底使用，不要拿来铺整块版面。
+ *
+ * 所有取值都过了 WCAG AA，见各 token 的注释。
+ *
+ * 层次模型（与 shadcn dashboard 一致）：
+ *   - 浅色：background 冷白 < sidebar 略深 < card / popover 纯白（卡片浮起）；
+ *   - 深色：background 最深 < sidebar 更暗（侧栏内凹）< card / popover 抬亮。
+ * 侧栏与内容区不同色，卡片再亮一档，三层才有纵深——三者同色会让整页变成一块平面。
  */
 @theme inline {
   --color-background: var(--background);
@@ -29,8 +53,12 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
+  --color-highlight: var(--highlight);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-logo-plate: var(--logo-plate);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -42,18 +70,80 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /*
+   * `--destructive-foreground` 与 `--chart-*` 是 tweakcn 导出稿里的 token。
+   * shadcn 的 Base UI 风格原件（button / badge 等）用 `bg-destructive/10 +
+   * text-destructive` 的浅色配方，不引用 `destructive-foreground`；但导出稿的主题
+   * 自带这组值，组件若换用实心 destructive 按钮就需要它。留在这里，避免下游手写
+   * `text-white` 绕过主题。`chart-*` 同理：`ui/chart` 由 `ChartConfig` 逐图配色，
+   * 这两组是给自定义图表用的默认序列色。
+   */
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
 
   /*
-   * 圆角派生尺度：由 :root 中的 --radius 基准值推导，
-   * 使圆角工具类真正受 --radius 驱动（shadcn v4 约定）。
+   * 字体族：tweakcn 导出稿指定 Inter（正文）+ Quicksand（标题）+ JetBrains Mono（代码）。
+   *
+   * 三套字体都**不含中日韩字形**，`PingFang SC` / `Microsoft YaHei` 是必需的
+   * 后备项——否则中文会落到浏览器的默认字体（macOS 上常是宋体），与拉丁字母的
+   * 字重、行高都对不上，中英混排会一行一个样。
    */
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  --font-sans:
+    "Inter Variable", "Quicksand Variable", ui-sans-serif, system-ui, "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono:
+    "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, "PingFang SC", monospace;
+  --font-serif: Georgia, "Songti SC", serif;
+  /* 导出稿的 `--tracking-normal: -0.01em`：紧排字距，与 Inter 的字形配套。 */
+  --tracking-normal: -0.01em;
+
+  /*
+   * 圆角派生尺度：逐档照抄 shadcn v4 约定（tweakcn 预览用的也是这一套）。
+   * 以 `--radius`（0.75rem）为基准，sm/md 递减 4px / 2px，xl 递增 4px；
+   * 2xl 以上不再从基准推导，直接取 Tailwind v4 的默认值。
+   *
+   * 早先用的是倍数制（0.6 / 0.8 / 1 / 1.4 / 1.8 / 2.2 / 2.6），与导出稿的
+   * 16px 卡片圆角差 0.8px（1.4×12 = 16.8）。单看不可见，但既然要「全部使用导出
+   * 主题的内容」，就按同一套公式来，不再自造尺度。
+   */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+  --radius-4xl: 2rem;
+
+  /*
+   * 阴影八档：逐档照抄 tweakcn 导出稿，不做视觉调整。
+   *
+   * `shadow-sm` / `shadow-md` 这些工具类直接读同名的 `--shadow-*` 变量。覆盖它们就
+   * 等于换掉整套投影语言——这是让 input（浅紫微光）、dropdown（`shadow-md`）、toast
+   * （`shadow-lg`）与 tweakcn 预览一致的唯一办法：本仓有 20 处 `shadow-*` 调用，
+   * 只改调用处等于重写全部组件。
+   *
+   * **不能像颜色那样用 `light-dark(浅, 深)` 折叠**：`light-dark()` 只在颜色上下文里
+   * 被解析，`box-shadow` 把整个 `light-dark(...)` 当未知值，结果是 `shadow: none`。
+   * 因此这里按主题分两套，默认值是浅色档（投影色为**品牌紫** `#6b46ff`），
+   * 深色档在下面的 `:root[data-theme="dark"]` 里覆盖为黑色。
+   * `sm` 及以上的第二层位移按档递增（1/2/4/8px），`2xs` / `xs` / `2xl` 只有一层。
+   */
+  --shadow-2xs: 0px 4px 15px 0px hsl(252 100% 63.7255% / 0.04);
+  --shadow-xs: var(--shadow-2xs);
+  --shadow-sm:
+    0px 4px 15px 0px hsl(252 100% 63.7255% / 0.08), 0px 1px 2px -1px hsl(252 100% 63.7255% / 0.08);
+  --shadow: var(--shadow-sm);
+  --shadow-md:
+    0px 4px 15px 0px hsl(252 100% 63.7255% / 0.08), 0px 2px 4px -1px hsl(252 100% 63.7255% / 0.08);
+  --shadow-lg:
+    0px 4px 15px 0px hsl(252 100% 63.7255% / 0.08), 0px 4px 6px -1px hsl(252 100% 63.7255% / 0.08);
+  --shadow-xl:
+    0px 4px 15px 0px hsl(252 100% 63.7255% / 0.08), 0px 8px 10px -1px hsl(252 100% 63.7255% / 0.08);
+  --shadow-2xl: 0px 4px 15px 0px hsl(252 100% 63.7255% / 0.2);
 }
 
 /* ---- 明暗选择：改写 color-scheme，light-dark() 据此取值 ---- */
@@ -86,38 +176,195 @@
   }
 }
 
+/*
+ * 深色档的阴影：导出稿把深色投影换成**黑色**，且位移与模糊更大（0 8px 25px）。
+ *
+ * 阴影不能像颜色那样写成 `light-dark(浅, 深)`——`light-dark()` 只在颜色上下文被解析，
+ * `box-shadow` 会把整个 `light-dark(...)` 当未知值（结果是 `shadow: none`）。所以浅色档
+ * 直接写在 `@theme inline`（= 上面那八档，投影色为品牌紫），深色档在这里另起一套规则。
+ *
+ * `data-theme="system"` 时同样要看系统偏好（`@media` 那段），否则跟随系统的用户会把
+ * 浅紫投影带进深色外观。两段选择器与 `@custom-variant dark` 保持一致。
+ */
+:root[data-theme="dark"] {
+  --shadow-2xs: 0px 8px 25px 0px hsl(0 0% 0% / 0.2);
+  --shadow-xs: var(--shadow-2xs);
+  --shadow-sm: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 1px 2px -1px hsl(0 0% 0% / 0.4);
+  --shadow-md: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 2px 4px -1px hsl(0 0% 0% / 0.4);
+  --shadow-lg: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 4px 6px -1px hsl(0 0% 0% / 0.4);
+  --shadow-xl: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 8px 10px -1px hsl(0 0% 0% / 0.4);
+  --shadow-2xl: 0px 8px 25px 0px hsl(0 0% 0% / 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --shadow-2xs: 0px 8px 25px 0px hsl(0 0% 0% / 0.2);
+    --shadow-xs: var(--shadow-2xs);
+    --shadow-sm: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 1px 2px -1px hsl(0 0% 0% / 0.4);
+    --shadow-md: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 2px 4px -1px hsl(0 0% 0% / 0.4);
+    --shadow-lg: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 4px 6px -1px hsl(0 0% 0% / 0.4);
+    --shadow-xl: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 8px 10px -1px hsl(0 0% 0% / 0.4);
+    --shadow-2xl: 0px 8px 25px 0px hsl(0 0% 0% / 1);
+  }
+}
+
 /* ---- 品牌 token：每个 token 用 light-dark(明, 暗) 一次声明 ---- */
 :root {
-  --background: light-dark(oklch(0.9835 0.009 78.28), oklch(0.1717 0.0376 274.61));
-  --foreground: light-dark(oklch(0.212 0.0513 274.59), oklch(0.9421 0.0162 293.74));
-  --card: light-dark(oklch(1 0 0), oklch(0.222 0.0545 274.95));
-  --card-foreground: light-dark(oklch(0.212 0.0513 274.59), oklch(0.9421 0.0162 293.74));
-  --popover: light-dark(oklch(1 0 0), oklch(0.222 0.0545 274.95));
-  --popover-foreground: light-dark(oklch(0.212 0.0513 274.59), oklch(0.9421 0.0162 293.74));
-  --primary: light-dark(oklch(0.5114 0.2532 282.17), oklch(0.6345 0.2104 288.92));
-  --primary-foreground: light-dark(oklch(1 0 0), oklch(0.1717 0.0376 274.61));
-  --secondary: light-dark(oklch(0.951 0.0194 302.21), oklch(0.2604 0.0583 274.71));
-  --secondary-foreground: light-dark(oklch(0.212 0.0513 274.59), oklch(0.9421 0.0162 293.74));
-  --muted: light-dark(oklch(0.951 0.0194 302.21), oklch(0.2604 0.0583 274.71));
-  --muted-foreground: light-dark(oklch(0.4916 0.0437 276.49), oklch(0.7253 0.0359 289.14));
-  --accent: light-dark(oklch(0.7241 0.1543 53.26), oklch(0.7837 0.1587 72.99));
-  --accent-foreground: light-dark(oklch(0.212 0.0513 274.59), oklch(0.1717 0.0376 274.61));
-  --destructive: light-dark(oklch(0.5527 0.21 27), oklch(0.64 0.19 25));
-  --border: light-dark(oklch(0.9208 0.0195 302.19), oklch(0.2962 0.0587 274.24));
-  --input: light-dark(oklch(0.9208 0.0195 302.19), oklch(0.2962 0.0587 274.24));
-  --ring: light-dark(oklch(0.5114 0.2532 282.17), oklch(0.6345 0.2104 288.92));
+  /* 页面底：`#FCFAFF`（带一丝紫的冷白）/ `#0A0A0F`（近黑）。 */
+  --background: light-dark(oklch(0.988 0.0069 304.2448), oklch(0.1473 0.0107 285.0074));
   /*
-   * 侧栏语义色：转发到既有品牌令牌，使个人中心侧栏的底色 / 边框 / hover 与全站一致。
-   * 转发而非新造色值——`--card` 等本身是 light-dark()，因此侧栏自动跟随主题。
+   * 正文：`#121217` / `#F0F0F5`。对 background 18.01（浅）/ 17.39（深）。
+   *
+   * 深色档取导出稿原值 0.9566。它比纯白低一档（不是 `#FFF`），在近黑底上是
+   * 柔和的浅灰而非屏幕上的白斑；再压暗就会偏离主题的既定观感。
    */
-  --sidebar: var(--card);
-  --sidebar-foreground: var(--foreground);
-  --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: var(--muted);
-  --sidebar-accent-foreground: var(--muted-foreground);
-  --sidebar-border: var(--border);
-  --sidebar-ring: var(--ring);
+  --foreground: light-dark(oklch(0.1845 0.0101 285.3646), oklch(0.9566 0.0067 286.2732));
+  /* 卡片比页面底更亮（浅色纯白 / 深色抬一档），让内容块从底色上浮起来。 */
+  --card: light-dark(oklch(1 0 0), oklch(0.1873 0.0203 284.2753));
+  --card-foreground: light-dark(oklch(0.1845 0.0101 285.3646), oklch(0.9566 0.0067 286.2732));
+  --popover: light-dark(oklch(1 0 0), oklch(0.1873 0.0203 284.2753));
+  --popover-foreground: light-dark(oklch(0.1845 0.0101 285.3646), oklch(0.9566 0.0067 286.2732));
+  /*
+   * 主色：`#6B46FF` / `#8061FF`。
+   *
+   * 浅色档是导出稿原值：压在白字上 5.32:1、压在页面上 5.13:1。
+   *
+   * 深色档从导出稿的 L=0.5990 提到 **0.615**：原值压在 `--card` 上只有 4.28:1，
+   * 作为链接色不达 AA。提到 0.615 后压在卡片上 4.51:1、页面上 4.79:1，是满足
+   * AA 的最小改动——再提就明显偏离主题了。
+   *
+   * **深色档的前景色用墨色，不用白**：白字压在提亮后的主色上只有 3.9:1 左右，
+   * 墨色 4.79:1。导出稿统一写白字，在深色档过不了 AA。
+   */
+  --primary: light-dark(oklch(0.5553 0.2554 283.4559), oklch(0.615 0.2299 286.2047));
+  --primary-foreground: light-dark(oklch(1 0 0), oklch(0.1473 0.0107 285.0074));
+  /*
+   * 次级面与强调面：**都带明显紫调**（C=0.027 / 0.033），这是主题的特征。
+   *
+   * 它们只作**小面积**底色（菜单 hover、选中项、标签、次级按钮）；大面积分区用
+   * `--muted`（近乎无彩的冷灰）。把紫调铺到整块版面，页面会泛薰衣草色。
+   *
+   * `secondary-foreground` / `accent-foreground` 在浅色档用 L=0.545 而非导出稿的
+   * 0.5553：导出稿是 4.42:1，差一点点过不了 AA，压暗一档后 4.63:1。
+   */
+  --secondary: light-dark(oklch(0.9498 0.0272 297.3155), oklch(0.244 0.0341 283.5857));
+  --secondary-foreground: light-dark(oklch(0.4357 0.1578 283.9596), oklch(0.8145 0.0994 289.1546));
+  --muted: light-dark(oklch(0.9686 0.0066 286.2752), oklch(0.244 0.0341 283.5857));
+  /*
+   * 次要文本：对 background 6.13（浅）/ 6.29（深），对 muted 5.80 / 5.21，达 AA。
+   */
+  --muted-foreground: light-dark(oklch(0.4878 0.0254 285.4193), oklch(0.6586 0.0235 285.736));
+  --accent: light-dark(oklch(0.939 0.0326 295.3163), oklch(0.2984 0.0486 283.0603));
+  --accent-foreground: light-dark(oklch(0.545 0.2554 283.4559), oklch(0.7118 0.1627 290.5306));
+  /*
+   * 高亮色：落地页的点、轨道、连接线与渐变光斑。
+   *
+   * 主题里的 `--accent` 是**面**（菜单 hover / 选中项底色），不是强调色——拿它画
+   * 装饰元素会得到一块面而不是一个点。这里单独声明一个亮紫，与主色同色相、更浅
+   * 一档。非文本图形按 WCAG 1.4.11 需 ≥ 3:1：对底色 3.79（浅）/ 6.92（深）。
+   */
+  --highlight: light-dark(oklch(0.6197 0.1908 292.6297), oklch(0.6979 0.1743 292.6297));
+  /*
+   * 危险色：导出稿浅色 `#FF4D4D` 对页面底只有 3.15:1、白字压上去 3.27:1，两头都
+   * 不达 AA，压到 L=0.58（5.18:1 / 白字 4.78:1）；深色档 `#8E1F1F` 太暗（2.38:1），
+   * 提到 L=0.64（5.45:1）。
+   */
+  --destructive: light-dark(oklch(0.58 0.2146 25.0397), oklch(0.64 0.1613 26.8994));
+  /*
+   * 危险色上的前景：实心 destructive 按钮 / 徽章的**文字色**。
+   *
+   * 两档取值相反：浅色档 `#DD2730` 配白字 4.78:1（配墨色只有 3.9:1）；深色档
+   * `#DD5E54` 配白字只有 3.62:1，配墨色 5.45:1。这正是 token 存在的意义，
+   * 不要退化成 `text-white`。
+   */
+  --destructive-foreground: light-dark(oklch(1 0 0), oklch(0.1473 0.0107 285.0074));
+  /*
+   * 成功色：用于「操作成功」这类短文本（订阅成功等），与 destructive 同一用途层级。
+   * 对 `--background` 的对比度为 5.13（浅色）/ 8.57（深色），达到 WCAG AA。
+   * 只作为**文字 / 图标色**使用；需要底色时配 `/10` 透明度，不要整块填充。
+   */
+  --success: light-dark(oklch(0.5131 0.1373 151.23), oklch(0.7224 0.1598 151.88));
+  /*
+   * 警告色：用于需要用户注意但不阻断操作的提示（如「正在以他人身份浏览」）。
+   * 对 `--background` 的对比度为 4.80（浅色）/ 10.34（深色），达到 WCAG AA。
+   */
+  --warning: light-dark(oklch(0.5521 0.1255 63.42), oklch(0.7995 0.15 75.2));
+  /*
+   * 图表序列色：导出稿的 `--chart-1..5`，从品牌紫依次排到青、红。
+   *
+   * `ui/chart` 的 `ChartConfig` 支持逐图指定颜色，这组是**默认序列**：自定义图表
+   * 不写 `color` 时按序取用，保证同一页面里的多条序列不撞色。
+   * 只用于数据可视化，不要拿它画 UI 元素（那是 `--primary` / `--highlight` 的事）。
+   */
+  --chart-1: light-dark(oklch(0.5553 0.2554 283.4559), oklch(0.599 0.2299 286.2047));
+  --chart-2: light-dark(oklch(0.6268 0.2325 303.9004), oklch(0.7217 0.1767 305.5038));
+  --chart-3: light-dark(oklch(0.6231 0.188 259.8145), oklch(0.7137 0.1434 254.624));
+  --chart-4: light-dark(oklch(0.7845 0.1325 181.912), oklch(0.8335 0.1384 186.7342));
+  --chart-5: light-dark(oklch(0.645 0.2154 16.4393), oklch(0.7192 0.169 13.428));
+  /*
+   * 品牌 Logo 的 CSS 变量（Jerbix v4 矢量包）。
+   *
+   * v4 的 SVG 用 `--jbx-*` 变量上色（`src/components/layout/brand/*.svg`），
+   * 因此换主题只需改这几个值，**不再需要两份位图资产**。
+   *
+   * 取值**直接用品牌稿的原色**（`css/jerbix-theme.css` 的 light / dark 两档），
+   * 不映射到站点语义 token：品牌稿的墨色 #111318、紫 #6948FF / #8066FF 是
+   * 设计方定的识别色，混入站点色会让 Logo 偏离品牌规范。站点主色 `#6B46FF`
+   * 与品牌紫 `#6948FF` 几乎同值，两套紫在页面上不会被看成两个色。
+   *
+   * - `--jbx-text` / `--jbx-mascot`：字标与吉祥物剪影，#111318 / #F8FAFC；
+   * - `--jbx-accent`：飘带与 X 的品牌紫，#6948FF / #8066FF；
+   * - `--jbx-code`：飘带上的 `</>`，两档都是纯白；
+   * - `--jbx-shadow`：脚下跌影，取品牌稿的浅灰 / 近黑。
+   */
+  --jbx-text: light-dark(#111318, #f8fafc);
+  --jbx-mascot: light-dark(#111318, #f8fafc);
+  --jbx-accent: light-dark(#6948ff, #8066ff);
+  --jbx-code: light-dark(#ffffff, #ffffff);
+  --jbx-shadow: light-dark(#e3e4e7, #05070b);
+  /*
+   * Logo 底板：恒定透明。
+   *
+   * v4 的 Logo 自带深浅两套配色，两种主题下都能直接放在页面底色上，
+   * 不需要额外垫板。
+   */
+  --logo-plate: transparent;
+  --border: light-dark(oklch(0.9278 0.0134 286.1348), oklch(0.2954 0.0397 283.7017));
+  /*
+   * 输入框描边比 `--border` 重一档：表单控件的边界属于「非文本 UI 组件」，
+   * WCAG 1.4.11 要求对底色 ≥ 3:1。导出稿把 input 与 border 写成同值（1.22:1），
+   * 表单框会几乎看不见；这里单独加深到 3.61（浅）/ 3.36（深）。
+   */
+  --input: light-dark(oklch(0.623 0.02 286.137), oklch(0.52 0.025 284.7));
+  --ring: light-dark(oklch(0.5553 0.2554 283.4559), oklch(0.615 0.2299 286.2047));
+  /*
+   * 侧栏语义色：**完全沿用导出稿**。
+   *
+   * 导出稿把 `--sidebar` 写成与 `--background` 同值（浅色都是 `#FCFAFF`、深色都是
+   * `#0A0A0F`）。早先为了「侧栏与内容区不同色」把 sidebar 单独压暗一档，结果侧栏
+   * 比页面底更暗、选中态的淡紫底浮在一层灰上——与 tweakcn 预览对不上。这里改回
+   * 导出稿的取值：**侧栏与页面底同色，靠 `--sidebar-border` 的 1px 描边分界**，
+   * 这也正是 shadcn dashboard 的默认层次。
+   *
+   * `sidebar-accent` 是菜单 hover 与选中态的底色（浅 `#F0EBFF` / 深 `#1E1E30`），
+   * 文字用 `sidebar-accent-foreground`（浅 `#6B46FF` / 深 `#8D70FF`）。
+   * 深色档的紫字从导出稿的 0.5990 提到 0.66：原值压在 `#1E1E30` 上只有 3.76:1，
+   * 提亮后 4.61:1。这是唯一的偏离，为了让选中项的文字达 AA。
+   *
+   * `sidebar-primary` 跟随 `--primary`（深色同样提到 0.615），
+   * `sidebar-primary-foreground` 因此也跟随用墨色——白字压在 0.615 上只有 3.9:1。
+   */
+  --sidebar: light-dark(oklch(0.988 0.0069 304.2448), oklch(0.1473 0.0107 285.0074));
+  --sidebar-foreground: light-dark(oklch(0.3665 0.0274 284.9708), oklch(0.7109 0.0231 285.7983));
+  --sidebar-primary: light-dark(oklch(0.5553 0.2554 283.4559), oklch(0.615 0.2299 286.2047));
+  --sidebar-primary-foreground: light-dark(oklch(1 0 0), oklch(0.1473 0.0107 285.0074));
+  --sidebar-accent: light-dark(oklch(0.9498 0.0272 297.3155), oklch(0.244 0.0341 283.5857));
+  --sidebar-accent-foreground: light-dark(
+    oklch(0.5553 0.2554 283.4559),
+    oklch(0.66 0.2299 286.2047)
+  );
+  --sidebar-border: light-dark(oklch(0.9278 0.0134 286.1348), oklch(0.2954 0.0397 283.7017));
+  --sidebar-ring: light-dark(oklch(0.5553 0.2554 283.4559), oklch(0.615 0.2299 286.2047));
+  /* 圆角 0.75rem：取自 tweakcn 主题，偏圆润，与品牌 mascot 的轮廓呼应。 */
   --radius: 0.75rem;
 }
 
@@ -144,6 +391,48 @@
   --tw-prose-td-borders: var(--border);
 }
 
+/*
+ * 表格容器外框：一处定义，所有表格共用。
+ *
+ * `ui/table` 是 shadcn 上游原件，只给 `<table>` 本身和 `[&_tr]:border-b` 的行分隔，
+ * **没有外层容器**。外框以前写在调用处（文档表格有一层 `border rounded-lg`、工作台
+ * 各处又没有），两处的描边 / 圆角容易分叉，改一处忘一处。
+ *
+ * 这里改成给 `Table` 自带的滚动容器（`data-slot="table-container"`）统一上框，
+ * **调用处零改动**——文档正文与工作台的所有表格同时获得外框。`.not-prose` 那层
+ * 是文档为了隔离 typography 排版而加的，保留它但不重复给框（`not-prose` 自身不再
+ * 写 border / rounded，冲突时靠下一条 `:not(.not-prose)` 规避）。
+ *
+ * 圆角取 `--radius-lg`（12px）而非 `--radius`（12px 是同一值，但语义是「卡片级」）：
+ * shadcn 的 `dashboard-01` 给表格外框用的是 `rounded-lg`，与卡片的 `rounded-xl`
+ * 差一档，视觉上表格比卡片更方正。颜色走 token（`--border`），换主题自动跟随，
+ * 调用处不写任何色值。
+ */
+[data-slot="table-container"] {
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+}
+
+/*
+ * 表头：一整行染 `--muted` 底色，并在滚动容器内吸顶。
+ *
+ * 上游 `TableHeader` 只有 `[&_tr]:border-b`，表头与数据行原先只靠一条分隔线区分；
+ * 这里照 shadcn `dashboard-01` 的写法（`<TableHeader className="sticky top-0 z-10 bg-muted">`）
+ * 补齐。底色给在 `thead` 而不是每个 `th` 上——`th` 各自带底色时，单元格间的空隙
+ * 会露出白底；`thead` 一层染通才是示例里的样子。
+ *
+ * `sticky` 必须配 `top-0`：`Table` 的滚动容器是 `overflow-x-auto`（不带 `y`），
+ * 竖向并不产生滚动，所以这里的吸顶只在调用处把表格放进自己的滚动区时才生效，
+ * 默认情况下是无副作用的。
+ */
+[data-slot="table-header"] {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--muted);
+}
+
 /* 锚点平滑滚动；用户偏好减少动效时关闭。 */
 html {
   scroll-behavior: smooth;
@@ -155,22 +444,72 @@ html {
   }
 }
 
+/*
+ * shadcn v4 的 base layer。
+ *
+ * Tailwind v4 把默认边框色从 v3 的 `gray-200` 改成了 `currentColor`，而 shadcn 组件
+ * 大量使用**不带颜色**的边框工具类（`border-b`、`border-t`、`divide-y`）。缺了这段，
+ * 表格行线、卡片页脚分隔线、折叠面板分隔线全都会取文字色——在本主题下是一条近黑的
+ * 线，比设计意图（`--border`）重得多。`@layer base` 里的 `*` 选择器优先级最低，组件
+ * 显式写的 `border-primary` 之类仍然胜出。
+ */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--border);
+    /* 与 shadcn 的 `outline-ring/50` 一致：焦点环是半透明的辅助提示，不是实心描边。 */
+    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+  }
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
+  /* 与导出稿的 `@layer base { body { letter-spacing: var(--tracking-normal) } }` 一致。 */
+  font-family: var(--font-sans);
+  letter-spacing: var(--tracking-normal);
+  /* 中英混排：中文段落里不要自动插入西文间距（导出稿的字体是拉丁专用字面）。 */
+  font-synthesis-weight: none;
 }
 
-/* 产品实验室：轨道、场景预览与工作流共用品牌 token。 */
+/*
+ * 卡片间距：`ui/card` 的 utility 类里**硬编码**了 `[--card-spacing:--spacing(4)]`，
+ * 后生成的 utility 会覆盖 `--card-spacing` 取值，因此不能只靠 `@theme` 里的变量。
+ *
+ * 这里直接给 `[data-slot="card"]` 定值。tweakcn 的 Cards / Dashboard 预览里卡片
+ * 实测 `padding: 24px 0` + 左右 `px-6` + 子项 `gap: 24px`，而上游默认是 16px。
+ * 统一走这一条，**全站所有卡片一次对齐**，调用处不必逐处加 `p-6`。
+ *
+ * 自定义属性只受同名声明影响，用子选择器覆盖不了父级身上的 `--card-spacing`，
+ * 所以只能写在卡片本体。`data-size="sm"` 那档排除在外：小卡本就是紧凑布局。
+ */
+[data-slot="card"]:not([data-size="sm"]) {
+  --card-spacing: 1.5rem;
+}
+
+/*
+ * 产品实验室：轨道、场景预览与工作流共用品牌 token。
+ *
+ * 混合空间一律用 **oklab**，不要用 oklch。oklch 的 `color-mix` 会按**色相角度**
+ * 插值：纯白/纯灰的色相是任意的（`#FFF` 解析为 89.88°），与品牌紫（282.61°）混合时
+ * 色相会沿最短路径从 89.88° 绕到 282.61°，途经红/粉区间——9% 紫 + 白实测得到
+ * `oklch(0.96 0.023 353)`，也就是**粉色**，而不是想要的淡紫。oklab 是直角坐标
+ * 混合，没有色相绕行问题，同一组输入得到正确的 `oklab(0.96 0.005 -0.022)`。
+ * 与 `transparent` 混合不受影响（透明色不参与色相插值），但统一写 oklab 更省心。
+ */
 .landing-lab {
   --lab-surface: light-dark(
-    color-mix(in oklch, var(--card) 84%, var(--background)),
-    color-mix(in oklch, var(--card) 90%, var(--background))
+    color-mix(in oklab, var(--card) 84%, var(--background)),
+    color-mix(in oklab, var(--card) 90%, var(--background))
   );
-  --lab-glass: color-mix(in oklch, var(--lab-surface) 88%, transparent);
-  --lab-line: color-mix(in oklch, var(--primary) 20%, var(--border));
+  --lab-glass: color-mix(in oklab, var(--lab-surface) 88%, transparent);
+  --lab-line: color-mix(in oklab, var(--primary) 20%, var(--border));
   --lab-shadow: light-dark(
-    color-mix(in oklch, var(--foreground) 9%, transparent),
-    color-mix(in oklch, var(--background) 65%, transparent)
+    color-mix(in oklab, var(--foreground) 9%, transparent),
+    color-mix(in oklab, var(--background) 65%, transparent)
   );
   --lab-terminal-bg: light-dark(var(--foreground), var(--background));
   --lab-terminal-ink: light-dark(var(--background), var(--foreground));
@@ -192,16 +531,16 @@ body {
   background-image:
     radial-gradient(
       ellipse at 80% 32%,
-      color-mix(in oklch, var(--accent) 12%, transparent),
+      color-mix(in oklab, var(--highlight) 12%, transparent),
       transparent 48%
     ),
     radial-gradient(
       ellipse at 60% 64%,
-      color-mix(in oklch, var(--primary) 9%, transparent),
+      color-mix(in oklab, var(--primary) 9%, transparent),
       transparent 55%
     ),
-    linear-gradient(color-mix(in oklch, var(--border) 45%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in oklch, var(--border) 45%, transparent) 1px, transparent 1px);
+    linear-gradient(color-mix(in oklab, var(--border) 45%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--border) 45%, transparent) 1px, transparent 1px);
   background-size:
     auto,
     auto,
@@ -227,12 +566,12 @@ body {
   background:
     radial-gradient(
       circle at 50% 46%,
-      color-mix(in oklch, var(--primary) 11%, transparent),
+      color-mix(in oklab, var(--primary) 11%, transparent),
       transparent 62%
     ),
     var(--lab-glass);
   box-shadow:
-    0 1px 0 color-mix(in oklch, var(--card) 70%, transparent) inset,
+    0 1px 0 color-mix(in oklab, var(--card) 70%, transparent) inset,
     0 1.5rem 4rem -2rem var(--lab-shadow);
 }
 
@@ -260,11 +599,11 @@ body {
 }
 
 .landing-lab .leap-trail .leap-trail-small {
-  stroke: var(--accent);
+  stroke: var(--highlight);
 }
 
 .landing-lab .leap-trail circle {
-  fill: var(--accent);
+  fill: var(--highlight);
   stroke: var(--background);
   stroke-width: 3;
 }
@@ -275,11 +614,11 @@ body {
   right: 0;
   width: 38%;
   aspect-ratio: 1;
-  border: 1px solid color-mix(in oklch, var(--accent) 24%, transparent);
+  border: 1px solid color-mix(in oklab, var(--highlight) 24%, transparent);
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    color-mix(in oklch, var(--accent) 14%, transparent),
+    color-mix(in oklab, var(--highlight) 14%, transparent),
     transparent 70%
   );
 }
@@ -308,6 +647,30 @@ body {
 .landing-lab .leap-scene[data-step="2"] .leap-mascot {
   top: 28%;
   left: 70%;
+}
+
+/*
+ * 深色主题的 mascot。
+ *
+ * 浅色版在白底上抠图，边缘残留一圈近白抗锯齿像素——深色下会像描了发光的边。
+ * 深色版边缘干净，两份同画幅同构图，因此定位规则全部复用 `.leap-mascot`，
+ * 这里只负责按主题显示/隐藏。
+ *
+ * 用 `visibility` 而非 `display`：两者都绝对定位在同一位置，隐藏的那层必须
+ * 继续占位，否则动画的 transform 基准会随主题变化。
+ */
+.landing-lab .leap-mascot-on-dark {
+  visibility: hidden;
+
+  @variant dark {
+    visibility: visible;
+  }
+}
+
+.landing-lab .leap-mascot:not(.leap-mascot-on-dark) {
+  @variant dark {
+    visibility: hidden;
+  }
 }
 
 .landing-lab .leap-stops {
@@ -343,7 +706,7 @@ body {
 
 .landing-lab .leap-stop[aria-pressed="true"] {
   border-color: var(--primary);
-  background: color-mix(in oklch, var(--primary) 10%, var(--card));
+  background: color-mix(in oklab, var(--primary) 10%, var(--card));
 }
 
 .landing-lab .leap-story {
@@ -385,7 +748,7 @@ body {
   position: absolute;
   inset: 0 auto 0 0;
   width: 22%;
-  background: linear-gradient(90deg, transparent, var(--accent), var(--primary), transparent);
+  background: linear-gradient(90deg, transparent, var(--highlight), var(--primary), transparent);
   animation: lab-signal-travel var(--lab-signal-duration) linear infinite;
   content: "";
 }
@@ -404,10 +767,10 @@ body {
   background:
     radial-gradient(
       ellipse at 100% 0,
-      color-mix(in oklch, var(--accent) 6%, transparent),
+      color-mix(in oklab, var(--highlight) 6%, transparent),
       transparent 65%
     ),
-    color-mix(in oklch, var(--secondary) 65%, var(--background));
+    color-mix(in oklab, var(--secondary) 65%, var(--background));
 }
 
 .landing-lab .lab-preview-header {
@@ -474,7 +837,7 @@ body {
   width: 0.3rem;
   height: 0.3rem;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--highlight);
   animation: lab-connector-travel var(--lab-signal-duration) ease-in-out infinite;
   content: "";
 }
@@ -526,7 +889,7 @@ body {
   position: absolute;
   inset: 0 0 auto;
   height: 60%;
-  background: color-mix(in oklch, var(--primary) 18%, var(--lab-surface));
+  background: color-mix(in oklab, var(--primary) 18%, var(--lab-surface));
   clip-path: polygon(0 0, 100% 0, 50% 100%);
   content: "";
 }
@@ -534,9 +897,9 @@ body {
 .landing-lab .lab-language-copy {
   min-width: 0;
   padding: 0.75rem;
-  border-inline-start: 2px solid var(--accent);
+  border-inline-start: 2px solid var(--highlight);
   border-radius: 0 calc(var(--radius) * 0.6) calc(var(--radius) * 0.6) 0;
-  background: color-mix(in oklch, var(--card) 70%, transparent);
+  background: color-mix(in oklab, var(--card) 70%, transparent);
   color: var(--foreground);
   font-size: 0.8125rem;
   line-height: 1.6;
@@ -596,11 +959,11 @@ body {
 .landing-lab .leap-stop[aria-pressed="true"],
 .landing-lab .lab-step[aria-pressed="true"],
 .landing-lab .lab-preview-select[aria-pressed="true"] {
-  border-color: color-mix(in oklch, var(--primary) 65%, var(--border));
-  background: color-mix(in oklch, var(--primary) 9%, var(--lab-surface));
+  border-color: color-mix(in oklab, var(--primary) 65%, var(--border));
+  background: color-mix(in oklab, var(--primary) 9%, var(--lab-surface));
   color: var(--foreground);
   box-shadow:
-    0 0 0 1px color-mix(in oklch, var(--primary) 12%, transparent),
+    0 0 0 1px color-mix(in oklab, var(--primary) 12%, transparent),
     0 0.5rem 1.5rem -1rem var(--lab-shadow);
 }
 
@@ -609,20 +972,45 @@ body {
   min-width: 0;
   padding: clamp(1rem, 3vw, 1.75rem);
   overflow: hidden;
-  border: 1px solid color-mix(in oklch, var(--primary) 35%, var(--lab-terminal-bg));
+  border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--lab-terminal-bg));
   border-radius: calc(var(--radius) * 1.6);
   background:
     radial-gradient(
       ellipse at 100% 0,
-      color-mix(in oklch, var(--primary) 15%, transparent),
+      color-mix(in oklab, var(--primary) 15%, transparent),
       transparent 65%
     ),
     var(--lab-terminal-bg);
   color: var(--lab-terminal-ink);
   box-shadow: 0 1.5rem 3rem -2rem var(--lab-shadow);
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono);
   font-size: clamp(0.6875rem, 1.2vw, 0.8125rem);
   line-height: 1.8;
+}
+
+/*
+ * 终端内部的层次：终端底色取自 `--lab-terminal-bg`，正文色是 `--lab-terminal-ink`，
+ * 两者在明暗下互为反转。次级文字与分隔线一律用 ink 的透明度派生，不要写死
+ * `text-white/*` —— 浅色主题下终端是深底、深色主题下是浅底，写死白色会在后者下消失。
+ */
+.landing-lab .lab-terminal-rule {
+  border-color: color-mix(in oklab, var(--lab-terminal-ink) 12%, transparent);
+}
+
+.landing-lab .lab-terminal-muted {
+  color: color-mix(in oklab, var(--lab-terminal-ink) 60%, transparent);
+}
+
+.landing-lab .lab-terminal-faint {
+  color: color-mix(in oklab, var(--lab-terminal-ink) 40%, transparent);
+}
+
+.landing-lab .lab-terminal-dot {
+  background: color-mix(in oklab, var(--lab-terminal-ink) 30%, transparent);
+}
+
+.landing-lab .lab-terminal-dot-faint {
+  background: color-mix(in oklab, var(--lab-terminal-ink) 20%, transparent);
 }
 
 .landing-lab .lab-terminal pre,
@@ -682,7 +1070,7 @@ body {
 
 .landing-lab .lab-feature-card:focus-within {
   border-color: var(--ring);
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 18%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 18%, transparent);
 }
 
 .landing-lab :is(.leap-stop, .lab-step, .lab-preview-select, .lab-motion-toggle):focus-visible {
@@ -713,7 +1101,7 @@ body {
   .landing-lab .leap-stop:hover,
   .landing-lab .lab-step:hover {
     transform: translateY(-2px);
-    border-color: color-mix(in oklch, var(--primary) 55%, var(--border));
+    border-color: color-mix(in oklab, var(--primary) 55%, var(--border));
     box-shadow: 0 0.75rem 1.75rem -1rem var(--lab-shadow);
   }
 

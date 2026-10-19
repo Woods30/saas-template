@@ -1,8 +1,9 @@
-import { Dialog } from '@base-ui/react/dialog'
-import { IconCornerDownRight, IconSearch, IconX } from '@tabler/icons-react'
+import { IconCornerDownRight, IconSearch } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
 import { type ReactNode, useCallback, useEffect, useId, useState } from 'react'
 import { DOC_FALLBACK_ICON, DOC_ICON } from '@/components/docs/doc-icons'
+import { Command, CommandDialog, CommandInput, CommandList } from '@/components/ui/command'
+import { Kbd, KbdGroup } from '@/components/ui/kbd'
 import { type DocEntry, type DocSearchResult, searchDocs } from '@/lib/docs'
 import type { Locale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
@@ -65,76 +66,59 @@ export function DocsSearch({
   }, [openState, setOpen])
 
   return (
-    <Dialog.Root open={openState} onOpenChange={setOpen}>
-      <Dialog.Trigger
+    <>
+      <button
+        type="button"
         aria-label={m.docs_search_label()}
+        onClick={() => setOpen(true)}
         className="flex w-full items-center gap-2 rounded-lg border border-border bg-transparent px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
       >
         <IconSearch className="size-4 shrink-0" aria-hidden />
         <span className="truncate">{m.docs_search_placeholder()}</span>
         {/* 键帽提示：让「⌘K 可用」这件事在界面上可见。 */}
-        <span className="ml-auto flex shrink-0 items-center gap-0.5">
-          <kbd className="rounded border border-border bg-muted px-1.5 font-sans text-[0.7rem]">
-            ⌘
-          </kbd>
-          <kbd className="rounded border border-border bg-muted px-1.5 font-sans text-[0.7rem]">
-            K
-          </kbd>
-        </span>
-      </Dialog.Trigger>
-      <Dialog.Portal>
-        {/* 遮罩 + 视口：弹窗水平居中并贴近顶部，长结果列表在视口内滚动。 */}
-        <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm transition-opacity data-[ending-style]:opacity-0 data-[starting-style]:opacity-0" />
-        <Dialog.Viewport className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-[12vh]">
-          <Dialog.Popup className="w-full max-w-xl overflow-hidden rounded-xl border border-border bg-popover shadow-2xl transition-all data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0">
-            <Dialog.Title className="sr-only">{m.docs_search_label()}</Dialog.Title>
-            <div className="flex items-center gap-2 border-b border-border px-4">
-              <IconSearch className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-              <input
-                type="search"
-                aria-label={m.docs_search_label()}
-                aria-controls={listId}
-                placeholder={m.docs_search_placeholder()}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                // 隐藏 WebKit 自带的清除按钮：它与右侧的关闭按钮叠在一起，
-                // 两个「×」会让人分不清哪个是关闭弹窗。
-                className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
-              />
-              <Dialog.Close
-                aria-label={m.docs_search_close()}
-                className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <IconX className="size-4" aria-hidden />
-              </Dialog.Close>
-            </div>
-            <div id={listId} className="max-h-[60vh] overflow-y-auto p-2">
-              {!hasQuery ? (
-                <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  {m.docs_search_hint()}
-                </p>
-              ) : results.length === 0 ? (
-                <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  {m.docs_search_empty()}
-                </p>
-              ) : (
-                <ul className="space-y-1">
-                  {results.map((result) => (
-                    <li key={result.doc.slug}>
-                      <SearchResult
-                        result={result}
-                        locale={locale}
-                        onSelect={() => setOpen(false)}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </Dialog.Popup>
-        </Dialog.Viewport>
-      </Dialog.Portal>
-    </Dialog.Root>
+        <KbdGroup className="ml-auto shrink-0">
+          <Kbd>⌘</Kbd>
+          <Kbd>K</Kbd>
+        </KbdGroup>
+      </button>
+      {/* `CommandDialog` 自带遮罩、居中定位、标题与描述，弹层样式与全站 Dialog 一致。 */}
+      <CommandDialog
+        open={openState}
+        onOpenChange={setOpen}
+        title={m.docs_search_label()}
+        description={m.docs_search_placeholder()}
+        className="max-w-xl"
+      >
+        {/* `label` 会成为输入框的 `aria-labelledby` 目标，缺了它 combobox 没有可访问名。 */}
+        <Command label={m.docs_search_label()} shouldFilter={false} className="rounded-xl">
+          <CommandInput
+            aria-controls={listId}
+            placeholder={m.docs_search_placeholder()}
+            value={query}
+            onValueChange={setQuery}
+          />
+          <CommandList id={listId} className="max-h-[60vh]">
+            {!hasQuery ? (
+              <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                {m.docs_search_hint()}
+              </p>
+            ) : results.length === 0 ? (
+              <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                {m.docs_search_empty()}
+              </p>
+            ) : (
+              <ul className="space-y-1">
+                {results.map((result) => (
+                  <li key={result.doc.slug}>
+                    <SearchResult result={result} locale={locale} onSelect={() => setOpen(false)} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CommandList>
+        </Command>
+      </CommandDialog>
+    </>
   )
 }
 

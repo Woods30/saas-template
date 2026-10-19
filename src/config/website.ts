@@ -29,7 +29,19 @@ export interface WebsiteConfig {
     name: string
     images: { ogImage: string; logoLight: string; logoDark: string; icon: string }
   }
-  ui: { defaultTheme: 'light' | 'dark' | 'system'; enableThemeSwitch: boolean }
+  ui: {
+    defaultTheme: 'light' | 'dark' | 'system'
+    enableThemeSwitch: boolean
+    /**
+     * 浏览器 UI 配色（地址栏 / 状态栏）与 PWA manifest 的底色。
+     *
+     * 必须与 `src/styles/globals.css` 中 `--background` 的明暗取值保持一致——
+     * 这两个值会被浏览器渲染在页面之外，读不到 CSS 变量，只能在这里显式声明。
+     * 改主题底色时**两处一起改**；`tests/unit/theme-colors.test.ts` 会校验它们
+     * 与 `globals.css` 里的 oklch 值等价，漂移会失败。
+     */
+    themeColor: { light: string; dark: string }
+  }
   docs: { enabled: boolean }
   blog: { enabled: boolean }
   changelog: { enabled: boolean }
@@ -84,11 +96,16 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       images: {
         ogImage: '/logo.png',
         logoLight: '/logo-horizontal-transparent.svg',
-        logoDark: '/logo-horizontal-transparent.svg',
+        logoDark: '/logo-horizontal-dark.svg',
         icon: '/icon-jerboa.svg',
       },
     },
-    ui: { defaultTheme: 'system', enableThemeSwitch: true },
+    ui: {
+      defaultTheme: 'system',
+      enableThemeSwitch: true,
+      // 与 globals.css 的 --background（浅 0.988 0.0069 304.2448 / 深 0.1473 0.0107 285.0074）等价。
+      themeColor: { light: '#FCFAFF', dark: '#0A0A0F' },
+    },
     docs: { enabled: true },
     blog: { enabled: true },
     changelog: { enabled: true },

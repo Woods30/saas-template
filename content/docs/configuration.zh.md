@@ -40,8 +40,15 @@ export const websiteConfig = createWebsiteConfig(publicEnv)
 |---|---|---|---|
 | `ui.defaultTheme` | `'light' \| 'dark' \| 'system'` | `'system'` | 无 `THEME` cookie 时的主题 |
 | `ui.enableThemeSwitch` | `boolean` | `true` | 为 `false` 时隐藏主题切换按钮 |
+| `ui.themeColor.light` | `string` | `'#FCFAFF'` | 浅色主题下浏览器地址栏 / 状态栏与 PWA 底色 |
+| `ui.themeColor.dark` | `string` | `'#0A0A0F'` | 深色主题下同上 |
 
 `ui.defaultTheme` 同时用于 SSR 与客户端，保证首屏不闪烁。
+
+`ui.themeColor` 必须与 `src/styles/globals.css` 中 `--background` 的明暗取值等价——浏览器在页面
+之外渲染这两个颜色，读不到 CSS 变量，只能显式声明。改主题底色时两处一起改；
+`tests/unit/theme-colors.test.ts` 会校验二者一致，并顺带校验 `public/manifest.json` 的
+`background_color`。
 
 ## 站点基址
 
@@ -121,11 +128,15 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       images: {
         ogImage: '/logo.png',
         logoLight: '/logo-horizontal-transparent.svg',
-        logoDark: '/logo-horizontal-transparent.svg',
+        logoDark: '/logo-horizontal-dark.svg',
         icon: '/icon-jerboa.svg',
       },
     },
-    ui: { defaultTheme: 'system', enableThemeSwitch: true },
+    ui: {
+      defaultTheme: 'system',
+      enableThemeSwitch: true,
+      themeColor: { light: '#FCFAFF', dark: '#0A0A0F' },
+    },
     docs: { enabled: true },
     blog: { enabled: true },
     changelog: { enabled: true },

@@ -63,8 +63,8 @@ function ProfilePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">{m.settings_profile_title()}</h2>
-        <p className="text-sm text-muted-foreground">{m.settings_profile_description()}</p>
+        <h2 className="text-2xl font-semibold tracking-tight">{m.settings_profile_title()}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{m.settings_profile_description()}</p>
       </div>
 
       <Card>

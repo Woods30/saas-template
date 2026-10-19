@@ -9,7 +9,7 @@ import { defineConfig, type Plugin } from 'vite'
 import {
   GENERATED_INDEX_PATH,
   normalizeGeneratedFile,
-} from './scripts/normalize-content-collections'
+} from './scripts/normalize-content-collections.ts'
 
 /**
  * 消除 content-collections 生成头的时间戳噪音。

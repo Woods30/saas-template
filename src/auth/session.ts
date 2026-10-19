@@ -12,6 +12,13 @@ export interface SessionInfo {
     /** 角色（`users.role`）；admin 插件据此判定权限，默认 `'user'`。 */
     role: string
   }
+  /**
+   * 当前会话是否由管理员 impersonate 而来。
+   *
+   * admin 插件把原管理员 id 写进 `sessions.impersonated_by`。UI 据此显示「停止模拟」
+   * 入口——没有这个标志，管理员会误以为自己就是被模拟的用户，也找不到退出路径。
+   */
+  impersonating: boolean
 }
 
 /**
@@ -47,6 +54,10 @@ export const fetchSession = createServerFn({ method: 'GET' }).handler(
         // 但类型上仍需兜底，避免把 `undefined` 传成 `role`。
         role: session.user.role ?? 'user',
       },
+      // admin 插件把 `impersonatedBy` 声明在 session 上（sessions.impersonated_by）。
+      impersonating: Boolean(
+        (session.session as { impersonatedBy?: string | null }).impersonatedBy,
+      ),
     }
   },
 )

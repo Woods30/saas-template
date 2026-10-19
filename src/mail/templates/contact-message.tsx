@@ -1,4 +1,4 @@
-import { EmailLayout } from '../components/EmailLayout'
+import { EMAIL_THEME, EmailLayout } from '../components/EmailLayout'
 
 interface Props {
   fromName: string
@@ -16,7 +16,14 @@ export default function ContactMessage({ fromName, fromEmail, subject, message }
       <p>
         <em>{subject}</em>
       </p>
-      <blockquote style={{ borderLeft: '3px solid #ccc', paddingLeft: 12, color: '#555' }}>
+      <blockquote
+        style={{
+          borderLeft: `3px solid ${EMAIL_THEME.border}`,
+          paddingLeft: 12,
+          color: EMAIL_THEME.mutedForeground,
+          margin: '16px 0',
+        }}
+      >
         {message}
       </blockquote>
     </EmailLayout>

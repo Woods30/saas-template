@@ -1,7 +1,12 @@
-import { Menu } from '@base-ui/react/menu'
 import { IconCheck, IconLanguage } from '@tabler/icons-react'
 import { LocaleFlag } from '@/components/icons/LocaleFlags'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { LOCALE_COOKIE_NAME, LOCALES, type Locale, localeConfig, swapLocale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
 
@@ -31,30 +36,22 @@ export function LocaleSwitcher({ value, className }: LocaleSwitcherProps) {
   }
 
   return (
-    <Menu.Root>
-      <Menu.Trigger
+    <DropdownMenu>
+      <DropdownMenuTrigger
         render={<Button variant="ghost" size="icon" aria-label={m.locale_label()} />}
         className={className}
       >
         <IconLanguage aria-hidden />
-      </Menu.Trigger>
-      <Menu.Portal>
-        <Menu.Positioner align="end" sideOffset={8} className="z-50">
-          <Menu.Popup className="min-w-36 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
-            {LOCALES.map((locale) => (
-              <Menu.Item
-                key={locale}
-                onClick={() => select(locale)}
-                className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-muted"
-              >
-                <LocaleFlag locale={locale} />
-                <span className="flex-1">{localeConfig[locale].name}</span>
-                {locale === value && <IconCheck className="size-4" aria-hidden />}
-              </Menu.Item>
-            ))}
-          </Menu.Popup>
-        </Menu.Positioner>
-      </Menu.Portal>
-    </Menu.Root>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" sideOffset={8} className="min-w-36">
+        {LOCALES.map((locale) => (
+          <DropdownMenuItem key={locale} onClick={() => select(locale)}>
+            <LocaleFlag locale={locale} />
+            <span className="flex-1">{localeConfig[locale].name}</span>
+            {locale === value && <IconCheck className="size-4" aria-hidden />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

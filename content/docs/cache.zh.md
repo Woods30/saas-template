@@ -26,7 +26,7 @@ pnpm exec wrangler kv namespace create saas-template-cache
 
 输出里的 `id` 回填到 `wrangler.jsonc`：
 
-```jsonc
+```jsonc title="wrangler.jsonc"
 {
   "kv_namespaces": [{ "binding": "CACHE", "id": "42041d2cc3e84a378f3e264591790a3b" }]
 }
