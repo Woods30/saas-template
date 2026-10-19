@@ -16,6 +16,8 @@ import { websiteConfig } from '@/config/website'
  *   注册完成后可以继续结账）；
  * - 该 plan 没有配置 Price → `{ kind: 'not-configured' }`，调用方应禁用按钮而不是
  *   让用户点出一个 502；
+ * - 已有生效中的订阅 → `{ kind: 'already-subscribed' }`（服务端 409）。调用方应
+ *   提示去「管理订阅」里换方案，而不是让用户再走一遍结账；
  * - 其他 → `{ kind: 'error', message }`。
  */
 
@@ -23,6 +25,7 @@ export type CheckoutOutcome =
   | { kind: 'redirect'; url: string }
   | { kind: 'unauthenticated' }
   | { kind: 'not-configured' }
+  | { kind: 'already-subscribed' }
   | { kind: 'error'; message: string }
 
 export interface StartCheckoutParams {
@@ -66,6 +69,9 @@ export async function startCheckout(params: StartCheckoutParams): Promise<Checko
   }
 
   if (response.status === 401) return { kind: 'unauthenticated' }
+  // 409 是服务端的重复订阅守卫。单独识别成一个 outcome：调用方要给出「已有订阅」
+  // 的明确提示，而不是一条通用错误——两者的下一步动作完全不同。
+  if (response.status === 409) return { kind: 'already-subscribed' }
   if (!response.ok) {
     // 不回显服务端错误体：它可能包含内部路径；调用方用本地文案兜底。
     return { kind: 'error', message: `http_${response.status}` }

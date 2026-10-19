@@ -392,7 +392,7 @@ E2E 的取舍：
   单个 spec 保持在 10 条以内，整套 E2E 目标在 5 分钟内跑完。
 - **locale**：跨语言行为由单元测试覆盖；E2E 只在**一个** locale 上跑主流程，不逐语言复制。
 
-当前基线（12 条，本地约 50 秒）：
+当前基线（15 条，本地约 40 秒）：
 
 | spec | 守什么 |
 |---|---|
@@ -402,8 +402,15 @@ E2E 的取舍：
 | `marketing.spec.ts` | 首页渲染 + 语言切换走真实 `/en` 前缀 |
 | `hydration.spec.ts` | zh / en 首页水合无 React / CSP 报错 |
 | `site-config.spec.ts` | 关闭模块的 API 返回 404 而非假成功 |
+| `payment.spec.ts` | 已订阅后不能再买（409 → 页面提示）；账单页显示套餐名 / 带时刻的续费日期 / 金额与周期 |
 
 新增用例前先对照这张表：如果守的东西已被某一层覆盖，就不该再进 E2E。
+
+`payment.spec.ts` 的前置条件：`.env` 里配好 `VITE_PAYMENT_PROVIDER` 与三个
+`VITE_STRIPE_PRICE_*`。未配置时（CI 用 `.env.example`，这些值为空）用例**跳过**而不是
+失败——模板开箱没有凭据是正常状态。它不真的打 Stripe：用
+`scripts/e2e-seed-subscription.ts` 直接往本地 D1 写一条 `active` 订阅来复现「已订阅」，
+再走真实的 API 与页面。真实结账（银行卡、3DS、webhook 投递）不在 E2E 范围内。
 
 ### 变更纪律
 

@@ -1,4 +1,4 @@
-import { pricingPlans } from '@/config/blocks'
+import { getPricingPlans } from '@/config/blocks'
 
 /**
  * 定价方案 ↔ Stripe Price ID 的显式映射。
@@ -92,6 +92,39 @@ export function isPlanPurchasable(planId: string, priceMap: PriceMap): boolean {
  * 用户永远买不到，配置却显示「完整」。返回找不到的 plan id 列表。
  */
 export function findOrphanPlanIds(priceMap: PriceMap): string[] {
-  const known = new Set(pricingPlans.map((plan) => plan.id))
+  const known = new Set(getPricingPlans().map((plan) => plan.id))
   return Object.keys(priceMap).filter((planId) => !known.has(planId))
+}
+
+/**
+ * 该 plan 实际可购买的计费周期，顺序固定为 `month` → `year` → `one_time`。
+ *
+ * 定价页的周期切换器、`startCheckout()` 的默认周期、以及「已订阅后能否再买」的
+ * 判断都从这一个函数取——三处各自读 `prices[0].interval` 时会得出不一致的答案
+ * （典型症状：年付 Price 配好了，页面永远只提交月付）。
+ *
+ * 只返回映射里有非空 Price 的周期：没配年付时，切换器不该出现一个点了就 502 的选项。
+ */
+export function availableIntervals(
+  priceMap: PriceMap,
+  planId: string,
+): Array<'month' | 'year' | 'one_time'> {
+  const periods = priceMap[planId]
+  if (!periods) return []
+  const order = ['month', 'year', 'one_time'] as const
+  return order.filter((interval) => Boolean(periods[interval]?.trim()))
+}
+
+/**
+ * Price ID → 定价页 plan id。
+ *
+ * 账单页要显示「用户买的是哪个套餐」，而数据库里存的是 Stripe 的 `priceId`。
+ * 反向查表用同一份映射，避免在组件里再维护一张 plan id ↔ 展示名的表。
+ * 未匹配时返回 `undefined`：Price 可能是手工在 Stripe 后台创建的，不该假装认识它。
+ */
+export function findPlanIdByPriceId(priceMap: PriceMap, priceId: string): string | undefined {
+  for (const [planId, periods] of Object.entries(priceMap)) {
+    if (Object.values(periods ?? {}).includes(priceId)) return planId
+  }
+  return undefined
 }

@@ -46,19 +46,62 @@ payment: {
 1. 定价页点击方案 → `startCheckout()`（`src/payment/checkout-client.ts`）
 2. 未登录 → 跳登录页并带 `?redirect=/pricing`，登录后回到定价页继续
 3. 已登录 → `POST /api/payment`：门禁 → 会话鉴权 → 限流（每 IP 每分钟 10 次）
-   → body 校验 → Price ID 白名单 → 创建 Checkout Session
+   → body 校验 → Price ID 白名单 → **已有订阅检查** → 创建 Checkout Session
 4. 成功后整页跳转到 Stripe Checkout
 5. 完成后回到 `/dashboard/billing?checkout=success`，账单页显示订阅与流水
 
-失败返回 502；配置缺失或网络错误时退回注册引导。
+### 月付 / 年付怎么选
+
+`pro_monthly` 一个 plan 下挂两个 Price：`VITE_STRIPE_PRICE_PRO_MONTHLY`（月付）与
+`VITE_STRIPE_PRICE_PRO_YEARLY`（年付）。只配其中一个时，定价页的周期切换器只列出
+配好的那个周期——不会出现一个点了就 502 的「按年付」选项。`lifetime` 是
+`one_time` Price，没有周期可选。
+
+### 已有订阅不能再买
+
+本模板的定价模型是「一个用户一份订阅」：重复购买会得到两条并存的订阅、两边同时
+扣款，而账单页只能显示一份。这条约束由**两层**共同保证：
+
+**第一层：Stripe 后台**（推荐开启）。在 Stripe 控制台的 `Settings` →
+`Checkout and Payment Links` → `Subscriptions` 打开
+`Limit customers to 1 subscription`，并把 `Direct customers to manage their
+subscription on` 设为 `Your website`、地址填站点的账单页（如
+`https://YOUR-DOMAIN.com/dashboard/billing`）。
+
+Stripe 按 **Customer 对象（Session 里带了的那个）或邮箱**匹配已有订阅，因此它挡得住
+绕过本站、直接用 Checkout 链接的情况。它判定为「已有订阅」的状态是 `active` /
+`past_due` / `unpaid` / `paused`。注意这条设置依赖客户门户的登录链接处于启用状态
+（`Billing` → `Customer portal`）：关掉登录链接，限制也会一起失效。
+
+**第二层：应用侧守卫**（本仓实现）。`mode: 'subscription'` 的结账在创建 session
+之前按**当前登录用户**查一次库，命中下列任一状态即返回 `409 ALREADY_SUBSCRIBED`：
+
+| 状态 | 为什么挡住 |
+|---|---|
+| `active` | 正常生效中 |
+| `trialing` | 试用期也在占用名额 |
+| `past_due` | 扣款失败但订阅仍在——最不该再买一份的时刻 |
+| `unpaid` | 重试耗尽仍未付款，订阅未结束 |
+| `paused` | 暂停中，恢复后继续扣款 |
+
+`canceled` 与 `incomplete_expired` **不**挡：它们已经结束，用户可以正常重新订阅。
+
+两层都要：Stripe 那层按邮箱 / Customer 匹配，改邮箱就绕过了；应用这层按本站
+`userId` 判定，且能给出明确的 409 文案让页面停在定价页解释原因。
+
+换方案走 Stripe Billing Portal（账户页的「管理订阅」），它会把旧订阅折算迁移，不会
+多出一份。一次性支付（终身版）不受此限制，买断没有「已有即重复」的概念。
+
+失败返回 502；409 时停留在定价页并提示去管理已有的订阅；配置缺失或网络错误时
+退回注册引导。
 
 ## 账单页
 
 `/dashboard/billing` 显示：
 
-- 当前订阅（状态、续费日期、金额）
+- 当前订阅（套餐、状态、续费日期与时间、金额、计费周期）
 - 付款流水（日期、金额、状态）
-- 「管理订阅」按钮 → `DELETE /api/payment` → Stripe Billing Portal
+- 「管理订阅」按钮 → `DELETE /api/payment` → Stripe Billing Portal（新标签页打开）
 
 服务端从数据库反查当前用户的 `customerId`（不接受客户端传入），因此不存在越权打开
 他人账单门户的问题。订阅与流水的查询都按 `userId` 走索引。

@@ -118,6 +118,32 @@ describe('deliverContactNotification', () => {
     vi.clearAllMocks()
   })
 
+  /**
+   * 以 `notification.enabled: false` 重新加载被测模块。
+   *
+   * 不能依赖出厂默认值：`website.ts` 的模块开关随部署场景调整（本仓本地联调期
+   * 会打开通知），依赖默认值的断言在开关变更后要么静默失效、要么无谓变红。
+   */
+  async function importWithNotificationDisabled() {
+    vi.resetModules()
+    vi.doMock('@/config/website', async () => {
+      const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
+      const { parsePublicEnv } =
+        await vi.importActual<typeof import('@/env/public')>('@/env/public')
+      const base = actual.createWebsiteConfig(
+        parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' }),
+      )
+      return {
+        ...actual,
+        websiteConfig: {
+          ...base,
+          notification: { enabled: false, provider: 'discord' },
+        },
+      }
+    })
+    return import('@/contact/notifications')
+  }
+
   it('calls sendMail with configured provider and contactMessage template', async () => {
     mockSendTemplate.mockResolvedValue({ ok: true })
 
@@ -142,9 +168,10 @@ describe('deliverContactNotification', () => {
   it('sendMail failure only logs, and reports not delivered when nothing else succeeds', async () => {
     mockSendTemplate.mockResolvedValue({ ok: false, error: 'SMTP error\ndetails' })
     const warnSpy = vi.spyOn(console, 'warn').mockReturnValue(undefined)
+    const { deliverContactNotification: deliver } = await importWithNotificationDisabled()
 
     // 邮件失败、通知未启用 → 没有任何通道成功，调用方需要据此回 503。
-    await expect(deliverContactNotification(validInput)).resolves.toEqual({ delivered: false })
+    await expect(deliver(validInput)).resolves.toEqual({ delivered: false })
 
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[contact]'))
     warnSpy.mockRestore()
@@ -154,16 +181,18 @@ describe('deliverContactNotification', () => {
     // provider 未注册 / 模板校验失败时 `sendMail` 直接 throw（只对 `{ok:false}` 重试）。
     mockSendTemplate.mockRejectedValue(new Error('provider not registered'))
     const warnSpy = vi.spyOn(console, 'warn').mockReturnValue(undefined)
+    const { deliverContactNotification: deliver } = await importWithNotificationDisabled()
 
-    await expect(deliverContactNotification(validInput)).resolves.toEqual({ delivered: false })
+    await expect(deliver(validInput)).resolves.toEqual({ delivered: false })
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[contact]'))
     warnSpy.mockRestore()
   })
 
   it('does NOT call notify when notification.enabled is false', async () => {
     mockSendTemplate.mockResolvedValue({ ok: true })
+    const { deliverContactNotification: deliver } = await importWithNotificationDisabled()
 
-    await deliverContactNotification(validInput)
+    await deliver(validInput)
 
     expect(mockNotify).not.toHaveBeenCalled()
   })

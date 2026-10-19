@@ -11,13 +11,20 @@ afterEach(() => {
   overwriteGetLocale(originalGetLocale)
 })
 
+/**
+ * 构造个人中心配置。
+ *
+ * 所有服务模块**显式**给值而不依赖 `website.ts` 的出厂默认值：默认开关随部署场景
+ * 调整（本仓本地联调期打开了 payment），依赖默认值的断言会随开关变更无谓变红。
+ */
 function createConfig(
-  overrides: { newsletter?: boolean; apiKeys?: boolean; admin?: boolean } = {},
+  overrides: { newsletter?: boolean; apiKeys?: boolean; admin?: boolean; payment?: boolean } = {},
 ) {
   const config = createWebsiteConfig(parsePublicEnv({}))
   return {
     ...config,
     newsletter: { ...config.newsletter, enabled: overrides.newsletter ?? false },
+    payment: { ...config.payment, enabled: overrides.payment ?? false },
     features: {
       ...config.features,
       enableApiKeys: overrides.apiKeys ?? false,
@@ -90,6 +97,29 @@ describe('个人中心导航分组', () => {
     const config = createConfig({ apiKeys: false })
     expect(leafItems(getSettingsSections('en', ctx(config))).map((item) => item.id)).not.toContain(
       'api-keys',
+    )
+  })
+
+  it('payment 开启时含「账单」，且该项按 payment 模块门禁', () => {
+    const config = createConfig({ payment: true })
+    const billing = leafItems(getSettingsSections('en', ctx(config))).find(
+      (item) => item.id === 'billing',
+    )
+    expect(billing).toBeDefined()
+    expect(billing?.visibility).toEqual({ module: 'payment' })
+    expect(billing?.destination).toEqual({
+      kind: 'internal',
+      options: expect.objectContaining({
+        to: '/{-$locale}/dashboard/billing',
+        params: { locale: 'en' },
+      }),
+    })
+  })
+
+  it('payment 关闭时不含「账单」', () => {
+    const config = createConfig({ payment: false })
+    expect(leafItems(getSettingsSections('en', ctx(config))).map((item) => item.id)).not.toContain(
+      'billing',
     )
   })
 

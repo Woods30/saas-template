@@ -60,26 +60,51 @@ describe('submitContact', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 配置门禁：contact 默认关闭 → POST 返回 404，且不读取 body / 不调用 provider
+// 配置门禁：contact 关闭 → POST 返回 404，且不读取 body / 不调用 provider
+//
+// 门禁用例**显式**关掉开关：`website.ts` 的默认值随部署场景调整（本仓本地联调期
+// 会打开部分模块），依赖出厂默认值的断言会在开关变更时静默失效。
 // ---------------------------------------------------------------------------
 describe('POST /api/contact 门禁', () => {
-  function getPostHandler(): (ctx: { request: Request }) => Promise<Response> {
-    const handlers = (
-      Route as unknown as { options?: { server?: { handlers?: Record<string, unknown> } } }
-    ).options?.server?.handlers
+  beforeEach(() => {
+    vi.doUnmock('@/config/website')
+    vi.resetModules()
+  })
+
+  /** 以 `contact.enabled: false` 重新加载路由。 */
+  async function importRouteWithContactDisabled() {
+    vi.resetModules()
+    vi.doMock('@/config/website', async () => {
+      const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
+      const { parsePublicEnv } =
+        await vi.importActual<typeof import('@/env/public')>('@/env/public')
+      const base = actual.createWebsiteConfig(
+        parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' }),
+      )
+      return { ...actual, websiteConfig: { ...base, contact: { enabled: false } } }
+    })
+    return import('@/routes/api/contact/$')
+  }
+
+  function getPostHandler(
+    route: unknown = Route,
+  ): (ctx: { request: Request }) => Promise<Response> {
+    const handlers = (route as { options?: { server?: { handlers?: Record<string, unknown> } } })
+      .options?.server?.handlers
     const handler = handlers?.POST
     if (typeof handler !== 'function') throw new Error('POST handler 缺失')
     return handler as (ctx: { request: Request }) => Promise<Response>
   }
 
   it('contact 关闭时返回 404 MODULE_DISABLED，且不读取 body', async () => {
+    const { Route: DisabledRoute } = await importRouteWithContactDisabled()
     const request = new Request('https://jerbix.dev/api/contact/submit', {
       method: 'POST',
       body: '{}',
     })
     const read = vi.spyOn(request, 'json')
 
-    const response = await getPostHandler()({ request })
+    const response = await getPostHandler(DisabledRoute)({ request })
 
     expect(response.status).toBe(404)
     expect(await response.json()).toEqual({ error: 'MODULE_DISABLED' })

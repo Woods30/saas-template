@@ -79,6 +79,28 @@ const EXTRA_ENV_KEYS = [
 /** 从子进程环境删除的键集合：`.env.example` 全部键 + 额外键，确保临时 `.env` 是唯一来源。 */
 const scrubKeys = [...dotenvKeys, ...EXTRA_ENV_KEYS]
 
+/**
+ * 已启用服务模块所需的完整配置。
+ *
+ * `website.ts` 当前默认打开 payment / notification / analytics（本仓本地联调期），
+ * 因此生产校验要求这些模块的字段齐备。用例若只提供 URL 与 auth secret，会被
+ * 「已启用服务缺少必要配置」拦下——这是预期行为，不是夹具遗漏。
+ */
+const ENABLED_SERVICES_ENV: Record<string, string> = {
+  STRIPE_SECRET_KEY: 'sk_test_synthetic',
+  STRIPE_WEBHOOK_SECRET: 'whsec_synthetic',
+  VITE_STRIPE_PRICE_PRO_MONTHLY: 'price_synthetic',
+  DISCORD_WEBHOOK_URL: 'https://discord.com/api/webhooks/1/synthetic',
+  VITE_GA_ID: 'G-SYNTHETIC',
+}
+
+/** 把已启用服务的配置拼成 `.env` 文本。 */
+function enabledServicesEnvText(): string {
+  return `${Object.entries(ENABLED_SERVICES_ENV)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n')}\n`
+}
+
 /** 在指定 cwd 下用 tsx 运行脚本，返回退出码与输出。 */
 function runScript(cwd: string, script: string, extraEnv: Record<string, string> = {}): RunResult {
   const env: Record<string, string | undefined> = { ...process.env, ...extraEnv }
@@ -220,6 +242,7 @@ describe('check-env-prod.ts（生产校验）', () => {
     const result = runScript(makeWorkspace(), checkEnvProd, {
       BETTER_AUTH_SECRET: 'a'.repeat(32),
       VITE_BASE_URL: VALID_URL,
+      ...ENABLED_SERVICES_ENV,
     })
     expect(result.stderr).toBe('')
     expect(result.code).toBe(0)
@@ -239,7 +262,10 @@ describe('check-env-prod.ts（生产校验）', () => {
     // 若仍读 `.env`，本地 localhost 会让校验失败——即使生产配置本身完全正确。
     const dir = makeWorkspace()
     writeDotEnv(dir, 'VITE_BASE_URL=http://localhost:3000\n')
-    writeDotEnvProduction(dir, `BETTER_AUTH_SECRET=${VALID_SECRET}\nVITE_BASE_URL=${VALID_URL}\n`)
+    writeDotEnvProduction(
+      dir,
+      `BETTER_AUTH_SECRET=${VALID_SECRET}\nVITE_BASE_URL=${VALID_URL}\n${enabledServicesEnvText()}`,
+    )
     const result = runScript(dir, checkEnvProd)
     expect(result.stderr).toBe('')
     expect(result.code).toBe(0)
@@ -258,7 +284,10 @@ describe('check-env-prod.ts（生产校验）', () => {
 
   it('无 `.env.production` 时回退读 `.env`（保持既有行为）', () => {
     const dir = makeWorkspace()
-    writeDotEnv(dir, `BETTER_AUTH_SECRET=${VALID_SECRET}\nVITE_BASE_URL=${VALID_URL}\n`)
+    writeDotEnv(
+      dir,
+      `BETTER_AUTH_SECRET=${VALID_SECRET}\nVITE_BASE_URL=${VALID_URL}\n${enabledServicesEnvText()}`,
+    )
     const result = runScript(dir, checkEnvProd)
     expect(result.stderr).toBe('')
     expect(result.code).toBe(0)
@@ -283,7 +312,10 @@ describe('check-env-prod.ts（生产校验）', () => {
 
   it('引用包裹的合法 secret 通过', () => {
     const dir = makeWorkspace()
-    writeDotEnv(dir, `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET="${VALID_SECRET}"\n`)
+    writeDotEnv(
+      dir,
+      `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET="${VALID_SECRET}"\n${enabledServicesEnvText()}`,
+    )
     const result = runScript(dir, checkEnvProd)
     expect(result.stderr).toBe('')
     expect(result.code).toBe(0)
@@ -307,18 +339,23 @@ describe('check-env-prod.ts（生产校验）', () => {
     const result = runScript(dir, checkEnvProd, {
       BETTER_AUTH_SECRET: VALID_SECRET,
       VITE_BASE_URL: VALID_URL,
+      ...ENABLED_SERVICES_ENV,
     })
     expect(result.stderr).toBe('')
     expect(result.code).toBe(0)
   })
 
-  it('默认关闭的服务模块不要求其 secret 齐备', () => {
+  it('已启用的服务模块缺少 secret 时失败（当前默认打开 payment / notification / analytics）', () => {
     const dir = makeWorkspace()
-    // 只提供生产必需的 URL 与 auth secret，未提供 RESEND / STRIPE 等服务端凭据。
+    // 只提供生产必需的 URL 与 auth secret，未提供 STRIPE / DISCORD / GA 凭据。
     writeDotEnv(dir, `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
     const result = runScript(dir, checkEnvProd)
-    expect(result.stderr).toBe('')
-    expect(result.code).toBe(0)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('STRIPE_SECRET_KEY')
+    expect(result.stderr).toContain('DISCORD_WEBHOOK_URL')
+    expect(result.stderr).toContain('VITE_GA_ID')
+    // 诊断只报字段名，不回声值。
+    expect(result.stderr).not.toContain(VALID_SECRET)
   })
 
   it('生产缺少公开 URL 不能借默认 localhost 通过', () => {
@@ -454,7 +491,10 @@ describe('check-env-prod.ts（生产校验）', () => {
 
   it('合法生产 URL https://jerbix.dev 通过（无值回显）', () => {
     const dir = makeWorkspace()
-    writeDotEnv(dir, `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
+    writeDotEnv(
+      dir,
+      `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET=${VALID_SECRET}\n${enabledServicesEnvText()}`,
+    )
     const result = runScript(dir, checkEnvProd)
     expect(result.code).toBe(0)
     expect(result.stdout).toContain('生产环境变量校验通过')

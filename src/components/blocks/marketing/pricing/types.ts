@@ -23,4 +23,11 @@ export interface PricingProps {
   plans: PricingPlan[]
   /** 渲染自定义 CTA（用于接 authClient + createCheckoutSession） */
   renderCta?: (plan: PricingPlan) => ReactNode
+  /**
+   * 当前选中的计费周期，决定每个 plan 显示哪一行价格。
+   *
+   * 不传时退回 `prices[0]`：一个 plan 只配一个周期（模板默认状态）时行为不变，
+   * 不需要调用方额外传参。
+   */
+  selectedInterval?: 'month' | 'year' | 'one_time'
 }

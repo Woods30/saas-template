@@ -1,5 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { eq } from 'drizzle-orm'
+import { getPricingPlans } from '@/config/blocks'
+import { findPlanIdByPriceId } from '@/config/payment'
 import { websiteConfig } from '@/config/website'
 import { createDb, schema } from '@/db'
 import { getServerContext } from '@/lib/server-context'
@@ -63,6 +65,26 @@ interface InvoicePaidObject {
       }
     }>
   } | null
+  /**
+   * 发票行项。`invoice.paid` 通知里的套餐与金额取自第一行：本模板的定价模型是
+   * 订阅单价格，首行即用户购买的那一项（后续行会是税、积分等）。
+   */
+  lines?: {
+    data?: Array<{
+      /** 行项金额（分）。含税与折扣，比 `price.unit_amount` 更接近实付。 */
+      amount?: number
+      currency?: string
+      description?: string | null
+      pricing?: {
+        /** 2025-09-30.clover 把 price 收进了 `pricing.price_details`。 */
+        price_details?: {
+          price?: string | { id?: string }
+          product?: string
+        } | null
+        type?: string
+      } | null
+    }>
+  } | null
 }
 
 /** `customer.subscription.*` 事件中实际用到的字段。 */
@@ -72,7 +94,13 @@ interface SubscriptionObject {
   cancel_at_period_end?: boolean
   items: {
     data: Array<{
-      price: { id: string }
+      price: {
+        id: string
+        currency?: string
+        /** 一次性 Price 没有 `recurring`。 */
+        recurring?: { interval?: string } | null
+        unit_amount?: number | null
+      }
       /** 周期在**订阅项**上，不在订阅顶层。 */
       current_period_start: number
       current_period_end: number
@@ -119,6 +147,32 @@ function subscriptionIdFromInvoice(invoice: InvoicePaidObject): string | null {
   return idOf(invoice.parent?.subscription_details?.subscription)
 }
 
+/**
+ * 从 Invoice 首行取 Price id。
+ *
+ * 新 API 把 price 收进 `pricing.price_details.price`，可能是字符串 id 或展开对象。
+ * 取不到时返回 `undefined`——通知里「不知道套餐」远好过猜一个。
+ */
+function priceIdFromInvoice(invoice: InvoicePaidObject): string | undefined {
+  const price = invoice.lines?.data?.[0]?.pricing?.price_details?.price
+  if (typeof price === 'string') return price
+  return price?.id
+}
+
+/**
+ * Price id → 展示用套餐名。
+ *
+ * 反向查 `priceMap`（同一份「定价页 plan ↔ Stripe Price」映射），因此新增 plan 或
+ * 改 Price ID 时不需要改这里。查不到时返回 `undefined`：Price 可能是手工在 Stripe
+ * 后台创建的，调用方退回显示 Price id，不假装认识它。
+ */
+function planNameForPrice(priceId: string | undefined): string | undefined {
+  if (!priceId) return undefined
+  const planId = findPlanIdByPriceId(websiteConfig.payment.priceMap, priceId)
+  if (!planId) return undefined
+  return getPricingPlans().find((plan) => plan.id === planId)?.name
+}
+
 // ------------------------------------------------------------------------------------------------
 // 业务 handler
 // ------------------------------------------------------------------------------------------------
@@ -126,11 +180,15 @@ function subscriptionIdFromInvoice(invoice: InvoicePaidObject): string | null {
 /**
  * Handles `checkout.session.completed`.
  *
- * - 订阅模式：写入 `subscriptions` 行。真实周期 / 价格由随后的
- *   `customer.subscription.created` 补齐，这里只落 userId 与 customerId 的关联。
+ * - 订阅模式：写入 `subscriptions` 行。userId 与 customerId 的关联在这里落地，
+ *   priceId 与周期由随后的 `customer.subscription.created` 补齐。
  * - 一次性支付（`mode: 'payment'`，如终身版）：**没有** subscription id。
  *   旧实现直接跳过，导致 `payments.userId` 永远为 null、无法判断谁买了终身版。
  *   这里改为写一条 `payments` 行，userId 取自 checkout 的 metadata。
+ *
+ * `priceId` 一并写进 subscription 行（而不是等 `subscription.created`）：
+ * `checkout.session.completed` 与 `invoice.paid` 到达的顺序不保证，若通知在
+ * `subscription.created` 之前触发，Price 还没入库就查不到套餐名。
  */
 export async function handleCheckoutCompleted(
   db: ReturnType<typeof createDb>,
@@ -143,7 +201,7 @@ export async function handleCheckoutCompleted(
     customer?: string | null
     amount_total?: number | null
     currency?: string | null
-    metadata?: { userId?: string }
+    metadata?: { userId?: string; planId?: string; interval?: string }
   }
 
   const rawUserId = s.metadata?.userId
@@ -255,6 +313,13 @@ export async function handleInvoicePaid(
  *
  * 周期字段在 `items.data[]` 上（新 API），取**第一项**作为订阅的主周期：本模板的
  * 定价模型是单价格订阅，多项订阅（按量 + 席位）不在支持范围内。
+ *
+ * 金额与周期一并落库（`amount` / `currency` / `interval`）：这三个列在 schema 里
+ * 早就声明了，早期实现从不写入，于是账单页的金额列永远显示 `—`、续费周期无从判断。
+ * 数据就来自订阅项自己的 price 对象，不需要额外请求 Stripe。
+ *
+ * 只在**有值**时才写这三个列：订阅可能处于 `incomplete`（还没定价细节）等中间态，
+ * 用 `undefined` 覆盖已有值会把上一次的正确答案擦掉。
  */
 export async function handleSubscriptionUpsert(
   db: ReturnType<typeof createDb>,
@@ -264,6 +329,17 @@ export async function handleSubscriptionUpsert(
   const periodStart = toDate(item?.current_period_start)
   const periodEnd = toDate(item?.current_period_end)
 
+  // `unit_amount: null` 表示按量计费等非固定价，写 `null` 与「不知道」同义，
+  // 因此这里只接受有限数字。
+  const amount =
+    typeof item?.price.unit_amount === 'number' && Number.isFinite(item.price.unit_amount)
+      ? item.price.unit_amount
+      : undefined
+  const currency = item?.price.currency?.trim() ? item.price.currency.toLowerCase() : undefined
+  // 一次性 Price 没有 `recurring`：那是 `mode: 'payment'` 的形态，interval 保持
+  // 空值，账单页据此显示「终身」而不是「按月」。
+  const interval = item?.price.recurring?.interval?.trim() || undefined
+
   await db
     .update(schema.subscriptions)
     .set({
@@ -271,6 +347,9 @@ export async function handleSubscriptionUpsert(
       priceId: item?.price.id ?? '',
       ...(periodStart ? { currentPeriodStart: periodStart } : {}),
       ...(periodEnd ? { currentPeriodEnd: periodEnd } : {}),
+      ...(amount !== undefined ? { amount } : {}),
+      ...(currency !== undefined ? { currency } : {}),
+      ...(interval !== undefined ? { interval } : {}),
       cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
       updatedAt: new Date(),
     })
@@ -287,6 +366,9 @@ export async function handleSubscriptionUpsert(
  * tanstarter 把「支付成功」作为通知模块的主要触发点；本模板此前只在联系表单里
  * 调用 `notify()`，支付事件完全没有通知，运营侧要等到查数据库才知道有人付款。
  *
+ * 套餐名是这条通知的核心信息：只写「用户 xxx 付款 5.99 USD」时，运营无法区分
+ * 这是月付订阅、年付订阅还是一次性买断，对账和客诉都要再查一次数据库。
+ *
  * 通知**不阻塞** webhook：`notify()` 自身吞掉所有异常并返回 `false`，这里也不
  * await 失败——webhook 的返回值只决定 Stripe 是否重投，与通知成败无关。
  */
@@ -295,13 +377,23 @@ async function notifyPaymentSucceeded(params: {
   amount: number
   currency: string
   kind: 'subscription' | 'one_time'
+  /** 定价页上的套餐名（如「专业版」）；查不到时由调用方退回 Price id。 */
+  plan?: string
 }): Promise<void> {
   if (!websiteConfig.notification.enabled) return
   const amount = `${(params.amount / 100).toFixed(2)} ${params.currency.toUpperCase()}`
+  const title = params.kind === 'subscription' ? '新订阅付款成功' : '新一次性付款成功'
   await notify(websiteConfig.notification.provider, {
-    title: params.kind === 'subscription' ? '新订阅付款成功' : '新一次性付款成功',
-    message: `用户 ${params.userId} 完成付款：${amount}`,
-    meta: { userId: params.userId, amount, kind: params.kind },
+    title,
+    // 套餐名缺失（Price 不在映射里）时退回「未知套餐」而不是省略整段——
+    // 「用户 xxx 完成订阅付款：5.99 USD」与原本的形式等价，信息量不减。
+    message: `用户 ${params.userId} 订阅${params.plan ?? '未知套餐'}：${amount}`,
+    meta: {
+      userId: params.userId,
+      plan: params.plan ?? '—',
+      amount,
+      kind: params.kind,
+    },
   })
 }
 
@@ -369,11 +461,15 @@ export const Route = createFileRoute('/api/webhooks/stripe')({
                   .where(eq(schema.subscriptions.subscriptionId, subscriptionId))
                   .limit(1)
                 if (rows[0]) {
+                  // 套餐名从发票首行的 Price 反查；映射里没有时退回 Price id，
+                  // 至少能看出这是哪一笔，而不是一个空字段。
+                  const priceId = priceIdFromInvoice(inv)
                   await notifyPaymentSucceeded({
                     userId: rows[0].userId,
                     amount: inv.amount_paid,
                     currency: inv.currency,
                     kind: 'subscription',
+                    plan: planNameForPrice(priceId) ?? priceId,
                   })
                 }
               }
