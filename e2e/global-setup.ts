@@ -23,6 +23,10 @@ const WARMUP_PATHS = [
   '/docs/getting-started',
   '/zh/dashboard/profile',
   '/zh/dashboard/sessions',
+  // 支付 E2E 的两个入口：定价页（点 CTA 走 /api/payment）与账单页（server function）。
+  // 不预热的话，冷启动时按钮可能还是 SSR 的静态 DOM，点下去没有处理器。
+  '/zh/pricing',
+  '/zh/dashboard/billing',
 ]
 
 export default async function globalSetup() {
