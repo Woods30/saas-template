@@ -9,6 +9,7 @@ import { websiteConfig } from '@/config/website'
 import { trackBeginCheckout } from '@/lib/analytics/events'
 import { assertPageEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
+import { resolveRedirectTarget } from '@/lib/urls'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 import { startCheckout } from '@/payment/checkout-client'
@@ -70,7 +71,9 @@ function PricingPage() {
           router.navigate({
             to: '/{-$locale}/auth/login',
             params: { locale },
-            search: { redirect: '/pricing' },
+            // 登录页的 `validateSearch` 只接受经过 `safeInternalPath` 的类型，
+            // 因此这里传常量也要走一次——类型即文档。
+            search: { redirect: resolveRedirectTarget('/pricing') },
           })
           return
         default:

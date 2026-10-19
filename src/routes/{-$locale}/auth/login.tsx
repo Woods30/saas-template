@@ -11,6 +11,7 @@ import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons'
 import { SubmitButton } from '@/components/auth/SubmitButton'
 import { trackLogin } from '@/lib/analytics/events'
 import { assertPageEnabled } from '@/lib/module-access'
+import { resolveRedirectTarget, type SafeInternalPath, safeInternalPath } from '@/lib/urls'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/auth/login')({
@@ -21,13 +22,11 @@ export const Route = createFileRoute('/{-$locale}/auth/login')({
     return fetchAuthProviderAvailability()
   },
   // 定价页在未登录时把用户送到这里并带上 `?redirect=/pricing`，登录后回到原处
-  // 继续结账。只接受站内相对路径，避免开放重定向。
-  validateSearch: (search: Record<string, unknown>): { redirect?: string } => {
-    const value = search.redirect
-    if (typeof value !== 'string') return {}
-    // 拒绝 `//evil.com`、`https://…` 与反斜杠变体（浏览器会把它当成 `//`）。
-    if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return {}
-    return { redirect: value }
+  // 继续结账。只接受站内相对路径，避免开放重定向（校验逻辑见 `safeInternalPath`：
+  // 浏览器解析前会剥离控制字符、把 `\` 当 `/`，因此不能只查字符串前缀）。
+  validateSearch: (search: Record<string, unknown>): { redirect?: SafeInternalPath } => {
+    const path = safeInternalPath(search.redirect)
+    return path === undefined ? {} : { redirect: path }
   },
   component: LoginPage,
 })
@@ -51,10 +50,8 @@ function LoginPage() {
       }
       trackLogin()
       // 登录后回来源页（定价页的结账引导会带 `?redirect=/pricing`）。
-      // `validateSearch` 已挡掉 `//host` 之类的跨站路径，这里再判一次是纵深防御。
-      window.location.assign(
-        redirect?.startsWith('/') && !redirect.startsWith('//') ? redirect : '/',
-      )
+      // `validateSearch` 已经过 `safeInternalPath`，这里再用一次是纵深防御。
+      window.location.assign(resolveRedirectTarget(redirect))
     },
   })
 
@@ -62,7 +59,7 @@ function LoginPage() {
     // 失败时 better-auth 会带 `error` 查询参数重定向回本站；这里只在发起阶段兜底复位。
     void signIn.social({
       provider: 'google',
-      callbackURL: redirect?.startsWith('/') ? redirect : '/',
+      callbackURL: resolveRedirectTarget(redirect),
     })
   }
 
