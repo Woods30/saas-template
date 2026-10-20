@@ -123,12 +123,15 @@ describe('seo()', () => {
     ).toBe(false)
   })
 
-  it('未提供 image 时不输出 og:image', async () => {
+  it('未提供 image 时回退到品牌 OG 图', async () => {
+    // 分享卡片缺图时各平台会退化成一段纯文字，等于没有卡片。缺省回退品牌图，
+    // 而不是干脆不输出标签。
     const { seoModule } = await loadModules(CUSTOM_BASE_URL)
     const head = seoModule.seo('/', { title: '无图' })
-    expect(head.meta.some((entry) => 'property' in entry && entry.property === 'og:image')).toBe(
-      false,
-    )
+    expect(head.meta).toContainEqual({
+      property: 'og:image',
+      content: `${CUSTOM_BASE_URL}/logo.png`,
+    })
   })
 
   it('把相对 image 路径转成绝对 URL', async () => {
@@ -194,6 +197,75 @@ describe('seo()', () => {
     const { seoModule } = await loadModules(CUSTOM_BASE_URL)
     const head = seoModule.seo('/pricing', { title: '价格 · Acme' })
     expect(head.links.some((link) => 'rel' in link && link.rel === 'alternate')).toBe(false)
+  })
+
+  it('传 locale 时补 x-default，指向默认语言的带前缀 URL', async () => {
+    // 本仓所有 canonical 都带语言前缀（`/zh/...`），不存在「无前缀 = 默认语言」的约定，
+    // 因此 x-default 必须指向默认语言的带前缀地址，而不是无前缀路径。
+    const { seoModule } = await loadModules(CUSTOM_BASE_URL)
+    const head = seoModule.seo('/pricing', { title: '价格 · Acme', locale: 'zh' })
+    expect(head.links).toContainEqual({
+      rel: 'alternate',
+      hrefLang: 'x-default',
+      href: `${CUSTOM_BASE_URL}/zh/pricing`,
+    })
+  })
+
+  it('alternateLocales 只列真实存在的翻译', async () => {
+    // 未翻译的页面不该把其他语言写进 hreflang——那会让爬虫去抓 404。
+    const { seoModule } = await loadModules(CUSTOM_BASE_URL)
+    const head = seoModule.seo('/pricing', {
+      title: '价格 · Acme',
+      locale: 'zh',
+      alternateLocales: ['en'],
+    })
+    const alternates = head.links.filter((link) => 'rel' in link && link.rel === 'alternate')
+    expect(alternates.map((link) => ('hrefLang' in link ? link.hrefLang : ''))).toEqual([
+      'x-default',
+      'en',
+    ])
+
+    const solo = seoModule.seo('/pricing', {
+      title: '价格 · Acme',
+      locale: 'zh',
+      alternateLocales: [],
+    })
+    expect(
+      solo.links
+        .filter((link) => 'rel' in link && link.rel === 'alternate')
+        .map((link) => ('hrefLang' in link ? link.hrefLang : '')),
+    ).toEqual(['x-default'])
+  })
+
+  it('noindex: true 追加 robots 指令', async () => {
+    const { seoModule } = await loadModules(CUSTOM_BASE_URL)
+    const head = seoModule.seo('/dashboard/profile', { title: '个人资料', noindex: true })
+    expect(head.meta).toContainEqual({ name: 'robots', content: 'noindex' })
+
+    const open = seoModule.seo('/pricing', { title: '价格' })
+    expect(open.meta.some((entry) => 'name' in entry && entry.name === 'robots')).toBe(false)
+  })
+
+  it('传 locale 时输出 og:locale，并列出其他语言的 alternate', async () => {
+    const { seoModule } = await loadModules(CUSTOM_BASE_URL)
+    const head = seoModule.seo('/pricing', { title: '价格 · Acme', locale: 'zh' })
+    expect(head.meta).toContainEqual({ property: 'og:locale', content: 'zh_CN' })
+    expect(head.meta).toContainEqual({ property: 'og:locale:alternate', content: 'en_US' })
+  })
+
+  it('输出 og:site_name，默认取站点品牌名', async () => {
+    const { seoModule } = await loadModules(CUSTOM_BASE_URL)
+    const head = seoModule.seo('/', { title: '首页' })
+    expect(head.meta).toContainEqual({ property: 'og:site_name', content: 'Jerbix' })
+  })
+
+  it('social 为空时不输出 twitter:site，配置后输出', async () => {
+    const { seoModule } = await loadModules(CUSTOM_BASE_URL)
+    const empty = seoModule.seo('/', { title: '首页' })
+    expect(empty.meta.some((entry) => 'name' in entry && entry.name === 'twitter:site')).toBe(false)
+
+    const withHandle = seoModule.seo('/', { title: '首页', twitterSite: '@jerbix' })
+    expect(withHandle.meta).toContainEqual({ name: 'twitter:site', content: '@jerbix' })
   })
 })
 
