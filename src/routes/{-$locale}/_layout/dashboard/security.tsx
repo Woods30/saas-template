@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { toast } from '@/components/ui/toast'
 import { destructiveFocusRing } from '@/lib/a11y'
 import { getRequestLocale } from '@/lib/locale'
 import { seo } from '@/lib/seo'
@@ -53,14 +54,12 @@ function SecurityPage() {
 
 function ChangePasswordCard() {
   const [serverError, setServerError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
 
   const form = useForm({
     defaultValues: { currentPassword: '', newPassword: '' },
     validators: { onSubmit: createChangePasswordSchema(authFormMessages()) },
     onSubmit: async ({ value }) => {
       setServerError(null)
-      setSaved(false)
       const { error } = await authClient.changePassword({
         currentPassword: value.currentPassword,
         newPassword: value.newPassword,
@@ -69,7 +68,7 @@ function ChangePasswordCard() {
         setServerError(error.message?.split('\n')[0] ?? m.settings_error_generic())
         return
       }
-      setSaved(true)
+      toast.add({ type: 'success', title: m.settings_security_password_success() })
       form.reset()
     },
   })
@@ -113,11 +112,6 @@ function ChangePasswordCard() {
               {serverError}
             </p>
           )}
-          {saved && (
-            <p role="status" className="text-sm text-muted-foreground">
-              {m.settings_security_password_success()}
-            </p>
-          )}
           <form.Subscribe selector={(state) => state.isSubmitting}>
             {(isSubmitting) => (
               <SubmitButton pending={isSubmitting}>
@@ -133,14 +127,12 @@ function ChangePasswordCard() {
 
 function ChangeEmailCard({ currentEmail }: { currentEmail: string }) {
   const [serverError, setServerError] = useState<string | null>(null)
-  const [sent, setSent] = useState(false)
 
   const form = useForm({
     defaultValues: { newEmail: '' },
     validators: { onSubmit: createChangeEmailSchema(authFormMessages()) },
     onSubmit: async ({ value }) => {
       setServerError(null)
-      setSent(false)
       const { error } = await authClient.changeEmail({
         newEmail: value.newEmail,
         callbackURL: '/',
@@ -149,7 +141,7 @@ function ChangeEmailCard({ currentEmail }: { currentEmail: string }) {
         setServerError(error.message?.split('\n')[0] ?? m.settings_error_generic())
         return
       }
-      setSent(true)
+      toast.add({ type: 'success', title: m.settings_security_email_sent() })
       form.reset()
     },
   })
@@ -182,11 +174,6 @@ function ChangeEmailCard({ currentEmail }: { currentEmail: string }) {
           {serverError && (
             <p role="alert" className="text-sm text-destructive">
               {serverError}
-            </p>
-          )}
-          {sent && (
-            <p role="status" className="text-sm text-muted-foreground">
-              {m.settings_security_email_sent()}
             </p>
           )}
           <form.Subscribe selector={(state) => state.isSubmitting}>

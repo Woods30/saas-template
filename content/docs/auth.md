@@ -127,6 +127,28 @@ disabled, so there is no layout shift.
 
 Forms themselves use TanStack Form + Zod throughout — see [Form conventions](./forms).
 
+## Legal notice on the sign-in / sign-up pages
+
+login and register render a line below the form card: "By clicking continue, you agree to our
+Terms of Service and Privacy Policy", linking to `/marketing/legal/terms` and
+`/marketing/legal/privacy` and following the current locale. The pattern follows shadcn's
+`login-03` block: the notice is a sibling of the card, because inside the card it reads as part
+of the form.
+
+It is controlled by the `legalNotice` prop on `AuthLayout` and is **off by default**. Only pages
+where the user is actively consenting pass it: `verify-email` is a terminal state with no submit
+button, users on `reset-password` / `forgot-password` are not creating an account, and `error`
+has no action to consent to. Of register's two `AuthLayout` call sites, only the form one passes
+it — by the time "check your inbox" appears the account exists and consent already happened.
+
+> **Note**: the Terms and privacy bodies live under `content/legal/` and are **templates with
+     placeholder prompts**. Before going live, replace every "fill in before deploying" item with
+     your real facts — at minimum: data retention period, the sub-processor list (with each one's
+     DPA), refund window, liability cap, governing law and venue, a contact email, and which
+     cookies this deployment actually sets. Placeholders are written as `> **Note**` so they render
+     as prominent Alerts; once they are all replaced, consider dropping the "this document is
+     template placeholder content" note at the top of each file.
+
 ## Key invariants when changing this
 
 Check each before touching auth code:

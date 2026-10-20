@@ -42,8 +42,16 @@ function canonicalHref(head: HeadResult): string | undefined {
   return head.links.find((link) => link.rel === 'canonical')?.href
 }
 
+/**
+ * 只取**真实翻译**的 alternate。
+ *
+ * `x-default` 是「找不到匹配语言时的兜底」，指向默认语言，不属于「另一个语言版本」，
+ * 因此这里排除它——否则断言「每条 alternate 都指向 /en/」会被兜底项打破。
+ */
 function alternateHrefs(head: HeadResult): string[] {
-  return head.links.filter((link) => link.rel === 'alternate').map((link) => link.href ?? '')
+  return head.links
+    .filter((link) => link.rel === 'alternate' && link.hrefLang !== 'x-default')
+    .map((link) => link.href ?? '')
 }
 
 afterEach(() => {

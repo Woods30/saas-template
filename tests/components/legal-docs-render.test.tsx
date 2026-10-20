@@ -72,6 +72,56 @@ describe('legal 详情页真实渲染', () => {
   })
 })
 
+/**
+ * 法律文档的**正文**回归。
+ *
+ * 上面四条只证明「路由命中且 frontmatter title 渲染出来了」——早期那版 404 bug 就是
+ * 这样被漏掉的：标题取自 loaderData，命中失败时页面变成根组件的 404，`<h1>404</h1>`
+ * 一样能查得到。正文断言补上另一半：章节标题真的渲染了，以及「部署前填写」的占位
+ * 提示以 `role="alert"` 出现（`Mdx` 把 `> **注意事项**` / `> **Note**` 升级成 `Alert`，
+ * 见 `src/components/mdx/Mdx.tsx` 的 `isNoteQuote`），占位因此不可能被静默丢掉。
+ *
+ * 这一半同样防回归：曾有一版 `content/legal/*.md` 只有一句话加一个省略号，标题正常、
+ * 正文却是空壳。
+ */
+describe('legal 详情页正文渲染', () => {
+  it('terms 中英文都渲染出章节标题与占位提示', async () => {
+    for (const [locale, path, heading] of [
+      ['zh', '/zh/marketing/legal/terms', '服务的接受'],
+      ['en', '/en/marketing/legal/terms', 'Acceptance'],
+    ] as const) {
+      setLocale(locale as 'zh' | 'en', { reload: false })
+      await renderRoute(path)
+      expect(
+        screen.getByRole('heading', { level: 2, name: heading }),
+        `${path} 应渲染章节「${heading}」`,
+      ).toBeInTheDocument()
+      expect(screen.getAllByRole('alert').length, `${path} 应有占位提示`).toBeGreaterThan(0)
+    }
+  })
+
+  it('privacy 中英文都渲染出章节标题与占位提示', async () => {
+    for (const [locale, path, heading] of [
+      ['zh', '/zh/marketing/legal/privacy', '我们收集哪些信息'],
+      ['en', '/en/marketing/legal/privacy', 'What we collect'],
+    ] as const) {
+      setLocale(locale as 'zh' | 'en', { reload: false })
+      await renderRoute(path)
+      expect(
+        screen.getByRole('heading', { level: 2, name: heading }),
+        `${path} 应渲染章节「${heading}」`,
+      ).toBeInTheDocument()
+      expect(screen.getAllByRole('alert').length, `${path} 应有占位提示`).toBeGreaterThan(0)
+    }
+  })
+
+  it('未知 slug 渲染 404 而不是崩溃', async () => {
+    setLocale('en', { reload: false })
+    await renderRoute('/en/marketing/legal/does-not-exist')
+    expect(pageTitle()).toBe('404')
+  })
+})
+
 describe('docs 详情页真实渲染', () => {
   it('/zh/docs/getting-started 渲染中文标题「快速开始」而非 404', async () => {
     setLocale('zh', { reload: false })

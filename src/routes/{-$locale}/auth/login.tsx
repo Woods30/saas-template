@@ -64,7 +64,7 @@ function LoginPage() {
   }
 
   return (
-    <AuthLayout title={m.auth_login_title()} description={m.auth_login_to_register()}>
+    <AuthLayout title={m.auth_login_title()} description={m.auth_login_to_register()} legalNotice>
       {/*
         `noValidate` 必填：`<Input type="email">` 会触发浏览器原生约束校验，值非法时
         原生校验会直接拦下 `submit`，`onSubmit` 永远不执行、schema 校验与错误文案也就

@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { toast } from '@/components/ui/toast'
 import { getRequestLocale } from '@/lib/locale'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
@@ -72,6 +73,7 @@ function SessionsPage() {
       return
     }
     await load()
+    toast.add({ type: 'success', title: m.settings_sessions_revoked_toast() })
   }
 
   async function onRevokeOthers() {
@@ -81,6 +83,7 @@ function SessionsPage() {
       return
     }
     await load()
+    toast.add({ type: 'success', title: m.settings_sessions_revoked_others_toast() })
   }
 
   return (

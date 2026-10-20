@@ -1,9 +1,11 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { fetchSession } from '@/auth/session'
 import { Cta, Hero } from '@/components/blocks/marketing'
 import { Pricing as PricingBlock } from '@/components/blocks/marketing/pricing'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { toast } from '@/components/ui/toast'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { getPricingPlans, pricingBlocks } from '@/config/blocks'
 import { availableIntervals, isPlanPurchasable } from '@/config/payment'
@@ -19,6 +21,18 @@ import { startCheckout } from '@/payment/checkout-client'
 export const Route = createFileRoute('/{-$locale}/pricing')({
   // 独立定价页由 payment 开关控制；首页 #pricing 锚点不受影响。
   beforeLoad: () => assertPageEnabled('payment'),
+  // 免费档的按钮要看会话：已登录用户再注册一次没有意义。
+  //
+  // 必须是 server function 而不是 `useSession()`：后者在 SSR 首帧是 pending，按钮
+  // 文字会先渲染「免费开始」再在水合后跳成「进入工作台」，用户看到一次闪烁。
+  // `fetchSession` 在 SSR 阶段就地执行（无网络往返），客户端导航时降级为一次 RPC，
+  // 两条路径都拿到真实会话。
+  loader: () => fetchSession(),
+  // Stripe Checkout 的取消回跳落在本页（`checkout-client.ts` 的 `cancelUrl`）。
+  // 不声明这个参数的话，`?checkout=cancelled` 会被路由当成未知 search 丢掉，
+  // 用户取消结账回来就什么提示都没有。
+  validateSearch: (search: Record<string, unknown>): { checkout?: 'cancelled' } =>
+    search.checkout === 'cancelled' ? { checkout: 'cancelled' } : {},
   head: () =>
     seo('/pricing', {
       title: m.pricing_page_title(),
@@ -60,15 +74,42 @@ const defaultInterval: 'month' | 'year' | 'one_time' =
  */
 function PricingPage() {
   const router = useRouter()
+  const { checkout } = Route.useSearch()
+  const session = Route.useLoaderData()
+  const authenticated = session !== null
   const [pendingPlanId, setPendingPlanId] = useState<string | null>(null)
-  const [notice, setNotice] = useState<'already-subscribed' | null>(null)
   const [interval, setInterval] = useState<'month' | 'year' | 'one_time'>(defaultInterval)
+
+  // 取消结账的回跳提示。必须**替换**掉带 `checkout` 的历史记录：否则刷新一次就会
+  // 再弹一次「结账未完成」，用户看到的是一条早已过期的消息。
+  useEffect(() => {
+    if (checkout !== 'cancelled') return
+    toast.add({ type: 'info', title: m.settings_billing_checkout_cancelled() })
+    void router.navigate({
+      to: '/{-$locale}/pricing',
+      params: { locale: getLocale() },
+      replace: true,
+    })
+  }, [checkout, router])
 
   async function onSelectPlan(planId: string) {
     // 一次性方案（lifetime）没有周期概念，直接走 one_time。
     const plan = getPricingPlans().find((p) => p.id === planId)
     const planInterval = plan?.prices[0]?.interval === 'one_time' ? 'one_time' : interval
     const locale = getLocale()
+
+    // 免费档没有 Price，也没有可发起的东西：已登录用户进工作台（他们已经在用免费版，
+    // 再注册一次只会拿到「该邮箱已注册」的错误），未登录用户才引导注册。
+    //
+    // 这里不能只看 `isPlanPurchasable` 为假就一律跳注册——已登录用户点「免费开始」
+    // 之前就是这么被丢到注册页的。
+    if (planId === 'free') {
+      router.navigate({
+        to: authenticated ? '/{-$locale}/dashboard' : '/{-$locale}/auth/register',
+        params: { locale },
+      })
+      return
+    }
 
     // 没有该 plan 的 Price：走注册引导，不发起结账。
     if (!isPlanPurchasable(planId, websiteConfig.payment.priceMap)) {
@@ -80,7 +121,6 @@ function PricingPage() {
       return
     }
 
-    setNotice(null)
     setPendingPlanId(planId)
     try {
       const outcome = await startCheckout({ planId, interval: planInterval, locale })
@@ -105,7 +145,16 @@ function PricingPage() {
         case 'already-subscribed':
           // 服务端挡下了重复订阅（409）。停留在定价页并说明原因，比让用户再付一次
           // 或被 Stripe 拒绝都更清楚。
-          setNotice('already-subscribed')
+          //
+          // 走 toast 而不是页面底部的一行字：提示必须出现在**用户点下去的那个位置**
+          // 附近，页面底部的说明在点击后根本不在视口里，等于没提示。超时放宽到 8 秒，
+          // 这条要读两行（结论 + 下一步去哪）。
+          toast.add({
+            type: 'info',
+            title: m.payment_already_subscribed(),
+            description: m.payment_already_subscribed_hint(),
+            timeout: 8000,
+          })
           return
         default:
           // 配置缺失或网络 / 服务端错误：退回注册引导，比停在按钮加载态更好。
@@ -157,27 +206,23 @@ function PricingPage() {
         renderCta={(plan) => {
           const configured = isPlanPurchasable(plan.id, websiteConfig.payment.priceMap)
           const pending = pendingPlanId === plan.id
+          // 按钮文字跟着**点击后真正会发生的事**变：
+          // - 已登录 + 免费档 → 去工作台，写「进入工作台」而不是「免费开始」；
+          // - 未登录 + 免费档 → 引导注册，保持「免费开始」；
+          // - 配了 Price → 用方案自身的结账文案。
+          const label = configured
+            ? plan.cta.label
+            : authenticated && plan.id === 'free'
+              ? m.pricing_goto_dashboard()
+              : m.pricing_free_cta()
           return (
             <Button className="w-full" disabled={pending} onClick={() => onSelectPlan(plan.id)}>
-              {pending
-                ? m.payment_checkout_redirecting()
-                : configured
-                  ? plan.cta.label
-                  : m.pricing_free_cta()}
+              {pending ? m.payment_checkout_redirecting() : label}
             </Button>
           )
         }}
       />
       <Cta {...pricingBlocks.Cta} />
-      {notice === 'already-subscribed' && (
-        <p role="status" className="mt-6 text-center text-sm text-muted-foreground">
-          {m.payment_already_subscribed()}
-          <span className="mx-2" aria-hidden>
-            ·
-          </span>
-          {m.payment_already_subscribed_hint()}
-        </p>
-      )}
       {/* 未配置 Price 时给一条明确线索：这个模板默认不带支付凭据。 */}
       {!hasAnyConfiguredPrice() && (
         <p className="mt-6 text-center text-sm text-muted-foreground">

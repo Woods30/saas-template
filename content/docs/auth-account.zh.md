@@ -4,7 +4,7 @@ description: 受保护路由的会话守卫，以及资料 / 安全 / 登录设�
 locale: zh
 order: 12
 group: features
-updated: 2026-10-15
+updated: 2026-10-20
 ---
 
 登录后的账号管理区域，位于 `/{locale}/dashboard/*`。从导航栏用户菜单的「个人中心」进入。
@@ -108,7 +108,7 @@ session。子页经 `Route.useRouteContext()` 取到它。
 
 ## 页面元数据
 
-每个子页的 `head()` 走 `seo()` 生成 meta 与 canonical，并追加 `robots: noindex`——
+每个子页的 `head()` 走 `seo()` 生成 meta 与 canonical，并传 `noindex: true`——
 个人页不应被搜索引擎索引。
 
 ## 参考资料

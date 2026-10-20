@@ -104,22 +104,60 @@ account page), which prorates the old subscription into the new one instead of a
 a second. One-time payments (Lifetime) are not affected — a buyout has no notion of
 "already owned".
 
-Failures return 502; a 409 stays on the pricing page with a pointer to manage the
-existing subscription; missing configuration or a network error falls back to the
-sign-up guide.
+Failures return 502; a 409 stays on the pricing page with a toast pointing at the existing
+subscription; missing configuration or a network error falls back to the sign-up guide.
+
+Checkout outcomes (success / cancel / duplicate) go through toasts rather than an inline
+line: all three appear **after** a click or a redirect, where an inline message easily
+lands outside the viewport. Success returns to the billing page (`?checkout=success`) and
+cancel returns to the pricing page (`?checkout=cancelled`); both clear the query parameter
+with a `replace` navigation right after showing the toast, so a reload never repeats it.
 
 ## Billing page
 
-`/dashboard/billing` shows:
+`/dashboard/billing` is split in two sections:
 
-- The current subscription (plan, status, renewal date and time, amount, billing period)
-- Payment history (date, amount, status)
-- A "Manage subscription" button → `DELETE /api/payment` → Stripe Billing Portal
-  (opens in a new tab)
+- **Current plan** — one card per subscription, not a table row. Plan name (mapped from
+  the Price id), status, price with billing period, and the exact next renewal time all
+  read in a single glance, with the manage action on the card itself. This data normally
+  has one row per page, so a four-column table has no information-density win.
+- **Transactions** — a table that keeps its header. The first column labels what the
+  money was for (subscription charge / one-time purchase), then the date, then a status
+  badge with the amount.
+
+Two separate status vocabularies, never swapped: "Current plan" uses subscription states
+(active / past due / trialing / cancelled), while "Transactions" uses payment states
+(paid / refunded). Their value sets differ — `payments.status` is only `paid` or
+`refunded`, so reusing subscription wording would render every payment as "Active".
+
+Same for the billing period: only `one_time` shows "Lifetime". `checkout.session.completed`
+inserts the subscription row before `interval` is populated, and the period only arrives
+with `customer.subscription.created`; while it is empty the card shows just the amount,
+with no period at all. This page briefly rendered "Period syncing" there, but that is a
+backend webhook-timing detail a user can neither read nor act on.
+
+A "Manage subscription" button → `DELETE /api/payment` → Stripe Billing Portal
+(opens in a new tab).
 
 The server looks up the caller's `customerId` from the database and never trusts a
-client-supplied value, so one user cannot open another's billing portal. Both
-queries hit the `userId` index.
+client-supplied value, so one user cannot open another's billing portal. Both queries
+hit the `userId` index.
+
+## Where the free-tier button goes
+
+The free tier has no Price, so its button branches on **session state**:
+
+| State | Destination |
+|---|---|
+| Signed out | `/auth/register`, carrying `?plan=free` |
+| Signed in | `/dashboard` (which itself redirects to `/dashboard/profile`) |
+
+A signed-in user clicking "Start for free" used to be sent all the way to the register
+page — they already have an account, so registering again only produces an "email
+already registered" error. The session is read in the route's `loader` via
+`fetchSession()` (a server function), not the client-side `useSession()`: the latter is
+pending on the SSR's first frame, so the button would render "Start for free" and then
+flip to "Go to dashboard" after hydration.
 
 ## Webhook
 

@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
+import { toast } from '@/components/ui/toast'
 import { getRequestLocale } from '@/lib/locale'
 import { assertPageEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
@@ -57,6 +58,12 @@ function NotificationsPage() {
       return
     }
     setSubscribed(next)
+    toast.add({
+      type: 'success',
+      title: next
+        ? m.settings_notifications_subscribed_toast()
+        : m.settings_notifications_unsubscribed_toast(),
+    })
   }
 
   return (

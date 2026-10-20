@@ -4,7 +4,7 @@ description: Every websiteConfig field, its default, and switch semantics
 locale: en
 order: 2
 group: config
-updated: 2026-10-14
+updated: 2026-10-20
 ---
 
 All site configuration lives in `src/config/website.ts`, which exports the `websiteConfig` object.
@@ -57,6 +57,56 @@ together; `tests/unit/theme-colors.test.ts` fails if they drift, and also checks
 | `baseUrl` | `string` | Comes from `VITE_BASE_URL`; used for canonical, OG, sitemap, robots |
 
 > Production must be a real HTTPS domain. `pnpm check:env:prod` rejects `localhost`, loopback addresses, `0.0.0.0`, URLs with embedded credentials, and reserved domains such as `example.com` / `.net` / `.org`.
+
+## SEO and page metadata
+
+Every route's `head()` calls `seo(path, options)` from `src/lib/seo.ts`, which produces meta,
+canonical, hreflang, and structured data in one shot.
+
+```ts
+export const Route = createFileRoute('/{-$locale}/_layout/marketing/about')({
+  head: () =>
+    seo('/marketing/about', {
+      title: m.about_page_title(),
+      description: m.about_page_description(),
+      locale: getRequestLocale(),
+      pageType: 'AboutPage',
+    }),
+})
+```
+
+| Option | Type | Description |
+|---|---|---|
+| `title` | `string` | Required; written to `<title>`, `og:title`, and the page's JSON-LD node |
+| `description` | `string` | When omitted, no `description` / `og:description` is emitted — no empty placeholder |
+| `image` | `string` | Share image; falls back to `metadata.images.ogImage`. Relative paths are expanded to absolute URLs |
+| `type` | `'website' \| 'article'` | `og:type`; defaults to `'website'` |
+| `locale` | `Locale` | Current language; emits hreflang alternates, `x-default`, and `og:locale` |
+| `alternateLocales` | `readonly Locale[]` | The other languages this page **actually exists in**; omitted means all of them |
+| `noindex` | `boolean` | Appends `<meta name="robots" content="noindex">`; for post-login pages |
+| `twitterSite` | `string` | `twitter:site` handle; derived from `social.x` when omitted, not emitted when unconfigured |
+| `pageType` | `SeoPageType` | Emits an `@graph` of `Organization` + `WebSite` + page node |
+
+Always emitted: `og:url`, `og:site_name`, `og:image`, `twitter:card` (always
+`summary_large_image`), and canonical.
+
+### Three hard constraints
+
+**`path` must be the real route path.** `seo()` uses the same `path` for canonical and hreflang,
+so a wrong one points both at a nonexistent address — the page looks completely fine while search
+engines index and users share a dead URL. `marketing/about` and `features` once pointed at
+`/about` / `/features` this way. When adding a marketing page, add a test that pins the real
+path, following `tests/unit/roadmap-head.test.ts`.
+
+**Evaluate copy with `m.*()` at the call site.** Never move `title` / `description` into
+`websiteConfig`: config is evaluated once at module load, so under SSR every later request would
+get the first request's language (see the counterexample recorded in
+`tests/unit/home-head.test.ts`).
+
+**Be honest with `alternateLocales`.** Pass `[]` for untranslated pages, or hreflang sends
+crawlers to a 404 — "declared but missing" is worse than "not declared". `x-default` points at
+the default language's **prefixed** URL (`/zh/...`), because every canonical in this repo carries
+a language prefix.
 
 ## Content modules
 

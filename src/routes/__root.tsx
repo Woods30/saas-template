@@ -11,6 +11,7 @@ import {
 import type { ReactNode } from 'react'
 import { AnalyticsProvider } from '@/components/AnalyticsProvider'
 import { JsonLd } from '@/components/JsonLd'
+import { Toaster } from '@/components/ui/toast'
 import { websiteConfig } from '@/config/website'
 import { organizationJsonLd } from '@/lib/json-ld'
 import { htmlLang } from '@/lib/locale'
@@ -71,7 +72,10 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body>
         <JsonLd data={organizationJsonLd()} />
-        {children}
+        {/* 全局唯一的 toast 出口：所有页面把「操作结果」交给它，不再各自在页面里
+            找位置渲染提示。挂在 `children` 之后、`Scripts` 之前，让 portal 的
+            宿主节点在 hydration 前就存在于文档里。 */}
+        <Toaster>{children}</Toaster>
         <Scripts />
       </body>
     </html>

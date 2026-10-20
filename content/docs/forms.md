@@ -108,6 +108,37 @@ const form = useForm({
 Field-level errors are wired to `aria-invalid` and `aria-describedby` automatically by
 `AuthFormField` — no hand-written wiring.
 
+## Where feedback goes: toast or in-page
+
+A message in the wrong place is worse than no message: an "already subscribed" line at the
+bottom of the page is outside the viewport right after the click that triggered it, so the
+user never sees it. Feedback is split by **where the user is looking**:
+
+| Case | Where it goes | Why |
+|---|---|---|
+| Successful action (save, update, send, delete) | toast | The result may be half a screen away from the control |
+| Checkout outcome (success / cancel / duplicate) | toast | The page is rebuilt after the redirect; there is no anchor for an inline line |
+| Failed form submission | in-form `<p role="alert">` | The user has to go back and edit; the clue must stay in place |
+| Field validation | under the field | Wired by `AuthFormField` |
+| Failure inside a dialog | inside the dialog | A toast sits behind the overlay and the focus trap |
+| List load failure | in page | That is page state, not the result of an action |
+
+`<Toaster />` is mounted once in `src/routes/__root.tsx`; business code only calls the
+singleton:
+
+```tsx
+import { toast } from '@/components/ui/toast'
+
+toast.add({ type: 'success', title: m.settings_profile_name_success() })
+```
+
+- `type` picks the icon: `success` / `info` / `warning` / `error` / `loading`.
+- Use `description` for a second line. Toasts dismiss after 5 seconds by default; pass an
+  explicit `timeout` when the copy needs longer.
+- One-shot messages driven by a `?query` parameter (Stripe checkout results, for example)
+  must be followed by a `replace` navigation that clears the parameter — otherwise every
+  reload re-shows a message that was already handled.
+
 ## Where the components come from
 
 Input controls, labels, and error display all come from `src/components/ui` (the shadcn

@@ -4,7 +4,7 @@ description: websiteConfig 的全部字段、默认值与开关语义
 locale: zh
 order: 2
 group: config
-updated: 2026-10-14
+updated: 2026-10-20
 ---
 
 站点配置的唯一入口是 `src/config/website.ts`，导出 `websiteConfig` 对象。
@@ -57,6 +57,53 @@ export const websiteConfig = createWebsiteConfig(publicEnv)
 | `baseUrl` | `string` | 取自 `VITE_BASE_URL`，用于 canonical、OG、sitemap、robots |
 
 > 生产环境必须是真实 HTTPS 域名。`pnpm check:env:prod` 会拒绝 `localhost`、回环地址、`0.0.0.0`、内嵌凭据的 URL，以及 `example.com` / `.net` / `.org` 等保留域名。
+
+## SEO 与页面元数据
+
+每个路由的 `head()` 调用 `src/lib/seo.ts` 的 `seo(path, options)`，一次产出 meta、canonical、
+hreflang 与结构化数据。
+
+```ts
+export const Route = createFileRoute('/{-$locale}/_layout/marketing/about')({
+  head: () =>
+    seo('/marketing/about', {
+      title: m.about_page_title(),
+      description: m.about_page_description(),
+      locale: getRequestLocale(),
+      pageType: 'AboutPage',
+    }),
+})
+```
+
+| 选项 | 类型 | 说明 |
+|---|---|---|
+| `title` | `string` | 必填，同时写入 `<title>`、`og:title` 与页面 JSON-LD 节点 |
+| `description` | `string` | 省略时不输出 `description` / `og:description`，不留空占位 |
+| `image` | `string` | 分享图；省略时回退 `metadata.images.ogImage`。相对路径自动补全为绝对 URL |
+| `type` | `'website' \| 'article'` | `og:type`，默认 `'website'` |
+| `locale` | `Locale` | 当前语言；提供时输出 hreflang alternates、`x-default` 与 `og:locale` |
+| `alternateLocales` | `readonly Locale[]` | 该页**真实存在**的其他语言版本；省略视为全部存在 |
+| `noindex` | `boolean` | 追加 `<meta name="robots" content="noindex">`，用于登录后页面 |
+| `twitterSite` | `string` | `twitter:site` 句柄；省略时从 `social.x` 推导，未配置则不输出 |
+| `pageType` | `SeoPageType` | 生成 `Organization` + `WebSite` + 页面节点的 `@graph` |
+
+固定输出：`og:url`、`og:site_name`、`og:image`、`twitter:card`（恒为
+`summary_large_image`）与 canonical。
+
+### 三条硬约束
+
+**`path` 必须是真实路由路径。** `seo()` 把同一个 `path` 同时用于 canonical 与 hreflang，
+传错会让两者都指向不存在的地址——页面看起来完全正常，搜索引擎据此建索引、用户据此分享。
+`marketing/about` 与 `features` 曾因此指向 `/about` / `/features`。新增 marketing 页时照
+`tests/unit/roadmap-head.test.ts` 补一条钉死真实路径的断言。
+
+**文案在调用点用 `m.*()` 求值。** 不要把 `title` / `description` 放进 `websiteConfig`：
+配置在模块加载期求值一次，SSR 下后续请求都会拿到首次请求的语言（见
+`tests/unit/home-head.test.ts` 记录的反面案例）。
+
+**`alternateLocales` 要诚实。** 未翻译的页面应传 `[]`，否则 hreflang 会把爬虫指向 404——
+「声明了但不存在」比「没声明」更糟。`x-default` 指向默认语言的**带前缀**地址（`/zh/...`），
+因为本仓 canonical 一律带语言前缀。
 
 ## 内容模块
 

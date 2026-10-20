@@ -1,9 +1,17 @@
-import { IconCreditCard } from '@tabler/icons-react'
-import { createFileRoute } from '@tanstack/react-router'
+import { IconAlertTriangle, IconCreditCard } from '@tabler/icons-react'
+import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
 import { Spinner } from '@/components/ui/spinner'
 import {
   Table,
@@ -13,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { toast } from '@/components/ui/toast'
 import { websiteConfig } from '@/config/website'
 import { trackPurchase } from '@/lib/analytics/events'
 import { getRequestLocale } from '@/lib/locale'
@@ -25,6 +34,7 @@ import {
   type SubscriptionRecord,
 } from '@/payment/billing'
 import {
+  paymentStatusMessageKey,
   planNameForSubscription,
   subscriptionIntervalMessageKey,
   subscriptionStatusMessageKey,
@@ -59,6 +69,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/billing')({
 })
 
 function BillingPage() {
+  const router = useRouter()
   const { checkout } = Route.useSearch()
   const [subscriptions, setSubscriptions] = useState<SubscriptionRecord[] | null>(null)
   const [payments, setPayments] = useState<PaymentRecord[] | null>(null)
@@ -79,6 +90,19 @@ function BillingPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // 结账结果的提示。`?checkout=` 是 Stripe 回跳时带上的，展示完就把它从地址栏
+  // 抹掉（`replace`）：不抹的话刷新一次会再弹一次，用户看到的是早已处理过的旧消息。
+  // 取消结账的回跳落在定价页，那边有同样的一段处理。
+  useEffect(() => {
+    if (checkout !== 'success') return
+    toast.add({ type: 'success', title: m.settings_billing_checkout_success() })
+    void router.navigate({
+      to: '/{-$locale}/dashboard/billing',
+      params: { locale: getRequestLocale() },
+      replace: true,
+    })
+  }, [checkout, router])
 
   // Stripe Checkout 成功返回时补发 `purchase` 事件。
   //
@@ -129,9 +153,6 @@ function BillingPage() {
     }
   }
 
-  // 「生效中」的订阅才值得给管理入口：已取消的行点进去也只是看历史。
-  const activeSubscription = subscriptions?.find((sub) => sub.status === 'active')
-
   return (
     <div className="space-y-8">
       <header>
@@ -139,17 +160,13 @@ function BillingPage() {
         <p className="mt-1 text-sm text-muted-foreground">{m.settings_billing_description()}</p>
       </header>
 
-      {/* Stripe Checkout 的返回提示：带 query 参数回来时说明一笔支付刚结束。 */}
-      {checkout === 'success' && (
-        <p role="status" className="text-sm text-success">
-          {m.settings_billing_checkout_success()}
-        </p>
-      )}
-      {checkout === 'cancelled' && (
-        <p role="status" className="text-sm text-muted-foreground">
-          {m.settings_billing_checkout_cancelled()}
-        </p>
-      )}
+      <Link
+        to="/{-$locale}/pricing"
+        params={{ locale: getRequestLocale() }}
+        className="inline-block text-sm text-muted-foreground underline hover:text-foreground"
+      >
+        {m.settings_billing_view_plans()}
+      </Link>
 
       {error && (
         <p role="alert" className="text-sm text-destructive">
@@ -157,8 +174,12 @@ function BillingPage() {
         </p>
       )}
 
+      {/* 当前订阅：一行一张卡，管理入口就放在卡内——订阅状态和「怎么改它」必须
+          在同一个视线里，按钮放在区块外面会让用户看完卡片再去找按钮。 */}
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground">{m.settings_billing_status()}</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">
+          {m.settings_billing_current_plan()}
+        </h2>
         {subscriptions === null ? (
           <Spinner className="size-5" />
         ) : subscriptions.length === 0 ? (
@@ -168,96 +189,82 @@ function BillingPage() {
                 <IconCreditCard className="size-6" />
               </EmptyMedia>
               <EmptyTitle>{m.settings_billing_empty()}</EmptyTitle>
+              <EmptyDescription>{m.settings_billing_empty_hint()}</EmptyDescription>
             </EmptyHeader>
+            <EmptyContent>
+              <Button
+                variant="outline"
+                size="sm"
+                render={<Link to="/{-$locale}/pricing" params={{ locale: getRequestLocale() }} />}
+              >
+                {m.settings_billing_upgrade_cta()}
+              </Button>
+            </EmptyContent>
           </Empty>
         ) : (
-          <div data-slot="table-container">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{m.settings_billing_plan()}</TableHead>
-                  <TableHead>{m.settings_billing_status()}</TableHead>
-                  <TableHead>{m.settings_billing_renews_on()}</TableHead>
-                  <TableHead>{m.settings_billing_amount()}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {subscriptions.map((sub) => (
-                  <TableRow key={sub.id}>
-                    <TableCell>
-                      <PlanName sub={sub} />
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {m[subscriptionStatusMessageKey(sub.status)]()}
-                      </Badge>
-                    </TableCell>
-                    {/* 具体时间而非只有日期：续费多发生在本地时区的白天，
-                        只写「2026/10/24」看不出是当天什么时候。 */}
-                    <TableCell>{formatDateTime(sub.currentPeriodEnd)}</TableCell>
-                    <TableCell>
-                      <span className="flex flex-wrap items-center gap-2">
-                        {formatAmount(sub.amount, sub.currency)}
-                        <Badge variant="outline">
-                          {m[subscriptionIntervalMessageKey(sub.interval)]()}
-                        </Badge>
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="space-y-4">
+            {subscriptions.map((sub) => (
+              <SubscriptionCard
+                key={sub.id}
+                sub={sub}
+                managing={managing}
+                onManage={() => onManageSubscription(sub.customerId)}
+              />
+            ))}
           </div>
         )}
-        <div className="flex justify-end">
-          <Button
-            variant="outline"
-            disabled={!activeSubscription?.customerId || managing}
-            onClick={() => onManageSubscription(activeSubscription?.customerId)}
-          >
-            {managing ? <Spinner className="size-4" /> : null}
-            {m.settings_billing_manage()}
-          </Button>
-        </div>
       </section>
 
+      {/* 交易记录常驻而非折叠：它回答「我付过什么」，和当前订阅是同一趟浏览的两半，
+          折起来反而要多一次点击才看得到自己的付款历史。
+
+          表头必须留着。第一列是「这笔钱的性质」（订阅扣款 / 一次性购买）而不是方案
+          名，第三列把「状态」和「金额」挤在一格，没有表头时这三列只能靠猜。 */}
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground">{m.settings_billing_date()}</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">
+          {m.settings_billing_transactions()}
+        </h2>
         {payments === null ? (
           <Spinner className="size-5" />
         ) : payments.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>{m.settings_billing_empty()}</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
+          <p className="text-sm text-muted-foreground">{m.settings_billing_pay_none()}</p>
         ) : (
-          <div data-slot="table-container">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{m.settings_billing_table_date()}</TableHead>
-                  <TableHead>{m.settings_billing_table_amount()}</TableHead>
-                  <TableHead>{m.settings_billing_table_status()}</TableHead>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{m.settings_billing_plan()}</TableHead>
+                <TableHead>{m.settings_billing_date()}</TableHead>
+                <TableHead className="text-right">{m.settings_billing_amount()}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {payments.map((payment) => (
+                <TableRow key={payment.id}>
+                  <TableCell className="max-w-40 truncate">
+                    {payment.description ?? paymentTypeKey(payment.type)()}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {formatDate(payment.paidAt ?? payment.createdAt)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Badge
+                      variant={
+                        paymentStatusMessageKey(payment.status) === 'settings_billing_paid'
+                          ? 'secondary'
+                          : 'outline'
+                      }
+                      className="mr-3"
+                    >
+                      {m[paymentStatusMessageKey(payment.status)]()}
+                    </Badge>
+                    <span className="tabular-nums">
+                      {formatAmount(payment.amount, payment.currency)}
+                    </span>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {payments.map((payment) => (
-                  <TableRow key={payment.id}>
-                    <TableCell>{formatDate(payment.paidAt ?? payment.createdAt)}</TableCell>
-                    <TableCell>{formatAmount(payment.amount, payment.currency)}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {payment.status === 'refunded'
-                          ? m.settings_billing_cancelled()
-                          : m.settings_billing_active()}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </section>
     </div>
@@ -265,18 +272,118 @@ function BillingPage() {
 }
 
 /**
- * 订阅行的套餐名。
+ * 单条订阅的摘要卡。
  *
- * 优先显示定价页上的方案名（「专业版」），用户看得懂；Price 不在映射里时退回显示
- * Price id——它至少是真实数据，且能看出这是 Stripe 后台手工创建的那一笔。
+ * 为什么是卡片而不是表格行：用户来账单页只关心一件事——「我现在是什么套餐、下次
+ * 什么时候扣钱、怎么改」。这几个事实在卡片里一屏看完；表格行要横向读四列并对不上
+ * 表头，订阅这种一页通常只有一条的数据用表格没有信息密度收益。
  *
- * 独立成组件而不是一行三元：读的是 `websiteConfig.payment.priceMap`（模块级常量），
- * 放在渲染函数里每次遍历都会重算，而组件只在 props 变化时重渲染。
+ * 两点特意区别于普通表格展示：
+ * - **状态**是一等元素：扣款失败（`past_due`）是这里唯一需要用户立刻行动的状态，
+ *   用 `destructive` 而不是和其他状态共用一枚中性 Badge。
+ * - **管理入口在卡内**：状态和「怎么改它」在同一个视线里，按钮不放区块外面。
  */
-function PlanName({ sub }: { sub: SubscriptionRecord }) {
+function SubscriptionCard({
+  sub,
+  managing,
+  onManage,
+}: {
+  sub: SubscriptionRecord
+  managing: boolean
+  onManage: () => void
+}) {
   const plan = planNameForSubscription(sub.priceId, websiteConfig.payment.priceMap)
-  if (plan) return <>{plan}</>
-  return <span className="font-mono text-xs">{sub.priceId || sub.subscriptionId || sub.id}</span>
+  const statusKey = subscriptionStatusMessageKey(sub.status)
+  // 周期可能还没同步到（`checkout.session.completed` 与 `customer.subscription.created`
+  // 之间），此时为 `null`。这时只显示金额，不拼一个用户看不懂的周期词。
+  const intervalLabel = (() => {
+    const key = subscriptionIntervalMessageKey(sub.interval)
+    return key ? m[key]() : null
+  })()
+  const amount = formatAmount(sub.amount, sub.currency)
+  // 取消续费后周期仍在走：这条要显式说出来，否则用户以为自己已经被降级了。
+  const cancellingAtPeriodEnd =
+    sub.cancelAtPeriodEnd && (sub.status === 'active' || sub.status === 'trialing')
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start justify-between gap-4">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle className="text-lg">{plan ?? planFallback(sub)}</CardTitle>
+            <Badge variant={statusKey === 'settings_billing_past_due' ? 'destructive' : 'outline'}>
+              {cancellingAtPeriodEnd ? m.settings_billing_status_cancel_soon() : m[statusKey]()}
+            </Badge>
+          </div>
+          <CardDescription>
+            {/* 周期未知时只说金额：`$5.99` 是确定的，「周期待同步」不是用户能用的信息。 */}
+            {amount !== '—' && intervalLabel
+              ? m.settings_billing_plan_price({ amount, interval: intervalLabel })
+              : amount !== '—'
+                ? amount
+                : (intervalLabel ?? '')}
+          </CardDescription>
+        </div>
+        {/* 只有能进 Stripe 门户的订阅才有管理入口：没有 customerId 的行（例如
+            手工构造的测试数据）按钮会出现却打不开门户。 */}
+        {sub.customerId && (
+          <Button variant="outline" size="sm" disabled={managing} onClick={onManage}>
+            {managing ? <Spinner className="size-4" /> : null}
+            {m.settings_billing_manage()}
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {sub.currentPeriodEnd && (
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-sm">
+            <span className="text-muted-foreground">{m.settings_billing_renews_on_short()}</span>
+            <span className="font-medium tabular-nums">{formatDateTime(sub.currentPeriodEnd)}</span>
+          </div>
+        )}
+        {cancellingAtPeriodEnd && (
+          <div className="flex items-start gap-2 rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
+            <IconAlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" />
+            <span>{m.settings_billing_cancel_hint()}</span>
+          </div>
+        )}
+        {statusKey === 'settings_billing_past_due' && (
+          <div className="flex items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <IconAlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" />
+            <span>{m.settings_billing_past_due()}</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * 订阅卡的套餐名兜底。
+ *
+ * Price 不在映射里时退回显示 Price id——它至少是真实数据，且能看出这是 Stripe 后台
+ * 手工创建的那一笔。优先显示定价页上的方案名（「专业版」）由调用处
+ * `planNameForSubscription` 完成，用户看得懂；取不到名时才走到这里。
+ */
+function planFallback(sub: SubscriptionRecord): string {
+  return sub.priceId || sub.subscriptionId || sub.id
+}
+
+/**
+ * 付款记录的类别文案。
+ *
+ * `payments.description` 由 webhook 写入，当前两条写入路径（一次性支付与
+ * `invoice.paid`）都不填它，所以第一列实际只能靠 `type` 区分——这也是它该显示的
+ * 内容：「这笔钱是订阅扣的还是买断的」。
+ */
+function paymentTypeKey(type: string) {
+  switch (type) {
+    case 'subscription':
+      return m.settings_billing_pay_type_subscription
+    case 'one_time':
+      return m.settings_billing_pay_type_one_time
+    default:
+      return m.settings_billing_pay_type_invoice
+  }
 }
 
 /** `Date | string | null` → 本地日期；空值显示 `—`。 */

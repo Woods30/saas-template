@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { AuthLayout } from '@/components/auth/AuthLayout'
 import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons'
 import { SubmitButton } from '@/components/auth/SubmitButton'
+import { setLocale } from '@/locale/paraglide/runtime.js'
 
 /**
  * 认证页共享 UI 组件。
@@ -87,5 +88,31 @@ describe('AuthLayout', () => {
     expect(screen.getByText('欢迎回来')).toBeInTheDocument()
     expect(screen.getByText('表单')).toBeInTheDocument()
     expect(screen.getByRole('main')).toBeInTheDocument()
+  })
+
+  // 法律声明只属于「用户正在创建账号 / 登录」的页面。`verify-email` 是终态、
+  // 没有提交按钮，`reset-password` / `forgot-password` 也没有在创建账号——让它们
+  // 显示「点击继续即表示同意」既无意义也像 bug。因此默认必须不渲染，由 login /
+  // register 显式打开。
+  it('默认不渲染法律声明', () => {
+    setLocale('zh', { reload: false })
+    render(<AuthLayout title="登录">表单</AuthLayout>)
+    expect(screen.queryByText('服务条款')).not.toBeInTheDocument()
+    expect(screen.queryByText('隐私政策')).not.toBeInTheDocument()
+  })
+
+  it('传 legalNotice 时渲染 Terms 与 Privacy 两个链接', () => {
+    setLocale('zh', { reload: false })
+    render(
+      <AuthLayout title="注册" legalNotice>
+        表单
+      </AuthLayout>,
+    )
+    // 只断言文案不断言 href：本文件把 `Link` mock 成 `<a href={typeof to === 'string' ? to : '#'}>`，
+    // 吃不到 `params`，对象的 `to` 会一律渲染成 `#`。href 由
+    // `tests/unit/navigation.test.ts` 针对 `getPublicLinkOptions('terms'|'privacy')`
+    // 覆盖，那才是正确的分层。
+    expect(screen.getByRole('link', { name: '服务条款' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '隐私政策' })).toBeInTheDocument()
   })
 })

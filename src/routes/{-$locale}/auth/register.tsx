@@ -84,7 +84,14 @@ function RegisterPage() {
   }
 
   return (
-    <AuthLayout title={m.auth_register_title()} description={m.auth_register_to_login()}>
+    // 只有表单这一支传 `legalNotice`：下面 `submitted` 之后的「请查收验证邮件」分支
+    // 刻意不传——那时账号已经创建、同意已经在提交表单时发生，再显示一次「点击继续
+    // 即表示同意」指的是一个用户做过的、且本页已无法再做的动作。
+    <AuthLayout
+      title={m.auth_register_title()}
+      description={m.auth_register_to_login()}
+      legalNotice
+    >
       {/* `noValidate` 见 `login.tsx` 的说明：原生约束校验会拦下 submit，让 schema 校验永远不跑。 */}
       <form
         noValidate

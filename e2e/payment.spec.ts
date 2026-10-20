@@ -101,17 +101,19 @@ test.describe('Payment', () => {
     await page.goto('/zh/pricing')
     // 重试点击而不是加长等待：冷启动时按钮可能还是 SSR 的静态 DOM，点下去没有
     // 处理器（`networkidle` 只说明请求停了，不说明 React 已水合）。
-    const status = page.getByRole('status')
+    // 提示走全局 toast（`Toaster` 挂在根文档里），按文案定位；toast 会自动消失，
+    // 所以判重试的是「这条文案出现过」而不是某个常驻元素的可见性。
+    const notice = page.getByText('你已经订阅了该方案')
     await expect(async () => {
-      if (await status.isVisible()) return
+      if (await notice.isVisible()) return
       await page.getByRole('button', { name: '选择专业版' }).click()
       // 服务端 409 → 页面停在定价页并说明原因（而不是跳走或再开一个 Checkout）。
-      await expect(status).toContainText('你已经订阅了该方案', { timeout: 3000 })
+      await expect(notice).toBeVisible({ timeout: 3000 })
     }).toPass({ timeout: 20000 })
     await expect(page).toHaveURL(/\/zh\/pricing/)
   })
 
-  test('账单页显示套餐名、带时刻的续费日期、金额与计费周期', async ({ page, request }) => {
+  test('账单页用订阅卡展示套餐名、带时刻的续费日期、金额与计费周期', async ({ page, request }) => {
     test.skip(!(await paymentConfigured(request)), '支付模块未配置（缺 Stripe 凭据或 Price）')
 
     const email = await register(page)
@@ -123,13 +125,33 @@ test.describe('Payment', () => {
     await page.goto('/zh/dashboard/billing')
     await page.waitForURL(/\/zh\/dashboard\/billing/)
 
-    const table = page.locator('table').first()
-    // 套餐名来自 Price id 反查：显示成 `price_1US...` 说明映射没生效。
-    await expect(table.getByRole('cell', { name: '专业版' })).toBeVisible({ timeout: 15000 })
+    // 定位到「当前订阅」区块而不是整页：这几项都是这里独有的文案。
+    const section = page.locator('section', { hasText: '当前订阅' }).first()
+    // 套餐名来自 Price id 反查，显示成 `price_1US...` 说明映射没生效。
+    await expect(section.getByText('专业版')).toBeVisible({ timeout: 15000 })
     // 续费日期必须带具体时刻（`toLocaleString`），只有日期不足以判断「今天会不会扣款」。
-    await expect(table.getByRole('cell', { name: /\d{1,2}:\d{2}/ })).toBeVisible()
-    // 金额与计费周期同格：金额缺失时这里会渲染成 `—`。
-    await expect(table.getByRole('cell', { name: /\$5\.99/ })).toBeVisible()
-    await expect(table.getByRole('cell', { name: /按月/ })).toBeVisible()
+    await expect(section.getByText(/\d{1,2}:\d{2}/)).toBeVisible()
+    // 金额与计费周期同格（`settings_billing_plan_price`），金额缺失时这里渲染成 `—`。
+    await expect(section.getByText(/\$5\.99 \/ 按月/)).toBeVisible()
+    // 周期写死为 month，就不能显示成「终身 / 周期待同步」：空值曾被误归为终身，
+    // 于是任何「订阅行已建、周期未补」的订阅都显示成买了买断版。
+    await expect(section.getByText('终身')).toHaveCount(0)
+    // 当前订阅是卡片而非表格行：这份数据一页通常只有一条，横向四列对不上表头。
+    await expect(section.locator('table')).toHaveCount(0)
+  })
+
+  test('已登录用户点免费档按钮进入工作台，不再被送回注册页', async ({ page }) => {
+    await register(page)
+
+    await page.goto('/zh/pricing')
+    // 冷启动时按钮可能还是 SSR 的静态 DOM，点下去没有处理器——先等水合。
+    await page.waitForLoadState('networkidle')
+    // 按钮文案本身是修复的一半：已登录 + 免费档必须显示「进入工作台」而不是
+    // 「免费开始」——后者会引导一个已有账号的用户再去注册一次。
+    await expect(page.getByRole('button', { name: '进入工作台' })).toBeVisible()
+    await page.getByRole('button', { name: '进入工作台' }).click()
+
+    // `/dashboard` 自身重定向到 `/dashboard/profile`，落点以 profile 为准。
+    await expect(page).toHaveURL(/\/zh\/dashboard\/profile/, { timeout: 20000 })
   })
 })

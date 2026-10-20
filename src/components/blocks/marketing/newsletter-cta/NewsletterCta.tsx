@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { toast } from '@/components/ui/toast'
 import { m } from '@/locale/paraglide/messages.js'
 import type { NewsletterCtaProps } from './types'
 
@@ -10,7 +11,10 @@ export function NewsletterCta({
   placeholder = 'you@example.com',
   successMessage,
 }: NewsletterCtaProps) {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  // 反馈分级沿用 `content/docs/forms.md` 的分级表（`dashboard/admin/users.tsx` 的
+  // `run()` 同一套）：**成功走全局 toast，失败留在表单内**。失败时用户要回头改邮箱，
+  // 线索必须留在原地——toast 出现的位置离输入框远，且一闪而过。
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   return (
@@ -21,7 +25,8 @@ export function NewsletterCta({
         className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center"
         onSubmit={async (e) => {
           e.preventDefault()
-          setStatus('loading')
+          setLoading(true)
+          setError(null)
           const email = (new FormData(e.currentTarget).get('email') as string) ?? ''
           try {
             const res = await fetch('/api/newsletter', {
@@ -30,14 +35,15 @@ export function NewsletterCta({
               body: JSON.stringify({ email }),
             })
             if (!res.ok) {
-              setStatus('error')
               setError(m.newsletter_error())
               return
             }
-            setStatus('success')
+            toast.add({ type: 'success', title: successMessage ?? m.newsletter_success() })
           } catch {
-            setStatus('error')
             setError(m.newsletter_error())
+          } finally {
+            // 放在 finally 里：不论成功或失败按钮都要解禁，否则用户改不了邮箱重试。
+            setLoading(false)
           }
         }}
       >
@@ -48,16 +54,15 @@ export function NewsletterCta({
           placeholder={placeholder}
           className="sm:max-w-xs"
         />
-        <Button type="submit" disabled={status === 'loading'}>
+        <Button type="submit" disabled={loading}>
           {m.newsletter_subscribe()}
         </Button>
       </form>
-      {status === 'success' && (
-        <p className="mt-3 text-sm text-success">{successMessage ?? m.newsletter_success()}</p>
-      )}
-      {status === 'error' && (
-        <p className="mt-3 text-sm text-destructive">
-          {m.newsletter_error()}: {error}
+      {/* 失败留在原地的唯一承载点：`role="alert"` 让屏幕阅读器即时播报。
+          注意别再写成 `{error}: {error}` ——`error` 里存的是一整句文案。 */}
+      {error && (
+        <p role="alert" className="mt-3 text-sm text-destructive">
+          {error}
         </p>
       )}
     </section>

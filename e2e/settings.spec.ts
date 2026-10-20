@@ -66,7 +66,9 @@ test.describe('Settings', () => {
     const nameField = page.getByRole('textbox', { name: '昵称' })
     await nameField.fill('新昵称')
     await page.getByRole('button', { name: '保存' }).click()
-    await expect(page.getByRole('status')).toBeVisible({ timeout: 15000 })
+    // 成功提示走全局 toast（`src/routes/__root.tsx` 挂的 `Toaster`），不再是表单内
+    // 的 `role="status"`。按文案断言，避免把测试绑到 toast 的内部结构上。
+    await expect(page.getByText('昵称已更新。')).toBeVisible({ timeout: 15000 })
 
     // 刷新走的是服务端回读：验证写入真的落到了 D1，而不是只改了本地状态。
     await page.reload()
