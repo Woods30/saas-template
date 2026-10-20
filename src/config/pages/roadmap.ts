@@ -1,5 +1,5 @@
-import type { CtaProps, HeroProps } from '@/components/blocks/marketing'
-import type { RoadmapProps } from '@/components/blocks/marketing/roadmap'
+import type { CtaProps, HeroProps } from '@/components/sections'
+import type { RoadmapProps } from '@/components/sections/Roadmap'
 import { m } from '@/locale/paraglide/messages.js'
 
 /**

@@ -1,6 +1,13 @@
 import { IconArrowUpRight } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
-import type { CtaProps } from './types'
+
+export interface CtaProps {
+  title: string
+  variant?: 'default' | 'quiet'
+  description?: string
+  primaryCta: { label: string; href: string }
+  secondaryCta?: { label: string; href: string }
+}
 
 export function Cta({
   title,

@@ -293,7 +293,7 @@ EOF
 **Files:**
 - Modify（CLI 覆盖）: `src/components/ui/card.tsx`、`src/components/ui/input.tsx`、`src/components/ui/label.tsx`
 - Test: `tests/components/ui-originals.test.tsx`（新建）
-- 调用点复核: `src/components/auth/AuthFormField.tsx`、`src/components/auth/AuthLayout.tsx`、`src/components/blocks/marketing/newsletter-cta/NewsletterCta.tsx`、四个 `settings/*.tsx`
+- 调用点复核: `src/components/auth/AuthFormField.tsx`、`src/components/auth/AuthLayout.tsx`、`src/components/sections/newsletter-cta/NewsletterCta.tsx`、四个 `settings/*.tsx`
 
 **Interfaces:**
 - Consumes: 无。

@@ -1,4 +1,4 @@
-import type { CtaProps, HeroProps, StatsProps } from '@/components/blocks/marketing'
+import type { CtaProps, HeroProps, StatsProps } from '@/components/sections'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const aboutBlocks = {

@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Pricing } from '@/components/blocks/marketing/pricing/Pricing'
-import type { PricingPlan } from '@/components/blocks/marketing/pricing/types'
-import { getPricingPlans } from '@/config/blocks/pricing'
+import type { PricingPlan } from '@/components/sections'
+import { Pricing } from '@/components/sections/Pricing'
+import { getPricingPlans } from '@/config/pages/pricing'
 import { getLocale, setLocale } from '@/locale/paraglide/runtime.js'
 
 // ---------------------------------------------------------------------------

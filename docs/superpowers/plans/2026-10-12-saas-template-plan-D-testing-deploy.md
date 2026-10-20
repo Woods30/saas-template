@@ -1033,7 +1033,7 @@ MIT
 - `src/contact` - 联系表单 + 投递
 - `src/admin` - 管理后台
 - `src/dashboard` - 用户面板
-- `src/components/blocks/marketing` - 营销 blocks（spec §4 对齐）
+- `src/components/sections` - 营销 blocks（spec §4 对齐）
 - `src/db` - Drizzle schema + D1 client
 - `src/config/website` - 站点配置
 - `content/` - Content Collections（docs / blog / changelog / legal）

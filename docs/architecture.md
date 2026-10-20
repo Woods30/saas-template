@@ -19,8 +19,8 @@
 | `src/config/footer-config.ts` | Footer 分组 |
 | `src/config/social-config.ts` | 社交平台映射与 HTTPS 过滤 |
 | `src/config/service-status.ts` | 纯配置诊断（`getServiceStatuses` / `validateWebsiteConfig`） |
-| `src/config/blocks/` | 营销 blocks 配置（pricing、功能开关） |
-| `src/components/blocks/marketing/` | 8 个营销 blocks（Hero / Features / Stats / Pricing / FAQ / Testimonials / NewsletterCTA / CTA） |
+| `src/config/pages/` | 营销 blocks 配置（pricing、功能开关） |
+| `src/components/sections/` | 8 个营销 blocks（Hero / Features / Stats / Pricing / FAQ / Testimonials / NewsletterCTA / CTA） |
 | `src/components/layout/` | `MenuLink` / `MenuItems` 等菜单渲染组件 |
 | `src/components/mdx/` | 极简 markdown 渲染（标题 / 代码块 / 表格 / 列表 / 引用块 / 链接） |
 | `src/components/docs/` | 文档站 shell（`DocsLayout`）、分组侧边栏（`DocsSidebar`）、侧栏搜索（`DocsSearch`）、右侧本页目录（`DocsToc`）、文末「下一步」卡片（`DocNextSteps`）与上一篇/下一篇（`DocPager`） |

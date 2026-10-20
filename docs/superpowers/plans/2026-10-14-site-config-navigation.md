@@ -298,7 +298,7 @@ links.push({ kind: 'link', id: 'support', title: m.social_support(), icon: IconM
 - Modify: `src/components/docs/DocsLayout.tsx`
 - Modify: `src/components/theme/ThemeToggle.tsx`
 - Modify: `src/lib/theme.ts`
-- Modify: `src/config/blocks/home.ts`
+- Modify: `src/config/pages/home.ts`
 - Test: `tests/unit/theme.test.ts`、`tests/components/theme-toggle.test.tsx`、`tests/components/landing.test.tsx`
 
 **Interfaces:**

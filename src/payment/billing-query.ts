@@ -1,4 +1,4 @@
-import { getPricingPlans } from '@/config/blocks'
+import { getPricingPlans } from '@/config/pages'
 import { findPlanIdByPriceId } from '@/config/payment'
 
 /**

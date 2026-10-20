@@ -1,5 +1,4 @@
-import type { CtaProps, FaqProps, HeroProps } from '@/components/blocks/marketing'
-import type { NewsletterCtaProps } from '@/components/blocks/marketing/newsletter-cta'
+import type { CtaProps, FaqProps, HeroProps, NewsletterCtaProps } from '@/components/sections'
 import { m } from '@/locale/paraglide/messages.js'
 
 /** getter 模式理由同 `home.ts`：`m.*()` 必须在读取时求值，否则固化首次请求语言。 */

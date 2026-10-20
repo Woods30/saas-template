@@ -1,5 +1,5 @@
-import type { CtaProps, HeroProps } from '@/components/blocks/marketing'
-import type { PricingPlan } from '@/components/blocks/marketing/pricing'
+import type { CtaProps, HeroProps } from '@/components/sections'
+import type { PricingPlan } from '@/components/sections/Pricing'
 import { m } from '@/locale/paraglide/messages.js'
 
 /**

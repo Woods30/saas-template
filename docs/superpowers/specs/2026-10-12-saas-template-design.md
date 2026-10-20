@@ -324,7 +324,7 @@ saas-template/
 - **`src/<feature>/`**：每个业务功能独立成目录（`auth/`, `payment/`, `mail/`, `storage/`, `cache/`, `newsletter/`, `notification/`, `contact/`）。每个目录至少包含 `types.ts` + `provider/`（如果有多实现）+ `index.ts`（注册表与对外 API）。
 - **`src/lib/`**：仅放**真正通用、无业务领域语义**的工具：`utils`, `locale`, `seo`, `routes`, `price-plan`, `markdown`, `formatter`, `pages`, `urls`, `sitemap`。
 - **`src/components/`**：按用途分（`ui`、`layout`、`shared`）和按功能分（`auth`、`payment`、`dashboard`、`admin`、`blog`、`changelog`、`contact`、`analytics`）。
-- **`src/components/blocks/`**：营销首页的 block 组件，按 `src/config/blocks.ts` 顺序拼装。
+- **`src/components/blocks/`**：营销首页的 block 组件，按 `src/config/pages.ts` 顺序拼装。
 
 ## 5. 配置系统
 
@@ -475,7 +475,7 @@ export const websiteConfig: WebsiteConfig = {
 };
 ```
 
-### 5.3 `src/config/blocks.ts`
+### 5.3 `src/config/pages.ts`
 
 ```ts
 export const homeBlocksConfig = [

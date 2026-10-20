@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { Roadmap } from '@/components/blocks/marketing/roadmap'
+import { Roadmap } from '@/components/sections/Roadmap'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
 /**

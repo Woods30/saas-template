@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Cta, Faq, Hero, NewsletterCta } from '@/components/blocks/marketing'
-import { waitlistBlocks } from '@/config/blocks'
+import { Cta, Faq, Hero, NewsletterCta } from '@/components/sections'
+import { waitlistBlocks } from '@/config/pages'
 import { websiteConfig } from '@/config/website'
 import { getRequestLocale } from '@/lib/locale'
 import { seo } from '@/lib/seo'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getPricingPlans } from '@/config/blocks/pricing'
+import { getPricingPlans } from '@/config/pages/pricing'
 import { findPlanIdByPriceId, type PriceMap } from '@/config/payment'
 import {
   paymentStatusMessageKey,

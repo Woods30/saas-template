@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { blocks } from '@/components/blocks/marketing'
+import { blocks } from '@/components/sections'
 
 describe('blocks registry', () => {
   it('导出全部 8 个通用 blocks（不含 Pricing）', () => {

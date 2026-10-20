@@ -7,7 +7,7 @@ import {
   IconShieldLock,
 } from '@tabler/icons-react'
 import { createElement } from 'react'
-import type { CtaProps, FaqProps, FeaturesProps, HeroProps } from '@/components/blocks/marketing'
+import type { CtaProps, FaqProps, FeaturesProps, HeroProps } from '@/components/sections'
 import { websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'

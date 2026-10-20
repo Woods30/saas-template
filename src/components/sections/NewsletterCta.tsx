@@ -3,7 +3,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toast'
 import { m } from '@/locale/paraglide/messages.js'
-import type { NewsletterCtaProps } from './types'
+
+export interface NewsletterCtaProps {
+  title: string
+  description?: string
+  placeholder?: string
+  successMessage?: string
+}
 
 export function NewsletterCta({
   title,
