@@ -1,225 +1,130 @@
 ---
 title: 网站配置
-description: websiteConfig 的全部字段、默认值与开关语义
+description: websiteConfig 的全部字段与开关语义
 locale: zh
 order: 2
 group: config
-updated: 2026-10-20
+updated: 2026-10-21
 ---
 
-站点配置的唯一入口是 `src/config/website.ts`，导出 `websiteConfig` 对象。
-
-```ts
-// src/config/website.ts
-import { type PublicEnv, publicEnv } from '@/env/public'
-
-export const websiteConfig = createWebsiteConfig(publicEnv)
-```
-
-工厂 `createWebsiteConfig(env)` 显式接收公开 env，脚本与单测可传入独立配置，不必依赖全局单例。
-
-> **注意事项**
-> - 只放**语言无关**值。配置在模块加载期求值一次；随请求语言变化的文案必须在组件 render 或路由 `head()` 内调用 `m.*()`。
-> - 只放**公开**值。类型签名只接受 `PublicEnv`，secret 无法经此进入客户端 bundle。
-
-## 元数据
-
-图片路径必须为 root-relative（`/logo.svg`）或 protocol-relative（`//cdn/logo.svg`），否则 `pnpm check` 会报错。
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `metadata.name` | `string` | 站点名称，用于 JSON-LD、邮件发件人显示名、manifest |
-| `metadata.images.ogImage` | `string` | Open Graph 分享图，由 `seo()` 补全为绝对 URL |
-| `metadata.images.logoLight` | `string` | 浅色主题下的 Logo |
-| `metadata.images.logoDark` | `string` | 深色主题下的 Logo |
-| `metadata.images.icon` | `string` | favicon 与 PWA 图标 |
-
-## UI
-
-| 字段 | 类型 | 默认值 | 说明 |
-|---|---|---|---|
-| `ui.defaultTheme` | `'light' \| 'dark' \| 'system'` | `'system'` | 无 `THEME` cookie 时的主题 |
-| `ui.enableThemeSwitch` | `boolean` | `true` | 为 `false` 时隐藏主题切换按钮 |
-| `ui.themeColor.light` | `string` | `'#FCFAFF'` | 浅色主题下浏览器地址栏 / 状态栏与 PWA 底色 |
-| `ui.themeColor.dark` | `string` | `'#0A0A0F'` | 深色主题下同上 |
-
-`ui.defaultTheme` 同时用于 SSR 与客户端，保证首屏不闪烁。
-
-`ui.themeColor` 必须与 `src/styles/globals.css` 中 `--background` 的明暗取值等价——浏览器在页面
-之外渲染这两个颜色，读不到 CSS 变量，只能显式声明。改主题底色时两处一起改；
-`tests/unit/theme-colors.test.ts` 会校验二者一致，并顺带校验 `public/manifest.json` 的
-`background_color`。
-
-## 站点基址
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `baseUrl` | `string` | 取自 `VITE_BASE_URL`，用于 canonical、OG、sitemap、robots |
-
-> 生产环境必须是真实 HTTPS 域名。`pnpm check:env:prod` 会拒绝 `localhost`、回环地址、`0.0.0.0`、内嵌凭据的 URL，以及 `example.com` / `.net` / `.org` 等保留域名。
-
-## SEO 与页面元数据
-
-每个路由的 `head()` 调用 `src/lib/seo.ts` 的 `seo(path, options)`，一次产出 meta、canonical、
-hreflang 与结构化数据。
-
-```ts
-export const Route = createFileRoute('/{-$locale}/_layout/marketing/about')({
-  head: () =>
-    seo('/marketing/about', {
-      title: m.about_page_title(),
-      description: m.about_page_description(),
-      locale: getRequestLocale(),
-      pageType: 'AboutPage',
-    }),
-})
-```
-
-| 选项 | 类型 | 说明 |
-|---|---|---|
-| `title` | `string` | 必填，同时写入 `<title>`、`og:title` 与页面 JSON-LD 节点 |
-| `description` | `string` | 省略时不输出 `description` / `og:description`，不留空占位 |
-| `image` | `string` | 分享图；省略时回退 `metadata.images.ogImage`。相对路径自动补全为绝对 URL |
-| `type` | `'website' \| 'article'` | `og:type`，默认 `'website'` |
-| `locale` | `Locale` | 当前语言；提供时输出 hreflang alternates、`x-default` 与 `og:locale` |
-| `alternateLocales` | `readonly Locale[]` | 该页**真实存在**的其他语言版本；省略视为全部存在 |
-| `noindex` | `boolean` | 追加 `<meta name="robots" content="noindex">`，用于登录后页面 |
-| `twitterSite` | `string` | `twitter:site` 句柄；省略时从 `social.x` 推导，未配置则不输出 |
-| `pageType` | `SeoPageType` | 生成 `Organization` + `WebSite` + 页面节点的 `@graph` |
-
-固定输出：`og:url`、`og:site_name`、`og:image`、`twitter:card`（恒为
-`summary_large_image`）与 canonical。
-
-### 三条硬约束
-
-**`path` 必须是真实路由路径。** `seo()` 把同一个 `path` 同时用于 canonical 与 hreflang，
-传错会让两者都指向不存在的地址——页面看起来完全正常，搜索引擎据此建索引、用户据此分享。
-`marketing/about` 与 `features` 曾因此指向 `/about` / `/features`。新增 marketing 页时照
-`tests/unit/roadmap-head.test.ts` 补一条钉死真实路径的断言。
-
-**文案在调用点用 `m.*()` 求值。** 不要把 `title` / `description` 放进 `websiteConfig`：
-配置在模块加载期求值一次，SSR 下后续请求都会拿到首次请求的语言（见
-`tests/unit/home-head.test.ts` 记录的反面案例）。
-
-**`alternateLocales` 要诚实。** 未翻译的页面应传 `[]`，否则 hreflang 会把爬虫指向 404——
-「声明了但不存在」比「没声明」更糟。`x-default` 指向默认语言的**带前缀**地址（`/zh/...`），
-因为本仓 canonical 一律带语言前缀。
-
-## 内容模块
-
-`docs` / `blog` / `changelog` 默认**开启**。关闭后对应页面返回 404、从 sitemap 移除、相关菜单项不渲染。
-
-| 字段 | 类型 | 默认值 | 说明 |
-|---|---|---|---|
-| `docs.enabled` | `boolean` | `true` | 文档站（`/docs`） |
-| `blog.enabled` | `boolean` | `true` | 博客（`/marketing/blog`） |
-| `changelog.enabled` | `boolean` | `true` | 更新日志（`/marketing/changelog`） |
-
-## 服务模块
-
-六个服务模块默认**关闭**。开启前须补齐「必要配置」，否则状态为 `incomplete`，API 返回 503。
-
-| 字段 | 类型 | 默认值 | 必要配置 |
-|---|---|---|---|
-| `mail.enabled` | `boolean` | `false` | 见[邮件](./integrations#邮件) |
-| `mail.provider` | `'resend' \| 'cloudflare'` | `'resend'` | — |
-| `mail.supportEmail` | `string` | `''` | 合法邮箱地址 |
-| `contact.enabled` | `boolean` | `false` | 依赖 `mail` 已配置完整 |
-| `newsletter.enabled` | `boolean` | `false` | 见[邮件订阅](./integrations#邮件订阅) |
-| `newsletter.provider` | `'resend' \| 'beehiiv'` | `'resend'` | — |
-| `payment.enabled` | `boolean` | `false` | 见[支付](./integrations#支付) |
-| `payment.provider` | `'stripe'` | `'stripe'` | 当前仅支持 Stripe |
-| `payment.allowedPriceIds` | `string[]` | `[]` | 至少一个非空 Price ID |
-| `notification.enabled` | `boolean` | `false` | Discord 或飞书 Webhook |
-| `analytics.enabled` | `boolean` | `false` | 见[分析](./integrations#分析) |
-| `analytics.providers` | `AnalyticsName[]` | `[]` | 每个选中 provider 的 ID |
-| `auth.enabled` | `boolean` | `true` | 见[身份认证](./auth) |
-| `auth.requireEmailVerification` | `boolean` | `false` | 安全控制，见[身份认证](./auth)。**不**跟随 `mail.enabled`。接上邮件后应改为 `true` |
-
-## 社交媒体
-
-`social` 是 `Partial<Record<SocialPlatform, string>>`，未配置的平台不渲染任何占位。
-
-支持：`github`、`x`、`bluesky`、`mastodon`、`discord`、`youtube`、`linkedin`、`facebook`、`instagram`、`tiktok`、`telegram`。
-
-```ts
-social: {
-  github: 'https://github.com/your-org/your-project',
-  x: 'https://x.com/your-handle',
-},
-```
-
-> 链接必须为**无凭据的 HTTPS URL**。不满足的项被静默跳过，并由 `pnpm check` 报告字段名（不回显原值）。`mail.supportEmail` 合法时，页脚额外渲染 `mailto:` 入口。
-
-## 功能开关
-
-| 字段 | 类型 | 默认值 | 说明 |
-|---|---|---|---|
-| `features.enableI18n` | `boolean` | `true` | 多语言 |
-| `features.enableFileUpload` | `boolean` | `false` | 文件上传（依赖存储模块） |
-| `features.enableApiKeys` | `boolean` | `true` | API 密钥管理 |
-| `features.enableAdmin` | `boolean` | `true` | 管理后台 |
-| `features.enableAIGateway` | `boolean` | `false` | AI 网关 |
-
-这些开关标记能力边界，本身不注册路由——路由文件始终存在，开关控制的是行为：`enableApiKeys` 关闭时 `/api/auth/api-key/*` 返回 404，相关菜单项也不再渲染。
-
-## 完整示例
+`src/config/website.ts` 是站点配置的唯一入口，导出 `websiteConfig` 对象。改站点名、
+Logo、开关、社交链接，都在这里。
 
 ```ts
 // src/config/website.ts
 export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
   return {
     baseUrl: env.VITE_BASE_URL,
-    metadata: {
-      name: 'Jerbix',
-      images: {
-        ogImage: '/logo.png',
-        logoLight: '/logo-horizontal-transparent.svg',
-        logoDark: '/logo-horizontal-dark.svg',
-        icon: '/icon-jerboa.svg',
-      },
-    },
-    ui: {
-      defaultTheme: 'system',
-      enableThemeSwitch: true,
-      themeColor: { light: '#FCFAFF', dark: '#0A0A0F' },
-    },
+    metadata: { name: 'Jerbix', images: { /* … */ } },
+    ui: { defaultTheme: 'system', enableThemeSwitch: true, themeColor: { /* … */ } },
     docs: { enabled: true },
-    blog: { enabled: true },
-    changelog: { enabled: true },
-    mail: { enabled: false, provider: 'resend', supportEmail: '' },
-    contact: { enabled: false },
-    newsletter: { enabled: false, provider: 'resend' },
-    payment: { enabled: false, provider: 'stripe', allowedPriceIds: [] },
-    notification: { enabled: false, provider: 'discord' },
-    analytics: { enabled: false, providers: [] },
-    auth: { enabled: true, requireEmailVerification: false },
-    social: {},
-    features: {
-      enableI18n: true,
-      enableFileUpload: false,
-      enableApiKeys: true,
-      enableAdmin: true,
-      enableAIGateway: false,
-    },
+    // …
   }
 }
 ```
 
-## 校验配置
+## 前提条件
 
-`src/config/service-status.ts` 的 `getServiceStatuses()` 是纯函数，按模块返回三种状态：
+先跑通本地开发，见[快速开始](./getting-started)。
 
-| 状态 | 含义 |
-|---|---|
-| `disabled` | 模块开关为 `false` |
-| `incomplete` | 已启用但缺少必要字段，`issues` 列出字段名与位置 |
-| `configured` | 开关与必要字段齐备 |
+## 设置
 
-> `configured` **只表示配置齐备**，不代表外部服务已就绪、邮件已投递或收款已成功。诊断输出只含字段名、原因与位置，绝不回显凭据值。
+### 站点信息
+
+```ts
+metadata: {
+  name: 'Jerbix',                                  // 站点名，出现在标题与 OG 标签
+  images: {
+    ogImage: '/logo.png',                          // 社交分享图（1200×630）
+    logoLight: '/logo-horizontal-transparent.svg', // 浅色主题的横向 Logo
+    logoDark: '/logo-horizontal-dark.svg',         // 深色主题的横向 Logo
+    icon: '/icon-jerboa.svg',                      // favicon
+  },
+}
+```
+
+Logo 的替换细节见[设计系统](./design-system#品牌-logo)。
+
+### 主题
+
+```ts
+ui: {
+  defaultTheme: 'system',      // 'light' | 'dark' | 'system'
+  enableThemeSwitch: true,     // 是否在导航栏显示切换按钮
+  themeColor: {                // 浏览器地址栏与 PWA 的底色
+    light: '#FCFAFF',
+    dark: '#0A0A0F',
+  },
+}
+```
+
+> `themeColor` 必须与 `styles/globals.css` 里 `--background` 的明暗取值一致。这两个值
+> 渲染在页面之外，读不到 CSS 变量，只能显式声明。`tests/unit/theme-colors.test.ts`
+> 会校验它们等价，改主题时两处一起改。
+
+### 模块开关
+
+每个可选模块都有 `enabled`。关闭时对应页面 404、API 返回 `404 MODULE_DISABLED`，
+导航里自动隐藏。
+
+```ts
+docs: { enabled: true },
+blog: { enabled: true },
+changelog: { enabled: true },
+mail: { enabled: false, provider: 'resend', supportEmail: '' },
+contact: { enabled: false },
+newsletter: { enabled: false, provider: 'resend' },
+payment: { enabled: false, provider: 'stripe', /* … */ },
+notification: { enabled: false, provider: 'discord' },
+analytics: { enabled: false, providers: ['ga'] },
+auth: { enabled: true, requireEmailVerification: false },
+```
+
+| 字段 | 默认 | 说明 |
+|---|---|---|
+| `docs` / `blog` / `changelog` | `true` | 内容模块，页面已就位 |
+| `mail` | `false` | 事务邮件。`supportEmail` 用于生成 `mailto:` 入口 |
+| `contact` | `false` | 联系表单 |
+| `newsletter` | `false` | 邮件订阅 |
+| `payment` | `false` | Stripe 结账与账单页 |
+| `notification` | `false` | Discord / 飞书 webhook |
+| `analytics` | `false` | 分析脚本 |
+| `auth` | `true` | 登录注册。关闭时整条认证路径 404 |
+
+> `auth.requireEmailVerification` 是**安全控制**，不是邮件开关。默认 `false` 是为了让
+> 未接邮件的模板开箱可用；接上邮件后应改为 `true`。若设为 `true` 但邮件没配齐，
+> `pnpm check:env:prod` 会直接失败——要求验证却发不出验证邮件，新用户永远无法登录。
+
+### 功能开关
+
+```ts
+features: {
+  enableI18n: true,        // 多语言（zh / en）
+  enableFileUpload: false, // 文件上传（需 R2）
+  enableApiKeys: true,     // 用户自助创建 API 密钥
+  enableAdmin: true,       // 管理台
+  enableAIGateway: false,  // AI 网关
+}
+```
+
+### 社交链接
+
+```ts
+social: {
+  github: 'https://github.com/your-org/your-repo',
+  x: 'https://x.com/your-handle',
+}
+```
+
+只渲染合法的 HTTPS 无凭据链接。支持的平台见 `WebsiteConfig['social']` 的类型定义。
+
+## 参考资料
+
+- [导航与菜单](./navigation) —— 导航栏、页脚、文档侧栏
+- [环境变量](./environment) —— `baseUrl` 从哪来
 
 ## 下一步
 
-- [导航与菜单](./navigation)——菜单如何按模块开关过滤
-- [功能集成](./integrations)——各服务模块的 provider 与接线
-- [环境变量](./environment)——两层 env 校验与 `VITE_` 规则
+- [导航与菜单](./navigation)——配置菜单项
+- [环境变量](./environment)——`VITE_` 规则
+- [设计系统](./design-system)——改配色与 Logo

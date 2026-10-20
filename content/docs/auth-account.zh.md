@@ -2,7 +2,7 @@
 title: 个人中心
 description: 受保护路由的会话守卫，以及资料 / 安全 / 登录设备 / 通知偏好四个板块
 locale: zh
-order: 12
+order: 11
 group: features
 updated: 2026-10-20
 ---

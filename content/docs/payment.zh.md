@@ -2,7 +2,7 @@
 title: 支付
 description: Stripe 结账、定价页映射、账单页与 Webhook
 locale: zh
-order: 8
+order: 14
 group: features
 updated: 2026-10-19
 ---

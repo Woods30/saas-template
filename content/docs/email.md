@@ -2,7 +2,7 @@
 title: Email
 description: Wiring Resend / Cloudflare Email and the contact form
 locale: en
-order: 6
+order: 12
 group: features
 updated: 2026-10-15
 ---

@@ -2,7 +2,7 @@
 title: Payment
 description: Stripe checkout, pricing map, billing page, and webhooks
 locale: en
-order: 8
+order: 14
 group: features
 updated: 2026-10-19
 ---

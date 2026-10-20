@@ -2,7 +2,7 @@
 title: Authentication
 description: Email/password and Google sign-in, email flows, session guards, and form conventions
 locale: en
-order: 11
+order: 10
 group: features
 updated: 2026-10-15
 ---

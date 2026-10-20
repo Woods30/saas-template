@@ -2,7 +2,7 @@
 title: 分析
 description: GA / Plausible / Umami / Clarity 的启用、CSP 与业务事件
 locale: zh
-order: 10
+order: 16
 group: features
 updated: 2026-10-19
 ---

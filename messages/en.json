@@ -127,6 +127,8 @@
   "docs_code_block": "Code",
   "docs_code_copy": "Copy code",
   "docs_group_config": "Configuration",
+  "docs_group_deploy": "Deployment",
+  "docs_group_develop": "Development",
   "docs_group_features": "Feature Modules",
   "docs_group_start": "Start",
   "docs_next": "Next",

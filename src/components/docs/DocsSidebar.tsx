@@ -25,7 +25,9 @@ import { m } from '@/locale/paraglide/messages.js'
 const GROUP_TITLE: Record<string, () => string> = {
   start: m.docs_group_start,
   config: m.docs_group_config,
+  deploy: m.docs_group_deploy,
   features: m.docs_group_features,
+  develop: m.docs_group_develop,
 }
 
 export function DocsSidebar({

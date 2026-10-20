@@ -127,6 +127,8 @@
   "docs_code_block": "代码",
   "docs_code_copy": "复制代码",
   "docs_group_config": "配置",
+  "docs_group_deploy": "部署",
+  "docs_group_develop": "开发",
   "docs_group_features": "功能模块",
   "docs_group_start": "开始",
   "docs_next": "下一篇",

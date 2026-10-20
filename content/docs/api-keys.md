@@ -2,7 +2,7 @@
 title: API Keys
 description: Self-service API key creation and revocation
 locale: en
-order: 18
+order: 17
 group: features
 updated: 2026-10-20
 ---

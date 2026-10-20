@@ -2,8 +2,8 @@
 title: Form conventions
 description: The unified TanStack Form + Zod + shadcn Field pattern, with a minimal copyable example
 locale: en
-order: 13
-group: config
+order: 21
+group: develop
 updated: 2026-10-14
 ---
 

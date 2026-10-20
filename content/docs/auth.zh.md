@@ -2,7 +2,7 @@
 title: 身份认证
 description: 邮箱密码与 Google 登录、邮件流程、会话守卫与表单约定
 locale: zh
-order: 11
+order: 10
 group: features
 updated: 2026-10-15
 ---

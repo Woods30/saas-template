@@ -2,7 +2,7 @@
 title: Newsletter
 description: Wiring Resend / Beehiiv subscriptions and rate limits
 locale: en
-order: 7
+order: 13
 group: features
 updated: 2026-10-15
 ---

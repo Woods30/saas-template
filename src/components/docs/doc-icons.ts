@@ -9,12 +9,17 @@ import {
   IconCreditCard,
   IconDatabase,
   IconFileText,
+  IconFolder,
+  IconForms,
   IconKey,
   IconMail,
+  IconPalette,
   IconPlugConnected,
   IconRocket,
   IconSettings,
   IconSitemap,
+  IconTestPipe,
+  IconUser,
   IconUsers,
 } from '@tabler/icons-react'
 
@@ -42,6 +47,11 @@ export const DOC_ICON: Record<string, typeof IconBook> = {
   cache: IconCloud,
   'api-keys': IconKey,
   'user-management': IconUsers,
+  'auth-account': IconUser,
+  'project-structure': IconFolder,
+  'design-system': IconPalette,
+  forms: IconForms,
+  testing: IconTestPipe,
 }
 
 /** 未在 {@link DOC_ICON} 中登记时的通用文档图标。 */

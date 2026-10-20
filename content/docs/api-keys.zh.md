@@ -2,7 +2,7 @@
 title: API 密钥
 description: 用户自助创建与撤销 API 密钥
 locale: zh
-order: 18
+order: 17
 group: features
 updated: 2026-10-20
 ---

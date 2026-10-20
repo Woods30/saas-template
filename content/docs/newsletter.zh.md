@@ -2,7 +2,7 @@
 title: 邮件订阅
 description: Resend / Beehiiv 订阅的接线与限流
 locale: zh
-order: 7
+order: 13
 group: features
 updated: 2026-10-15
 ---

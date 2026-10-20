@@ -2,7 +2,7 @@
 title: Analytics
 description: Enabling GA / Plausible / Umami / Clarity, CSP, and business events
 locale: en
-order: 10
+order: 16
 group: features
 updated: 2026-10-19
 ---

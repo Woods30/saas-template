@@ -1,90 +1,121 @@
 ---
 title: Getting Started
-description: Run Jerbix from scratch — environment, resources, and deploy checks
+description: From clone to live — run it, customize it, deploy it
 locale: en
 order: 1
 group: start
-updated: 2026-10-15
+updated: 2026-10-21
 ---
 
-## Prepare your environment
+This page takes you from cloning the repo to a live site. Four stages, every step with a
+copyable command.
 
-You need Node.js 22.12+ on an even-numbered LTS (22 or 24), pnpm, and a Cloudflare account.
+When you finish you have a site on Cloudflare Workers with your own name, logo, and
+navigation.
+
+## Prerequisites
+
+| Need | Notes |
+|---|---|
+| Node.js 22 / 24 | Even LTS only. Odd versions (23 / 25) are unsupported by `vitest@5` |
+| pnpm | Version pinned by `packageManager` in `package.json`; do not use pnpm 9 |
+| Cloudflare account | The free plan is enough. You can run locally without one |
+
+```bash
+node --version   # v22.x or v24.x
+pnpm --version
+```
+
+## Setup
+
+### 1. Install dependencies
 
 ```bash
 pnpm install
-pnpm exec wrangler login
-pnpm exec wrangler whoami
 ```
 
-`wrangler login` opens a browser to authorize. Use `whoami` to confirm the account before continuing.
-
-## Provision resources
+### 2. Provision local resources
 
 ```bash
 pnpm run setup
 ```
 
-The script creates or looks up a D1 database, R2 bucket, and KV namespace, generates an auth secret, and writes local `.env` and `wrangler.jsonc`.
+The script asks for a project name, then creates (or reuses) a D1 database, R2 bucket, and
+KV namespace, generates the auth secret, and writes the results to `.env` and
+`wrangler.jsonc`.
 
-> **Note**: The resources it creates belong to your Cloudflare account. Check existing configuration before running so you do not overwrite values you need to keep.
+If you are not logged in to Cloudflare it warns you but continues — local development uses
+a SQLite-backed D1 and needs no real resources. To log in:
 
-Stripe, email, and notification can be configured in the script or later. You must still fill in credentials for whichever modules you use before deploying.
+```bash
+pnpm exec wrangler login
+```
 
-## Start local development
+### 3. Start the dev server
 
 ```bash
 pnpm dev
 ```
 
-Open `http://localhost:3000`. The database uses D1 (SQLite) with Drizzle. The script attempts local migrations; if that fails, retry manually:
+Open `http://localhost:3000`. If the database was not initialized, run it manually:
 
 ```bash
 pnpm exec wrangler d1 migrations apply DB --local
 ```
 
-## Customize the site
+### 4. Customize the site
 
-| What to change | Where |
-|---|---|
-| Site name, logo, module switches | `src/config/website.ts` |
-| UI copy | `messages/zh.json`, `messages/en.json` |
-| Page routes | `src/routes/` |
-| Marketing blocks | `src/components/blocks/marketing/` |
-| Docs / blog content | `content/` |
+All site identity lives in `src/config/website.ts`:
 
-See [Website Config](./configuration) for every configuration field.
-
-## Check and deploy
-
-```bash
-pnpm check
-pnpm test
-pnpm exec vitest run --config vitest.components.config.ts
-pnpm build
-pnpm check:client-bundle
+```ts
+// src/config/website.ts
+export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
+  return {
+    baseUrl: env.VITE_BASE_URL,
+    metadata: {
+      name: 'Jerbix',                        // ← your site name
+      images: { ogImage: '/logo.png', /* … */ },
+    },
+    docs: { enabled: true },                 // ← set false to drop the docs site
+    // …
+  }
+}
 ```
+
+See [Website Config](./configuration) for every field.
+
+### 5. Deploy
 
 ```bash
 pnpm deploy
 ```
 
-`pnpm deploy` runs the production env check, builds, verifies the client bundle, then runs `wrangler deploy`.
+This runs production env validation → build → client bundle leak check → `wrangler deploy`.
 
-> **Note**: A local `.env` does **not** become production secrets. Configure them separately with `wrangler secret put`, and never put secrets in `VITE_` variables — those are shipped to the browser bundle.
+> Local `.env` values do **not** become production secrets. Configure them separately with
+> `wrangler secret put`, and **never** put a secret behind a `VITE_` prefix — those are
+> inlined into the browser bundle.
+
+To deploy automatically on push to `main`, see
+[Cloudflare · CI deployment](./cloudflare#ci-deployment).
+
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `pnpm dev` | Dev server on port 3000 |
+| `pnpm build` | Production build |
+| `pnpm deploy` | Validate → build → check → deploy |
+| `pnpm check` | Biome + TypeScript + env + locale (run before committing) |
+| `pnpm test` | Unit and component tests |
 
 ## References
 
-- [Cloudflare Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/) — keys and bindings in `wrangler.jsonc`
-- [Cloudflare D1](https://developers.cloudflare.com/d1/) — database creation and migrations
-- [Cloudflare Workers KV get started](https://developers.cloudflare.com/kv/get-started/) — KV namespaces and bindings
-- [Cloudflare R2 Workers API](https://developers.cloudflare.com/r2/get-started/workers-api/) — object storage from a Worker
-- [Cloudflare Workers Secrets](https://developers.cloudflare.com/workers/configuration/secrets/) — production secrets and local `.dev.vars`
-- [Drizzle <> Cloudflare D1](https://orm.drizzle.team/docs/connect-cloudflare-d1) — driver and initialization
+- [Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/)
+- [Cloudflare D1](https://developers.cloudflare.com/d1/)
 
 ## Next steps
 
-- [Website Config](./configuration) — every `websiteConfig` field and switch
-- [Navigation & Menus](./navigation) — navbar, footer, and docs sidebar
-- [Integrations](./integrations) — email, payment, newsletter, notifications, analytics
-- [Environment Variables](./environment) — the two-layer check and the `VITE_` rule
+- [Website Config](./configuration) — name, logo, module switches
+- [Cloudflare](./cloudflare) — account setup and CI deployment
+- [Project Structure](./project-structure) — where to change things

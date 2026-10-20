@@ -2,7 +2,7 @@
 title: Account center
 description: The session guard on protected routes, plus the profile, security, sessions, and notifications sections
 locale: en
-order: 12
+order: 11
 group: features
 updated: 2026-10-20
 ---
