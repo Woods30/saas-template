@@ -8,6 +8,7 @@ import {
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MenuItems } from '@/components/layout/MenuItems'
+import { Navbar } from '@/components/marketing/Navbar'
 import { homeBlocks } from '@/config/blocks/home'
 import { getPublicLinkOptions, type MenuItem } from '@/config/navigation'
 import { websiteConfig } from '@/config/website'
@@ -29,6 +30,24 @@ async function renderRoute(path: string) {
   const router = getRouter()
   router.update({
     history: createMemoryHistory({ initialEntries: [path] }),
+    context: { queryClient: new QueryClient() },
+  })
+  await router.load()
+  return render(<RouterProvider router={router} />)
+}
+
+/**
+ * 用最小 Router 只挂载 Navbar。
+ *
+ * 只给**需要交互**的用例用：真实 routeTree 的 `shellComponent` 会在 jsdom 里渲染
+ * 嵌套 `<html>`，之后任何 state 更新都不返回（见下方用例的注释）。只渲染 Navbar
+ * 既能覆盖触发按钮、面板与 Escape 行为，又不触碰那一层 shell。
+ */
+async function renderNavbar() {
+  const rootRoute = createRootRoute({ component: () => <Navbar /> })
+  const router = createRouter({
+    routeTree: rootRoute,
+    history: createMemoryHistory({ initialEntries: ['/en'] }),
     context: { queryClient: new QueryClient() },
   })
   await router.load()
@@ -90,8 +109,13 @@ describe('Navbar 消费菜单配置（真实 Router）', () => {
     )
   })
 
+  // 这条用例不走 `renderRoute`（真实 routeTree）：`__root` 的 `shellComponent`
+  // 会渲染 `<html><head>…<Scripts/></body></html>`，jsdom 下嵌套 html 元素会让
+  // React 的挂载进入循环，此后**任何** state 更新都不返回——不止这条用例，
+  // 同文件后续用例连同个 run 里的其他文件都会被拖死。
+  // 因此这里用最小 Router 只挂 `Navbar`，与 `renderMenuItems` 同一思路。
   it('移动端 Escape 关闭面板并把焦点还给触发按钮', async () => {
-    await renderRoute('/en')
+    await renderNavbar()
     const header = within(screen.getByRole('banner'))
     const trigger = screen.getByRole('button', { name: 'Open navigation menu' })
     // 面板关闭时只有桌面导航里的一份 Docs。
