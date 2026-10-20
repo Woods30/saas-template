@@ -144,4 +144,4 @@ pnpm check:env
 
 - [Website Config](./configuration) — how module switches map to required config
 - [Integrations](./integrations) — the env fields each module needs
-- Deployment steps live in `docs/deployment.md` in the repo
+- Deployment steps live in `content/docs/cloudflare.md` in the repo

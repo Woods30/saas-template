@@ -167,4 +167,4 @@ cp .env.example .env.production
 
 - [网站配置](./configuration)——模块开关与必要配置的对应关系
 - [功能集成](./integrations)——各模块所需的 env 字段
-- 部署步骤见仓库内 `docs/deployment.md`
+- 部署步骤见仓库内 `content/docs/cloudflare.zh.md`

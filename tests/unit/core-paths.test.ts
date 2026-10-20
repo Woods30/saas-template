@@ -27,7 +27,7 @@ describe('isCorePath', () => {
     expect(isCorePath('src/components/sections/hero/Hero.tsx')).toBe(false)
     expect(isCorePath('src/styles/globals.css')).toBe(false)
     expect(isCorePath('messages/zh.json')).toBe(false)
-    expect(isCorePath('docs/architecture.md')).toBe(false)
+    expect(isCorePath('content/docs/project-structure.zh.md')).toBe(false)
   })
 
   it('清单非空且无重复', () => {
