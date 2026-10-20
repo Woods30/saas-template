@@ -12,14 +12,13 @@ import { m } from '@/locale/paraglide/messages.js'
 export const Route = createFileRoute('/{-$locale}/_layout/dashboard/notifications')({
   // 通知偏好整块依赖 newsletter 模块：模块关闭时该页与菜单项一并消失。
   beforeLoad: () => assertPageEnabled('newsletter'),
-  head: () => {
-    const base = seo('/dashboard/notifications', {
+  head: () =>
+    seo('/dashboard/notifications', {
       title: m.settings_notifications_title(),
       description: m.settings_notifications_description(),
       locale: getRequestLocale(),
-    })
-    return { ...base, meta: [...base.meta, { name: 'robots', content: 'noindex' }] }
-  },
+      noindex: true,
+    }),
   component: NotificationsPage,
 })
 

@@ -43,14 +43,13 @@ import {
 export const Route = createFileRoute('/{-$locale}/_layout/dashboard/billing')({
   // 与侧栏入口同源：支付模块关闭时整页 404。
   beforeLoad: () => assertPageEnabled('payment'),
-  head: () => {
-    const base = seo('/dashboard/billing', {
+  head: () =>
+    seo('/dashboard/billing', {
       title: m.settings_billing_title(),
       description: m.settings_billing_description(),
       locale: getRequestLocale(),
-    })
-    return { ...base, meta: [...base.meta, { name: 'robots', content: 'noindex' }] }
-  },
+      noindex: true,
+    }),
   component: BillingPage,
   validateSearch: (search: Record<string, unknown>): { checkout?: 'success' | 'cancelled' } => {
     const value = search.checkout

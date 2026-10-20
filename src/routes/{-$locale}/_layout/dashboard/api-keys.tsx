@@ -42,14 +42,13 @@ import { m } from '@/locale/paraglide/messages.js'
 export const Route = createFileRoute('/{-$locale}/_layout/dashboard/api-keys')({
   // 功能开关关闭时整页 404：与菜单项消失同源，路由本身始终保留。
   beforeLoad: () => assertFeatureEnabled('enableApiKeys'),
-  head: () => {
-    const base = seo('/dashboard/api-keys', {
+  head: () =>
+    seo('/dashboard/api-keys', {
       title: m.settings_api_keys_title(),
       description: m.settings_api_keys_description(),
       locale: getRequestLocale(),
-    })
-    return { ...base, meta: [...base.meta, { name: 'robots', content: 'noindex' }] }
-  },
+      noindex: true,
+    }),
   component: ApiKeysPage,
 })
 

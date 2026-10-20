@@ -19,14 +19,13 @@ import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/dashboard/sessions')({
-  head: () => {
-    const base = seo('/dashboard/sessions', {
+  head: () =>
+    seo('/dashboard/sessions', {
       title: m.settings_sessions_title(),
       description: m.settings_sessions_description(),
       locale: getRequestLocale(),
-    })
-    return { ...base, meta: [...base.meta, { name: 'robots', content: 'noindex' }] }
-  },
+      noindex: true,
+    }),
   component: SessionsPage,
 })
 

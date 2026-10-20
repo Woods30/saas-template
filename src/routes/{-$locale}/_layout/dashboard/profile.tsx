@@ -14,15 +14,13 @@ import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/dashboard/profile')({
-  head: () => {
-    const base = seo('/dashboard/profile', {
+  head: () =>
+    seo('/dashboard/profile', {
       title: m.settings_profile_title(),
       description: m.settings_profile_description(),
       locale: getRequestLocale(),
-    })
-    // 个人页不应被搜索引擎索引，在通用 meta 之后追加 robots 指令。
-    return { ...base, meta: [...base.meta, { name: 'robots', content: 'noindex' }] }
-  },
+      noindex: true,
+    }),
   component: ProfilePage,
 })
 

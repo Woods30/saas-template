@@ -25,14 +25,13 @@ import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/dashboard/security')({
-  head: () => {
-    const base = seo('/dashboard/security', {
+  head: () =>
+    seo('/dashboard/security', {
       title: m.settings_security_title(),
       description: m.settings_security_description(),
       locale: getRequestLocale(),
-    })
-    return { ...base, meta: [...base.meta, { name: 'robots', content: 'noindex' }] }
-  },
+      noindex: true,
+    }),
   component: SecurityPage,
 })
 
