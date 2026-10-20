@@ -63,6 +63,9 @@ export function getSitemapPaths(
   pushStatic()
   pushStatic('/marketing/features')
   pushStatic('/marketing/about')
+  // roadmap / waitlist 是静态营销页，没有对应模块开关，因此无条件收录。
+  pushStatic('/marketing/roadmap')
+  pushStatic('/marketing/waitlist')
   pushStatic('/marketing/legal/terms')
   pushStatic('/marketing/legal/privacy')
 
@@ -70,7 +73,7 @@ export function getSitemapPaths(
   if (config.blog.enabled) pushStatic('/marketing/blog')
   if (config.changelog.enabled) pushStatic('/marketing/changelog')
   if (config.payment.enabled) pushStatic('/pricing')
-  if (config.contact.enabled) pushStatic('/contact')
+  if (config.contact.enabled) pushStatic('/marketing/contact')
 
   // 动态内容：仅当前语言，alternates 依同 slug 的对方语言内容决定。
   // 博客 URL 使用真实路由前缀 `/marketing/blog/{path}`，slug 取 `_meta.path`。

@@ -40,7 +40,10 @@ import { Route as Char123LocaleChar125LayoutDocsIndexRouteImport } from './route
 import { Route as Char123LocaleChar125LayoutDocsSlugRouteImport } from './routes/{-$locale}/_layout/docs/$slug'
 import { Route as Char123LocaleChar125LayoutMarketingIndexRouteImport } from './routes/{-$locale}/_layout/marketing/index'
 import { Route as Char123LocaleChar125LayoutMarketingAboutRouteImport } from './routes/{-$locale}/_layout/marketing/about'
+import { Route as Char123LocaleChar125LayoutMarketingContactRouteImport } from './routes/{-$locale}/_layout/marketing/contact'
 import { Route as Char123LocaleChar125LayoutMarketingFeaturesRouteImport } from './routes/{-$locale}/_layout/marketing/features'
+import { Route as Char123LocaleChar125LayoutMarketingRoadmapRouteImport } from './routes/{-$locale}/_layout/marketing/roadmap'
+import { Route as Char123LocaleChar125LayoutMarketingWaitlistRouteImport } from './routes/{-$locale}/_layout/marketing/waitlist'
 import { Route as Char123LocaleChar125LayoutDashboardAdminUsersRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/users'
 import { Route as Char123LocaleChar125LayoutMarketingBlogIndexRouteImport } from './routes/{-$locale}/_layout/marketing/blog/index'
 import { Route as Char123LocaleChar125LayoutMarketingBlogSlugRouteImport } from './routes/{-$locale}/_layout/marketing/blog/$slug'
@@ -225,10 +228,28 @@ const Char123LocaleChar125LayoutMarketingAboutRoute =
     path: '/about',
     getParentRoute: () => Char123LocaleChar125LayoutMarketingRoute,
   } as any)
+const Char123LocaleChar125LayoutMarketingContactRoute =
+  Char123LocaleChar125LayoutMarketingContactRouteImport.update({
+    id: '/contact',
+    path: '/contact',
+    getParentRoute: () => Char123LocaleChar125LayoutMarketingRoute,
+  } as any)
 const Char123LocaleChar125LayoutMarketingFeaturesRoute =
   Char123LocaleChar125LayoutMarketingFeaturesRouteImport.update({
     id: '/features',
     path: '/features',
+    getParentRoute: () => Char123LocaleChar125LayoutMarketingRoute,
+  } as any)
+const Char123LocaleChar125LayoutMarketingRoadmapRoute =
+  Char123LocaleChar125LayoutMarketingRoadmapRouteImport.update({
+    id: '/roadmap',
+    path: '/roadmap',
+    getParentRoute: () => Char123LocaleChar125LayoutMarketingRoute,
+  } as any)
+const Char123LocaleChar125LayoutMarketingWaitlistRoute =
+  Char123LocaleChar125LayoutMarketingWaitlistRouteImport.update({
+    id: '/waitlist',
+    path: '/waitlist',
     getParentRoute: () => Char123LocaleChar125LayoutMarketingRoute,
   } as any)
 const Char123LocaleChar125LayoutDashboardAdminUsersRoute =
@@ -291,7 +312,10 @@ export interface FileRoutesByFullPath {
   '/{-$locale}/dashboard/sessions': typeof Char123LocaleChar125LayoutDashboardSessionsRoute
   '/{-$locale}/docs/$slug': typeof Char123LocaleChar125LayoutDocsSlugRoute
   '/{-$locale}/marketing/about': typeof Char123LocaleChar125LayoutMarketingAboutRoute
+  '/{-$locale}/marketing/contact': typeof Char123LocaleChar125LayoutMarketingContactRoute
   '/{-$locale}/marketing/features': typeof Char123LocaleChar125LayoutMarketingFeaturesRoute
+  '/{-$locale}/marketing/roadmap': typeof Char123LocaleChar125LayoutMarketingRoadmapRoute
+  '/{-$locale}/marketing/waitlist': typeof Char123LocaleChar125LayoutMarketingWaitlistRoute
   '/{-$locale}/dashboard/': typeof Char123LocaleChar125LayoutDashboardIndexRoute
   '/{-$locale}/docs/': typeof Char123LocaleChar125LayoutDocsIndexRoute
   '/{-$locale}/marketing/': typeof Char123LocaleChar125LayoutMarketingIndexRoute
@@ -327,7 +351,10 @@ export interface FileRoutesByTo {
   '/{-$locale}/dashboard/sessions': typeof Char123LocaleChar125LayoutDashboardSessionsRoute
   '/{-$locale}/docs/$slug': typeof Char123LocaleChar125LayoutDocsSlugRoute
   '/{-$locale}/marketing/about': typeof Char123LocaleChar125LayoutMarketingAboutRoute
+  '/{-$locale}/marketing/contact': typeof Char123LocaleChar125LayoutMarketingContactRoute
   '/{-$locale}/marketing/features': typeof Char123LocaleChar125LayoutMarketingFeaturesRoute
+  '/{-$locale}/marketing/roadmap': typeof Char123LocaleChar125LayoutMarketingRoadmapRoute
+  '/{-$locale}/marketing/waitlist': typeof Char123LocaleChar125LayoutMarketingWaitlistRoute
   '/{-$locale}/dashboard': typeof Char123LocaleChar125LayoutDashboardIndexRoute
   '/{-$locale}/docs': typeof Char123LocaleChar125LayoutDocsIndexRoute
   '/{-$locale}/marketing': typeof Char123LocaleChar125LayoutMarketingIndexRoute
@@ -367,7 +394,10 @@ export interface FileRoutesById {
   '/{-$locale}/_layout/dashboard/sessions': typeof Char123LocaleChar125LayoutDashboardSessionsRoute
   '/{-$locale}/_layout/docs/$slug': typeof Char123LocaleChar125LayoutDocsSlugRoute
   '/{-$locale}/_layout/marketing/about': typeof Char123LocaleChar125LayoutMarketingAboutRoute
+  '/{-$locale}/_layout/marketing/contact': typeof Char123LocaleChar125LayoutMarketingContactRoute
   '/{-$locale}/_layout/marketing/features': typeof Char123LocaleChar125LayoutMarketingFeaturesRoute
+  '/{-$locale}/_layout/marketing/roadmap': typeof Char123LocaleChar125LayoutMarketingRoadmapRoute
+  '/{-$locale}/_layout/marketing/waitlist': typeof Char123LocaleChar125LayoutMarketingWaitlistRoute
   '/{-$locale}/_layout/dashboard/': typeof Char123LocaleChar125LayoutDashboardIndexRoute
   '/{-$locale}/_layout/docs/': typeof Char123LocaleChar125LayoutDocsIndexRoute
   '/{-$locale}/_layout/marketing/': typeof Char123LocaleChar125LayoutMarketingIndexRoute
@@ -408,7 +438,10 @@ export interface FileRouteTypes {
     | '/{-$locale}/dashboard/sessions'
     | '/{-$locale}/docs/$slug'
     | '/{-$locale}/marketing/about'
+    | '/{-$locale}/marketing/contact'
     | '/{-$locale}/marketing/features'
+    | '/{-$locale}/marketing/roadmap'
+    | '/{-$locale}/marketing/waitlist'
     | '/{-$locale}/dashboard/'
     | '/{-$locale}/docs/'
     | '/{-$locale}/marketing/'
@@ -444,7 +477,10 @@ export interface FileRouteTypes {
     | '/{-$locale}/dashboard/sessions'
     | '/{-$locale}/docs/$slug'
     | '/{-$locale}/marketing/about'
+    | '/{-$locale}/marketing/contact'
     | '/{-$locale}/marketing/features'
+    | '/{-$locale}/marketing/roadmap'
+    | '/{-$locale}/marketing/waitlist'
     | '/{-$locale}/dashboard'
     | '/{-$locale}/docs'
     | '/{-$locale}/marketing'
@@ -483,7 +519,10 @@ export interface FileRouteTypes {
     | '/{-$locale}/_layout/dashboard/sessions'
     | '/{-$locale}/_layout/docs/$slug'
     | '/{-$locale}/_layout/marketing/about'
+    | '/{-$locale}/_layout/marketing/contact'
     | '/{-$locale}/_layout/marketing/features'
+    | '/{-$locale}/_layout/marketing/roadmap'
+    | '/{-$locale}/_layout/marketing/waitlist'
     | '/{-$locale}/_layout/dashboard/'
     | '/{-$locale}/_layout/docs/'
     | '/{-$locale}/_layout/marketing/'
@@ -736,11 +775,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingAboutRouteImport
       parentRoute: typeof Char123LocaleChar125LayoutMarketingRoute
     }
+    '/{-$locale}/_layout/marketing/contact': {
+      id: '/{-$locale}/_layout/marketing/contact'
+      path: '/contact'
+      fullPath: '/{-$locale}/marketing/contact'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingContactRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutMarketingRoute
+    }
     '/{-$locale}/_layout/marketing/features': {
       id: '/{-$locale}/_layout/marketing/features'
       path: '/features'
       fullPath: '/{-$locale}/marketing/features'
       preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingFeaturesRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutMarketingRoute
+    }
+    '/{-$locale}/_layout/marketing/roadmap': {
+      id: '/{-$locale}/_layout/marketing/roadmap'
+      path: '/roadmap'
+      fullPath: '/{-$locale}/marketing/roadmap'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingRoadmapRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutMarketingRoute
+    }
+    '/{-$locale}/_layout/marketing/waitlist': {
+      id: '/{-$locale}/_layout/marketing/waitlist'
+      path: '/waitlist'
+      fullPath: '/{-$locale}/marketing/waitlist'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingWaitlistRouteImport
       parentRoute: typeof Char123LocaleChar125LayoutMarketingRoute
     }
     '/{-$locale}/_layout/dashboard/admin/users': {
@@ -837,7 +897,10 @@ const Char123LocaleChar125LayoutDocsRouteWithChildren =
 
 interface Char123LocaleChar125LayoutMarketingRouteChildren {
   Char123LocaleChar125LayoutMarketingAboutRoute: typeof Char123LocaleChar125LayoutMarketingAboutRoute
+  Char123LocaleChar125LayoutMarketingContactRoute: typeof Char123LocaleChar125LayoutMarketingContactRoute
   Char123LocaleChar125LayoutMarketingFeaturesRoute: typeof Char123LocaleChar125LayoutMarketingFeaturesRoute
+  Char123LocaleChar125LayoutMarketingRoadmapRoute: typeof Char123LocaleChar125LayoutMarketingRoadmapRoute
+  Char123LocaleChar125LayoutMarketingWaitlistRoute: typeof Char123LocaleChar125LayoutMarketingWaitlistRoute
   Char123LocaleChar125LayoutMarketingIndexRoute: typeof Char123LocaleChar125LayoutMarketingIndexRoute
   Char123LocaleChar125LayoutMarketingBlogSlugRoute: typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
   Char123LocaleChar125LayoutMarketingLegalSlugRoute: typeof Char123LocaleChar125LayoutMarketingLegalSlugRoute
@@ -849,8 +912,14 @@ const Char123LocaleChar125LayoutMarketingRouteChildren: Char123LocaleChar125Layo
   {
     Char123LocaleChar125LayoutMarketingAboutRoute:
       Char123LocaleChar125LayoutMarketingAboutRoute,
+    Char123LocaleChar125LayoutMarketingContactRoute:
+      Char123LocaleChar125LayoutMarketingContactRoute,
     Char123LocaleChar125LayoutMarketingFeaturesRoute:
       Char123LocaleChar125LayoutMarketingFeaturesRoute,
+    Char123LocaleChar125LayoutMarketingRoadmapRoute:
+      Char123LocaleChar125LayoutMarketingRoadmapRoute,
+    Char123LocaleChar125LayoutMarketingWaitlistRoute:
+      Char123LocaleChar125LayoutMarketingWaitlistRoute,
     Char123LocaleChar125LayoutMarketingIndexRoute:
       Char123LocaleChar125LayoutMarketingIndexRoute,
     Char123LocaleChar125LayoutMarketingBlogSlugRoute:

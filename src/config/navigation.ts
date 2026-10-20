@@ -10,6 +10,8 @@ export type PublicTarget =
   | 'changelog'
   | 'pricing'
   | 'contact'
+  | 'roadmap'
+  | 'waitlist'
   | 'login'
   | 'terms'
   | 'privacy'
@@ -27,7 +29,11 @@ export function getPublicLinkOptions(target: PublicTarget, locale: Locale, hash?
     case 'pricing':
       return linkOptions({ to: '/{-$locale}/pricing', params: { locale } })
     case 'contact':
-      return linkOptions({ to: '/{-$locale}/contact', params: { locale } })
+      return linkOptions({ to: '/{-$locale}/marketing/contact', params: { locale } })
+    case 'roadmap':
+      return linkOptions({ to: '/{-$locale}/marketing/roadmap', params: { locale } })
+    case 'waitlist':
+      return linkOptions({ to: '/{-$locale}/marketing/waitlist', params: { locale } })
     case 'login':
       return linkOptions({ to: '/{-$locale}/auth/login', params: { locale } })
     case 'terms':
