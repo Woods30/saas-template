@@ -4,7 +4,7 @@ description: The session guard on protected routes, plus the profile, security, 
 locale: en
 order: 12
 group: features
-updated: 2026-10-15
+updated: 2026-10-20
 ---
 
 The account management area behind sign-in, at `/{locale}/dashboard/*`. Reach it from
@@ -119,8 +119,8 @@ tree. There is also **no** "Back to site" link — the logo is that entry point.
 
 ## Page metadata
 
-Each child page's `head()` runs `seo()` for meta and canonical, then appends
-`robots: noindex` — personal pages should not be indexed.
+Each child page's `head()` runs `seo()` for meta and canonical and passes
+`noindex: true` — personal pages should not be indexed.
 
 ## References
 

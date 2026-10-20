@@ -11,6 +11,7 @@ export const Route = createFileRoute('/{-$locale}/')({
       title: m.home_page_title(),
       description: m.site_description(),
       locale: getLocale(),
+      pageType: 'WebPage',
     }),
   component: () => (
     <MarketingLayout>

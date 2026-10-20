@@ -4,7 +4,7 @@ description: Configure the navbar, footer, docs sidebar, and social links
 locale: en
 order: 3
 group: config
-updated: 2026-10-14
+updated: 2026-10-20
 ---
 
 Every menu shares one data model and one set of render components, so filtering rules, external-link behavior, and keyboard handling are identical across the navbar, footer, and docs sidebar.
@@ -29,10 +29,17 @@ Every menu shares one data model and one set of render components, so filtering 
 | `blog` | `/{locale}/marketing/blog` |
 | `changelog` | `/{locale}/marketing/changelog` |
 | `pricing` | `/{locale}/pricing` |
-| `contact` | `/{locale}/contact` |
+| `contact` | `/{locale}/marketing/contact` |
+| `roadmap` | `/{locale}/marketing/roadmap` |
+| `waitlist` | `/{locale}/marketing/waitlist` |
 | `login` | `/{locale}/auth/login` |
 | `terms` | `/{locale}/marketing/legal/terms` |
 | `privacy` | `/{locale}/marketing/legal/privacy` |
+
+`contact` is gated by the `contact` module (its route `beforeLoad` throws 404), so **any menu
+item pointing at it must carry `visibility: { module: 'contact' }`** — otherwise the default
+config (`contact.enabled: false`) ships a link that 404s on click. `roadmap` / `waitlist` are
+static pages with no module switch, so their menu items carry no `visibility`.
 
 ## Menu item types
 

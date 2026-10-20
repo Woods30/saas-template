@@ -13,6 +13,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/marketing/blog/')({
       title: m.blog_page_title(),
       description: m.blog_page_description(),
       locale: getLocale(),
+      pageType: 'CollectionPage',
     }),
   component: BlogIndex,
 })

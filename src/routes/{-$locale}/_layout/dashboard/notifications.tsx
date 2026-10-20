@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
+import { toast } from '@/components/ui/toast'
 import { getRequestLocale } from '@/lib/locale'
 import { assertPageEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
@@ -12,14 +13,13 @@ import { m } from '@/locale/paraglide/messages.js'
 export const Route = createFileRoute('/{-$locale}/_layout/dashboard/notifications')({
   // 通知偏好整块依赖 newsletter 模块：模块关闭时该页与菜单项一并消失。
   beforeLoad: () => assertPageEnabled('newsletter'),
-  head: () => {
-    const base = seo('/dashboard/notifications', {
+  head: () =>
+    seo('/dashboard/notifications', {
       title: m.settings_notifications_title(),
       description: m.settings_notifications_description(),
       locale: getRequestLocale(),
-    })
-    return { ...base, meta: [...base.meta, { name: 'robots', content: 'noindex' }] }
-  },
+      noindex: true,
+    }),
   component: NotificationsPage,
 })
 
@@ -58,6 +58,12 @@ function NotificationsPage() {
       return
     }
     setSubscribed(next)
+    toast.add({
+      type: 'success',
+      title: next
+        ? m.settings_notifications_subscribed_toast()
+        : m.settings_notifications_unsubscribed_toast(),
+    })
   }
 
   return (

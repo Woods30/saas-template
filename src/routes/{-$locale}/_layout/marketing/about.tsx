@@ -7,10 +7,11 @@ import { getLocale } from '@/locale/paraglide/runtime.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/marketing/about')({
   head: () =>
-    seo('/about', {
+    seo('/marketing/about', {
       title: m.about_page_title(),
       description: m.about_page_description(),
       locale: getLocale(),
+      pageType: 'AboutPage',
     }),
   component: AboutPage,
 })

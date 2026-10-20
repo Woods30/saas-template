@@ -14,19 +14,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { toast } from '@/components/ui/toast'
 import { getRequestLocale } from '@/lib/locale'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/dashboard/sessions')({
-  head: () => {
-    const base = seo('/dashboard/sessions', {
+  head: () =>
+    seo('/dashboard/sessions', {
       title: m.settings_sessions_title(),
       description: m.settings_sessions_description(),
       locale: getRequestLocale(),
-    })
-    return { ...base, meta: [...base.meta, { name: 'robots', content: 'noindex' }] }
-  },
+      noindex: true,
+    }),
   component: SessionsPage,
 })
 
@@ -73,6 +73,7 @@ function SessionsPage() {
       return
     }
     await load()
+    toast.add({ type: 'success', title: m.settings_sessions_revoked_toast() })
   }
 
   async function onRevokeOthers() {
@@ -82,6 +83,7 @@ function SessionsPage() {
       return
     }
     await load()
+    toast.add({ type: 'success', title: m.settings_sessions_revoked_others_toast() })
   }
 
   return (

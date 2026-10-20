@@ -9,6 +9,7 @@ import { SubmitButton } from '@/components/auth/SubmitButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { toast } from '@/components/ui/toast'
 import { getRequestLocale } from '@/lib/locale'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
@@ -19,9 +20,10 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/profile')({
       title: m.settings_profile_title(),
       description: m.settings_profile_description(),
       locale: getRequestLocale(),
+      noindex: true,
     })
     // 个人页不应被搜索引擎索引，在通用 meta 之后追加 robots 指令。
-    return { ...base, meta: [...base.meta, { name: 'robots', content: 'noindex' }] }
+    return base
   },
   component: ProfilePage,
 })
@@ -29,21 +31,18 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/profile')({
 function ProfilePage() {
   const { session } = Route.useRouteContext()
   const [serverError, setServerError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
-  const [verificationSent, setVerificationSent] = useState(false)
 
   const form = useForm({
     defaultValues: { name: session.user.name },
     validators: { onSubmit: createProfileSchema(authFormMessages()) },
     onSubmit: async ({ value }) => {
       setServerError(null)
-      setSaved(false)
       const { error } = await authClient.updateUser({ name: value.name })
       if (error) {
         setServerError(error.message?.split('\n')[0] ?? m.settings_error_generic())
         return
       }
-      setSaved(true)
+      toast.add({ type: 'success', title: m.settings_profile_name_success() })
     },
   })
 
@@ -57,7 +56,7 @@ function ProfilePage() {
       setServerError(error.message?.split('\n')[0] ?? m.settings_error_generic())
       return
     }
-    setVerificationSent(true)
+    toast.add({ type: 'success', title: m.settings_profile_verification_sent() })
   }
 
   return (
@@ -95,11 +94,6 @@ function ProfilePage() {
                 {serverError}
               </p>
             )}
-            {saved && (
-              <p role="status" className="text-sm text-muted-foreground">
-                {m.settings_profile_name_success()}
-              </p>
-            )}
             <form.Subscribe selector={(state) => state.isSubmitting}>
               {(isSubmitting) => (
                 <SubmitButton pending={isSubmitting}>
@@ -126,11 +120,6 @@ function ProfilePage() {
             <Button type="button" variant="outline" size="sm" onClick={onSendVerification}>
               {m.settings_profile_send_verification()}
             </Button>
-          )}
-          {verificationSent && (
-            <span role="status" className="text-sm text-muted-foreground">
-              {m.settings_profile_verification_sent()}
-            </span>
           )}
         </CardContent>
       </Card>

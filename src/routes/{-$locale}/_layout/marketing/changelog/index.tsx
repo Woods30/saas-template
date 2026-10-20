@@ -13,6 +13,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/marketing/changelog/')
       title: m.changelog_page_title(),
       description: m.changelog_page_description(),
       locale: getLocale(),
+      pageType: 'CollectionPage',
     }),
   component: ChangelogPage,
 })

@@ -258,11 +258,14 @@ describe('getModuleUnavailableResponse', () => {
 describe('getSitemapPaths', () => {
   const base = 'https://jerbix.dev'
 
-  it('默认配置含首页、features/about/legal 与启用的 docs/blog/changelog', () => {
+  it('默认配置含首页、features/about/roadmap/waitlist/legal 与启用的 docs/blog/changelog', () => {
     const locs = getSitemapPaths(makeConfig(), 'en').map((p) => p.loc)
     expect(locs).toContain(`${base}/en`)
     expect(locs).toContain(`${base}/en/marketing/features`)
     expect(locs).toContain(`${base}/en/marketing/about`)
+    // roadmap / waitlist 没有模块开关，默认配置下必须出现在 sitemap 里。
+    expect(locs).toContain(`${base}/en/marketing/roadmap`)
+    expect(locs).toContain(`${base}/en/marketing/waitlist`)
     expect(locs).toContain(`${base}/en/marketing/legal/terms`)
     expect(locs).toContain(`${base}/en/marketing/legal/privacy`)
     expect(locs).toContain(`${base}/en/docs`)
@@ -278,7 +281,7 @@ describe('getSitemapPaths', () => {
       'en',
     ).map((p) => p.loc)
     expect(locs).not.toContain(`${base}/en/pricing`)
-    expect(locs).not.toContain(`${base}/en/contact`)
+    expect(locs).not.toContain(`${base}/en/marketing/contact`)
   })
 
   it('模块开启时补上 pricing / contact', () => {
@@ -293,7 +296,9 @@ describe('getSitemapPaths', () => {
     })
     const locs = getSitemapPaths(config, 'en').map((p) => p.loc)
     expect(locs).toContain(`${base}/en/pricing`)
-    expect(locs).toContain(`${base}/en/contact`)
+    // 联系页已移入 marketing 布局，URL 必须带 `/marketing` 前缀——这是路由迁移的
+    // 回归守卫，写错会让 sitemap 指向一个不存在的路径。
+    expect(locs).toContain(`${base}/en/marketing/contact`)
   })
 
   it('docs 关闭时静态与动态文档路径都不出现', () => {
@@ -491,7 +496,7 @@ describe('页面路由门禁接线', () => {
     const { Route: contact } = (await importRouteWithConfig(
       { contact: { enabled: false } },
       {},
-      '@/routes/{-$locale}/contact',
+      '@/routes/{-$locale}/_layout/marketing/contact',
     )) as { Route: { options: { beforeLoad: () => unknown } } }
     const pricingBeforeLoad = pricing.options.beforeLoad
     const contactBeforeLoad = contact.options.beforeLoad

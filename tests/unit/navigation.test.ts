@@ -51,7 +51,9 @@ describe('公共链接目标', () => {
     ['blog', '/{-$locale}/marketing/blog'],
     ['changelog', '/{-$locale}/marketing/changelog'],
     ['pricing', '/{-$locale}/pricing'],
-    ['contact', '/{-$locale}/contact'],
+    ['contact', '/{-$locale}/marketing/contact'],
+    ['roadmap', '/{-$locale}/marketing/roadmap'],
+    ['waitlist', '/{-$locale}/marketing/waitlist'],
     ['login', '/{-$locale}/auth/login'],
     ['terms', '/{-$locale}/marketing/legal/$slug', 'terms'],
     ['privacy', '/{-$locale}/marketing/legal/$slug', 'privacy'],
@@ -125,17 +127,20 @@ describe('导航配置工厂', () => {
       'template',
       'changelog',
     ])
+    // contact 默认关闭（`contact.enabled: false`），菜单项随模块门禁一并消失。
     expect(resources?.kind === 'group' && resources.items.map((item) => item.id)).toEqual([
       'docs',
       'blog',
       'terms',
       'privacy',
+      'roadmap',
+      'waitlist',
     ])
     expect(
       resources?.kind === 'group' &&
         resources.items.map((item) => item.kind === 'link' && item.destination),
     ).toEqual(
-      (['docs', 'blog', 'terms', 'privacy'] as const).map((target) => ({
+      (['docs', 'blog', 'terms', 'privacy', 'roadmap', 'waitlist'] as const).map((target) => ({
         kind: 'internal',
         options: getPublicLinkOptions(target, 'en'),
       })),
@@ -156,6 +161,8 @@ describe('导航配置工厂', () => {
       'blog',
       'terms',
       'privacy',
+      'roadmap',
+      'waitlist',
     ])
     const actions = getNavbarActions('zh', config)
     expect(actions.primary.destination).toEqual({
@@ -166,6 +173,25 @@ describe('导航配置工厂', () => {
       kind: 'internal',
       options: getPublicLinkOptions('login', 'zh'),
     })
+  })
+
+  it('开启 contact 模块后 Footer 才出现联系入口', () => {
+    // contact 页由 `assertPageEnabled('contact')` 门禁，默认关闭。菜单项必须跟着
+    // 开关走，否则默认配置下会给出一个点开即 404 的链接。
+    const config = createConfig()
+    config.contact.enabled = true
+    const resources = getFooterLinks('en', { config, authenticated: false }).find(
+      (item) => item.id === 'resources',
+    )
+    expect(resources?.kind === 'group' && resources.items.map((item) => item.id)).toEqual([
+      'docs',
+      'blog',
+      'terms',
+      'privacy',
+      'contact',
+      'roadmap',
+      'waitlist',
+    ])
   })
 
   it('启用 docs 时主按钮指向 Docs', () => {
@@ -184,7 +210,7 @@ describe('导航配置工厂', () => {
       items.map((item) => item.kind === 'group' && item.items.map((child) => child.id)),
     ).toEqual([
       ['features', 'workflow', 'template'],
-      ['docs', 'terms', 'privacy'],
+      ['docs', 'terms', 'privacy', 'roadmap', 'waitlist'],
     ])
   })
 })

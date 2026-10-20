@@ -24,6 +24,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/marketing/legal/$slug'
       title: loaderData?.title ?? '',
       type: 'article',
       locale: getLocale(),
+      pageType: 'WebPage',
     }),
   component: LegalPage,
 })

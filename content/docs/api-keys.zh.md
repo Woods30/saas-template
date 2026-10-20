@@ -4,7 +4,7 @@ description: 用户自助创建与撤销 API 密钥
 locale: zh
 order: 18
 group: features
-updated: 2026-10-16
+updated: 2026-10-20
 ---
 
 API 密钥基于 better-auth 的 `@better-auth/api-key` 插件。用户在个人中心自助创建与撤销，
@@ -25,11 +25,28 @@ API 密钥基于 better-auth 的 `@better-auth/api-key` 插件。用户在个人
 `/dashboard/api-keys`（`src/routes/{-$locale}/_layout/dashboard/api-keys.tsx`）。
 入口在个人中心侧边栏，受功能开关 `features.enableApiKeys` 控制。
 
-- **创建**：输入名称 → `authClient.apiKey.create({ name })`。返回体含**明文 `key`**，
-  页面在第二个弹窗里一次性展示并提示立即保存。
+- **创建**：输入名称 + 选有效期 → `authClient.apiKey.create({ name, expiresIn })`。返回体含
+  **明文 `key`**，页面在第二个弹窗里一次性展示并提示立即保存。
 - **列表**：`authClient.apiKey.list()` → `{ apiKeys, total, limit, offset }`。条目不含
   明文，掩码用 `start`。
 - **删除**：`authClient.apiKey.delete({ keyId })` → `{ success }`。
+
+### 有效期
+
+`expiresIn` 的单位是**秒**，`null` 表示永不过期。界面给 30 / 90 / 365 天与「永不过期」
+四个选项，默认 30 天。
+
+> 默认值选 30 天而不是「永不过期」：密钥会进 CI 配置、第三方集成这些**人不再看一眼**的
+> 地方，长期有效密钥一旦泄漏，失效手段只剩人工删除。GitHub PAT、Stripe 的默认取向同理。
+
+上限 365 天不是随意定的：插件 `keyExpiration.maxExpiresIn` 默认就是 365，超出会被拒
+（`EXPIRES_IN_IS_TOO_LARGE`）。把界面上限对齐服务端默认值，用户就选不到必然失败的值。
+
+四个选项的语义差别**只在创建那一刻**——插件把 `expiresIn` 换算成 `expiresAt` 时间戳落库，
+列表页读的是那一个时间戳。因此创建后无法在界面上「续期」，只能删除重建。
+
+若要改默认值或选项，动 `src/routes/{-$locale}/_layout/dashboard/api-keys.tsx` 顶部的
+`EXPIRY_OPTIONS` 与 `DEFAULT_EXPIRY_DAYS`；服务端的硬上限另见下文配置节。
 
 ## 服务端校验
 
@@ -45,6 +62,35 @@ if (!result.valid) return new Response('Unauthorized', { status: 401 })
 `KEY_NOT_FOUND` / `KEY_EXPIRED` / `KEY_DISABLED`）。
 
 请求头默认用 `x-api-key`。
+
+## 服务端有效期约束
+
+`expiresIn` 由客户端传入，因此服务端必须有硬边界，否则任何调用方都能造一个 1 秒后失效、
+或永不过期的密钥。这道校验由插件内置，**本仓目前依赖它的默认值**：
+
+| 选项 | 默认值 | 语义 |
+|---|---|---|
+| `keyExpiration.minExpiresIn` | `1` | 允许的最小天数，低于则 `EXPIRES_IN_IS_TOO_SMALL` |
+| `keyExpiration.maxExpiresIn` | `365` | 允许的最大天数，高于则 `EXPIRES_IN_IS_TOO_LARGE` |
+| `keyExpiration.disableCustomExpiresTime` | `false` | 为 `true` 时忽略客户端传入值，一律用 `defaultExpiresIn` |
+| `keyExpiration.defaultExpiresIn` | `null` | 客户端不传时的兜底天数；`null` 表示不过期 |
+
+界面的 `EXPIRY_OPTIONS` 上限（365）正是对齐这里的默认 `maxExpiresIn`，用户选不到必然被拒的值。
+
+需要收紧时在 `src/auth/auth.ts` 显式传 `keyExpiration`：
+
+```ts
+apiKey({
+  defaultPrefix: 'key_',
+  keyExpiration: { minExpiresIn: 1, maxExpiresIn: 90, defaultExpiresIn: 30 * 86_400 },
+})
+```
+
+> **改了上限要同步改界面。** 服务端拒绝只会让创建请求失败并显示一条错误，
+> 用户在下拉里仍能看到那个选项——两处取值必须一起动。
+
+`disableCustomExpiresTime: true` 是「由服务端统一规定有效期」的开关，适合「所有密钥 90 天
+强制轮换」的组织策略；开启后界面的有效期选择器应当一并移除，否则是个不起作用的控件。
 
 > **注意事项**：`defaultPrefix` 设为 `key_`，新建密钥都带此前缀。
 >

@@ -77,6 +77,28 @@ export function getFooterLinks(locale: Locale, ctx: MenuContext) {
             title: m.footer_privacy(),
             destination: { kind: 'internal', options: getPublicLinkOptions('privacy', locale) },
           },
+          // contact 由 `contact` 模块门禁（路由 `beforeLoad` 抛 404），因此菜单项
+          // 必须跟着开关走，否则默认配置下会给出一个点开即 404 的链接。
+          {
+            kind: 'link',
+            id: 'contact',
+            title: m.nav_contact(),
+            visibility: { module: 'contact' },
+            destination: { kind: 'internal', options: getPublicLinkOptions('contact', locale) },
+          },
+          // roadmap / waitlist 是静态营销页，没有对应模块开关，因此不设 visibility。
+          {
+            kind: 'link',
+            id: 'roadmap',
+            title: m.nav_roadmap(),
+            destination: { kind: 'internal', options: getPublicLinkOptions('roadmap', locale) },
+          },
+          {
+            kind: 'link',
+            id: 'waitlist',
+            title: m.nav_waitlist(),
+            destination: { kind: 'internal', options: getPublicLinkOptions('waitlist', locale) },
+          },
         ],
       },
     ],

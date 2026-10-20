@@ -97,25 +97,57 @@ export function planNameForSubscription(
 }
 
 /**
- * 计费周期 → 展示文案的消息键。
+ * 付款状态 → 展示文案的消息键。
+ *
+ * 与订阅状态是两套取值域，不能互相复用：`payments.status` 只有 `paid` / `refunded`
+ * （见 `handleInvoicePaid` 与一次性支付路径），而「生效中」是订阅的 `active` 的文案。
+ * 此前交易记录直接调订阅的映射，于是每一笔已付款都显示成「生效中」——用户看到的
+ * 是一个既不属于付款语义、又无法区分退款的状态。
+ */
+export function paymentStatusMessageKey(
+  status: string,
+): 'settings_billing_paid' | 'settings_billing_refunded' | 'settings_billing_payment_status' {
+  switch (status) {
+    case 'paid':
+      return 'settings_billing_paid'
+    case 'refunded':
+      return 'settings_billing_refunded'
+    default:
+      return 'settings_billing_payment_status'
+  }
+}
+
+/** 计费周期的展示文案键；`null` 表示周期未知（见 `subscriptionIntervalMessageKey`）。 */
+export type BillingIntervalMessageKey =
+  | 'settings_billing_interval_month'
+  | 'settings_billing_interval_year'
+  | 'settings_billing_interval_lifetime'
+
+/**
+ * 计费周期 → 展示文案的消息键；周期未知时返回 `null`。
  *
  * Stripe 的 `recurring.interval` 取值域是 `day` / `week` / `month` / `year`；本模板
- * 只提供月、年与一次性三种，其余（如在 Stripe 后台改成了按周）落到原始值显示，
- * 不把「按周」硬说成「按月」。
+ * 只提供月、年与一次性三种，其余（如在 Stripe 后台改成了按周）同样返回 `null`。
+ *
+ * **空值不能归为终身**：`checkout.session.completed` 先插入订阅行（此时只写
+ * `status` 与 `customer`，`interval` 还空着），周期要等 `customer.subscription.created`
+ * 才补齐。把空值当成 `one_time`，会让这段时间里的月付订阅显示成「终身」。
+ *
+ * **未知也不编一个状态词**：曾试过返回「周期待同步」，但那是后端实现细节（第二个
+ * webhook 还没到），用户既看不懂也无法据此行动。返回 `null` 让调用方只渲染金额，
+ * 把「不知道」表达为「不说」，比说一句用户读不懂的话更诚实。
  */
 export function subscriptionIntervalMessageKey(
   interval: string | null | undefined,
-):
-  | 'settings_billing_interval_month'
-  | 'settings_billing_interval_year'
-  | 'settings_billing_interval_lifetime' {
+): BillingIntervalMessageKey | null {
   switch (interval) {
     case 'month':
       return 'settings_billing_interval_month'
     case 'year':
       return 'settings_billing_interval_year'
-    default:
-      // 空值与 `one_time` 都归为终身：一次性买断没有「下一期」。
+    case 'one_time':
       return 'settings_billing_interval_lifetime'
+    default:
+      return null
   }
 }

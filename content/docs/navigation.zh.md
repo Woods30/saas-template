@@ -4,7 +4,7 @@ description: 配置 Navbar、页脚、文档侧边栏与社交链接
 locale: zh
 order: 3
 group: config
-updated: 2026-10-14
+updated: 2026-10-20
 ---
 
 所有菜单共用同一套数据模型与渲染组件，因此过滤规则、外链行为与键盘操作在 Navbar、页脚、文档侧边栏中保持一致。
@@ -29,10 +29,16 @@ updated: 2026-10-14
 | `blog` | `/{locale}/marketing/blog` |
 | `changelog` | `/{locale}/marketing/changelog` |
 | `pricing` | `/{locale}/pricing` |
-| `contact` | `/{locale}/contact` |
+| `contact` | `/{locale}/marketing/contact` |
+| `roadmap` | `/{locale}/marketing/roadmap` |
+| `waitlist` | `/{locale}/marketing/waitlist` |
 | `login` | `/{locale}/auth/login` |
 | `terms` | `/{locale}/marketing/legal/terms` |
 | `privacy` | `/{locale}/marketing/legal/privacy` |
+
+`contact` 由 `contact` 模块门禁（路由 `beforeLoad` 抛 404），因此**引用它的菜单项必须带
+`visibility: { module: 'contact' }`**，否则默认配置（`contact.enabled: false`）下会给出一个
+点开即 404 的链接。`roadmap` / `waitlist` 是没有模块开关的静态页，菜单项不加 `visibility`。
 
 ## 菜单项类型
 

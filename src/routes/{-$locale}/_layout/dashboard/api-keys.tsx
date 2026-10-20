@@ -25,6 +25,7 @@ import {
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Spinner } from '@/components/ui/spinner'
 import {
   Table,
@@ -34,6 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { toast } from '@/components/ui/toast'
 import { getRequestLocale } from '@/lib/locale'
 import { assertFeatureEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
@@ -42,16 +44,30 @@ import { m } from '@/locale/paraglide/messages.js'
 export const Route = createFileRoute('/{-$locale}/_layout/dashboard/api-keys')({
   // 功能开关关闭时整页 404：与菜单项消失同源，路由本身始终保留。
   beforeLoad: () => assertFeatureEnabled('enableApiKeys'),
-  head: () => {
-    const base = seo('/dashboard/api-keys', {
+  head: () =>
+    seo('/dashboard/api-keys', {
       title: m.settings_api_keys_title(),
       description: m.settings_api_keys_description(),
       locale: getRequestLocale(),
-    })
-    return { ...base, meta: [...base.meta, { name: 'robots', content: 'noindex' }] }
-  },
+      noindex: true,
+    }),
   component: ApiKeysPage,
 })
+
+/** `expiresIn` 的单位是**秒**，界面按天选择。 */
+const SECONDS_PER_DAY = 86_400
+
+/**
+ * 有效期选项（天）。「永不过期」由下面的 `'never'` 单独表示，不放进这个数组。
+ *
+ * 上限卡在 365 天：插件 `keyExpiration.maxExpiresIn` 默认就是 365，超出会返回
+ * `EXPIRES_IN_IS_TOO_LARGE`——把界面上限对齐服务端默认值，用户不会选到一个必然被拒的值。
+ */
+const EXPIRY_OPTIONS = [30, 90, 365] as const
+const DEFAULT_EXPIRY_DAYS = 30
+
+/** 选择器的值；`'never'` 与数字天分开表示，避免用 `0` / `NaN` 当哨兵。 */
+type ExpiryChoice = number | 'never'
 
 /** `list` 返回的密钥条目（**不含**明文 `key`，只有 `start` 前几位）。 */
 interface ApiKeyEntry {
@@ -70,9 +86,10 @@ function ApiKeysPage() {
   // 名称过滤：与 admin 用户管理同一套做法——输入即时回显，过滤在渲染时本地生效。
   const [searchValue, setSearchValue] = useState('')
 
-  // 创建弹窗：输入名称 → 提交；成功后切到「一次性展示」弹窗。
+  // 创建弹窗：输入名称 + 选有效期 → 提交；成功后切到「一次性展示」弹窗。
   const [createOpen, setCreateOpen] = useState(false)
   const [name, setName] = useState('')
+  const [expiry, setExpiry] = useState<ExpiryChoice>(DEFAULT_EXPIRY_DAYS)
   const [creating, setCreating] = useState(false)
   const [createdKey, setCreatedKey] = useState<string | null>(null)
 
@@ -96,7 +113,13 @@ function ApiKeysPage() {
   async function onCreate() {
     setCreating(true)
     setError(null)
-    const { data, error: createError } = await authClient.apiKey.create({ name: name.trim() })
+    // `never` 时传 `null`：插件的 `expiresIn` 语义就是「null = 不过期」，
+    // 省略字段则会落到 `keyExpiration.defaultExpiresIn`（未配置时同样为 null）。
+    const expiresIn = expiry === 'never' ? null : expiry * SECONDS_PER_DAY
+    const { data, error: createError } = await authClient.apiKey.create({
+      name: name.trim(),
+      expiresIn,
+    })
     setCreating(false)
     if (createError) {
       setError(createError.message?.split('\n')[0] ?? m.settings_error_generic())
@@ -106,7 +129,9 @@ function ApiKeysPage() {
     setCreatedKey(data?.key ?? null)
     setCreateOpen(false)
     setName('')
+    setExpiry(DEFAULT_EXPIRY_DAYS)
     await load()
+    toast.add({ type: 'success', title: m.settings_api_keys_created_toast() })
   }
 
   async function onDelete(entry: ApiKeyEntry) {
@@ -117,6 +142,7 @@ function ApiKeysPage() {
       return
     }
     await load()
+    toast.add({ type: 'success', title: m.settings_api_keys_deleted_toast() })
   }
 
   // 名称过滤：本地过滤（`apiKey.list` 没有查询参数，也没有分页），
@@ -250,6 +276,33 @@ function ApiKeysPage() {
               onChange={(event) => setName(event.target.value)}
               placeholder={m.settings_api_keys_name_placeholder()}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="api-key-expiry">{m.settings_api_keys_expires_label()}</Label>
+            {/* 原生 `<select>`：选项是固定 4 项短文案，不需要搜索或分组，
+                原生控件在移动端会调起正确的滚轮 / 操作表，且零 JS 即可用。 */}
+            <NativeSelect
+              id="api-key-expiry"
+              value={expiry === 'never' ? 'never' : String(expiry)}
+              onChange={(event) =>
+                setExpiry(
+                  event.target.value === 'never'
+                    ? 'never'
+                    : Number.parseInt(event.target.value, 10),
+                )
+              }
+            >
+              {/* 选项列表在渲染期构造：`m.*()` 调用时才读当前语言，
+                  提到模块级会把首次加载的语言固化下来。 */}
+              {EXPIRY_OPTIONS.map((days) => (
+                <NativeSelectOption key={days} value={String(days)}>
+                  {m.settings_api_keys_expires_in_days({ days })}
+                </NativeSelectOption>
+              ))}
+              <NativeSelectOption value="never">
+                {m.settings_api_keys_never_expires()}
+              </NativeSelectOption>
+            </NativeSelect>
           </div>
           <DialogFooter>
             <DialogClose render={<Button type="button" variant="outline" />}>

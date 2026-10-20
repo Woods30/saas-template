@@ -73,6 +73,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { toast } from '@/components/ui/toast'
 import { getRequestLocale } from '@/lib/locale'
 import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
@@ -103,14 +104,13 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/users'
     assertFeatureEnabled('enableAdmin')
     assertAdminRole(context.session.user.role)
   },
-  head: () => {
-    const base = seo('/dashboard/admin/users', {
+  head: () =>
+    seo('/dashboard/admin/users', {
       title: m.admin_users_title(),
       description: m.admin_users_description(),
       locale: getRequestLocale(),
-    })
-    return { ...base, meta: [...base.meta, { name: 'robots', content: 'noindex' }] }
-  },
+      noindex: true,
+    }),
   component: AdminUsersPage,
 })
 
@@ -229,8 +229,16 @@ function AdminUsersPage() {
     void load()
   }, [load])
 
-  /** 写操作共用收尾：报错则展示，成功则重取列表并刷新会话。 */
-  async function run(action: () => Promise<{ error?: { message?: string } | null }>) {
+  /**
+   * 写操作共用收尾：报错则展示，成功则重取列表并刷新会话。
+   *
+   * `successMessage` 是这个动作的「做成了」反馈，走 toast。错误仍留在页面上——
+   * 失败时用户需要知道**哪个操作**失败，toast 一闪而过不够。
+   */
+  async function run(
+    action: () => Promise<{ error?: { message?: string } | null }>,
+    successMessage?: string,
+  ) {
     setBusy(true)
     setError(null)
     const { error: actionError } = await action()
@@ -241,6 +249,7 @@ function AdminUsersPage() {
     }
     await load()
     void router.invalidate()
+    if (successMessage) toast.add({ type: 'success', title: successMessage })
     return true
   }
 
@@ -511,7 +520,10 @@ function AdminUsersPage() {
                       }}
                       onToggleBan={() =>
                         user.banned
-                          ? void run(() => authClient.admin.unbanUser({ userId: user.id }))
+                          ? void run(
+                              () => authClient.admin.unbanUser({ userId: user.id }),
+                              m.admin_users_unbanned_toast(),
+                            )
                           : setBanTarget(user)
                       }
                       onImpersonate={() => void impersonate(user)}
@@ -537,7 +549,10 @@ function AdminUsersPage() {
                           size="sm"
                           disabled={busy}
                           onClick={() =>
-                            void run(() => authClient.admin.unbanUser({ userId: user.id }))
+                            void run(
+                              () => authClient.admin.unbanUser({ userId: user.id }),
+                              m.admin_users_unbanned_toast(),
+                            )
                           }
                         >
                           {m.admin_users_unban()}
@@ -653,8 +668,9 @@ function AdminUsersPage() {
               onClick={async () => {
                 if (!roleTarget) return
                 if (
-                  await run(() =>
-                    authClient.admin.setRole({ userId: roleTarget.id, role: roleValue }),
+                  await run(
+                    () => authClient.admin.setRole({ userId: roleTarget.id, role: roleValue }),
+                    m.admin_users_role_updated_toast(),
                   )
                 ) {
                   setRoleTarget(null)
@@ -673,12 +689,14 @@ function AdminUsersPage() {
         busy={busy}
         onClose={() => setBanTarget(null)}
         onSubmit={(banReason, days) =>
-          run(() =>
-            authClient.admin.banUser({
-              userId: banTarget?.id ?? '',
-              ...(banReason ? { banReason } : {}),
-              ...(days > 0 ? { banExpiresIn: days * SECONDS_PER_DAY } : {}),
-            }),
+          run(
+            () =>
+              authClient.admin.banUser({
+                userId: banTarget?.id ?? '',
+                ...(banReason ? { banReason } : {}),
+                ...(days > 0 ? { banExpiresIn: days * SECONDS_PER_DAY } : {}),
+              }),
+            m.admin_users_banned_toast(),
           )
         }
       />
@@ -708,7 +726,12 @@ function AdminUsersPage() {
               variant="destructive"
               onClick={async () => {
                 if (!deleteTarget) return
-                if (await run(() => authClient.admin.removeUser({ userId: deleteTarget.id }))) {
+                if (
+                  await run(
+                    () => authClient.admin.removeUser({ userId: deleteTarget.id }),
+                    m.admin_users_deleted_toast(),
+                  )
+                ) {
                   setDeleteTarget(null)
                 }
               }}
@@ -862,6 +885,7 @@ function UserSessionsDialog({
       return
     }
     if (target) await load(target.id)
+    toast.add({ type: 'success', title: m.admin_users_sessions_revoked_toast() })
   }
 
   return (

@@ -102,6 +102,34 @@ const form = useForm({
 
 字段级错误由 `AuthFormField` 自动接上 `aria-invalid` 与 `aria-describedby`，无需手写。
 
+## 反馈分级：toast 还是留在页面上
+
+提示放错位置比没有提示更糟：写在页面底部的「已订阅」在用户点完按钮后根本不在视口里，
+等于没提示。本仓按**用户当时在看哪里**分两级：
+
+| 场景 | 归属 | 理由 |
+|---|---|---|
+| 操作成功（保存、更新、发送、删除） | toast | 结果与操作点可能隔着半屏；toast 固定在视口角落 |
+| 结账结果（成功 / 取消 / 重复订阅） | toast | 回跳后页面会重建，行内提示没有承载点 |
+| 表单提交失败 | 表单内 `<p role="alert">` | 用户要回头改输入，线索必须留在原地 |
+| 字段校验错误 | 字段下方 | 由 `AuthFormField` 自动接线 |
+| 弹窗内的失败 | 弹窗内 | toast 会被遮罩与焦点陷阱挡住 |
+| 列表加载失败 | 页面内 | 它是页面状态，不是一次操作的结果 |
+
+toast 由 `src/routes/__root.tsx` 挂载一次的 `<Toaster />` 统一承载，业务代码只调用
+单例：
+
+```tsx
+import { toast } from '@/components/ui/toast'
+
+toast.add({ type: 'success', title: m.settings_profile_name_success() })
+```
+
+- `type` 决定图标：`success` / `info` / `warning` / `error` / `loading`。
+- 需要两行说明时用 `description`；默认 5 秒自动消失，读起来不够就显式传 `timeout`。
+- 带 `?query` 回跳的一次性提示（如 Stripe 结账结果）展示后必须用 `replace` 导航清掉
+  参数，否则刷新一次会再弹一次。
+
 ## 组件来源
 
 输入控件、标签、错误展示一律来自 `src/components/ui`（shadcn **Base UI** 版），**不本地
