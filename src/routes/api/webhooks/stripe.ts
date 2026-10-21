@@ -62,7 +62,7 @@ interface SubscriptionObject {
   id: string
   status: string
   cancel_at_period_end?: boolean
-  /** Stripe 把 Checkout Session 的 metadata 复制到 subscription，故这里也带 userId。 */
+  /** 归属来自创建 session 时写入的 `subscription_data.metadata`。 */
   metadata?: { userId?: string } | null
   customer?: string | { id: string } | null
   items: {
@@ -276,8 +276,11 @@ export async function handleInvoicePaid(
  *
  * Stripe 不保证事件顺序，`customer.subscription.created` 可能早于
  * `checkout.session.completed` 到达。此时订阅行还不存在，UPDATE 影响 0 行，
- * 订阅信息就永远补不上。故行不存在时用 `metadata.userId`（Stripe 会把
- * Checkout Session 的 metadata 复制到 subscription）补建。
+ * 订阅信息就永远补不上。故行不存在时用 `metadata.userId` 补建——这个 metadata
+ * 来自创建 session 时显式写入的 `subscription_data.metadata`（Stripe **不会**把
+ * Checkout Session 的 metadata 自动复制到 Subscription）。
+ *
+ * 拿不到归属时抛错而非静默跳过：跳过会被记成「已处理」，Stripe 永不重投。
  */
 export async function handleSubscriptionUpsert(
   db: ReturnType<typeof createDb>,
@@ -319,10 +322,13 @@ export async function handleSubscriptionUpsert(
   // 行不存在：只有拿得到归属才能建，`subscriptions.user_id` 是 NOT NULL。
   const userId = sub.metadata?.userId?.trim()
   if (!userId) {
-    console.warn(
-      `[stripe-webhook] customer.subscription.${sub.status}: subscription ${sub.id} not found and no metadata.userId`,
+    // 抛错而不是静默 return：return 会让事件被记成「已处理」，Stripe 永不重投，
+    // 这条订阅的价格与周期就永远补不上——账单页只能显示一个空壳卡片。
+    // 抛错会删掉事件行并返回 500，重投时 `checkout.session.completed` 很可能
+    // 已经把订阅行写好，UPDATE 就落得下了。
+    throw new Error(
+      `[stripe-webhook] subscription ${sub.id} has no row and no metadata.userId to attribute it`,
     )
-    return
   }
 
   await db

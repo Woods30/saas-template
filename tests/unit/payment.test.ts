@@ -155,6 +155,32 @@ describe('StripePaymentProvider', () => {
     expect(result.sessionId).toBe('cs_test_session')
   })
 
+  it('订阅模式把 userId 写进 subscription_data.metadata', async () => {
+    const { StripePaymentProvider } = await import('@/payment')
+    const provider = new StripePaymentProvider('sk_test', 'whsec_test')
+    await provider.createCheckoutSession({
+      priceId: 'price_123',
+      userId: 'user_456',
+      customerEmail: 'test@example.com',
+      successUrl: 'https://app.example.com/success',
+      cancelUrl: 'https://app.example.com/cancel',
+      locale: 'en',
+      mode: 'subscription',
+    })
+
+    // Checkout Session 自己的 metadata **不会**被 Stripe 复制到 Subscription
+    // （实测订阅上的 metadata 是空的）。归属只能靠 subscription_data.metadata，
+    // 否则 `customer.subscription.created` 早于 `checkout.session.completed` 到达时
+    // 无从知道这条订阅属于谁。
+    expect(mockStripeInstance.sessionsCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: 'subscription',
+        metadata: { userId: 'user_456' },
+        subscription_data: { metadata: { userId: 'user_456' } },
+      }),
+    )
+  })
+
   it('createCheckoutSession returns url and sessionId', async () => {
     const { StripePaymentProvider } = await import('@/payment')
     const provider = new StripePaymentProvider('sk_test', 'whsec_test')
@@ -757,8 +783,13 @@ describe('handleSubscriptionUpsert — 周期字段读取自订阅项', () => {
     mockDb.update.mockReturnValue({
       set: vi.fn().mockImplementation((v: Record<string, unknown>) => {
         capturedSet.value = v
-        // `returning` 判定订阅行是否已存在：空数组表示需要补建。
-        return { where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }) }
+        // `returning` 判定订阅行是否已存在。这里一律让行存在，把用例聚焦到
+        // 「列映射是否正确」；行缺失时的补建 / 抛错另见下面的归属用例。
+        return {
+          where: vi
+            .fn()
+            .mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'sub_x' }]) }),
+        }
       }),
     })
   })
@@ -994,7 +1025,7 @@ describe('webhook 事件顺序无关', () => {
       id: 'sub_race',
       status: 'active',
       cancel_at_period_end: false,
-      // Stripe 会把 Checkout Session 的 metadata 复制到 subscription。
+      // 归属来自 `subscription_data.metadata`（创建 session 时显式写入）。
       metadata: { userId: 'user_race' },
       customer: 'cus_race',
       items: {
@@ -1014,6 +1045,56 @@ describe('webhook 事件顺序无关', () => {
     })
 
     expect(insertSpy).toHaveBeenCalled()
+  })
+
+  it('订阅行缺失且 metadata 无归属时抛错，让 Stripe 重投', async () => {
+    // UPDATE 影响 0 行：订阅行还没写。
+    mockDb.update.mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+      }),
+    })
+    const insertSpy = vi.fn()
+    mockDb.insert.mockImplementation(() => {
+      insertSpy()
+      return {
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi
+            .fn()
+            .mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+        }),
+      }
+    })
+
+    const { handleSubscriptionUpsert } = await import('@/routes/api/webhooks/stripe')
+
+    // 静默 return 会被当成「处理成功」记进 processed_at，Stripe 永不重投，
+    // 订阅的价格与周期就永远补不上——必须抛错。
+    await expect(
+      handleSubscriptionUpsert(mockDb as never, {
+        id: 'sub_orphan',
+        status: 'active',
+        cancel_at_period_end: false,
+        metadata: {},
+        customer: 'cus_orphan',
+        items: {
+          data: [
+            {
+              price: {
+                id: 'price_orphan',
+                currency: 'usd',
+                recurring: { interval: 'month' },
+                unit_amount: 599,
+              },
+              current_period_start: 1700000000,
+              current_period_end: 1702598400,
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow(/no metadata.userId/)
+
+    expect(insertSpy).not.toHaveBeenCalled()
   })
 
   it('订阅行已存在时只更新，不重复插入', async () => {

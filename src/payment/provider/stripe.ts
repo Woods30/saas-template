@@ -41,6 +41,14 @@ export class StripePaymentProvider implements PaymentProvider {
       // 兜底用站点默认语言，而非「非 zh 即 en」，否则新增语言会被当成 en 提交。
       locale: params.locale ?? defaultLocale,
       metadata: { userId: params.userId },
+      // Checkout Session 自己的 metadata **不会**被 Stripe 复制到 Subscription
+      // （实测订阅对象上的 metadata 是空的）。归属必须显式写进
+      // `subscription_data.metadata`：否则 `customer.subscription.created` 早于
+      // `checkout.session.completed` 到达时，这条订阅无从知道属于谁——
+      // 补建不了，价格与周期也就永远补不上。
+      ...(params.mode === 'subscription'
+        ? { subscription_data: { metadata: { userId: params.userId } } }
+        : {}),
       ...(params.mode === 'payment' ? { invoice_creation: { enabled: true } } : {}),
       ...(params.mode === 'payment' ? { allow_promotion_codes: true } : {}),
     })
