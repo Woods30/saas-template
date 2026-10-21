@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
  * 任何功能测试失败，只在截图里看得出来。
  *
  * 扫描范围排除两类文件：
- * - `src/components/ui/`：shadcn 上游原件，本地不修改（见 AGENT.md 关键不变量）；
+ * - `src/components/ui/`：shadcn 上游原件，本地不修改（见 AGENTS.md 关键不变量）；
  * - `src/mail/`：邮件客户端不执行站点 CSS，颜色必须是字面量，由 `EMAIL_THEME` 集中管理。
  */
 

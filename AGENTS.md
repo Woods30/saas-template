@@ -1,7 +1,7 @@
 # AGENTS.md
 
 本文件是**所有 AI 编程代理**（Claude Code、Codex、Cursor、Copilot、Gemini CLI…）的
-统一入口。`AGENT.md` 与 `CLAUDE.md` 都转发到这里；新增或修改项目规约时**改本文件**，
+统一入口。`CLAUDE.md` 转发到这里；新增或修改项目规约时**改本文件**，
 不要在多处复制。
 
 ## 项目定位
@@ -86,8 +86,8 @@ scripts/             构建与校验脚本
 - **先找现成组件**，没有才手写。新增 shadcn 组件用
   `pnpm dlx shadcn@latest add <component> -y`。
 - **行为修改先写失败测试**；结构整理与行为修改分开提交。
-- 提交前 `pnpm check` 与 `pnpm test` 必须全绿。提交消息末尾附
-  `Co-Authored-By: Claude Code <noreply@anthropic.com>`。
+- 提交前 `pnpm check` 与 `pnpm test` 必须全绿。提交消息写清改了什么、为什么，
+  **不添加** `Co-Authored-By` 之类的工具署名行。
 - **文档语言为中文**；技术名词、命令、代码标识符保留英文；中文与半角英数之间加空格。
 
 ## 需要先确认的操作

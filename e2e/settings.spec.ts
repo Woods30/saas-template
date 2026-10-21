@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test'
  *
  * 只守四条跨页面旅程：路由守卫、默认落点、资料读写落到 D1、登出后会话失效。
  * 侧栏折叠、菜单层叠、面包屑结构等界面细节由 `tests/components/settings-layout.test.tsx`
- * 与 `tests/components/user-menu.test.tsx` 覆盖（见 `AGENT.md`「测试分层」）。
+ * 与 `tests/components/user-menu.test.tsx` 覆盖（见 `AGENTS.md`「测试分层」）。
  *
  * 默认配置下 `newsletter` 模块关闭，因此「通知偏好」入口不出现——据此断言菜单随模块
  * 门禁收敛，而不是写死入口数量。

@@ -69,7 +69,7 @@ pnpm deploy   # 生产 env 校验 → 构建 → bundle 泄漏检查 → wrangle
 
 [`AGENTS.md`](AGENTS.md) 是**所有 AI 编程代理**（Claude Code、Codex、Cursor、Copilot、
 Gemini CLI 等）的统一入口：命令、目录地图、关键不变量、工作方式与需确认操作。
-`AGENT.md` 与 `CLAUDE.md` 都转发到它。新增或修改项目规约时改 `AGENTS.md`。
+`CLAUDE.md` 转发到它。新增或修改项目规约时改 `AGENTS.md`。
 
 ## 许可
 
