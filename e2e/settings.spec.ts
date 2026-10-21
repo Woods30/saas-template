@@ -70,14 +70,18 @@ test.describe('Settings', () => {
     // 登出入口在侧栏用户卡片：`dashboard` 是 `_layout` 路由，首页顶栏的 `UserMenu`
     // 在这里并不存在，必须先进入工作台。
     await page.goto('/zh/dashboard/profile')
-    // 等水合再点卡片：React 刚接管首帧时事件处理器还没绑定，弹窗不会出现。
     await page.waitForLoadState('networkidle')
     const sidebar = page.locator('[data-slot="sidebar"]')
-    await sidebar.getByRole('button', { name: /设置用户/ }).click()
-
+    const trigger = sidebar.getByRole('button', { name: /设置用户/ })
     // 页面级定位：`Menu.Portal` 把弹出层挂到 body 下，不是侧栏的 DOM 后代。
     const logout = page.getByRole('menuitem', { name: '退出登录' })
-    await logout.waitFor()
+    // 冷启动时事件处理器可能还没绑定，点了也不弹菜单：重试点击，已开则不再点
+    // （再点会关掉）。与 hydration.spec.ts 同一套等待方式。
+    await expect(async () => {
+      if (await logout.isVisible()) return
+      await trigger.click()
+      await expect(logout).toBeVisible({ timeout: 500 })
+    }).toPass({ timeout: 15000 })
     await logout.click()
     // 登出是整页跳转；只等 URL 变化会撞上仍在进行的导航，随后 `goto` 被 abort。
     await page.waitForURL((url) => url.pathname === '/zh' || url.pathname === '/')
