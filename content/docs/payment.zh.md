@@ -205,8 +205,23 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
 STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxx
 ```
 
+改完 `.env` 要重启 dev server（`vite` 不会热重载 env）。
+
 注意这个 `whsec_` 与 Stripe Dashboard 上给 endpoint 生成的 secret **不是同一个**，
 混用会一直验签失败（返回 400 且不写库）。
+
+**CLI 版本必须是 v1.43.3 及以上**（当前 v1.54.1）。老版本会永远停在
+`Getting ready...` —— 它用的是 Stripe 早已废弃的 WebSocket 订阅协议，事件根本
+不会转发过来。现象很有迷惑性：支付成功、页面提示成功，但本地库一行都没进，
+Stripe CLI 终端里也一条请求都没有。升级即可：
+
+```bash
+brew upgrade stripe
+```
+
+**要看请求，盯 CLI 终端，不是 Stripe Dashboard**。`stripe listen` 的转发是独立
+通道，事件**不会**出现在 Dashboard 的 webhook 端点事件列表里——除非你另外在
+Dashboard 配了端点，而那个端点的请求同样到不了 `localhost`。
 
 还需要在 Dashboard 或 CLI 里开启这些事件类型，否则相应分支不会触发：
 

@@ -231,8 +231,25 @@ listening for events". Put the former in `.env`:
 STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxx
 ```
 
+Restart the dev server afterwards — Vite does not hot-reload env changes.
+
 That `whsec_` is **not** the endpoint secret generated in the Stripe Dashboard — mixing
 the two makes every signature check fail (400, nothing written).
+
+**The CLI must be v1.43.3 or newer** (currently v1.54.1). Older builds hang forever
+on `Getting ready...`: they speak a WebSocket subscription protocol Stripe has since
+retired, so no event is ever forwarded. The symptom is misleading — payment succeeds,
+the page confirms it, yet nothing lands in the local database and the CLI shows no
+requests at all. Upgrade fixes it:
+
+```bash
+brew upgrade stripe
+```
+
+**Watch the CLI terminal, not the Stripe Dashboard.** `stripe listen` forwards over its
+own channel; the events do **not** appear in a Dashboard webhook endpoint's event list.
+They only show up there if you configured a separate endpoint — and that endpoint's
+requests cannot reach `localhost` either.
 
 Enable these event types, in the Dashboard or via the CLI:
 
