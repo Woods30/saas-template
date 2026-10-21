@@ -17,19 +17,14 @@ export interface RoadmapProps {
   items: RoadmapItem[]
 }
 
-/**
- * 状态标记的语义配色。
- *
- * 只用主题 token，不写死色值：`bg-primary` 跟随品牌色，`bg-muted-foreground` 表示
- * 尚未开始。深浅色主题都由 CSS 变量提供，无需在组件里判断。
- */
+/** 状态标记配色，只用主题 token，深浅色由 CSS 变量自动切换。 */
 const STATUS_DOT: Record<RoadmapStatus, string> = {
   done: 'bg-primary',
   active: 'bg-primary ring-4 ring-primary/20',
   planned: 'bg-muted-foreground/40',
 }
 
-/** 状态文案随语言变化，因此在渲染时求值（`m.*()` 读取运行时 locale）。 */
+/** 渲染时求值，`m.*()` 读取运行时 locale。 */
 function statusLabel(status: RoadmapStatus): string {
   switch (status) {
     case 'done':
@@ -44,7 +39,6 @@ function statusLabel(status: RoadmapStatus): string {
 function RoadmapEntry({ item, last }: { item: RoadmapItem; last: boolean }) {
   return (
     <li className="relative flex gap-4 pb-8 last:pb-0">
-      {/* 竖线连到下一项；最后一项不画，避免尾部悬空。 */}
       {!last && (
         <span aria-hidden="true" className="absolute top-4 left-[5px] h-full w-px bg-border" />
       )}

@@ -11,12 +11,7 @@ afterEach(() => {
   overwriteGetLocale(originalGetLocale)
 })
 
-/**
- * 构造个人中心配置。
- *
- * 所有服务模块**显式**给值而不依赖 `website.ts` 的出厂默认值：默认开关随部署场景
- * 调整（本仓本地联调期打开了 payment），依赖默认值的断言会随开关变更无谓变红。
- */
+/** 构造个人中心配置。服务模块显式给值，不依赖随部署场景调整的出厂默认值。 */
 function createConfig(
   overrides: { newsletter?: boolean; apiKeys?: boolean; admin?: boolean; payment?: boolean } = {},
 ) {
@@ -40,7 +35,7 @@ function ctx(
   return { config, authenticated: true, role }
 }
 
-/** 摊平顶层 group，得到所有叶子链接项（顺序即渲染顺序）。 */
+/** 摊平顶层 group，得到叶子链接项（顺序即渲染顺序）。 */
 function leafItems(items: readonly MenuItem[]): MenuLinkItem[] {
   const out: MenuLinkItem[] = []
   for (const item of items) {
@@ -142,8 +137,7 @@ describe('个人中心导航分组', () => {
 
   it('文案随请求语言变化', () => {
     const config = createConfig()
-    // 文案在调用时经 `m.*()` 求值，而 Paraglide 的 `m` 读的是运行时 locale，
-    // 不是传给工厂的 `locale` 参数——单测里必须显式覆盖它（与 navigation.test.ts 同法）。
+    // `m.*()` 读运行时 locale 而非工厂的 `locale` 参数，单测必须显式覆盖。
     overwriteGetLocale(() => 'zh')
     expect(leafItems(getSettingsSections('zh', ctx(config))).map((item) => item.title)).toEqual([
       '资料',

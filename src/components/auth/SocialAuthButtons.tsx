@@ -3,19 +3,14 @@ import { Button } from '@/components/ui/button'
 import { m } from '@/locale/paraglide/messages.js'
 
 interface SocialAuthButtonsProps {
-  /** 服务端是否配置了 Google OAuth；由路由 `beforeLoad` 判定后传入（客户端读不到服务端 env）。 */
+  /** 服务端是否配置了 Google OAuth；客户端读不到服务端 env，由路由 `beforeLoad` 传入。 */
   googleEnabled: boolean
   onGoogleClick: () => void
-  /** 表单是否正在提交；提交中一并禁用社交登录，避免并发发起两种登录。 */
+  /** 提交中一并禁用，避免并发发起两种登录。 */
   disabled?: boolean
 }
 
-/**
- * 社交登录按钮组。
- *
- * 此前 `socialProviders.google` 已在服务端配置好，UI 却完全没有入口——用户永远用不到。
- * 这里按「是否已配置」条件渲染：未配置时不占位、不显示禁用按钮。
- */
+/** 社交登录按钮组；未配置时整体不渲染，不占位也不显示禁用按钮。 */
 export function SocialAuthButtons({
   googleEnabled,
   onGoogleClick,

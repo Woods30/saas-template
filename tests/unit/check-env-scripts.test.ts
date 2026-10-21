@@ -15,20 +15,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { resolveRawEnv } from '../../scripts/lib/env-file'
 
 /**
- * `scripts/check-env.ts`、`scripts/check-env-prod.ts`、`scripts/check-client-bundle.ts` 的黑盒测试。
+ * check-env / check-env-prod / check-client-bundle 的黑盒测试。
  *
- * 这三个脚本都在**当前工作目录**读取 `.env` / 扫描 `dist/client`，因此测试必须在隔离的
- * 临时 cwd 中 `spawn` 它们，才能既使用真实文件样例，又不触碰用户仓库里的 `.env`。
- *
- * 做法：在每个临时目录内创建 `scripts` 符号链接（指向本仓库的脚本），使脚本内的相对导入
- * `../src/env/*` 正确解析到仓库源码；同时把 cwd 切到临时目录，脚本便只看到临时的 `.env`
- * 与 `dist/client`。测试结束仅删除自己创建的临时目录。
+ * 三个脚本都按 cwd 读 `.env`、扫 `dist/client`，故在临时目录内放一个指向仓库 `scripts`
+ * 的符号链接再 spawn，既能用真实文件样例，又不碰仓库自己的 `.env`。
  */
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 const tsxBin = join(repoRoot, 'node_modules', '.bin', 'tsx')
-// 脚本从仓库根运行时靠 `tsconfig.json` 的 `paths` 解析 `@/*` 别名；测试把 cwd 切到临时目录后
-// 该 tsconfig 不在解析路径上，需显式指回仓库 tsconfig，才能加载 `src/config/website` 等模块。
+// cwd 切到临时目录后 `@/*` 别名解析不到仓库 tsconfig，需显式指回。
 const repoTsconfig = join(repoRoot, 'tsconfig.json')
 
 const checkEnv = 'scripts/check-env.ts'
@@ -47,11 +42,8 @@ interface RunResult {
 }
 
 /**
- * 仓库 `.env.example` 中的键名集合。
- *
- * Vitest 会把仓库根的 `.env` 载入 `process.env`，若不清理，子进程会继承这些值并经
- * 「进程 env 覆盖 .env」的规则盖过临时 `.env`，使负例测试失真。这里在派生子进程前
- * 删除这些键，让每个测试的临时 `.env` 成为唯一来源（显式传入的 `extraEnv` 除外）。
+ * `.env.example` 的键名集合。Vitest 会把仓库 `.env` 载入 `process.env`，进程 env 又优先于
+ * 文件，不清理会盖过临时 `.env` 使负例失真；派生子进程前删除这些键。
  */
 const dotenvKeys = readFileSync(join(repoRoot, '.env.example'), 'utf-8')
   .split('\n')
@@ -61,12 +53,8 @@ const dotenvKeys = readFileSync(join(repoRoot, '.env.example'), 'utf-8')
   .filter((key) => key.length > 0)
 
 /**
- * 需要从子进程环境里额外清除的键。
- *
- * `.env.example` 未列出、但已在 `src/env` schema 声明或会影响校验的进程变量：
- * - `NODE_ENV`：Vitest 运行在 `test`，若继承会干扰生产语义断言；
- * - `ADMIN_EMAILS`、`BEEHIIV_SEND_WELCOME_EMAIL`、`VITE_UMAMI_WEBSITE_ID`、
- *   `VITE_CLARITY_PROJECT_ID`：schema 已声明，防止真实值经进程 env 泄漏进子进程。
+ * `.env.example` 未列出但会影响校验的进程变量：`NODE_ENV` 会干扰生产语义断言，
+ * 其余为 schema 已声明的键，防止真实值经进程 env 泄漏进子进程。
  */
 const EXTRA_ENV_KEYS = [
   'NODE_ENV',
@@ -79,13 +67,7 @@ const EXTRA_ENV_KEYS = [
 /** 从子进程环境删除的键集合：`.env.example` 全部键 + 额外键，确保临时 `.env` 是唯一来源。 */
 const scrubKeys = [...dotenvKeys, ...EXTRA_ENV_KEYS]
 
-/**
- * 已启用服务模块所需的完整配置。
- *
- * `website.ts` 当前默认打开 payment / notification / analytics（本仓本地联调期），
- * 因此生产校验要求这些模块的字段齐备。用例若只提供 URL 与 auth secret，会被
- * 「已启用服务缺少必要配置」拦下——这是预期行为，不是夹具遗漏。
- */
+/** 已启用服务模块（payment / notification / analytics 默认打开）所需的完整配置。 */
 const ENABLED_SERVICES_ENV: Record<string, string> = {
   STRIPE_SECRET_KEY: 'sk_test_synthetic',
   STRIPE_WEBHOOK_SECRET: 'whsec_synthetic',
@@ -126,7 +108,6 @@ function runScript(cwd: string, script: string, extraEnv: Record<string, string>
   }
 }
 
-/** 临时目录名，与仓库内脚本的 `scripts` 符号链接互不影响。 */
 const createdDirs: string[] = []
 
 /** 新建隔离 cwd：含指向仓库脚本的 `scripts` 符号链接。 */
@@ -155,7 +136,7 @@ function writeBundleFile(dir: string, relativePath: string, content: string): vo
 }
 
 afterAll(() => {
-  // 仅清理本测试创建的临时目录，绝不触碰仓库或用户的 `.env`。
+  // 只清理本测试创建的临时目录。
   for (const dir of createdDirs) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -258,8 +239,7 @@ describe('check-env-prod.ts（生产校验）', () => {
   })
 
   it('存在 `.env.production` 时优先读它，忽略 `.env` 的本地值', () => {
-    // 生产部署的约定：`pnpm deploy` 校验的是 `.env.production`，而不是开发用的 `.env`。
-    // 若仍读 `.env`，本地 localhost 会让校验失败——即使生产配置本身完全正确。
+    // `pnpm deploy` 校验的是 `.env.production`；若读开发用 `.env`，localhost 会让校验失败。
     const dir = makeWorkspace()
     writeDotEnv(dir, 'VITE_BASE_URL=http://localhost:3000\n')
     writeDotEnvProduction(
@@ -273,7 +253,7 @@ describe('check-env-prod.ts（生产校验）', () => {
   })
 
   it('`.env.production` 非法时不回退到合法的 `.env`', () => {
-    // 有 `.env.production` 就以它为准：回退会让「生产配置写错了」被本地值悄悄掩盖。
+    // 有 `.env.production` 就以它为准，回退会掩盖写错的生产配置。
     const dir = makeWorkspace()
     writeDotEnv(dir, `BETTER_AUTH_SECRET=${VALID_SECRET}\nVITE_BASE_URL=${VALID_URL}\n`)
     writeDotEnvProduction(dir, 'VITE_BASE_URL=http://localhost:3000\n')
@@ -354,7 +334,7 @@ describe('check-env-prod.ts（生产校验）', () => {
     expect(result.stderr).toContain('STRIPE_SECRET_KEY')
     expect(result.stderr).toContain('DISCORD_WEBHOOK_URL')
     expect(result.stderr).toContain('VITE_GA_ID')
-    // 诊断只报字段名，不回声值。
+    // 只报字段名，不回声值。
     expect(result.stderr).not.toContain(VALID_SECRET)
   })
 
@@ -413,7 +393,7 @@ describe('check-env-prod.ts（生产校验）', () => {
 
   it('VITE_BASE_URL=0.0.0.0 失败（无值回显）', () => {
     const dir = makeWorkspace()
-    // 用 https 隔离 host 守卫，否则 http 会先被协议守卫拦下，无法证明 0.0.0.0 分支生效。
+    // 用 https 隔离协议守卫，才能证明拦下的是 0.0.0.0 分支。
     writeDotEnv(dir, `VITE_BASE_URL=https://0.0.0.0\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
     const result = runScript(dir, checkEnvProd)
     expect(result.code).toBe(1)
@@ -572,7 +552,7 @@ describe('resolveRawEnv（.env 缺失与合并规则）', () => {
     const dir = makeWorkspace()
     writeDotEnv(dir, '__SAAS_ENV_FILE_ONLY__=from-file\nVITE_BASE_URL=from-file\n')
 
-    // 显式设置进程 env 值（合成），使「进程 env 优先」规则恒定被验证，不依赖外部是否设置。
+    // 显式设置合成进程 env，使「进程 env 优先」恒定被验证。
     const processValue = 'https://process-override.jerbix.dev'
     const previous = process.env.VITE_BASE_URL
     process.env.VITE_BASE_URL = processValue

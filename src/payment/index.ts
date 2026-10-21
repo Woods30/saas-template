@@ -16,8 +16,7 @@ type PaymentProviderFactory = () => PaymentProvider
 type PaymentEnv = Pick<ServerEnv, 'STRIPE_SECRET_KEY' | 'STRIPE_WEBHOOK_SECRET'>
 
 /**
- * 按当前请求 env 构建 payment provider 注册表。
- * 在 src/server.ts 的 als.run() 中调用，结果注入 ServerContext.paymentProviderRegistry。
+ * 按当前请求 env 构建 payment provider 注册表，在 `src/server.ts` 的 `als.run()` 中调用。
  * 只消费 `parseServerEnv` 归一化后的字段。
  */
 export function buildPaymentProviderRegistry(

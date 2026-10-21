@@ -1,9 +1,5 @@
 /**
- * 核心区清单——「全量回归 + e2e」的判定依据，**单一事实来源**。
- *
- * 本地 `pnpm check:core` 与 CI 的 e2e 触发条件都读这里，不得两处各写一份。
- * 命中以下任一前缀即视为核心变更：这些区域的缺陷影响面广或涉及安全边界，
- * 值得每次改动都跑完整回归。
+ * 核心区清单：「全量回归 + e2e」的判定依据，本地与 CI 共用，不得两处各写一份。
  */
 export const CORE_PATHS: readonly string[] = [
   'src/auth/',
@@ -24,7 +20,6 @@ export const CORE_PATHS: readonly string[] = [
 
 /** 某文件路径是否落在核心区。 */
 export function isCorePath(file: string): boolean {
-  // 归一化：去掉可能的 ./ 前缀，统一用 / 分隔。
   const normalized = file.replace(/^\.\//, '').replace(/\\/g, '/')
   return CORE_PATHS.some((prefix) => normalized.startsWith(prefix))
 }

@@ -1,21 +1,17 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   // Worker 名决定线上地址：`<name>.<账号 workers.dev 子域>.workers.dev`。
-  // 当前为 `demo`，配账号子域 `saas-template-demo` → https://demo.saas-template-demo.workers.dev
-  // 注意：与 package.json 的 `name` 是两个独立字段，后者只是 npm 包名。
+  // 与 package.json 的 `name` 无关。
   "name": "demo",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
-  // `main` 指向自定义 server entry：它用 Paraglide 的 `paraglideMiddleware` 包住
-  // `createStartHandler(defaultStreamHandler)`，为每个请求写入语言上下文（见 src/server.ts）。
-  // TanStack Start 构建时也会探测 `src/server.ts` 并使用它，二者保持一致。
+  // 自定义 server entry：注入语言上下文与 CSP nonce，见 src/server.ts。
   "main": "src/server.ts",
   "vars": {
     "NODE_ENV": "production"
   },
   "observability": { "enabled": true },
-  // D1 数据库（auth + 业务表）。ID 由 `wrangler d1 create` 产出后手工回填——
-  // 不用 `--update-config`，那会经 JSON 序列化抹掉本文件的注释。
+  // ID 由 `wrangler d1 create` 产出后手工回填——`--update-config` 会抹掉本文件注释。
   "d1_databases": [
     {
       "binding": "DB",

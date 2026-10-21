@@ -4,22 +4,12 @@ import { readFileSync } from 'node:fs'
 import { parseEnv } from 'node:util'
 
 /**
- * 为 E2E 预备支付场景：给某个用户写入一条「已订阅」记录。
+ * 为 E2E 写入一条「已订阅」记录：E2E 不能真打 Stripe，故直接写本地 D1。
+ * `--local` 硬编码，绝不触碰生产库。
  *
- * 为什么需要它：重复订阅守卫（409）与账单页的四列展示，都要求库里已经存在一条
- * `active` 订阅。而 E2E 不能真的去打 Stripe——那需要真实银行卡、且会把测试账号的
- * 订阅状态留在 Stripe 后台。因此这里**直接写本地 D1**，把「已订阅」这一状态复现出来。
+ * 用法：`pnpm exec tsx scripts/e2e-seed-subscription.ts <email>`
  *
- * 只动本地库：`--local` 是硬编码的。生产库由 `db:migrate:remote` 等显式命令管理，
- * 这个脚本绝不参与。
- *
- * 用法：
- *   pnpm exec tsx scripts/e2e-seed-subscription.ts <email>
- *
- * 写什么：一行 `subscriptions`，`price_id` 指向 `VITE_STRIPE_PRICE_PRO_MONTHLY`，
- * `amount` / `currency` / `interval` 三个列一并填上——账单页的金额列显示 `—` 正是
- * 因为这三个列空着（见 `handleSubscriptionUpsert` 的注释）。缺失时页面拿不到可展示的
- * 数据，用例就失去意义。
+ * `amount` / `currency` / `interval` 必须一并填上，否则账单页金额列渲染成 `—`。
  */
 
 /** 与本地 D1 的 `subscriptions` 列一一对应，避免拼 SQL 时漏字段。 */
@@ -37,13 +27,13 @@ interface SeedSubscription {
   currentPeriodEnd: number
 }
 
-/** 读 `.env` 里的 Price ID；空串视为未配置，由调用方报错。 */
+/** 读 `.env` 里的 Price ID；空串由调用方报错。 */
 function readEnv(key: string): string {
   const parsed = parseEnv(readFileSync('.env', 'utf-8')) as Record<string, string>
   return parsed[key]?.trim() ?? ''
 }
 
-/** 按邮箱查本地 D1 的 users 表，返回用户 id。 */
+/** 按邮箱查本地 D1 的 users 表。 */
 export function findUserIdByEmail(email: string): string | null {
   const sql = `SELECT id FROM users WHERE email = '${escapeSql(email)}'`
   const out = execFileSync(
@@ -60,12 +50,7 @@ function escapeSql(value: string): string {
   return value.split("'").join("''")
 }
 
-/**
- * 构造 INSERT。
- *
- * 导出是为了单测：这条 SQL 拼的是用户 id 与 price id，两者都来自本地库 / `.env`，
- * 但转义规则必须被固定住，否则将来有人改拼接方式时会引入注入。
- */
+/** 构造 INSERT；导出供单测固定转义规则，防止改拼接方式时引入注入。 */
 export function buildSeedSql(sub: SeedSubscription): string {
   const values = [
     sub.id,
@@ -77,8 +62,7 @@ export function buildSeedSql(sub: SeedSubscription): string {
     sub.amount,
     sub.currency,
     sub.interval,
-    // 必须是**整数** Unix 秒。Drizzle 把该列声明为 `integer(..., { mode: 'timestamp' })`，
-    // 写成 `datetime(...)` 会得到 TEXT，读回时转不成 Date，账单页就渲染成 `—`。
+    // 必须是整数 Unix 秒：写成 `datetime(...)` 会得到 TEXT，读回转不成 Date，渲染成 `—`。
     sub.currentPeriodEnd,
   ]
   const quoted = values.map((v) => (typeof v === 'number' ? v : `'${escapeSql(String(v))}'`))
@@ -104,7 +88,7 @@ function main(): void {
     process.exit(1)
   }
 
-  // 时间戳 + 随机段：同一邮箱重复 seed 时 id 与 subscription_id 不撞（`id` 是主键）。
+  // 时间戳 + 随机段：同一邮箱重复 seed 时主键不撞。
   const unique = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
   const sql = buildSeedSql({
     id: `sub_e2e_${unique}`,

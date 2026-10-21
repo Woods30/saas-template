@@ -17,18 +17,11 @@ interface ContactValues {
 const EMPTY: ContactValues = { name: '', fromEmail: '', subject: '', message: '' }
 
 /**
- * 联系表单。
+ * 联系表单。成功走全局 toast（提交后表单已清空），失败留在表单内 `role="alert"`。
+ * 字段校验交给服务端的 `contactSchema`，客户端只做「非空 + 提交中」。
  *
- * 反馈分级严格遵循 `content/docs/forms.zh.md` 的分级表，与 `NewsletterCta` 一致：
- *
- * - **成功走全局 toast**——提交后表单被清空，结果与操作点之间没有稳定的承载位置；
- * - **失败留在表单内** `role="alert"`——用户要回头改输入，线索必须留在原地。
- *
- * 字段级校验交给服务端：`/api/contact` 用 `contactSchema` 校验并返回 400。客户端只做
- * 「非空 + 提交中」这一层，避免把 Zod 的英文默认消息带进界面（本仓 UI 全中文）。
- *
- * `<form noValidate>` 必填：`<Input type="email">` 会触发浏览器原生约束校验，值非法时
- * 原生校验直接拦下 `submit`，`onSubmit` 永远不会执行。
+ * `<form noValidate>` 必填：`<Input type="email">` 的原生约束校验会拦下 submit，
+ * 导致 `onSubmit` 永远不执行。
  */
 export function ContactForm() {
   const [serverError, setServerError] = useState<string | null>(null)

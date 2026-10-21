@@ -30,12 +30,11 @@ interface SeoOptions {
 /**
  * 生成路由 `head()` 所需的 meta、canonical 与结构化数据。
  *
- * 设计取向：**只做加法**。新增字段不改变既有输出值，因为下游测试用
- * `toContainEqual` 断言精确对象，改动既有取值会静默破坏它们。
+ * 设计取向：**只做加法**。新增字段不改变既有输出值，下游测试用 `toContainEqual`
+ * 断言精确对象。
  *
- * 语言相关的文案**不**在这里读配置：`title` / `description` 由调用点用 `m.*()` 在
- * `head()` 内求值。把文案放进 `websiteConfig` 会在模块加载时固化语言，SSR 下所有
- * 后续请求都会拿到首次请求的语言（`tests/unit/home-head.test.ts` 记录过这个 bug）。
+ * 语言相关文案**不**在这里读配置：`title` / `description` 由调用点用 `m.*()` 在
+ * `head()` 内求值，否则会在模块加载时固化语言。
  */
 export function seo(path: string, options: SeoOptions) {
   const url = getCanonicalUrl(path)
@@ -55,9 +54,7 @@ export function seo(path: string, options: SeoOptions) {
         },
         ...otherLocales.map((l) => ({
           rel: 'alternate' as const,
-          // React JSX requires `hrefLang` (camelCase) for the `<link hreflang>` HTML
-          // attribute; lowercase `hreflang` triggers "Invalid DOM property" at runtime
-          // because TanStack Router's `<Asset>` spreads `attrs` straight onto `<link>`.
+          // 必须 camelCase：TanStack 的 `<Asset>` 会把 attrs 直接摊到 `<link>` 上。
           hrefLang: localeConfig[l].hreflang,
           href: localeUrl(l, path),
         })),
@@ -103,16 +100,11 @@ function localeUrl(locale: Locale, path: string): string {
   return `${getBaseUrl()}/${locale}${path === '/' ? '' : path}`
 }
 
-/**
- * 从 `websiteConfig.social.x` 推导 `twitter:site` 句柄。
- *
- * 本仓的社交平台枚举用的是 `x` 而不是 `twitter`；未配置时返回 `undefined`，调用方
- * 因此不输出该标签（输出空标签比不输出更糟）。
- */
+/** 从 `websiteConfig.social.x` 推导 `twitter:site` 句柄；未配置时返回 `undefined`。 */
 function socialHandle(): string | undefined {
   const handle = websiteConfig.social.x
   if (!handle) return undefined
-  // 配置里可能写完整 URL（`https://x.com/jerbix`）或裸句柄；统一成 `@handle`。
+  // 配置里可能写完整 URL 或裸句柄；统一成 `@handle`。
   const name = handle.replace(/^https?:\/\/(?:www\.)?x\.com\//i, '').replace(/^@/, '')
   const trimmed = name.split(/[/?#]/)[0]?.trim()
   return trimmed ? `@${trimmed}` : undefined
@@ -121,8 +113,7 @@ function socialHandle(): string | undefined {
 /**
  * 生成 Organization + WebSite + 页面节点组成的 `@graph`。
  *
- * 三个节点放同一个 `@graph` 里，页面节点才能通过 `isPartOf` 指向站点、通过
- * `publisher` 指向组织——分开输出时搜索引擎只能看到孤立节点。
+ * 必须在同一个 `@graph` 里，页面节点才能通过 `isPartOf` / `publisher` 指向其他节点。
  */
 function pageJsonLdScript(path: string, options: SeoOptions, pageType: SeoPageType) {
   const url = getCanonicalUrl(path)
@@ -165,10 +156,7 @@ function pageJsonLdScript(path: string, options: SeoOptions, pageType: SeoPageTy
 /**
  * 把 `image` 补全为绝对 URL。
  *
- * - 已是绝对 URL（含 `scheme://`）原样返回；
- * - 协议相对 URL（以 `//` 开头，如 `//cdn.example.com/og.png`）补上当前站点的协议，
- *   否则会被拼成 `https://acme.example.com//cdn.example.com/og.png` 这类畸形地址；
- * - 其余相对路径（`/og.png`、`og.png`）基于站点基址补全。
+ * 协议相对 URL（`//cdn...`）须补上站点协议，否则会拼成畸形地址。
  */
 function toAbsoluteUrl(image: string): string {
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(image)) return image

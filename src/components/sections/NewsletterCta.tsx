@@ -17,9 +17,7 @@ export function NewsletterCta({
   placeholder = 'you@example.com',
   successMessage,
 }: NewsletterCtaProps) {
-  // 反馈分级沿用 `content/docs/forms.md` 的分级表（`dashboard/admin/users.tsx` 的
-  // `run()` 同一套）：**成功走全局 toast，失败留在表单内**。失败时用户要回头改邮箱，
-  // 线索必须留在原地——toast 出现的位置离输入框远，且一闪而过。
+  // 成功走全局 toast，失败留在表单内：用户要回头改邮箱，线索必须留在原地。
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -48,7 +46,6 @@ export function NewsletterCta({
           } catch {
             setError(m.newsletter_error())
           } finally {
-            // 放在 finally 里：不论成功或失败按钮都要解禁，否则用户改不了邮箱重试。
             setLoading(false)
           }
         }}
@@ -64,8 +61,7 @@ export function NewsletterCta({
           {m.newsletter_subscribe()}
         </Button>
       </form>
-      {/* 失败留在原地的唯一承载点：`role="alert"` 让屏幕阅读器即时播报。
-          注意别再写成 `{error}: {error}` ——`error` 里存的是一整句文案。 */}
+      {/* `role="alert"` 让读屏即时播报；`error` 存的是一整句文案，不要再加前缀。 */}
       {error && (
         <p role="alert" className="mt-3 text-sm text-destructive">
           {error}

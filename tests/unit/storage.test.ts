@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FileInfo, UploadOptions, UploadResult } from '@/storage'
 
-// --- Mock R2StorageProvider directly (simpler than mocking R2Bucket) ---
+// 直接 mock R2StorageProvider，比 mock R2Bucket 更简单。
 const mockUploadFile =
   vi.fn<
     (
@@ -36,7 +36,7 @@ vi.mock('@/storage/provider/r2', () => ({
   })),
 }))
 
-// Mock server-context so getServerContext() returns a context with the mock provider.
+// Mock server-context，让 `getServerContext()` 返回带 mock provider 的上下文。
 vi.mock('@/lib/server-context', () => ({
   getServerContext: () => ({
     env: {},
@@ -54,10 +54,8 @@ vi.mock('@/lib/server-context', () => ({
   },
 }))
 
-// Import after vi.mock — the mock is now active.
+// 必须在 vi.mock 之后导入。
 import { deleteFile, downloadFile, getFileInfo, listUserFiles, uploadFile } from '@/storage'
-
-// --- Tests ---
 
 describe('storage types', () => {
   it('exports UploadOptions 接口', () => {

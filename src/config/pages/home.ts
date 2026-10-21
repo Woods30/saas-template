@@ -13,14 +13,14 @@ import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 
 /**
- * docs CTA 目标：模块启用时指向当前语言的文档入口，关闭时回退首页 `#features` 锚点，
- * 避免把用户导向已下线的页面。语言在调用时求值，不固化首次请求的 locale。
+ * docs CTA 目标：模块启用时指向当前语言的文档入口，关闭时回退首页 `#features`。
+ * 语言在调用时求值，不固化首次请求的 locale。
  */
 function docsCtaHref(): string {
   return websiteConfig.docs.enabled ? `/${getLocale()}/docs` : '#features'
 }
 
-// 消息在 render 读取配置时求值，避免模块缓存固化第一次请求的语言。
+// getter：消息在读取配置时求值，避免模块缓存固化第一次请求的语言。
 export const homeBlocks = {
   get Hero() {
     return {

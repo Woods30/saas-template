@@ -46,7 +46,7 @@ interface RunResult {
   stderr: string
 }
 
-/** 在仓库根用 tsx 运行 CLI，返回退出码与输出（不抛出，便于断言任意退出码）。 */
+/** 在仓库根用 tsx 运行 CLI；不抛出，便于断言任意退出码。 */
 function runCheckCore(base: string, cwd: string = repoRoot): RunResult {
   try {
     const stdout = execFileSync(tsxBin, [checkCoreChanged, base], {
@@ -72,10 +72,7 @@ afterAll(() => {
 })
 
 /**
- * 新建隔离 git 仓库：`main` 有一次提交，HEAD 位于**无共同祖先**的 `orphan` 分支。
- *
- * 复现「ref 可解析但无 merge base」：`git rev-parse --verify --quiet main^{commit}` 退出 0
- * （前置 ref 校验通过），但 `git diff main...HEAD` 因 no merge base 退出 128。
+ * 新建隔离 git 仓库：HEAD 位于无共同祖先的 `orphan` 分支，复现「ref 可解析但无 merge base」。
  */
 function makeOrphanRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'saas-core-changed-'))
@@ -96,14 +93,8 @@ function makeOrphanRepo(): string {
 }
 
 /**
- * `check-core-changed.ts` 的退出码契约（黑盒：真实 spawn，断言真实退出码）。
- *
- * 三个码语义不同、必须可区分：
- * - `0` 命中核心区（需全量回归）；
- * - `1` 确属未触及核心区（跳过回归）；
- * - `2` base ref 无效——**不得与 `1` 混淆**。Task 5 的 CI 门禁写作
- *   `if tsx scripts/check-core-changed.ts <ref>; then core=true; else core=false; fi`，
- *   若无效 ref 落回 `1`，则「无法判定」会被静默读成「非核心」而跳过 e2e（fail-open）。
+ * 退出码契约（黑盒 spawn）：0 命中核心区，1 未触及，2 无法判定。
+ * 2 不得与 1 混淆，否则 CI 门禁会把「无法判定」读成「非核心」而静默跳过 e2e。
  */
 describe('check-core-changed CLI 退出码', () => {
   it('base ref 无效时退出码为 2（可与「非核心」的 1 区分），且 stderr 指明该 ref', () => {
@@ -113,7 +104,6 @@ describe('check-core-changed CLI 退出码', () => {
   })
 
   it('确属未触及核心区时退出码为 1（保持既有契约）', () => {
-    // base=HEAD 的 diff 恒为空 → 无核心改动。
     const result = runCheckCore('HEAD')
     expect(result.code).toBe(1)
   })
@@ -125,12 +115,8 @@ describe('check-core-changed CLI 退出码', () => {
   })
 
   /**
-   * ref 可解析但 `git diff` 失败（无 merge base）也必须落 2，不得落到 1。
-   *
-   * 这是同一 fail-open 的更窄触发面：`main` 通过 ref 前置校验，但孤儿分支与 `main` 无
-   * 共同祖先，`git diff main...HEAD` 退出 128。若不捕获，execFileSync 抛异常 → Node 退出
-   * 1，与「确属非核心」不可区分，CI 门禁会静默跳过 e2e。测试用隔离临时仓库复现，不触碰
-   * 真实仓库的分支 / 提交。
+   * ref 可解析但 diff 失败（无 merge base）也必须落 2：异常若逃逸，Node 以 1 退出，
+   * 与「确属非核心」不可区分。用隔离临时仓库复现，不碰真实仓库。
    */
   it('ref 有效但无 merge base（diff 失败）时退出码为 2，且 stderr 指明该 ref', () => {
     const result = runCheckCore('main', makeOrphanRepo())

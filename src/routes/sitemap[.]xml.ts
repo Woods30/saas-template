@@ -35,11 +35,8 @@ function buildUrl(baseUrl: string, locale: Locale, path?: string): string {
 /**
  * 生成全部 sitemap 路径（纯函数，不读 env / 不发请求）。
  *
- * - 静态页：首页、marketing features / about / legal（terms、privacy）。
- * - 模块页：docs / blog / changelog 随开关输出；pricing 由 payment、contact 由 contact。
- * - 动态项：仅含当前语言且已发布（博客）的内容，博客使用真实 `/marketing/blog/{path}`。
- * - alternates：仅当同 slug 在对方语言确实存在时才生成，不伪造缺失翻译；
- *   静态页在所有语言都存在，因此包含除自身外的全部语言。
+ * alternates 只在对方语言确实存在同 slug 内容时生成，不伪造缺失翻译；
+ * 静态页在所有语言都存在，故包含除自身外的全部语言。
  */
 export function getSitemapPaths(
   config: WebsiteConfig,
@@ -75,8 +72,7 @@ export function getSitemapPaths(
   if (config.payment.enabled) pushStatic('/pricing')
   if (config.contact.enabled) pushStatic('/marketing/contact')
 
-  // 动态内容：仅当前语言，alternates 依同 slug 的对方语言内容决定。
-  // 博客 URL 使用真实路由前缀 `/marketing/blog/{path}`，slug 取 `_meta.path`。
+  // 博客 slug 取 `_meta.path`，URL 前缀是真实路由 `/marketing/blog/`。
   if (config.blog.enabled) {
     const keyOf = (post: { _meta: { path: string; fileName: string } }) =>
       contentSlug(post._meta.fileName)
@@ -87,8 +83,7 @@ export function getSitemapPaths(
       const alternates = source.blogs
         .filter((b) => b.locale !== locale && b.published && keyOf(b) === key)
         .flatMap((b) => {
-          // 内容的 `locale` 经 schema 校验，但仍显式解析一次：sitemap 输出的 hreflang
-          // 必须是合法语言标签，未支持的取值宁可跳过也不要写进 sitemap 污染索引。
+          // hreflang 必须是合法语言标签，不支持的取值宁可跳过也不写进 sitemap。
           const alt = parseLocale(b.locale)
           return alt
             ? [{ hreflang: alt, href: buildUrl(baseUrl, alt, `/marketing/blog/${b._meta.path}`) }]

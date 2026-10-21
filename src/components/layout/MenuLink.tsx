@@ -3,13 +3,8 @@ import type { ReactNode } from 'react'
 import type { MenuLinkItem } from '@/config/navigation'
 
 /**
- * 菜单链接的统一渲染器：把 {@link MenuLinkItem} 的判别联合直接展开为真实路由
- * 选项或外链。
- *
- * - `internal`：透传 `getPublicLinkOptions` 生成的 Router options（含 locale / hash / slug）；
- * - `external`：渲染 `<a>`，`newTab` 为真时补 `target="_blank"` 与 `rel="noopener noreferrer"`。
- *
- * Navbar 与 Footer 共用同一实现，保证导航来源与安全属性只有一处定义。
+ * 菜单链接的统一渲染器：内部链接透传 Router options，外链在 `newTab` 时补
+ * `target` 与 `rel="noopener noreferrer"`。Navbar 与 Footer 共用。
  */
 export function MenuLink({
   item,

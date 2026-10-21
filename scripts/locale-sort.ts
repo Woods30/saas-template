@@ -1,10 +1,6 @@
 /**
  * 把 `messages/*.json` 的键按字典序重排，保留 `$schema` 等所有字段。
- *
- * 排序后的文件按 2 空格缩进、结尾换行输出，与仓库其余 JSON 风格一致。
- *
- * 以 `LOCALES` 为基准：缺少某个受支持语言的消息文件、或存在不受支持语言的残留文件，
- * 都直接失败而不是静默跳过——否则新增语言后 `locale:sort` 会「成功」却漏掉新文件。
+ * 以 `LOCALES` 为基准：缺文件或有多余文件都直接失败，避免新增语言后静默漏排。
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -15,8 +11,7 @@ const MESSAGES_DIR = 'messages'
 
 function sortRecord(record: Record<string, unknown>): Record<string, unknown> {
   const sorted: Record<string, unknown> = {}
-  // `$schema`（以 `$` 开头）在 ASCII 序中天然排在字母之前，因此全量排序即可把它
-  // 保留在文件顶部，无需特殊处理。
+  // `$schema` 以 `$` 开头，ASCII 序天然排在字母之前，全量排序即可置顶。
   for (const key of Object.keys(record).sort()) {
     sorted[key] = record[key]
   }

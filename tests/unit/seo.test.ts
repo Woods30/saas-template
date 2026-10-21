@@ -1,11 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * 站点 URL 与 SEO helper 的单测。
- *
- * 关键约束：`getBaseUrl` / `getCanonicalUrl` / `seo` 读取的是模块加载期解析好的
- * `publicEnv`，因此这里用 `vi.stubEnv` 注入自定义 `VITE_BASE_URL` 后 `resetModules`
- * 再动态导入，验证「非默认 base URL 真正影响导出函数」，而不是恒定 localhost。
+ * 站点 URL 与 SEO helper。这些函数读模块加载期解析好的 `publicEnv`，
+ * 故用 `stubEnv` + `resetModules` + 动态导入验证非默认 base URL 真的生效。
  */
 
 const CUSTOM_BASE_URL = 'https://acme.example.com'
@@ -14,7 +11,7 @@ type UrlsModule = typeof import('@/lib/urls')
 type SeoModule = typeof import('@/lib/seo')
 type WebsiteModule = typeof import('@/config/website')
 
-/** 在给定 VITE_BASE_URL 下重新加载模块，确保读取的是本次解析结果。 */
+/** 在给定 VITE_BASE_URL 下重新加载模块。 */
 async function loadModules(baseUrl: string | undefined): Promise<{
   urls: UrlsModule
   seoModule: SeoModule
@@ -124,8 +121,7 @@ describe('seo()', () => {
   })
 
   it('未提供 image 时回退到品牌 OG 图', async () => {
-    // 分享卡片缺图时各平台会退化成一段纯文字，等于没有卡片。缺省回退品牌图，
-    // 而不是干脆不输出标签。
+    // 缺图时各平台会退化成纯文字，缺省回退品牌图而不是不输出标签。
     const { seoModule } = await loadModules(CUSTOM_BASE_URL)
     const head = seoModule.seo('/', { title: '无图' })
     expect(head.meta).toContainEqual({
@@ -174,9 +170,8 @@ describe('seo()', () => {
   })
 
   it('传入 locale 时输出 hreflang alternates，键名用 hrefLang（camelCase）', async () => {
-    // TanStack Router 的 `<Asset>` 会把 `links[].attrs` 直接展开到 `<link {...attrs} />`。
-    // React JSX 只接受 `hrefLang`（camelCase）作为 `<link hreflang>` 的属性名；若用
-    // 小写 `hreflang`，运行时会抛 "Invalid DOM property `hreflang`"。本测试是回归守卫。
+    // `<Asset>` 会把 `links[].attrs` 展开到 `<link {...attrs} />`；React 只接受
+    // camelCase `hrefLang`，小写 `hreflang` 会在运行时抛 Invalid DOM property。
     const { seoModule } = await loadModules(CUSTOM_BASE_URL)
     const head = seoModule.seo('/pricing', { title: '价格 · Acme', locale: 'zh' })
 
@@ -185,7 +180,6 @@ describe('seo()', () => {
       hrefLang: 'en',
       href: `${CUSTOM_BASE_URL}/en/pricing`,
     })
-    // 任何 alternate 都不应使用小写 `hreflang` 键
     for (const link of head.links) {
       if ('rel' in link && link.rel === 'alternate') {
         expect(link).not.toHaveProperty('hreflang')
@@ -200,8 +194,7 @@ describe('seo()', () => {
   })
 
   it('传 locale 时补 x-default，指向默认语言的带前缀 URL', async () => {
-    // 本仓所有 canonical 都带语言前缀（`/zh/...`），不存在「无前缀 = 默认语言」的约定，
-    // 因此 x-default 必须指向默认语言的带前缀地址，而不是无前缀路径。
+    // 所有 canonical 都带语言前缀，x-default 也必须指向带前缀的默认语言地址。
     const { seoModule } = await loadModules(CUSTOM_BASE_URL)
     const head = seoModule.seo('/pricing', { title: '价格 · Acme', locale: 'zh' })
     expect(head.links).toContainEqual({
@@ -212,7 +205,7 @@ describe('seo()', () => {
   })
 
   it('alternateLocales 只列真实存在的翻译', async () => {
-    // 未翻译的页面不该把其他语言写进 hreflang——那会让爬虫去抓 404。
+    // 未翻译的页面不该把其他语言写进 hreflang，否则爬虫会去抓 404。
     const { seoModule } = await loadModules(CUSTOM_BASE_URL)
     const head = seoModule.seo('/pricing', {
       title: '价格 · Acme',

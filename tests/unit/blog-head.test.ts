@@ -5,18 +5,10 @@ import { Route as BlogIndexRoute } from '@/routes/{-$locale}/_layout/marketing/b
 import { Route as ChangelogRoute } from '@/routes/{-$locale}/_layout/marketing/changelog/index'
 
 /**
- * 博客 / changelog 页面 `head()` 的 canonical 与 hreflang 回归测试。
+ * 博客 / changelog `head()` 的 canonical 与 hreflang 回归。
  *
- * 缺陷背景：这些路由的 `head()` 曾把 path 写成 `/blog`、`/blog/${title}`、`/changelog`，
- * 但文件路由的真实前缀是 `/{locale}/marketing/blog`、`/{locale}/marketing/changelog`
- * （见 `src/routeTree.gen.ts`）。`seo()` 把同一 path 同时用于 canonical 与 hreflang
- * alternate 的 href，因此 canonical / alternates 都指向不存在的路由。
- *
- * 详情页另有第二个错误：用 `title`（可含空格 / 中文）充当路径段，真实 slug 是
- * `post._meta.path`，`beforeLoad` 已解析出 `post` 并放入 route context（`loaderData`）。
- *
- * SSR 中 Paraglide 通过 AsyncLocalStorage 按请求写入语言；这里用假的 ALS store 复现
- * 「每请求调用 `head()`」的语义（与 `tests/unit/home-head.test.ts` 同一模式）。
+ * 曾把 path 写成 `/blog/${title}`（缺 locale 前缀，且用标题当路径段），导致
+ * canonical 与 alternate 都指向不存在的路由。
  */
 
 interface HeadLink {
@@ -42,12 +34,7 @@ function canonicalHref(head: HeadResult): string | undefined {
   return head.links.find((link) => link.rel === 'canonical')?.href
 }
 
-/**
- * 只取**真实翻译**的 alternate。
- *
- * `x-default` 是「找不到匹配语言时的兜底」，指向默认语言，不属于「另一个语言版本」，
- * 因此这里排除它——否则断言「每条 alternate 都指向 /en/」会被兜底项打破。
- */
+/** 只取真实翻译的 alternate：`x-default` 是兜底项，不属于「另一个语言版本」。 */
 function alternateHrefs(head: HeadResult): string[] {
   return head.links
     .filter((link) => link.rel === 'alternate' && link.hrefLang !== 'x-default')

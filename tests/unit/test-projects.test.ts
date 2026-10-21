@@ -2,14 +2,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 /**
- * 测试分组接线守卫。
- *
- * 此前 vitest.workspace.ts 无人引用（vitest 5 已废弃该文件），`pnpm test` 实际
- * 只跑 tests/unit，tests/components 被漏掉。改用 test.projects 后，本测试以源码
- * 断言钉死「两组都在 projects 里」且「死配置已删除」，防止回归。
- *
- * 用源码断言而非 import 配置：配置模块带解析副作用，且 repo 既有守卫测试
- * （brand-config.test.ts）同样读源码。
+ * 测试分组接线守卫：vitest.workspace.ts 曾被废弃但无人引用，`pnpm test` 漏跑
+ * tests/components。用源码断言钉死「两组都在 projects 里」且死配置已删除。
  */
 const root = new URL('../../', import.meta.url)
 const vitestConfig = readFileSync(new URL('vitest.config.ts', root), 'utf-8')

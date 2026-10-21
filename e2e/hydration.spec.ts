@@ -1,14 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-/**
- * E2E: SSR / hydration 契约
- *
- * 这是 E2E 里少数**只有真实服务端 + 真实浏览器**才能验证的东西：服务端渲染出的 DOM 与
- * 客户端首帧是否一致、事件是否真的绑上了。组件测试跑在 jsdom 里，没有真实水合过程。
- *
- * 两个 locale 放在**同一个用例**里循环，而不是复制成两条——跨语言行为由
- * `tests/unit/locale-*` 覆盖，这里只是顺带确认 en 的 SSR 输出同样干净。
- */
+/** E2E: SSR 与客户端首帧一致、事件真的绑上（jsdom 无法覆盖）。 */
 /** 主题菜单项文案随 locale 变，抽成表避免在断言里写三元嵌套。 */
 const THEME_LABELS = {
   zh: { light: '浅色', dark: '深色' },
@@ -28,13 +20,11 @@ test('zh / en 首页水合无 React / CSP 错误，且主题切换已绑定事�
     await page.goto(`/${locale}`)
     await page.waitForLoadState('networkidle')
 
-    // 通过实际交互确认水合已绑定事件：主题切换是菜单，打开后点选与当前不同的主题。
     const html = page.locator('html')
     const before = await html.getAttribute('data-theme')
     const label = locale === 'zh' ? '切换主题' : 'Toggle theme'
     const target = THEME_LABELS[locale][before === 'dark' ? 'light' : 'dark']
-    // 与 marketing.spec 同一处理：冷启动时按钮可能尚未水合，重试打开菜单；
-    // 菜单已开就不再点（再点会关掉）。
+    // 冷启动时按钮可能尚未水合：重试打开菜单，已开则不再点（再点会关掉）。
     const trigger = page.getByRole('button', { name: label })
     const option = page.getByRole('menuitemradio', { name: target })
     await expect(async () => {

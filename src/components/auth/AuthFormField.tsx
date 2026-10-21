@@ -12,14 +12,8 @@ interface AuthFormFieldProps {
 }
 
 /**
- * 认证表单字段：TanStack Form 与 shadcn `Field` 之间的**薄适配层**。
- *
- * 输入控件、标签、错误展示全部来自 `@/components/ui`（shadcn Base UI），这里只做接线：
- * `field.state.value` / `handleChange` / `handleBlur` 接到 `<Input>`，
- * `field.state.meta.errors` 接到 `<FieldError>`。
- *
- * 不引入浏览器原生表单能力（`name` / `required`）：本仓的认证表单由 TanStack Form 驱动，
- * 原生属性不仅无用，`name` 还会让水合前的点击触发原生 GET 提交（见 `SubmitButton` 的说明）。
+ * TanStack Form 与 shadcn `Field` 之间的薄适配层。不加 `name` / `required` 等原生属性：
+ * 表单由 TanStack Form 驱动，且 `name` 会让水合前的点击触发原生 GET 提交。
  */
 export function AuthFormField({ field, label, type, autoComplete, minLength }: AuthFormFieldProps) {
   const invalid = field.state.meta.errors.length > 0

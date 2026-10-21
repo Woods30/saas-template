@@ -41,8 +41,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [
       { rel: 'stylesheet', href: globalsCss },
       { rel: 'manifest', href: '/manifest.json' },
-      // 图标按浏览器能力分级：SVG 优先（矢量、随系统深浅色切换），
-      // 不认 SVG 的退回 ICO，iOS 主屏用 180px PNG（它不读 manifest 的 icons）。
+      // iOS 主屏不读 manifest 的 icons，必须单独给 apple-touch-icon。
       { rel: 'icon', href: '/icon.svg', type: 'image/svg+xml' },
       { rel: 'icon', href: '/favicon.ico', sizes: '16x16 32x32 48x48 64x64' },
       { rel: 'apple-touch-icon', href: '/favicon-180.png', sizes: '180x180' },
@@ -56,13 +55,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 // TanStack Start 不会自动生成 HTML 文档；根路由必须通过 `shellComponent` 提供。
 function RootDocument({ children }: { children: ReactNode }) {
-  // `getLocale()` 在 SSR 阶段读取 Paraglide 的 AsyncLocalStorage，其值由
-  // `src/server.ts` 的 paraglideMiddleware 按请求写入；客户端 hydration 复用同一
-  // 解析结果，因此不会出现 lang 与内容不一致。
+  // SSR 读 ALS，客户端读同一 cookie，故 hydration 时 lang / theme 不会跳变。
   const locale = getLocale()
 
-  // 与 `getLocale()` 同理：SSR 读 ALS（请求 cookie），客户端读 `THEME` cookie，
-  // 两侧对同一 cookie 得出同一值，故 `data-theme` 不会在 hydration 时变化。
   const theme = getTheme()
 
   return (
@@ -109,7 +104,7 @@ function NotFound() {
 }
 
 function ServerError({ error }: ErrorComponentProps) {
-  // 仅在 server console 输出；不向客户端暴露错误信息
+  // 仅在 server console 输出，不向客户端暴露错误信息。
   if (typeof window === 'undefined') {
     console.error('[root error]', error)
   }

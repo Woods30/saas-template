@@ -18,8 +18,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/marketing/waitlist')({
 })
 
 function WaitlistPage() {
-  // newsletter 模块默认关闭，此时 `/api/newsletter` 返回 404。页面仍然可达（它本身
-  // 是静态营销页），但不能给一个点下去必然失败的按钮——换成说明 + 联系入口。
+  // 模块关闭时 `/api/newsletter` 返回 404，页面仍可达但不能给必然失败的按钮。
   const available = websiteConfig.newsletter.enabled
   return (
     <>

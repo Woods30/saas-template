@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// ---------------------------------------------------------------------------
-// Mock server-context ALS — hoisted so the factory always sees the live object
-// ---------------------------------------------------------------------------
+// Mock server-context ALS；hoist 后工厂始终拿到同一个活对象。
 const { mockServerContext, mockCacheProvider, mockNewsletterProviderRegistry } = vi.hoisted(() => {
   const mockNewsletterProviderRegistry: Record<string, (() => object) | undefined> = {}
   const mockCacheProvider = {
@@ -32,9 +30,7 @@ vi.mock('@/lib/server-context', () => ({
   },
 }))
 
-// ---------------------------------------------------------------------------
-// Mock cache
-// ---------------------------------------------------------------------------
+// Mock cache。
 vi.mock('@/cache', () => ({
   createCacheKey: (prefix: string, ...parts: string[]) => `${prefix}:${parts.join(':')}`,
   deleteCache: vi.fn().mockResolvedValue(undefined),
@@ -50,9 +46,7 @@ vi.mock('@/cache', () => ({
   },
 }))
 
-// ---------------------------------------------------------------------------
-// Mock resend SDK
-// ---------------------------------------------------------------------------
+// Mock resend SDK。
 const mockContactsCreate = vi.fn()
 const mockContactsUpdate = vi.fn()
 const mockContactsGet = vi.fn()
@@ -67,9 +61,7 @@ vi.mock('resend', () => ({
   },
 }))
 
-// ---------------------------------------------------------------------------
-// Module under test — import after mocks
-// ---------------------------------------------------------------------------
+// 被测模块，必须在 mock 之后导入。
 import { parseServerEnv } from '@/env/server'
 import {
   BeehiivNewsletterProvider,
@@ -82,9 +74,7 @@ import {
 } from '@/newsletter'
 import { Route as NewsletterRoute } from '@/routes/api/newsletter/$'
 
-// ---------------------------------------------------------------------------
-// ResendNewsletterProvider
-// ---------------------------------------------------------------------------
+// ResendNewsletterProvider。
 describe('ResendNewsletterProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -173,9 +163,7 @@ describe('ResendNewsletterProvider', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// BeehiivNewsletterProvider
-// ---------------------------------------------------------------------------
+// BeehiivNewsletterProvider。
 describe('BeehiivNewsletterProvider', () => {
   it('getProviderName returns beehiiv', () => {
     const provider = new BeehiivNewsletterProvider('key', 'pub-1')
@@ -219,9 +207,7 @@ describe('BeehiivNewsletterProvider', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// buildNewsletterProviderRegistry
-// ---------------------------------------------------------------------------
+// buildNewsletterProviderRegistry。
 describe('buildNewsletterProviderRegistry', () => {
   it('returns undefined for resend when env is missing', () => {
     const registry = buildNewsletterProviderRegistry(parseServerEnv({}))
@@ -271,7 +257,7 @@ describe('buildNewsletterProviderRegistry', () => {
     const factory = registry.beehiiv
     if (!factory) return
 
-    // Mock fetch to inspect the subscribe call
+    // 用 fetch 替身检查 subscribe 请求体。
     const mockFetch = vi.fn().mockResolvedValue({ ok: true })
     vi.stubGlobal('fetch', mockFetch)
 
@@ -310,9 +296,7 @@ describe('buildNewsletterProviderRegistry', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// subscribe / unsubscribe / checkStatus via ALS
-// ---------------------------------------------------------------------------
+// subscribe / unsubscribe / checkStatus（经 ALS）。
 describe('subscribe / unsubscribe / checkStatus', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -377,9 +361,7 @@ describe('subscribe / unsubscribe / checkStatus', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// checkRateLimit
-// ---------------------------------------------------------------------------
+// checkRateLimit。
 describe('checkRateLimit', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -404,26 +386,26 @@ describe('checkRateLimit', () => {
   })
 
   it('allows up to 5 requests, blocks 6th', async () => {
-    // Simulate persistent KV: set updates the value that get returns
+    // 模拟持久化 KV：set 写入 get 读取的值。
     let storedTimestamps: number[] = []
     mockCacheProvider.get.mockImplementation(async () => storedTimestamps)
     mockCacheProvider.set.mockImplementation(async (_key: string, val: unknown) => {
       storedTimestamps = val as number[]
     })
 
-    // 1st-5th requests should be allowed
+    // 前 5 次放行。
     for (let i = 1; i <= 5; i++) {
       const allowed = await checkRateLimit('1.2.3.4', 'subscribe')
       expect(allowed).toBe(true)
     }
 
-    // 6th request should be blocked
+    // 第 6 次拒绝。
     const allowed = await checkRateLimit('1.2.3.4', 'subscribe')
     expect(allowed).toBe(false)
   })
 
   it('resets after window expires', async () => {
-    // Simulate KV with timestamps that are all >60s old — filtered out
+    // 时间戳全部超过 60s，会被过滤掉。
     let storedTimestamps: number[] = Array.from(
       { length: 5 },
       (_, i) => Date.now() - 70000 - i * 1000,
@@ -433,25 +415,24 @@ describe('checkRateLimit', () => {
       storedTimestamps = val as number[]
     })
 
-    // Should be allowed because old timestamps are filtered out
     const result = await checkRateLimit('1.2.3.4', 'subscribe')
     expect(result).toBe(true)
-    // New timestamp should be stored
+    // 新时间戳已写入。
     const setCall = mockCacheProvider.set.mock.calls[0] as unknown as [string, number[], number]
     expect(setCall[1].length).toBe(1)
   })
 
   it('denies when cache provider is unavailable (fail closed)', async () => {
-    // Fail closed: when cacheProvider is null, deny the request
+    // 缓存不可用时 fail closed。
     const prev = mockServerContext.cacheProvider
     mockServerContext.cacheProvider = null
     const result = await checkRateLimit('1.2.3.4', 'subscribe')
     expect(result).toBe(false)
-    mockServerContext.cacheProvider = prev // restore for other tests
+    mockServerContext.cacheProvider = prev
   })
 
   it('applies stricter limit (1/min) for unknown IP', async () => {
-    // Unknown IP gets 1 request allowed; 2nd is blocked
+    // 未知 IP 只放行 1 次。
     let storedTimestamps: number[] = []
     mockCacheProvider.get.mockImplementation(async () => storedTimestamps)
     mockCacheProvider.set.mockImplementation(async (_key: string, val: unknown) => {
@@ -466,7 +447,6 @@ describe('checkRateLimit', () => {
   })
 
   it('allows 5 requests for known IP in sequence', async () => {
-    // Verify 5 sequential calls for a known IP all pass
     let storedTimestamps: number[] = []
     mockCacheProvider.get.mockImplementation(async () => storedTimestamps)
     mockCacheProvider.set.mockImplementation(async (_key: string, val: unknown) => {
@@ -482,9 +462,7 @@ describe('checkRateLimit', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// POST /api/newsletter 配置门禁（newsletter 默认关闭）
-// ---------------------------------------------------------------------------
+// POST /api/newsletter 配置门禁（默认关闭）。
 describe('POST /api/newsletter 门禁', () => {
   function getHandler(): (ctx: { request: Request }) => Promise<Response> {
     const handlers = (
@@ -509,7 +487,7 @@ describe('POST /api/newsletter 门禁', () => {
     expect(response.status).toBe(404)
     expect(await response.json()).toEqual({ error: 'MODULE_DISABLED' })
     expect(read).not.toHaveBeenCalled()
-    // newsletter 模块自身的 rate-limit 也必须在门禁之后。
+    // 模块自身的 rate-limit 也必须在门禁之后。
     const setCalls = mockCacheProvider.set.mock.calls.length
     expect(setCalls).toBe(0)
   })

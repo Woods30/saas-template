@@ -5,23 +5,11 @@ import { m } from '@/locale/paraglide/messages.js'
 /**
  * 定价方案。
  *
- * `prices` 是**展示**数据：页面上的金额与周期说明。真正用于结账的是
- * `VITE_STRIPE_PRICE_*` 派生的 `priceMap`（`src/config/payment.ts`）——两者是
- * 故意分开的，展示价写死在这里，实际扣款价由 Stripe 决定，不会因为改了文案就
- * 收错钱。
+ * `prices` 只是**展示**数据，实际扣款价由 `priceMap`（`VITE_STRIPE_PRICE_*` 派生）决定，
+ * 两者故意分开，改文案不会收错钱；因此这里的金额与 Stripe 后台的 Price 需人工保持一致。
  *
- * 因此这里的金额与 Stripe 后台的 Price 必须由人保持一致：`pro_monthly` 的 `year`
- * 项只是让页面出现「按年付」选项，选中后提交的是 `VITE_STRIPE_PRICE_PRO_YEARLY`
- * 指向的那个 Price。
- *
- * 一个 plan 有多个周期时，定价页顶部出现月付 / 年付切换器，默认落在第一个周期上。
- *
- * ## 为什么是工厂函数而不是常量
- *
- * 文案含 `m.*()` 调用，而 `m` 读的是**运行时** locale。写成模块级常量时，整个
- * 数组只在 import 那一刻求值一次，之后切换语言不会跟着变——SSR 下还会把首次
- * 请求的语言固化给所有后续请求。改成函数后每次渲染重新求值，与 `homeBlocks`
- * 的 getter 是同一个理由。
+ * 用工厂函数而非常量：`m.*()` 读运行时 locale，模块级常量会把首次请求的语言固化给
+ * 所有后续请求（SSR 下表现为整页语言不对 + hydration mismatch）。
  */
 export function getPricingPlans(): PricingPlan[] {
   return [
@@ -60,11 +48,8 @@ export function getPricingPlans(): PricingPlan[] {
 }
 
 /**
- * 页面级文案块。
- *
- * 与 `homeBlocks` 同理用 getter：`m.*()` 读运行时 locale，写成普通字段会在 import
- * 那一刻把首次请求的语言固化给所有后续请求——SSR 下表现为偶尔整个页面语言不对，
- * 客户端还会报 hydration mismatch。
+ * 页面级文案块。与 `homeBlocks` 同理必须用 getter：写成普通字段会把首次请求的语言
+ * 固化给所有后续请求（SSR 下整页语言不对 + hydration mismatch）。
  */
 export const pricingBlocks = {
   get Hero() {

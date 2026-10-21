@@ -10,38 +10,11 @@ import { getPaymentProvider } from '@/payment'
 import type { SubscriptionStatus } from '@/payment/types'
 
 /**
- * Stripe webhook 路由 — 幂等 + 重投保护。
+ * Stripe webhook：幂等（`webhook_events`）+ 失败重投。
  *
- * 幂等表 `webhook_events` 在 Task 2 schema 已声明：
- * - `id`: Stripe event id（`evt_xxx`），主键
- * - `type`: 事件类型
- * - `payload`: 原始 JSON（用于排障）
- * - `processedAt`: 处理完成时间（NULL = 在处理中）
- *
- * 流程：
- * 1. 验签失败 → 400（不写库）
- * 2. INSERT OR IGNORE event id；已存在 → 直接 200
- * 3. 业务 switch；任意抛错 → 500（让 Stripe 重投）
- * 4. 成功后 UPDATE `processedAt = now()`
- *
- * ## Stripe API 版本（重要）
- *
- * `stripe@23` 对应 API `2025-09-30.clover`，与旧版本相比有两处**破坏性字段迁移**，
- * 本文件的 handler 已按新结构读取：
- *
- * - `Invoice.subscription` → `Invoice.parent.subscription_details.subscription`
- * - `Invoice.charge` → `Invoice.payments.data[].payment.charge`（或 `payment_intent`）
- * - `Subscription.current_period_start` / `current_period_end` →
- *   `Subscription.items.data[].current_period_*`（周期属于订阅项，不再挂在订阅上）
- *
- * 按旧字段读取不会抛错——字段是 `undefined`，于是 `payments.type` 恒为 `'invoice'`、
- * `stripeChargeId` 恒为 `null`、周期写成 `Invalid Date`。这正是「配置完整、功能静默
- * 错误」的典型：webhook 返回 200，数据库里却是错数据。
+ * 必须按 API `2025-09-30.clover` 的字段读取：旧字段不报错，只会是 `undefined`，
+ * 导致金额、charge id、周期静默写错，而 webhook 仍返回 200。
  */
-
-// ------------------------------------------------------------------------------------------------
-// 类型辅助 —— 只声明实际读取的字段，避免把整个 Stripe 类型搬进业务层
-// ------------------------------------------------------------------------------------------------
 
 /** `invoice.paid` 事件中实际用到的字段（API 2025-09-30.clover 结构）。 */
 interface InvoicePaidObject {
@@ -65,10 +38,7 @@ interface InvoicePaidObject {
       }
     }>
   } | null
-  /**
-   * 发票行项。`invoice.paid` 通知里的套餐与金额取自第一行：本模板的定价模型是
-   * 订阅单价格，首行即用户购买的那一项（后续行会是税、积分等）。
-   */
+  /** 发票行项。套餐与金额只取首行：本模板是单价格订阅，后续行是税、积分等。 */
   lines?: {
     data?: Array<{
       /** 行项金额（分）。含税与折扣，比 `price.unit_amount` 更接近实付。 */
@@ -122,12 +92,10 @@ function toDate(seconds: number | null | undefined): Date | undefined {
 }
 
 /**
- * 从 Invoice 中取 charge id。
+ * 从 Invoice 中取 charge id，取不到时退回 payment_intent id。
  *
- * 新 API 把支付记录放在 `invoice.payments.data[]`，`payment.charge` 只在**没有**
- * PaymentIntent 时才直接给出 charge（有 PI 时给的是 `payment_intent`）。这里优先
- * 取 charge，取不到时退回 payment_intent id——`charge.refunded` 分支按 `chargeId`
- * 回写，用 PI id 做键对不上，但至少比写入 `null` 可排障（有值说明「这是 PI 支付」）。
+ * 新 API 里 `payment.charge` 只在没有 PaymentIntent 时才直接给出。退回 PI id 无法
+ * 匹配 `charge.refunded`，但至少说明「这是 PI 支付」，比写 `null` 可排障。
  */
 function chargeIdFromInvoice(invoice: InvoicePaidObject): string | null {
   const entries = invoice.payments?.data ?? []
@@ -147,12 +115,7 @@ function subscriptionIdFromInvoice(invoice: InvoicePaidObject): string | null {
   return idOf(invoice.parent?.subscription_details?.subscription)
 }
 
-/**
- * 从 Invoice 首行取 Price id。
- *
- * 新 API 把 price 收进 `pricing.price_details.price`，可能是字符串 id 或展开对象。
- * 取不到时返回 `undefined`——通知里「不知道套餐」远好过猜一个。
- */
+/** 从 Invoice 首行取 Price id；取不到返回 `undefined`，不猜。 */
 function priceIdFromInvoice(invoice: InvoicePaidObject): string | undefined {
   const price = invoice.lines?.data?.[0]?.pricing?.price_details?.price
   if (typeof price === 'string') return price
@@ -162,9 +125,8 @@ function priceIdFromInvoice(invoice: InvoicePaidObject): string | undefined {
 /**
  * Price id → 展示用套餐名。
  *
- * 反向查 `priceMap`（同一份「定价页 plan ↔ Stripe Price」映射），因此新增 plan 或
- * 改 Price ID 时不需要改这里。查不到时返回 `undefined`：Price 可能是手工在 Stripe
- * 后台创建的，调用方退回显示 Price id，不假装认识它。
+ * 反向查 `priceMap`，新增 plan 时无需改这里。查不到返回 `undefined`：Price 可能是
+ * 后台手工创建的，调用方退回显示 Price id。
  */
 function planNameForPrice(priceId: string | undefined): string | undefined {
   if (!priceId) return undefined
@@ -173,22 +135,11 @@ function planNameForPrice(priceId: string | undefined): string | undefined {
   return getPricingPlans().find((plan) => plan.id === planId)?.name
 }
 
-// ------------------------------------------------------------------------------------------------
-// 业务 handler
-// ------------------------------------------------------------------------------------------------
-
 /**
  * Handles `checkout.session.completed`.
  *
- * - 订阅模式：写入 `subscriptions` 行。userId 与 customerId 的关联在这里落地，
- *   priceId 与周期由随后的 `customer.subscription.created` 补齐。
- * - 一次性支付（`mode: 'payment'`，如终身版）：**没有** subscription id。
- *   旧实现直接跳过，导致 `payments.userId` 永远为 null、无法判断谁买了终身版。
- *   这里改为写一条 `payments` 行，userId 取自 checkout 的 metadata。
- *
- * `priceId` 一并写进 subscription 行（而不是等 `subscription.created`）：
- * `checkout.session.completed` 与 `invoice.paid` 到达的顺序不保证，若通知在
- * `subscription.created` 之前触发，Price 还没入库就查不到套餐名。
+ * 一次性支付没有 subscription id，必须单独写 `payments` 行，否则无法判断谁买断。
+ * userId 取自 checkout metadata；用户已注销时跳过，不写孤儿行。
  */
 export async function handleCheckoutCompleted(
   db: ReturnType<typeof createDb>,
@@ -209,7 +160,6 @@ export async function handleCheckoutCompleted(
     console.warn('[stripe-webhook] checkout.session.completed: missing userId in metadata')
     return
   }
-  // 先确认用户仍在库中：用户注销后到达的迟到事件不应写入孤儿行。
   const userExists = await db
     .select({ id: schema.users.id })
     .from(schema.users)
@@ -255,12 +205,8 @@ export async function handleCheckoutCompleted(
 /**
  * Handles `invoice.paid`.
  *
- * userId 的查找顺序：
- * 1. 按 invoice 的订阅 id 反查 `subscriptions`（最准，订阅行一定存在）；
- * 2. 退回按 customerId 反查（订阅行尚未写入时的兜底）。
- *
- * 旧实现只走 2，且读的是新 API 已移除的 `inv.charge`，于是 `chargeId` 恒为 null、
- * `charge.refunded` 永远匹配不到任何行。
+ * userId 先按订阅 id 反查，再退回 customerId（订阅行尚未写入时的兜底）。
+ * 不读已移除的 `inv.charge`，否则 `chargeId` 恒为 null，退款永远匹配不到行。
  */
 export async function handleInvoicePaid(
   db: ReturnType<typeof createDb>,
@@ -311,15 +257,9 @@ export async function handleInvoicePaid(
 /**
  * Handles `customer.subscription.created` / `updated`.
  *
- * 周期字段在 `items.data[]` 上（新 API），取**第一项**作为订阅的主周期：本模板的
- * 定价模型是单价格订阅，多项订阅（按量 + 席位）不在支持范围内。
- *
- * 金额与周期一并落库（`amount` / `currency` / `interval`）：这三个列在 schema 里
- * 早就声明了，早期实现从不写入，于是账单页的金额列永远显示 `—`、续费周期无从判断。
- * 数据就来自订阅项自己的 price 对象，不需要额外请求 Stripe。
- *
- * 只在**有值**时才写这三个列：订阅可能处于 `incomplete`（还没定价细节）等中间态，
- * 用 `undefined` 覆盖已有值会把上一次的正确答案擦掉。
+ * 周期字段挂在 `items.data[]` 上，只取第一项：本模板不支持多项订阅。
+ * 只在有值时才写 amount / currency / interval，否则中间态会用 `undefined`
+ * 擦掉上一次的正确值。
  */
 export async function handleSubscriptionUpsert(
   db: ReturnType<typeof createDb>,
@@ -329,15 +269,13 @@ export async function handleSubscriptionUpsert(
   const periodStart = toDate(item?.current_period_start)
   const periodEnd = toDate(item?.current_period_end)
 
-  // `unit_amount: null` 表示按量计费等非固定价，写 `null` 与「不知道」同义，
-  // 因此这里只接受有限数字。
+  // `unit_amount: null` 表示按量计费，与「不知道」同义，只接受有限数字。
   const amount =
     typeof item?.price.unit_amount === 'number' && Number.isFinite(item.price.unit_amount)
       ? item.price.unit_amount
       : undefined
   const currency = item?.price.currency?.trim() ? item.price.currency.toLowerCase() : undefined
-  // 一次性 Price 没有 `recurring`：那是 `mode: 'payment'` 的形态，interval 保持
-  // 空值，账单页据此显示「终身」而不是「按月」。
+  // 一次性 Price 没有 `recurring`，interval 留空，账单页据此显示「终身」。
   const interval = item?.price.recurring?.interval?.trim() || undefined
 
   await db
@@ -356,21 +294,11 @@ export async function handleSubscriptionUpsert(
     .where(eq(schema.subscriptions.subscriptionId, sub.id))
 }
 
-// ------------------------------------------------------------------------------------------------
-// 通知
-// ------------------------------------------------------------------------------------------------
-
 /**
  * 支付成功后的运营通知。
  *
- * tanstarter 把「支付成功」作为通知模块的主要触发点；本模板此前只在联系表单里
- * 调用 `notify()`，支付事件完全没有通知，运营侧要等到查数据库才知道有人付款。
- *
- * 套餐名是这条通知的核心信息：只写「用户 xxx 付款 5.99 USD」时，运营无法区分
- * 这是月付订阅、年付订阅还是一次性买断，对账和客诉都要再查一次数据库。
- *
- * 通知**不阻塞** webhook：`notify()` 自身吞掉所有异常并返回 `false`，这里也不
- * await 失败——webhook 的返回值只决定 Stripe 是否重投，与通知成败无关。
+ * 套餐名是核心信息，否则运营无法区分月付、年付与买断。
+ * 通知失败不影响 webhook 结果：`notify()` 自身吞掉异常，不阻塞重投判断。
  */
 async function notifyPaymentSucceeded(params: {
   userId: string
@@ -385,8 +313,7 @@ async function notifyPaymentSucceeded(params: {
   const title = params.kind === 'subscription' ? '新订阅付款成功' : '新一次性付款成功'
   await notify(websiteConfig.notification.provider, {
     title,
-    // 套餐名缺失（Price 不在映射里）时退回「未知套餐」而不是省略整段——
-    // 「用户 xxx 完成订阅付款：5.99 USD」与原本的形式等价，信息量不减。
+    // 套餐名缺失时退回「未知套餐」，而不是省略整段。
     message: `用户 ${params.userId} 订阅${params.plan ?? '未知套餐'}：${amount}`,
     meta: {
       userId: params.userId,
@@ -396,10 +323,6 @@ async function notifyPaymentSucceeded(params: {
     },
   })
 }
-
-// ------------------------------------------------------------------------------------------------
-// Route
-// ------------------------------------------------------------------------------------------------
 
 export const Route = createFileRoute('/api/webhooks/stripe')({
   server: {
@@ -427,7 +350,6 @@ export const Route = createFileRoute('/api/webhooks/stripe')({
         const typedEvent = event as { id: string; type: string; data: { object: unknown } }
         const db = createDb(env.DB)
 
-        // 幂等：先尝试插入
         const inserted = await db
           .insert(schema.webhookEvents)
           .values({
@@ -461,8 +383,7 @@ export const Route = createFileRoute('/api/webhooks/stripe')({
                   .where(eq(schema.subscriptions.subscriptionId, subscriptionId))
                   .limit(1)
                 if (rows[0]) {
-                  // 套餐名从发票首行的 Price 反查；映射里没有时退回 Price id，
-                  // 至少能看出这是哪一笔，而不是一个空字段。
+                  // 套餐名从发票首行反查；映射里没有时退回 Price id。
                   const priceId = priceIdFromInvoice(inv)
                   await notifyPaymentSucceeded({
                     userId: rows[0].userId,
@@ -506,7 +427,7 @@ export const Route = createFileRoute('/api/webhooks/stripe')({
 
           return new Response('ok', { status: 200 })
         } catch (err) {
-          // 业务失败：删除已插入的事件行，让 Stripe 重投
+          // 删除事件行，让 Stripe 重投。
           await db.delete(schema.webhookEvents).where(eq(schema.webhookEvents.id, typedEvent.id))
           console.error(
             `[stripe-webhook] handler error: ${err instanceof Error ? err.message.split('\n')[0] : 'unknown'}`,

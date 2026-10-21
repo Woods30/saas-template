@@ -5,13 +5,10 @@ import type { PaymentRecord, SubscriptionRecord } from './billing-query'
 /**
  * 账单页数据的 server function。
  *
- * 与 `fetchAdminUsers` 同一套考量：订阅与流水在 D1 里，客户端没有也不应该有直接
- * 读 `DB` binding 的通道，只能经 server function；而 server function 是可被直接
- * 调用的 HTTP 端点，因此**必须自己校验会话**，不能依赖路由的 `beforeLoad`
- * （那是页面的守卫，不管 RPC）。
+ * server function 是可被直接调用的 HTTP 端点，**必须自己校验会话**，不能依赖路由的
+ * `beforeLoad`（那是页面守卫，不管 RPC）。
  *
- * 只按**当前用户**取数，不接受调用方传入 userId——否则把任意用户的订阅状态暴露给
- * 任何登录用户（越权读）。取消订阅走 `/api/payment` 的 DELETE，本函数只读。
+ * 只按**当前用户**取数，不接受调用方传入 userId，否则任何登录用户都能越权读取。
  */
 
 export type { PaymentRecord, SubscriptionRecord } from './billing-query'
@@ -43,11 +40,7 @@ export const fetchBillingOverview = createServerFn({ method: 'GET' })
     const db = createDb(env.DB)
     const userId = session.user.id
 
-    // 订阅按创建时间倒序取最近几条；流水按创建时间倒序。两者在同一轮
-    // `Promise.all` 里并行，账单页首屏一次拿全。
-    //
-    // `eq` 在 handler 内引入：schema 是动态 import 的（与 `admin-users.ts` 同一
-    // 手法，避免把 DB 拉进客户端 bundle），`eq` 本身零依赖，同步取即可。
+    // schema 用动态 import，避免把 DB 拉进客户端 bundle；`eq` 零依赖，同处引入即可。
     const { eq } = await import('drizzle-orm')
     const [subscriptions, payments] = await Promise.all([
       db

@@ -6,16 +6,8 @@ import { setLocale } from '@/locale/paraglide/runtime.js'
 import { getRouter } from '@/router'
 
 /**
- * 博客详情页 JSON-LD 的回归测试（渲染真实路由组件）。
- *
- * 缺陷背景：`BlogPost` 组件里 `articleJsonLd({ path: `/blog/${post._meta.path}` })`
- * 仍用旧前缀 `/blog`，输出的 JSON-LD `Article.url` 指向 404（真实路由前缀是
- * `/marketing/blog`）。`head()` 里的 canonical 已修正，但组件里这一行是独立的
- * 字面量，纯函数单测覆盖不到，必须渲染组件读取页面里的
- * `script[type="application/ld+json"]`。
- *
- * 用真实 Router + memory history 渲染整页（与 `tests/components/navigation.test.tsx`
- * 同一模式），根文档另会输出 Organization 的 JSON-LD，因此按 `@type` 过滤出 Article。
+ * 博客详情页 JSON-LD 回归：组件里的 `Article.url` 曾用旧前缀 `/blog` 指向 404。
+ * 该字面量纯函数测不到，必须渲染整页再按 `@type` 从 JSON-LD 中过滤出 Article。
  */
 
 beforeEach(() => setLocale('en', { reload: false }))
@@ -56,7 +48,7 @@ describe('博客详情页 JSON-LD', () => {
 
     const article = jsonLdObjects(container).find((data) => data['@type'] === 'Article')
     const url = new URL(String(article?.url))
-    // 旧缺陷产出 pathname `/blog/hello-world`；修复后必须是 `/marketing/blog/hello-world`。
+    // 旧缺陷产出 `/blog/hello-world`，修复后应为 `/marketing/blog/hello-world`。
     expect(url.pathname).toBe('/marketing/blog/hello-world')
   })
 })

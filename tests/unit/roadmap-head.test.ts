@@ -3,15 +3,8 @@ import { overwriteServerAsyncLocalStorage } from '@/locale/paraglide/runtime.js'
 import { Route as RoadmapRoute } from '@/routes/{-$locale}/_layout/marketing/roadmap'
 
 /**
- * roadmap 页 `head()` 的 canonical 回归。
- *
- * 这条测试守的是一类**已经在仓库里发生过的 bug**：`marketing/about.tsx` 与
- * `features.tsx` 曾调用 `seo('/about')` / `seo('/features')`，而它们的真实路由是
- * `/marketing/about` / `/marketing/features`。`seo()` 把同一个 path 同时用于 canonical
- * 与 hreflang，于是两者都指向了不存在的地址，搜索引擎据此建索引、用户据此分享，
- * 而页面本身看起来完全正常。
- *
- * 新增 marketing 页时照此写一条：把真实路由路径钉死在断言里。
+ * roadmap 页 `head()` 的 canonical 回归：`seo()` 的 path 曾漏 `marketing` 前缀，
+ * canonical 与 hreflang 都指向不存在的地址而页面看起来正常。
  */
 
 interface HeadLink {

@@ -17,8 +17,7 @@ export const Route = createFileRoute('/{-$locale}/auth/forgot-password')({
 })
 
 function ForgotPasswordPage() {
-  // `done` 表达「已离开表单，进入结果页」，`serverError` 是页面级提示——两者都不是字段状态，
-  // 留在组件里（见 `login.tsx` 对 TanStack Form 1.33 错误入口的说明）。
+  // 页面级状态，不属于字段状态，故不放进 TanStack Form。
   const [done, setDone] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
 
@@ -27,8 +26,7 @@ function ForgotPasswordPage() {
     validators: { onSubmit: createForgotSchema(authFormMessages()) },
     onSubmit: async ({ value }) => {
       setServerError(null)
-      // 无论邮箱是否存在都返回成功，避免账号枚举；因此这里不看 `error`。
-      // `redirectTo` 带上当前语言前缀，重置链接才能回到同一语言的页面。
+      // 无论邮箱是否存在都返回成功，避免账号枚举；`redirectTo` 须带语言前缀。
       await authClient.requestPasswordReset({
         email: value.email,
         redirectTo: `/${getRequestLocale()}/auth/reset-password`,

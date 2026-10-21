@@ -9,10 +9,7 @@ import { Stats } from './Stats'
 import { Testimonials } from './Testimonials'
 
 /**
- * 通用区块注册表。
- *
- * **恰好 8 个键，不含 `Pricing`**：定价区块要接 `renderCta` 与周期切换，由定价页
- * 按具名组件单独引入，不属于「换个页面也能直接摆上去」的通用区块。
+ * 通用区块注册表，恰好 8 个键、不含 `Pricing`（定价需接 `renderCta` 与周期切换）。
  * `tests/unit/blocks.test.ts` 钉死了这一点。
  */
 export const blocks = {

@@ -97,10 +97,8 @@ function LeapJourney({ paused }: { paused: boolean }) {
           <circle cx="369" cy="112" r="5" />
         </svg>
         <span className="leap-horizon" aria-hidden="true" />
-        {/* 深色主题单独一份 mascot：浅色版是在白底上抠的，边缘残留一圈近白
-            抗锯齿像素（实测 79% 的边缘像素接近纯白），深色下看起来像描了一圈
-            发光的边。深色版边缘是干净的，只有 0.2% 近白。
-            两份同画幅（1032×714）同构图，切换时不跳变。 */}
+        {/* 深色主题单独一份 mascot：浅色版在白底上抠图，深色下边缘会残留一圈近白
+            抗锯齿像素。两份同画幅同构图，切换时不跳变。 */}
         <img
           src="/mascot.png"
           alt={m.home_mascot_alt()}
@@ -386,14 +384,8 @@ function Workflow() {
 }
 
 /**
- * 首页定价模块。
- *
- * 只在 `payment.enabled` 时渲染：模块关闭时首页不该出现付不了钱的方案卡片。
- * 完整能力（周期切换、结账）在独立定价页，这里只做概览与导流——链接也指向
- * `/pricing`，那条路由自带同一道门禁，关闭时为 404 而不是死链。
- *
- * CTA 直接是「查看完整方案」而不是「立即购买」：首页不承担结账，进入定价页再选
- * 周期与付款，路径少一层歧义。
+ * 首页定价概览，仅在 `payment.enabled` 时渲染。周期切换与结账在独立定价页，
+ * CTA 只做导流，不在这里承担付款。
  */
 function HomePricing() {
   if (!websiteConfig.payment.enabled) return null
@@ -621,7 +613,6 @@ function CapabilityFeatures() {
   )
 }
 
-/** 首页锚点兼容旧导航，消息始终在 render 时读取。 */
 export function LandingPage() {
   const [paused, setPaused] = useState(false)
   const [pageVisible, setPageVisible] = useState(true)

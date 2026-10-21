@@ -12,8 +12,7 @@ jobs:
     outputs:
       core: ${{ steps.core.outputs.core }}
     steps:
-      # fetch-depth: 0 必须：浅克隆下 origin/<base_ref> 无法解析，
-      # check-core-changed 会以退出码 2（无法判定）失败。
+      # fetch-depth: 0 必须：浅克隆下 origin/<base_ref> 无法解析，核心区判定会失败。
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
@@ -21,12 +20,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      # 复用 scripts/core-paths.ts：命中核心区 → core=true。
-      #
-      # check-core-changed 是三态退出码：0=命中核心区，1=确属非核心，2=**无法判定**
-      # （base ref 无效 / 无 merge base 致 diff 失败）。必须三路分支：若写成
-      # `if ...; then true; else false; fi`，退出码 2 会落进 else → core=false →
-      # e2e 被静默跳过（fail-open）。故 2 必须显式失败，绝不折算成 core=false。
+      # check-core-changed 是三态退出码：0=核心区，1=非核心，2=无法判定。
+      # 2 必须显式失败——写成 if/else 会让它落进 else → core=false → e2e 被静默跳过。
       - id: core
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -87,9 +82,7 @@ jobs:
     if: needs.changes.outputs.core == 'true' || github.event_name == 'push'
     env:
       E2E_BASE_URL: http://localhost:3000
-      # 本 job 自己启动并等待 dev server（见下方 Start / Wait 步骤）。若不设此变量，
-      # playwright.config.ts 的 webServer 会再起一个，CI 下 `reuseExistingServer` 为
-      # false，于是直接报「port 3000 already used」——两个 server 抢同一端口。
+      # 本 job 自己起 dev server；不设此变量 Playwright 会再起一个，两个 server 抢端口。
       E2E_NO_SERVER: 1
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -98,24 +91,19 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      # 复用 build job 的产物，避免 e2e job 内重复 content:build + build。
+      # 复用 build job 的产物，避免重复构建。
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: build
           path: dist/
       # 必须有 `.env`：wrangler.jsonc 的 vars 把 NODE_ENV 定为 production，缺 `.env`
-      # 时 better-auth 判定为生产环境并拒绝使用默认 secret，凡是走会话的用例（auth /
-      # settings）全部 500。`.env.example` 里 NODE_ENV=development 会在 dev 下覆盖
-      # 该 binding，且 optional 字段留空即可通过 `pnpm check:env`，故直接照抄。
+      # 时 better-auth 会拒绝默认 secret，所有走会话的用例全部 500。
       - name: Create .env
         run: cp .env.example .env
-      # CI 的 D1 是全新空库（runner 每次都是干净文件系统，且本 workflow 此前从未执行过
-      # 迁移）。不建表的话每个走会话的用例都 500——`sign-up` 打 `users` 表直接
-      # `D1_ERROR: no such table: users`，注册不跳转，auth / settings 套件整片超时。
-      # 历史上这些用例能过只是因为空库恰好在部分 runner 上带缓存，属于隐性依赖。
+      # CI 的 D1 是全新空库，不建表则 `sign-up` 报 no such table: users，走会话的
+      # 用例整片超时。
       - name: Apply D1 migrations
         run: pnpm run db:migrate:local
-      # 启动 dev server；playwright.config.ts 的 webServer.command 接管生命周期
       - name: Start server
         run: pnpm run dev --port 3000 &
         env:

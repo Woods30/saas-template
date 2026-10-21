@@ -10,14 +10,8 @@ import {
 } from '@/config/payment'
 
 /**
- * 定价方案 ↔ Stripe Price ID 的映射。
- *
- * 这一层是「定价页能点」与「点了能付款」之间的唯一桥。四类错误都会让用户付错钱
- * 或点了就 502，因此逐条守住：
- * - 空字符串不能当成有效 Price（`.env` 里留空的变量会被 Vite 注入为 `''`）；
- * - 周期与 Price 必须配对，不能把年付价当周付价；
- * - 没有 Price 的 plan 不得标记为可购买；
- * - 映射里的 plan id 必须在定价页存在。
+ * 定价方案 ↔ Stripe Price ID 映射：空串不算有效 Price（Vite 会把空变量注入为 `''`）、
+ * 周期必须与 Price 配对、无 Price 的 plan 不可购买、plan id 必须存在。
  */
 
 describe('buildPriceMap', () => {
@@ -72,7 +66,7 @@ describe('resolvePriceId', () => {
 
   it('未配置的周期返回 undefined，不跨周期回退', () => {
     const partial = buildPriceMap({ VITE_STRIPE_PRICE_PRO_MONTHLY: 'price_m' })
-    // 年付没配时不能回退到月付价：用户会按年付按钮买成月付。
+    // 年付没配时不能回退到月付价。
     expect(resolvePriceId(partial, 'pro_monthly', 'year')).toBeUndefined()
   })
 

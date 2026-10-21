@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// ---------------------------------------------------------------------------
-// Hoisted mock factories — must be at module top level so vi.mock hoisting
-// can reference them inside the factory functions.
-// ---------------------------------------------------------------------------
+// Hoisted mock factories：必须位于模块顶层，供 `vi.mock` 工厂引用。
 const mockMailProviderRegistry: Record<string, (() => object) | undefined> = {}
 const mockNotificationProviderRegistry: Record<string, (() => object) | undefined> = {}
 const mockSendTemplate = vi.fn()
@@ -33,14 +30,10 @@ vi.mock('@/notification', () => ({
 
 import { websiteConfig } from '@/config/website'
 import { deliverContactNotification } from '@/contact/notifications'
-// ---------------------------------------------------------------------------
-// Module under test — import after mocks
-// ---------------------------------------------------------------------------
+// 被测模块，必须在 mock 之后导入。
 import { type ContactInput, contactSchema } from '@/contact/schema'
 
-// ---------------------------------------------------------------------------
-// contactSchema
-// ---------------------------------------------------------------------------
+// contactSchema。
 describe('contactSchema', () => {
   it('accepts valid input', () => {
     const input = {
@@ -103,9 +96,7 @@ describe('contactSchema', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// deliverContactNotification
-// ---------------------------------------------------------------------------
+// deliverContactNotification。
 describe('deliverContactNotification', () => {
   const validInput: ContactInput = {
     name: '张三',
@@ -118,12 +109,7 @@ describe('deliverContactNotification', () => {
     vi.clearAllMocks()
   })
 
-  /**
-   * 以 `notification.enabled: false` 重新加载被测模块。
-   *
-   * 不能依赖出厂默认值：`website.ts` 的模块开关随部署场景调整（本仓本地联调期
-   * 会打开通知），依赖默认值的断言在开关变更后要么静默失效、要么无谓变红。
-   */
+  /** 以 `notification.enabled: false` 重新加载被测模块；不依赖随部署调整的出厂默认值。 */
   async function importWithNotificationDisabled() {
     vi.resetModules()
     vi.doMock('@/config/website', async () => {
@@ -149,7 +135,7 @@ describe('deliverContactNotification', () => {
 
     await deliverContactNotification(validInput)
 
-    // provider 取自 websiteConfig.mail.provider（默认 resend），不再固定 cloudflare。
+    // provider 取自 `websiteConfig.mail.provider` 配置，不固定写死。
     expect(mockSendTemplate).toHaveBeenCalledWith(
       websiteConfig.mail.provider,
       expect.objectContaining({
@@ -170,7 +156,7 @@ describe('deliverContactNotification', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockReturnValue(undefined)
     const { deliverContactNotification: deliver } = await importWithNotificationDisabled()
 
-    // 邮件失败、通知未启用 → 没有任何通道成功，调用方需要据此回 503。
+    // 两个通道都未成功时调用方回 503。
     await expect(deliver(validInput)).resolves.toEqual({ delivered: false })
 
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[contact]'))
@@ -178,7 +164,7 @@ describe('deliverContactNotification', () => {
   })
 
   it('sendMail 抛异常时被接住，不让 500 冒到路由层', async () => {
-    // provider 未注册 / 模板校验失败时 `sendMail` 直接 throw（只对 `{ok:false}` 重试）。
+    // provider 未注册或模板校验失败时 `sendMail` 直接 throw。
     mockSendTemplate.mockRejectedValue(new Error('provider not registered'))
     const warnSpy = vi.spyOn(console, 'warn').mockReturnValue(undefined)
     const { deliverContactNotification: deliver } = await importWithNotificationDisabled()
@@ -201,7 +187,7 @@ describe('deliverContactNotification', () => {
     mockSendTemplate.mockResolvedValue({ ok: true })
     mockNotify.mockResolvedValue(true)
 
-    // websiteConfig.notification.enabled = true — re-import with mocked config
+    // 以 `notification.enabled: true` 重新导入。
     vi.resetModules()
     vi.doMock('@/config/website', () => ({
       websiteConfig: {
@@ -251,7 +237,7 @@ describe('deliverContactNotification', () => {
 
     mockNotificationProviderRegistry.discord = () => ({ send: async () => false })
 
-    // websiteConfig.notification.enabled = true
+    // 以 `notification.enabled: true` 重新导入。
     vi.resetModules()
     vi.doMock('@/config/website', () => ({
       websiteConfig: {
@@ -283,7 +269,7 @@ describe('deliverContactNotification', () => {
       '@/contact/notifications'
     )
 
-    // 通知失败但邮件成功 → 仍算已送达；不抛错。
+    // 通知失败但邮件成功仍算已送达，不抛错。
     await expect(reimportedDeliverMixed(validInput)).resolves.toEqual({ delivered: true })
   })
 

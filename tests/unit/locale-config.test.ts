@@ -12,19 +12,14 @@ import {
 } from '@/config/locale'
 
 /**
- * 受支持语言的**单一事实来源**。
- *
- * 此前 `LOCALES` / `localeConfig` 在 `src/lib/locale.ts`、`project.inlang/settings.json`、
- * `content-collections.ts`、`src/lib/content-locale.ts`、sitemap 与各模块的
- * `locale: 'zh' | 'en'` 之间各自重复，新增一种语言要改六处且极易漏改。这些用例把
- * 「配置自洽」钉住：新增语言时若漏了元数据或默认值，这里会直接失败。
+ * 受支持语言的单一事实来源：新增语言时若漏了元数据或默认值，这里直接失败。
  */
 
 describe('LOCALE_OPTIONS', () => {
   it('每个受支持语言都有完整元数据', () => {
     for (const option of LOCALE_OPTIONS) {
       expect(option.code).toBeTruthy()
-      // 语言名、hreflang、og:locale 三者都是渲染或 SEO 的必需字段。
+      // 三者都是渲染或 SEO 的必需字段。
       expect(option.name).toBeTruthy()
       expect(option.englishName).toBeTruthy()
       expect(option.hreflang).toBeTruthy()
@@ -39,7 +34,7 @@ describe('LOCALE_OPTIONS', () => {
   })
 
   it('默认语言在受支持列表内', () => {
-    // 默认语言若不在列表里，`parseLocale` 的兜底会指向一个不存在的语言。
+    // 默认语言不在列表里时，`parseLocale` 的兜底会指向不存在的语言。
     expect(LOCALES).toContain(defaultLocale)
   })
 

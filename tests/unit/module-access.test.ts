@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// ---------------------------------------------------------------------------
 // Hoisted mocks — 只在边界 mock SDK / 认证 / provider，门禁逻辑走真实实现。
-// ---------------------------------------------------------------------------
 const mocks = vi.hoisted(() => ({
   checkRateLimit: vi.fn().mockResolvedValue(true),
   getAuth: vi.fn(),
@@ -44,7 +42,7 @@ vi.mock('@/mail', () => ({
 
 vi.mock('@/db', () => ({
   createDb: (...args: unknown[]) => mocks.createDb(...args),
-  // Webhook 路由会读取 `schema.webhookEvents.id` 作为幂等冲突目标。
+  // Webhook 路由读 `schema.webhookEvents.id` 作为幂等冲突目标。
   schema: { webhookEvents: { id: { name: 'webhook_events.id' } } },
 }))
 
@@ -53,9 +51,8 @@ vi.mock('@/lib/server-context', () => ({
   als: { getStore: () => mocks.getServerContext() },
 }))
 
-// auth 页面的 `beforeLoad` 会调用 `fetchAuthProviderAvailability`（一个 server function）。
-// server function 需要 TanStack Start 的请求上下文，测试环境没有，调用会抛无关错误并
-// 遮住真正要断言的门禁。这里把它替换为固定值，让门禁成为唯一被测对象。
+// auth 页面的 `beforeLoad` 会调 server function `fetchAuthProviderAvailability`，测试环境
+// 缺 TanStack Start 请求上下文会抛无关错误、遮住门禁断言，故替换为固定值。
 vi.mock('@/auth/providers', () => ({
   getAuthProviderAvailability: () => ({ google: false }),
   fetchAuthProviderAvailability: async () => ({ google: false }),
@@ -70,16 +67,13 @@ import { assertPageEnabled } from '@/lib/module-access'
 import { getModuleUnavailableResponse } from '@/lib/module-access.server'
 import { getSitemapPaths, renderSitemapXml } from '@/routes/sitemap[.]xml'
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
 const publicEnv: PublicEnv = parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' })
 const emptyEnv: ServerEnv = parseServerEnv({})
 
-/** 合法的 supportEmail 字面量（避免在断言中散落同一字符串）。 */
+/** 合法 supportEmail 字面量。 */
 const SUPPORT_EMAIL = ['support', 'jerbix.dev'].join('@')
 
-/** 完整默认配置（docs/blog/changelog 开，服务关），可按键覆盖开关。 */
+/** 完整默认配置（docs/blog/changelog 开，服务关）。 */
 function makeConfig(overrides: Partial<WebsiteConfig> = {}): WebsiteConfig {
   return { ...createWebsiteConfig(publicEnv), ...overrides }
 }
@@ -115,11 +109,8 @@ async function expectNotFoundAsync(fn: () => unknown): Promise<void> {
 
 /**
  * 取全部 auth 页面路由的 `beforeLoad`。
- *
- * 开关通过**直接改写 `websiteConfig.auth` 单例**切换（与 `navigation.test.tsx` 同一做法）：
- * `assertPageEnabled` 在**调用时**读 `config[module].enabled`，因此无需重载模块图。
- * 路由模块在 import 时就把 `websiteConfig` 绑定进闭包，用 `doMock` 替换模块导出对已
- * 导入的路由无效——这也是此前「关闭开关后页面照旧放行」的原因。
+ * 路由模块在 import 时把 `websiteConfig` 绑定进闭包，用 `doMock` 换导出对已导入的路由
+ * 无效；开关必须直接改写单例（`assertPageEnabled` 调用时才读 `enabled`）。
  */
 async function importAuthRoutes(): Promise<Array<() => unknown>> {
   const modules = await Promise.all([
@@ -136,9 +127,7 @@ async function importAuthRoutes(): Promise<Array<() => unknown>> {
   )
 }
 
-// ---------------------------------------------------------------------------
-// assertPageEnabled — 页面开关
-// ---------------------------------------------------------------------------
+// assertPageEnabled：页面开关。
 describe('assertPageEnabled', () => {
   it('docs / blog / changelog 关闭时抛 notFound', () => {
     expectNotFound(() => assertPageEnabled('docs', makeConfig({ docs: { enabled: false } })))
@@ -177,14 +166,12 @@ describe('assertPageEnabled', () => {
   })
 
   it('抛出的错误是 notFound 标记', () => {
-    // 直接确认标记来源，避免误判普通 Error。
+    // 确认标记来源，避免误判普通 Error。
     expect((notFound() as { isNotFound?: boolean }).isNotFound).toBe(true)
   })
 })
 
-// ---------------------------------------------------------------------------
-// getModuleUnavailableResponse — API 门禁
-// ---------------------------------------------------------------------------
+// getModuleUnavailableResponse：API 门禁。
 describe('getModuleUnavailableResponse', () => {
   it('模块关闭返回 404 MODULE_DISABLED', async () => {
     const res = getModuleUnavailableResponse('newsletter', {
@@ -252,9 +239,7 @@ describe('getModuleUnavailableResponse', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// getSitemapPaths — 纯路径工厂
-// ---------------------------------------------------------------------------
+// getSitemapPaths：纯路径工厂。
 describe('getSitemapPaths', () => {
   const base = 'https://jerbix.dev'
 
@@ -263,7 +248,6 @@ describe('getSitemapPaths', () => {
     expect(locs).toContain(`${base}/en`)
     expect(locs).toContain(`${base}/en/marketing/features`)
     expect(locs).toContain(`${base}/en/marketing/about`)
-    // roadmap / waitlist 没有模块开关，默认配置下必须出现在 sitemap 里。
     expect(locs).toContain(`${base}/en/marketing/roadmap`)
     expect(locs).toContain(`${base}/en/marketing/waitlist`)
     expect(locs).toContain(`${base}/en/marketing/legal/terms`)
@@ -274,8 +258,7 @@ describe('getSitemapPaths', () => {
   })
 
   it('关闭模块的 pricing / contact 不进 sitemap', () => {
-    // 显式关闭而不是依赖出厂默认值：`website.ts` 的模块开关随部署场景调整
-    // （本仓本地联调期会打开 payment），依赖默认值的断言会随开关变更静默失效。
+    // 显式关闭而非依赖默认值：模块开关随部署场景调整，依赖默认值会静默失效。
     const locs = getSitemapPaths(
       makeConfig({ payment: { ...makeConfig().payment, enabled: false } }),
       'en',
@@ -296,8 +279,7 @@ describe('getSitemapPaths', () => {
     })
     const locs = getSitemapPaths(config, 'en').map((p) => p.loc)
     expect(locs).toContain(`${base}/en/pricing`)
-    // 联系页已移入 marketing 布局，URL 必须带 `/marketing` 前缀——这是路由迁移的
-    // 回归守卫，写错会让 sitemap 指向一个不存在的路径。
+    // 联系页在 marketing 布局下，URL 必须带 `/marketing` 前缀，否则 sitemap 指向不存在的路径。
     expect(locs).toContain(`${base}/en/marketing/contact`)
   })
 
@@ -428,8 +410,7 @@ describe('getSitemapPaths', () => {
   })
 
   it('路由 GET handler 序列化真实配置的 XML（关闭模块不含 pricing）', async () => {
-    // 显式关闭 payment 后重新导入：本仓默认打开 payment，直接断言「不含 pricing」
-    // 会把部署开关当成被测行为。
+    // 显式关闭 payment 后重新导入：默认打开时断言「不含 pricing」测的是部署开关。
     const { Route } = (await importRouteWithConfig(
       { payment: { ...makeConfig().payment, enabled: false } },
       {},
@@ -450,9 +431,7 @@ describe('getSitemapPaths', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// renderSitemapXml — XML 转义
-// ---------------------------------------------------------------------------
+// renderSitemapXml：XML 转义。
 describe('renderSitemapXml', () => {
   it('转义 loc / href 中的 & < > 引号', () => {
     const xml = renderSitemapXml([
@@ -475,19 +454,16 @@ describe('renderSitemapXml', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// 页面路由接线 — beforeLoad 最前处门禁
-// ---------------------------------------------------------------------------
+// 页面路由接线：beforeLoad 最前处门禁。
 describe('页面路由门禁接线', () => {
   beforeEach(() => {
-    // 前面的用例可能用 `vi.doMock('@/config/website')` 覆盖过配置；模块级替身会
-    // 跨用例残留，导致这里改真实 `websiteConfig` 的开关对已替换的模块不生效。
+    // 前面的用例可能 doMock 过 `@/config/website`，残留的替身会让改真实单例不生效。
     vi.doUnmock('@/config/website')
     vi.resetModules()
   })
 
   it('pricing 与 contact 关闭时 beforeLoad 抛 notFound', async () => {
-    // 显式关闭：本仓为本地联调把 payment 默认打开，门禁本身仍需被验证。
+    // 显式关闭：默认打开 payment，但门禁本身仍需被验证。
     const { Route: pricing } = (await importRouteWithConfig(
       { payment: { ...makeConfig().payment, enabled: false } },
       {},
@@ -513,15 +489,13 @@ describe('页面路由门禁接线', () => {
   it('auth 页面默认开启时 beforeLoad 不抛 notFound', async () => {
     const modules = await importAuthRoutes()
     for (const beforeLoad of modules) {
-      // `beforeLoad` 可能是同步（`() => assertPageEnabled(...)`）也可能是异步
-      // （login / register 额外取社交登录可见性），统一 await 后断言不抛。
+      // `beforeLoad` 可能同步也可能异步（login / register 另取社交登录可见性），统一 await。
       await expect(Promise.resolve().then(beforeLoad)).resolves.not.toThrow()
     }
   })
 
   it('auth 关闭时每个 auth 页面 beforeLoad 都抛 notFound', async () => {
-    // 用 `importRouteWithConfig` 而不是改已导入的 `websiteConfig`：`vi.resetModules()`
-    // 之后路由持有的是新的模块实例，改旧实例上的字段不会生效。
+    // 必须重新导入：`vi.resetModules()` 后路由持有新模块实例，改旧实例字段不生效。
     for (const path of [
       '@/routes/{-$locale}/auth/login',
       '@/routes/{-$locale}/auth/register',
@@ -540,12 +514,10 @@ describe('页面路由门禁接线', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// API handler 门禁 — disabled 时在 body / auth / rate-limit / provider 之前返回
-// ---------------------------------------------------------------------------
+// API handler 门禁：disabled 时在 body / auth / rate-limit / provider 之前返回。
 type Handler = (ctx: { request: Request }) => Promise<Response>
 
-/** 从真实路由对象上取 server handler 并做一次边界窄化。 */
+/** 从真实路由对象上取 server handler。 */
 function getHandler(route: unknown, method: 'POST' | 'DELETE'): Handler {
   const handlers = (route as { options?: { server?: { handlers?: Record<string, unknown> } } })
     .options?.server?.handlers
@@ -554,10 +526,7 @@ function getHandler(route: unknown, method: 'POST' | 'DELETE'): Handler {
   return handler as Handler
 }
 
-/**
- * 用覆盖后的 websiteConfig / server env 重新导入路由，验证 enabled 分支（503 / 放行）。
- * 只在边界 mock，门禁与 handler 主体走真实实现。
- */
+/** 用覆盖后的 websiteConfig / server env 重新导入路由，验证 enabled 分支（503 / 放行）。 */
 async function importRouteWithConfig(
   overrides: Partial<WebsiteConfig>,
   env: Record<string, unknown>,
@@ -628,7 +597,7 @@ describe('API handler 门禁（默认服务全关）', () => {
   })
 
   it('payment POST 返回 404，且不调用 auth / rate-limit / provider', async () => {
-    // 本仓默认打开 payment；门禁分支用显式关闭的配置验证。
+    // 默认打开 payment，门禁分支用显式关闭的配置验证。
     const { Route } = (await importRouteWithConfig(
       { payment: { ...makeConfig().payment, enabled: false } },
       {},
@@ -741,9 +710,7 @@ describe('API handler 门禁（enabled 分支）', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// Stripe Webhook — 不受 payment.enabled 开关影响
-// ---------------------------------------------------------------------------
+// Stripe Webhook：不受 payment.enabled 开关影响。
 describe('Stripe Webhook 不受 payment.enabled 门禁影响', () => {
   const parseWebhookEvent = vi.fn()
 
@@ -754,7 +721,7 @@ describe('Stripe Webhook 不受 payment.enabled 门禁影响', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
-    // 前一组用例通过 doMock 覆盖了 server-context；这里复位为共享 mock。
+    // 前一组用例 doMock 过 server-context，这里复位为共享 mock。
     vi.doMock('@/lib/server-context', () => ({
       getServerContext: () => mocks.getServerContext(),
       als: { getStore: () => mocks.getServerContext() },
@@ -804,7 +771,7 @@ describe('Stripe Webhook 不受 payment.enabled 门禁影响', () => {
       data: { object: {} },
     })
     setupProvider()
-    // 幂等插入：模拟首次插入返回一行。
+    // 模拟首次插入返回一行。
     const returning = vi.fn().mockResolvedValue([{ id: 'evt_disabled_ok' }])
     const onConflictDoNothing = vi.fn().mockReturnValue({ returning })
     const values = vi.fn().mockReturnValue({ onConflictDoNothing })

@@ -6,18 +6,8 @@ import type { Locale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
 
 /**
- * 正文末尾的「下一步」卡片。
- *
- * 这些小节的链接在正文里是一串普通列表项，视觉上与正文其他内容无异。改渲染为
- * 块状卡片后，页面底部的「读完之后去哪」一眼可见。
- *
- * 与紧邻的「上一篇 / 下一篇」刻意做出区分，避免两个区块看起来是同一件事：
- * - 分页是**线性**的（沿 `order` 走相邻篇），只有文字与方向箭头；
- * - 「下一步」是**分支**的（作者挑选的相关篇），因此每张卡片带目标文档的图标
- *   （与侧边栏同一份映射）、蓝色强调色与说明文字。
- *
- * 站内相对链接（`./configuration`）走文档路由，因此切换语言后仍指向对应译文；
- * 站外链接按普通外链渲染并加 `rel`。
+ * 正文末尾的「下一步」卡片。与线性的「上一篇 / 下一篇」刻意区分：这里是作者挑选的
+ * 分支链接，因此带目标文档图标与强调色。站内相对链接走文档路由，切换语言后仍指向译文。
  */
 export function DocNextSteps({ steps, locale }: { steps: NextStep[]; locale: Locale }) {
   if (steps.length === 0) return null
@@ -41,7 +31,6 @@ export function DocNextSteps({ steps, locale }: { steps: NextStep[]; locale: Loc
 
 function StepCard({ step, locale }: { step: NextStep; locale: Locale }) {
   const target = docLinkTarget(step.href)
-  // 图标取自目标文档，与侧边栏一致；站外链接没有对应文档，用通用图标。
   const Icon = (target && DOC_ICON[target.slug]) || DOC_FALLBACK_ICON
   const isExternal = target === undefined
 
@@ -64,7 +53,7 @@ function StepCard({ step, locale }: { step: NextStep; locale: Locale }) {
           )}
         </span>
         {step.description !== '' && (
-          // 说明文字来自正文的 `——…` 后缀，可能带行内标记；去掉标记后按纯文本展示。
+          // 说明可能带行内 code 标记，这里去掉标记按纯文本展示。
           <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
             {step.description.replace(/`([^`]+)`/g, '$1')}
           </span>

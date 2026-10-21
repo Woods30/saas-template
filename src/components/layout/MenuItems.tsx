@@ -2,13 +2,8 @@ import type { MenuItem } from '@/config/navigation'
 import { MenuLink } from './MenuLink'
 
 /**
- * 菜单项的共享 renderer，按 `variant` 决定分组呈现方式：
- *
- * - `navbar`：group 渲染为原生 `<details>/<summary>`（键盘可展开，无需脚本）；
- * - `footer`：group 渲染为 `<nav aria-label>` + `<h2>` + 子项。
- *
- * link 一律交给 {@link MenuLink}，保证内部 / 外链的目标与安全属性只有一处定义。
- * `onNavigate` 透传给每条链接，供调用方在导航后关闭移动面板与已展开的 details。
+ * 菜单项的共享 renderer：`navbar` 用原生 `<details>`（键盘可展开、无需脚本），
+ * `footer` 用 `<nav>` + `<h2>`。`onNavigate` 供调用方在导航后关闭移动面板。
  */
 export function MenuItems({
   items,

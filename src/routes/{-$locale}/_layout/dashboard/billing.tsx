@@ -43,12 +43,8 @@ import {
 /**
  * 账单与订阅页。
  *
- * 服务端数据经 `fetchBillingOverview`（server function）按当前会话取数，客户端不
- * 直接碰 `DB`。页面本身不重复鉴权——`dashboard` 的 `beforeLoad` 已经守卫了整棵
- * 子树；server function 内部另有一道会话检查（RPC 端点必须自己把关）。
- *
- * 「管理订阅」按钮调 `/api/payment` 的 DELETE，由服务端从数据库反查 customerId
- * （不接受客户端传入），因此这里不需要知道 Stripe 的 customer id。
+ * 数据经 `fetchBillingOverview` 按会话取数，客户端不直接碰 `DB`。
+ * 「管理订阅」的 customerId 由服务端反查，不接受客户端传入。
  */
 export const Route = createFileRoute('/{-$locale}/_layout/dashboard/billing')({
   // 与侧栏入口同源：支付模块关闭时整页 404。
@@ -82,7 +78,7 @@ function BillingPage() {
       setSubscriptions(result.subscriptions)
       setPayments(result.payments)
     } catch {
-      // 不回显服务端错误体：401 / 500 对用户是同一件事，「稍后重试」。
+      // 不回显服务端错误体：401 / 500 对用户是同一件事。
       setError(m.settings_error_generic())
     }
   }, [])
@@ -91,9 +87,7 @@ function BillingPage() {
     void load()
   }, [load])
 
-  // 结账结果的提示。`?checkout=` 是 Stripe 回跳时带上的，展示完就把它从地址栏
-  // 抹掉（`replace`）：不抹的话刷新一次会再弹一次，用户看到的是早已处理过的旧消息。
-  // 取消结账的回跳落在定价页，那边有同样的一段处理。
+  // 展示完用 `replace` 抹掉 `?checkout=`，否则刷新会再弹一次旧消息。
   useEffect(() => {
     if (checkout !== 'success') return
     toast.add({ type: 'success', title: m.settings_billing_checkout_success() })
@@ -104,14 +98,9 @@ function BillingPage() {
     })
   }, [checkout, router])
 
-  // Stripe Checkout 成功返回时补发 `purchase` 事件。
-  //
-  // 为什么不放在 webhook：webhook 跑在服务端（Workers），拿不到浏览器里的分析全局
-  // 对象；而 `/api/payment` 的响应也走不到这里。URL 上的 `checkout=success` 是唯一
-  // 能确认「这笔支付属于这个浏览器会话」的信号。
-  //
-  // 只发一次：`search` 在一次导航内不变，但 StrictMode 下 effect 跑两遍，用 ref
-  // 挡掉第二次。
+  // `purchase` 事件必须在浏览器补发：webhook 跑在 Workers，拿不到分析全局对象，
+  // `checkout=success` 是唯一能确认归属本会话的信号。
+  // 用 ref 挡掉 StrictMode 下的第二次执行。
   const trackedRef = useRef(false)
   useEffect(() => {
     if (checkout !== 'success' || trackedRef.current) return
@@ -142,9 +131,7 @@ function BillingPage() {
         setError(m.settings_error_generic())
         return
       }
-      // 新标签页打开：Stripe Billing Portal 里「返回商户」的按钮用的是同一 URL，
-      // 若在本标签跳转，用户回到的账单页就是离开时的那个状态——刚才的加载与筛选
-      // 都得重来。新标签页让原页面保持不动，关掉门户即可继续。
+      // 新标签页打开：门户的「返回商户」用的是同一 URL，本标签跳转会让页面状态丢失。
       window.open(body.url, '_blank', 'noopener')
     } catch {
       setError(m.settings_error_generic())
@@ -174,8 +161,7 @@ function BillingPage() {
         </p>
       )}
 
-      {/* 当前订阅：一行一张卡，管理入口就放在卡内——订阅状态和「怎么改它」必须
-          在同一个视线里，按钮放在区块外面会让用户看完卡片再去找按钮。 */}
+      {/* 当前订阅：管理入口放在卡内，状态与「怎么改它」保持同一视线。 */}
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-muted-foreground">
           {m.settings_billing_current_plan()}
@@ -215,11 +201,8 @@ function BillingPage() {
         )}
       </section>
 
-      {/* 交易记录常驻而非折叠：它回答「我付过什么」，和当前订阅是同一趟浏览的两半，
-          折起来反而要多一次点击才看得到自己的付款历史。
-
-          表头必须留着。第一列是「这笔钱的性质」（订阅扣款 / 一次性购买）而不是方案
-          名，第三列把「状态」和「金额」挤在一格，没有表头时这三列只能靠猜。 */}
+      {/* 交易记录常驻不折叠。表头必须留着：第一列是款项性质而非方案名，
+          第三列把状态与金额挤在一格，没有表头只能靠猜。 */}
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-muted-foreground">
           {m.settings_billing_transactions()}
@@ -274,14 +257,8 @@ function BillingPage() {
 /**
  * 单条订阅的摘要卡。
  *
- * 为什么是卡片而不是表格行：用户来账单页只关心一件事——「我现在是什么套餐、下次
- * 什么时候扣钱、怎么改」。这几个事实在卡片里一屏看完；表格行要横向读四列并对不上
- * 表头，订阅这种一页通常只有一条的数据用表格没有信息密度收益。
- *
- * 两点特意区别于普通表格展示：
- * - **状态**是一等元素：扣款失败（`past_due`）是这里唯一需要用户立刻行动的状态，
- *   用 `destructive` 而不是和其他状态共用一枚中性 Badge。
- * - **管理入口在卡内**：状态和「怎么改它」在同一个视线里，按钮不放区块外面。
+ * 一页通常只有一条订阅，卡片比表格更能一屏读完「套餐、下次扣款、怎么改」。
+ * `past_due` 是唯一需要用户立刻行动的状态，故单独用 `destructive`。
  */
 function SubscriptionCard({
   sub,
@@ -294,14 +271,13 @@ function SubscriptionCard({
 }) {
   const plan = planNameForSubscription(sub.priceId, websiteConfig.payment.priceMap)
   const statusKey = subscriptionStatusMessageKey(sub.status)
-  // 周期可能还没同步到（`checkout.session.completed` 与 `customer.subscription.created`
-  // 之间），此时为 `null`。这时只显示金额，不拼一个用户看不懂的周期词。
+  // 周期可能尚未同步（两个 webhook 之间），此时只显示金额。
   const intervalLabel = (() => {
     const key = subscriptionIntervalMessageKey(sub.interval)
     return key ? m[key]() : null
   })()
   const amount = formatAmount(sub.amount, sub.currency)
-  // 取消续费后周期仍在走：这条要显式说出来，否则用户以为自己已经被降级了。
+  // 取消续费后周期仍在走，须显式说明，否则用户以为自己已被降级。
   const cancellingAtPeriodEnd =
     sub.cancelAtPeriodEnd && (sub.status === 'active' || sub.status === 'trialing')
 
@@ -316,7 +292,7 @@ function SubscriptionCard({
             </Badge>
           </div>
           <CardDescription>
-            {/* 周期未知时只说金额：`$5.99` 是确定的，「周期待同步」不是用户能用的信息。 */}
+            {/* 周期未知时只说金额。 */}
             {amount !== '—' && intervalLabel
               ? m.settings_billing_plan_price({ amount, interval: intervalLabel })
               : amount !== '—'
@@ -324,8 +300,7 @@ function SubscriptionCard({
                 : (intervalLabel ?? '')}
           </CardDescription>
         </div>
-        {/* 只有能进 Stripe 门户的订阅才有管理入口：没有 customerId 的行（例如
-            手工构造的测试数据）按钮会出现却打不开门户。 */}
+        {/* 没有 customerId 的订阅进不了门户，不渲染管理按钮。 */}
         {sub.customerId && (
           <Button variant="outline" size="sm" disabled={managing} onClick={onManage}>
             {managing ? <Spinner className="size-4" /> : null}
@@ -360,21 +335,13 @@ function SubscriptionCard({
 /**
  * 订阅卡的套餐名兜底。
  *
- * Price 不在映射里时退回显示 Price id——它至少是真实数据，且能看出这是 Stripe 后台
- * 手工创建的那一笔。优先显示定价页上的方案名（「专业版」）由调用处
- * `planNameForSubscription` 完成，用户看得懂；取不到名时才走到这里。
+ * Price 不在映射里时退回显示 Price id：至少是真实数据，能看出是后台手工创建的。
  */
 function planFallback(sub: SubscriptionRecord): string {
   return sub.priceId || sub.subscriptionId || sub.id
 }
 
-/**
- * 付款记录的类别文案。
- *
- * `payments.description` 由 webhook 写入，当前两条写入路径（一次性支付与
- * `invoice.paid`）都不填它，所以第一列实际只能靠 `type` 区分——这也是它该显示的
- * 内容：「这笔钱是订阅扣的还是买断的」。
- */
+/** 付款记录的类别文案。webhook 不写 `description`，第一列只能靠 `type` 区分。 */
 function paymentTypeKey(type: string) {
   switch (type) {
     case 'subscription':
@@ -397,8 +364,7 @@ function formatDate(value: Date | string | null | undefined): string {
 /**
  * `Date | string | null` → 本地日期 + 时间。
  *
- * 续费日期用这个而不是 `formatDate`：同一天的续费时刻跨时区会差出十几小时，
- * 只给日期不足以支持「今天会不会被扣款」这种判断。
+ * 续费日期需要精确到时刻：跨时区可能差十几小时，只给日期无法判断「今天是否扣款」。
  */
 function formatDateTime(value: Date | string | null | undefined): string {
   if (!value) return '—'
@@ -407,12 +373,7 @@ function formatDateTime(value: Date | string | null | undefined): string {
   return date.toLocaleString()
 }
 
-/**
- * 分 → 主单位格式化。
- *
- * `Intl.NumberFormat` 在服务端与客户端的 locale 行为一致，且不会把 `undefined`
- * 渲染成 `NaN`：金额或币种缺失时直接显示 `—`，不猜一个币种。
- */
+/** 分 → 主单位格式化；金额或币种缺失时显示 `—`，不猜币种。 */
 function formatAmount(amount: number | null | undefined, currency: string | null | undefined) {
   if (typeof amount !== 'number' || !currency) return '—'
   try {

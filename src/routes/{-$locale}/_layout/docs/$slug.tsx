@@ -16,9 +16,8 @@ import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
 /**
- * 单篇文档页。slug 与语言无关（见 `src/lib/docs.ts`），因此：
- * - URL 不泄漏 `.zh` 之类的语言后缀（`/docs/getting-started`）；
- * - 切换语言后同一个 slug 仍能命中对应译文，不再 404。
+ * 单篇文档页。slug 与语言无关（见 `src/lib/docs.ts`）：URL 不泄漏语言后缀，
+ * 切换语言后同一个 slug 仍能命中对应译文。
  */
 export const Route = createFileRoute('/{-$locale}/_layout/docs/$slug')({
   beforeLoad: ({ params }) => {
@@ -28,8 +27,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/docs/$slug')({
     return { doc, locale }
   },
   loader: ({ context, params }) => {
-    // 这些派生结果都在 loader 里算好：解析整篇正文不该出现在渲染路径上，
-    // 相邻文档的顺序又依赖该语言下的完整文档列表。
+    // 派生结果在 loader 里算好：解析正文不该出现在渲染路径上。
     const { body, steps } = splitNextSteps(context.doc.content)
     const neighbors = docNeighbors(docsForLocale(context.locale), params.slug)
 
@@ -40,7 +38,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/docs/$slug')({
       steps,
       prev: neighbors.prev,
       next: neighbors.next,
-      // 最近更新日期在 loader 里格式化：文案依赖当前语言，必须按请求求值。
+      // 格式化依赖当前语言，必须按请求求值。
       updated: formatUpdatedDate(context.doc.updated, context.locale),
       headings: extractHeadings(body),
       slug: params.slug,
@@ -63,7 +61,6 @@ function DocPage() {
   const { locale } = Route.useRouteContext()
 
   return (
-    // 正文与右侧目录并排并整体居中；超宽屏下不再左对齐留出大片空洞。
     <div className="mx-auto flex max-w-5xl justify-center gap-10">
       <article className="max-w-3xl min-w-0 flex-1">
         <h1 className="text-3xl font-bold tracking-tight">{doc.title}</h1>

@@ -33,30 +33,17 @@ const ICON_BUTTON_CLASS =
   'inline-flex shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring'
 
 /**
- * 文档站的独立 shell（参考 docs.tanstarter.dev 的三栏布局）：
- *
- * - 宽屏**没有顶栏**：Logo 与侧栏开关并排放在侧栏顶部，下面是搜索、导航与底部工具条；
- * - 窄屏：常驻侧栏放不下，改用一条顶栏（Logo + 搜索图标 + 侧栏开关），侧栏以抽屉覆盖正文；
- * - 右侧：正文。
- *
- * 与 `MarketingLayout` 不同，这里不渲染营销站点的 Navbar / Footer，避免在文档阅读场景里
- * 堆叠无关导航。侧边栏用 `sticky` 占满视口高度，因此底部工具条始终贴在屏幕左下角，
- * 不随正文滚动。
- *
- * **自适应布局**：常驻侧栏宽 240px，窄屏放不下——它会把正文挤成一条。因此
- * - 窄屏（< lg）：侧栏默认隐藏，顶栏的开关以**抽屉**形式覆盖打开，正文占满宽度；
- * - 宽屏（≥ lg）：侧栏常驻，但可手动收起，把宽度让给正文（偏好写入 cookie）。
- *
- * 初始收起状态经 `getSidebarCollapsed()` 取得：SSR 读 ALS、客户端读 cookie，两侧一致，
- * 因此不会在 hydration 时闪一下再收起。
+ * 文档站 shell（参考 docs.tanstarter.dev）：宽屏无顶栏，Logo 与侧栏开关在侧栏顶部；
+ * 窄屏（< lg）侧栏改为顶栏触发的抽屉。初始收起状态由 `getSidebarCollapsed()` 同时
+ * 从 SSR 的 ALS 与客户端 cookie 取得，两侧一致，因此 hydration 不会闪。
  */
 export function DocsLayout({ locale, children }: { locale: Locale; children: ReactNode }) {
   const docs = docsForLocale(locale)
   const activeSlug = useActiveDocSlug()
   const [collapsed, setCollapsed] = useState(getSidebarCollapsed)
-  // 窄屏抽屉的开合（临时状态，不持久化）。
+  // 窄屏抽屉的开合，临时状态不持久化。
   const [drawerOpen, setDrawerOpen] = useState(false)
-  // 搜索弹窗由本层持有：窄屏顶栏的图标与侧栏的触发器要打开同一个弹窗。
+  // 搜索弹窗由本层持有，顶栏图标与侧栏触发器要打开同一个弹窗。
   const [searchOpen, setSearchOpen] = useState(false)
 
   const toggleCollapsed = useCallback(() => {
@@ -70,7 +57,7 @@ export function DocsLayout({ locale, children }: { locale: Locale; children: Rea
 
   return (
     <div className="flex min-h-screen flex-col">
-      {/* 窄屏顶栏。宽屏下常驻侧栏自己带 Logo 与开关，顶栏只会多占一条，故 `lg:hidden`。 */}
+      {/* 宽屏下侧栏自带 Logo 与开关，顶栏只会多占一条，故 `lg:hidden`。 */}
       <header className="sticky top-0 z-40 flex h-14 items-center gap-1 border-b border-border bg-background/90 px-3 backdrop-blur-xl lg:hidden">
         <Link
           to="/{-$locale}"
@@ -80,7 +67,6 @@ export function DocsLayout({ locale, children }: { locale: Locale; children: Rea
         >
           <BrandLogo className="w-28" />
         </Link>
-        {/* 侧栏在窄屏被隐藏，搜索与导航都需要这里的入口。 */}
         <button
           type="button"
           aria-label={m.docs_search_label()}
@@ -99,11 +85,9 @@ export function DocsLayout({ locale, children }: { locale: Locale; children: Rea
           <IconLayoutSidebar className="size-5" aria-hidden />
         </button>
       </header>
-      {/* 不居中、不设 max-w：超宽屏下若居中会留下大片空白。正文自身有 max-w-3xl
-          约束行宽，因此这里左对齐即可。 */}
+      {/* 不居中、不设 max-w：正文自身有 max-w-3xl 约束行宽。 */}
       <div className="relative flex w-full flex-1">
-        {/* 宽屏常驻侧栏。收起后整块隐藏（把 240px 让给正文），展开入口移到下方浮动工具条。
-            窄屏完全不渲染它——窄屏用下面的 `Sheet` 抽屉，两者共用同一份 `SidebarPanel`。 */}
+        {/* 宽屏常驻侧栏；窄屏完全不渲染，改用下面的 `Sheet` 抽屉，共用 `SidebarPanel`。 */}
         <aside
           className={`sticky top-0 h-dvh w-60 shrink-0 ${collapsed ? 'hidden' : 'hidden lg:flex'}`}
         >
@@ -118,13 +102,11 @@ export function DocsLayout({ locale, children }: { locale: Locale; children: Rea
           />
         </aside>
 
-        {/* 窄屏抽屉。
-            用 shadcn 的 `Sheet`（Base UI Dialog）而不是手写 `fixed` 面板：焦点陷阱、
-            `aria-modal`、背景滚动锁、Escape 关闭、关闭后焦点归还，全部由弹层提供。
-            手写版缺这些，实测 Tab 会把焦点放到被遮住的正文里。 */}
+        {/* 用 `Sheet` 而非手写 `fixed` 面板：焦点陷阱、`aria-modal`、滚动锁与焦点归还
+            都由弹层提供；手写版实测 Tab 会把焦点放进被遮住的正文。 */}
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
           <SheetContent side="left" className="w-60 gap-0 p-0" showCloseButton={false}>
-            {/* 弹层需要可访问名；视觉上由侧栏头的 logo 承担，故标题只给读屏。 */}
+            {/* 弹层需要可访问名，视觉上由侧栏头 logo 承担，故只给读屏。 */}
             <SheetTitle className="sr-only">{m.docs_sidebar_title()}</SheetTitle>
             <SheetDescription className="sr-only">{m.docs_sidebar_title()}</SheetDescription>
             <SidebarPanel
@@ -134,15 +116,12 @@ export function DocsLayout({ locale, children }: { locale: Locale; children: Rea
               onSearchOpenChange={setSearchOpen}
               activeSlug={activeSlug}
               onClose={() => setDrawerOpen(false)}
-              // 点文档后收起抽屉，否则新正文被盖住，用户不知道跳转成功了。
               onNavigate={() => setDrawerOpen(false)}
             />
           </SheetContent>
         </Sheet>
-        {/* 收起后侧栏整块隐藏，展开入口必须留在侧栏之外——否则用户再也点不到它。
-            固定在**左上角**（参照 docs.tanstarter.dev）：侧栏收起后正文从左侧顶格开始，
-            左上角是原本侧栏开关所在的位置，视线不用移动；放左下角则要越过整页正文才找得到。
-            宽屏专属：窄屏走顶栏的抽屉按钮。 */}
+        {/* 收起后侧栏整块隐藏，展开入口必须留在侧栏之外。固定在左上角：那里原本
+            就是侧栏开关的位置，视线不用移动。宽屏专属，窄屏走顶栏的抽屉按钮。 */}
         {collapsed && (
           <div className="fixed top-4 left-4 z-40 hidden items-center gap-0.5 rounded-xl border border-border bg-muted p-0.5 text-muted-foreground shadow-lg lg:flex">
             <button
@@ -164,8 +143,7 @@ export function DocsLayout({ locale, children }: { locale: Locale; children: Rea
             </button>
           </div>
         )}
-        {/* 收起态在左侧让出一条与浮动工具条等宽的空白（`lg:pl-20`）：不让我，左上角的
-            按钮会压住正文标题。展开态恢复常规内边距。 */}
+        {/* 收起态在左侧让出空白，否则左上角浮动按钮会压住正文标题。 */}
         <main className={`min-w-0 flex-1 px-6 py-10 sm:px-10 ${collapsed ? 'lg:pl-20' : ''}`}>
           {children}
         </main>
@@ -175,10 +153,8 @@ export function DocsLayout({ locale, children }: { locale: Locale; children: Rea
 }
 
 /**
- * 当前打开的文档 slug，供侧栏展开所在分组。
- *
- * `/docs` 本身渲染的是 `index` 文档（见 `docsLanding`），因此路径为空时也返回
- * `index`——否则停在文档首页时，index 所在分组不会被展开。
+ * 当前文档 slug，供侧栏展开所在分组。`/docs` 本身渲染 `index` 文档，
+ * 因此路径为空时也返回 `index`。
  */
 function useActiveDocSlug(): string {
   return useRouterState({
@@ -190,12 +166,7 @@ function useActiveDocSlug(): string {
   })
 }
 
-/**
- * 侧栏面板本体：宽屏常驻侧栏与窄屏抽屉共用同一份内容。
- *
- * 两处只有「关闭方式」不同——宽屏给收起按钮，抽屉给关闭按钮——其余结构、尺寸、
- * 底部工具条必须一致，否则同一个导航会在两种断点下长得不一样。
- */
+/** 侧栏面板：宽屏常驻侧栏与窄屏抽屉共用，两者只有「关闭方式」不同。 */
 function SidebarPanel({
   locale,
   docs,
@@ -219,8 +190,7 @@ function SidebarPanel({
 }) {
   return (
     <div className="flex h-full w-full flex-col border-r border-border bg-sidebar">
-      {/* Logo 与「文档」后缀并排：参照站把品牌名与栏目名并读，明确这是文档站而非营销
-          首页。抽屉里宽度只有 240px，后缀隐藏，位置让给关闭按钮。 */}
+      {/* 抽屉里宽度只有 240px，后缀隐藏，位置让给关闭按钮。 */}
       <div className="flex items-center gap-2 border-b border-border p-3">
         <Link
           to="/{-$locale}"
@@ -233,9 +203,7 @@ function SidebarPanel({
         <span className="hidden text-sm text-muted-foreground lg:inline">
           {m.docs_sidebar_title()}
         </span>
-        {/* 宽屏收起开关：收起后把 240px 让给正文，偏好跨会话保留。收起后本侧栏整块
-            隐藏，这个按钮也就点不到了，展开入口改由下方浮动工具条提供——因此收起态
-            不再渲染它，避免 DOM 里出现两个同名「展开文档导航」按钮。 */}
+        {/* 收起后本侧栏整块隐藏，展开入口由浮动工具条提供，避免 DOM 里出现两个同名按钮。 */}
         {showCollapseButton && onCollapse && (
           <button
             type="button"
@@ -247,8 +215,7 @@ function SidebarPanel({
             <IconLayoutSidebarLeftCollapse className="size-4" aria-hidden />
           </button>
         )}
-        {/* 抽屉的关闭按钮。顶栏的开关在抽屉打开时被遮罩盖住，够不到，因此必须有一个
-            在面板内的出口。 */}
+        {/* 抽屉打开时顶栏开关被遮罩盖住，面板内必须留一个出口。 */}
         {onClose && (
           <button
             type="button"
@@ -260,7 +227,7 @@ function SidebarPanel({
           </button>
         )}
       </div>
-      {/* 搜索固定在侧栏顶部，不随文档列表滚动——文档变多时它必须一直够得着。 */}
+      {/* 搜索固定在侧栏顶部，不随文档列表滚动。 */}
       <div className="border-b border-border p-3">
         <DocsSearch
           docs={docs}
@@ -272,7 +239,7 @@ function SidebarPanel({
       <div className="flex-1 overflow-y-auto p-3">
         <DocsSidebar docs={docs} activeSlug={activeSlug} onNavigate={onNavigate} />
       </div>
-      {/* 工具条固定在左下角（GitBook 风格）：不随正文滚动。 */}
+      {/* 工具条固定在侧栏底部（GitBook 风格），不随正文滚动。 */}
       <div className="flex items-center justify-end gap-1 border-t border-border p-3">
         <LocaleSwitcher value={locale} className={ICON_BUTTON_BORDER} />
         <ThemeToggle className={ICON_BUTTON_BORDER} />

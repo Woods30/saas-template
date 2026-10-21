@@ -3,12 +3,9 @@ import { requiresEmailVerification, signUpOutcome } from '@/auth/flow'
 import { createWebsiteConfig, type WebsiteConfig } from '@/config/website'
 
 /**
- * 注册流程的两个派生判定。
- *
- * 关键：**邮箱验证是安全控制，不是邮件功能开关**。它必须由显式配置
- * `auth.requireEmailVerification` 决定，不能随 `mail.enabled` 隐式降级——否则
- * 「没配邮件」这种运维状态会悄悄变成「任何人都能拿别人的邮箱注册」，而邮箱在
- * 下游被当作身份依据（如 Stripe customerEmail、ADMIN_EMAILS 白名单）。
+ * 注册流程的两个派生判定。邮箱验证是安全控制而非邮件开关，必须由显式配置
+ * `auth.requireEmailVerification` 决定；随 `mail.enabled` 隐式降级会让「没配邮件」
+ * 变成「任何人都能拿别人的邮箱注册」。
  */
 function config(overrides: {
   requireEmailVerification?: boolean

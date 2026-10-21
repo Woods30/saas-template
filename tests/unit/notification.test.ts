@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// ---------------------------------------------------------------------------
-// Mock server-context ALS
-// ---------------------------------------------------------------------------
+// Mock server-context ALS。
 const mockNotificationProviderRegistry: Record<string, (() => object) | undefined> = {}
 
 vi.mock('@/lib/server-context', () => ({
@@ -17,9 +15,7 @@ vi.mock('@/lib/server-context', () => ({
   },
 }))
 
-// ---------------------------------------------------------------------------
-// Module under test — import after mocks
-// ---------------------------------------------------------------------------
+// 被测模块，必须在 mock 之后导入。
 import { parseServerEnv } from '@/env/server'
 import {
   buildNotificationProviderRegistry,
@@ -28,9 +24,7 @@ import {
   notify,
 } from '@/notification'
 
-// ---------------------------------------------------------------------------
-// DiscordNotificationProvider
-// ---------------------------------------------------------------------------
+// DiscordNotificationProvider。
 describe('DiscordNotificationProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -70,9 +64,7 @@ describe('DiscordNotificationProvider', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// FeishuNotificationProvider
-// ---------------------------------------------------------------------------
+// FeishuNotificationProvider。
 describe('FeishuNotificationProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -108,8 +100,7 @@ describe('FeishuNotificationProvider', () => {
   })
 
   it('HTTP 200 但 code 非 0 时返回 false（飞书的业务错误藏在响应体里）', async () => {
-    // 签名 / 关键词 / IP 白名单校验失败都是 HTTP 200 + 非 0 code。
-    // 只看 `res.ok` 会把失败当成功，`notify()` 也不会告警。
+    // 校验失败是 HTTP 200 + 非 0 code，只看 `res.ok` 会把失败当成功。
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: vi.fn().mockResolvedValue({ code: 19021, msg: 'sign match fail' }),
@@ -171,9 +162,7 @@ describe('FeishuNotificationProvider', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// DiscordNotificationProvider — 超时
-// ---------------------------------------------------------------------------
+// DiscordNotificationProvider 的超时。
 describe('DiscordNotificationProvider', () => {
   it('请求带超时信号', async () => {
     const mockFetch = vi.fn().mockResolvedValue({ ok: true })
@@ -189,9 +178,7 @@ describe('DiscordNotificationProvider', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// buildNotificationProviderRegistry
-// ---------------------------------------------------------------------------
+// buildNotificationProviderRegistry。
 describe('buildNotificationProviderRegistry', () => {
   it('returns undefined for both providers when env is empty', () => {
     const registry = buildNotificationProviderRegistry(parseServerEnv({}))
@@ -219,9 +206,7 @@ describe('buildNotificationProviderRegistry', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// notify
-// ---------------------------------------------------------------------------
+// notify。
 describe('notify', () => {
   beforeEach(() => {
     vi.clearAllMocks()

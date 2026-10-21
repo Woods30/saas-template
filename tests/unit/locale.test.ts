@@ -18,7 +18,7 @@ function requestWith(headers: Record<string, string>): Request {
 
 describe('getRequestLocale', () => {
   afterEach(() => {
-    // `overwriteGetLocale` 改的是模块级实现，必须复位，否则污染同文件后续用例。
+    // 模块级实现必须复位，否则污染后续用例。
     overwriteGetLocale(() => 'zh')
   })
 
@@ -28,8 +28,8 @@ describe('getRequestLocale', () => {
   })
 
   it('对 Paraglide 给出的未支持语言回退默认语言，而不是原样透传', () => {
-    // `getLocale()` 读 cookie / Accept-Language，属用户可控输入，可能给出 'fr'。
-    // 此前调用方一律 `as Locale` 强转，把非法值一路带进 `docsForLocale`（静默返回空）。
+    // `getLocale()` 属用户可控输入，可能给出 'fr'；此前调用方一律 `as Locale` 强转，
+    // 把非法值一路带进 `docsForLocale`（静默返回空）。
     overwriteGetLocale(() => 'fr' as never)
     expect(getRequestLocale()).toBe(defaultLocale)
   })
@@ -88,14 +88,13 @@ describe('readCookieValue', () => {
 })
 
 describe('百分号编码 cookie 的解析与比较一致性（回归）', () => {
-  // 回归点：readLocaleCookie 会解码后解析，而持久化比较若直接取原始值，
-  // `%65%6E`（即 en）会与 en 不等，导致每个请求都重复下发 Set-Cookie。
+  // 回归点：比较若直接取原始 cookie 值，`%65%6E`（即 en）会与 en 不等，导致
+  // 每个请求都重复下发 Set-Cookie。
   it('原始值不同于解析结果，故比较必须基于解码后的解析值', () => {
     const header = `${LOCALE_COOKIE_NAME}=%65%6E`
     expect(readCookieValue(header, LOCALE_COOKIE_NAME)).toBe('%65%6E')
     expect(readLocaleCookie(header)).toBe('en')
-    // persistLocaleCookie 以 readLocaleCookie 的结果与会话 locale 比较，故对同一 cookie
-    // 解析与比较得出一致结论（都视作 en），不再重复下发。
+    // 解析与比较须对同一 cookie 得出一致结论，不再重复下发。
     expect(readLocaleCookie(header)).toBe(resolveLocale(requestWith({ cookie: header })))
   })
 })

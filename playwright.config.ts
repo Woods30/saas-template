@@ -5,9 +5,8 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  // CI 用单 worker（干净 D1 + 稳定复现）。本地默认是 CPU 核数的一半（本机 16 核 → 8），
-  // 但 8 个浏览器同时打 `vite dev` 会在按需编译上互相排队：注册后等 `/get-session`
-  // 的断言、⌘K 弹窗这类用例会偶发超时，与代码无关。固定 4 个既保留并行收益，又不再 flake。
+  // 本地固定 4：默认的 CPU 核数一半会让多个浏览器在 `vite dev` 按需编译上排队，
+  // 导致与代码无关的偶发超时。
   workers: process.env.CI ? 1 : 4,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'html',
   use: {

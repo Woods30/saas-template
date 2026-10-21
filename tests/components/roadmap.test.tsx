@@ -3,12 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Roadmap } from '@/components/sections/Roadmap'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
-/**
- * 路线图块的渲染回归。
- *
- * 断言只看**语义结构**（有序列表、标题、状态文案），不碰类名细节——样式调整不该
- * 连带修改业务测试。状态文案来自 `m.*()`，因此同时验证了本地化接线。
- */
+/** 路线图块渲染：只断言语义结构（有序列表、标题、状态文案）与本地化接线，不碰类名。 */
 
 beforeEach(() => setLocale('zh', { reload: false }))
 afterEach(() => setLocale('en', { reload: false }))

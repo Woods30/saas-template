@@ -16,7 +16,7 @@ export const Route = createFileRoute('/{-$locale}/auth/reset-password')({
 })
 
 function ResetPasswordPage() {
-  // `done` / `missingToken` 表达页面去向，`serverError` 是页面级提示——都不是字段状态。
+  // 页面级状态，不属于字段状态。
   const [serverError, setServerError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
   const [missingToken, setMissingToken] = useState(false)

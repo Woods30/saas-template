@@ -4,7 +4,7 @@ import { getRequestLocale } from '@/lib/locale'
 
 /**
  * `/docs` 本身不渲染内容，重定向到该语言下的第一篇文档。
- * slug 与语言无关（见 `src/lib/docs.ts`），因此切换语言时 URL 保持稳定。
+ * slug 与语言无关，切换语言时 URL 保持稳定。
  */
 export const Route = createFileRoute('/{-$locale}/_layout/docs/')({
   beforeLoad: () => {

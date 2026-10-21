@@ -11,11 +11,9 @@ import type {
 /**
  * Stripe payment provider — Cloudflare Workers 适配。
  *
- * 关键点：
- * 1. `httpClient` 用 `Stripe.createFetchHttpClient()`（Workers 原生 fetch）。
- * 2. `webhook` 验签用 `constructEventAsync` + `createSubtleCryptoProvider()`，
- *    因为同步 `constructEvent` 依赖 Node `crypto`，在 Workers 上不可用。
- * 3. `apiVersion` 锁为 2025-09-30.clover（v23.0.0 内置的 latest stable）。
+ * 必须用 `createFetchHttpClient()`，且验签走 `constructEventAsync` +
+ * `createSubtleCryptoProvider()`：同步的 `constructEvent` 依赖 Node `crypto`，
+ * 在 Workers 上不可用。
  */
 export class StripePaymentProvider implements PaymentProvider {
   private readonly stripe: Stripe
@@ -40,8 +38,7 @@ export class StripePaymentProvider implements PaymentProvider {
       customer_email: params.customerEmail,
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
-      // 调用方已校验为受支持语言；兜底用站点默认语言，而非「非 zh 即 en」——
-      // 后者会在新增语言时把新语言错误地当成 en 提交给 Stripe。
+      // 兜底用站点默认语言，而非「非 zh 即 en」，否则新增语言会被当成 en 提交。
       locale: params.locale ?? defaultLocale,
       metadata: { userId: params.userId },
       ...(params.mode === 'payment' ? { invoice_creation: { enabled: true } } : {}),

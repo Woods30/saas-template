@@ -37,7 +37,7 @@ export function writeEnv(env: Record<string, string>) {
 async function main() {
   console.log('🚀 SaaS Template Setup\n')
 
-  // 0. 校验 wrangler 登录（软警告，不强制）
+  // wrangler 未登录只软警告，不阻断。
   try {
     const out = run('wrangler whoami', { stdio: 'pipe' }).toString()
     const m = out.match(/associated with the email (.+?)[\n"]/)
@@ -48,7 +48,6 @@ async function main() {
     console.warn('⚠️  wrangler 未登录（将继续；wrangler 命令可能失败）')
   }
 
-  // 1. 项目名与资源名
   const projectName = await input({
     message: '项目名（用于 Cloudflare 资源前缀）',
     default: 'saas-template',
@@ -58,13 +57,12 @@ async function main() {
   const r2Name = `${projectName}-uploads`
   const kvName = `${projectName}-cache`
 
-  // 2. 创建 D1（捕获已存在情况）
   let dbId = ''
   try {
     const out = run(`wrangler d1 create ${dbName} --json`, { stdio: 'pipe' }).toString()
     dbId = (JSON.parse(out) as { uuid: string }).uuid
   } catch {
-    // 已存在；从 wrangler d1 list 解析
+    // 已存在时从 d1 list 解析 id。
     try {
       const list = run(`wrangler d1 list --json`, { stdio: 'pipe' }).toString()
       const found = (JSON.parse(list) as Array<{ uuid: string; name: string }>).find(
@@ -79,14 +77,12 @@ async function main() {
   }
   console.log(`✅ D1：${dbId}`)
 
-  // 3. 创建 R2
   try {
     run(`wrangler r2 bucket create ${r2Name}`)
   } catch {
     console.log(`✅ R2 bucket ${r2Name}（可能已存在）`)
   }
 
-  // 4. 创建 KV
   let kvId = ''
   try {
     const out = run(`wrangler kv namespace create ${kvName}`, { stdio: 'pipe' }).toString()
@@ -110,12 +106,10 @@ async function main() {
   }
   console.log(`✅ KV：${kvId}`)
 
-  // 5. 生成 Better Auth secret
   const authSecret = randomBytes(32).toString('base64')
 
   const env = readEnv()
 
-  // 6. Stripe 配置
   const stripeChoice = await select({
     message: 'Stripe 配置？',
     choices: [
@@ -132,7 +126,6 @@ async function main() {
     env.VITE_STRIPE_PRICE_LIFETIME = await input({ message: 'VITE_STRIPE_PRICE_LIFETIME' })
   }
 
-  // 7. Email provider
   const mailProvider = await select({
     message: '邮件 provider？',
     choices: [
@@ -152,13 +145,11 @@ async function main() {
     env.RESEND_API_KEY = await password({ message: 'RESEND_API_KEY' })
   }
 
-  // 8. Discord Webhook
   const enableDiscord = await confirm({ message: '启用 Discord 通知？', default: false })
   if (enableDiscord) {
     env.DISCORD_WEBHOOK_URL = await input({ message: 'DISCORD_WEBHOOK_URL' })
   }
 
-  // 9. 写入 .env
   env.CLOUDFLARE_DATABASE_ID = dbId
   env.BETTER_AUTH_SECRET = authSecret
   if (!existsSync('.env')) {
@@ -170,9 +161,8 @@ async function main() {
   }
   writeEnv(env)
 
-  // 10. 合并 wrangler.jsonc（保留 JSONC 注释和已有字段）
   const wranglerRaw = readFileSync('wrangler.jsonc', 'utf-8')
-  // 简单方法：剥离注释，解析，修改，写回（注释会丢失，但字段保留）
+  // 剥离 JSONC 注释后解析再写回：字段保留，注释会丢失。
   const stripped = wranglerRaw.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
   const wrangler = JSON.parse(stripped) as Record<string, unknown>
 
@@ -190,7 +180,6 @@ async function main() {
   writeFileSync('wrangler.jsonc', `${JSON.stringify(wrangler, null, 2)}\n`)
   console.log('✅ wrangler.jsonc 已更新')
 
-  // 11. 迁移（本地 D1）
   try {
     run('pnpm exec wrangler d1 migrations apply DB --local')
   } catch (e) {

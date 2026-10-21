@@ -11,8 +11,8 @@ import type { EmailTemplate, SendTemplateParams } from './types'
 /**
  * 邮件主题，按模板 × 语言。
  *
- * 键类型是 `Record<Locale, string>` 而非 `Record<'zh' | 'en', string>`：新增语言时
- * 这里会**编译报错**，迫使补齐每个模板的译文，而不是让新语言的收件人收到空白主题。
+ * 键类型是 `Record<Locale, string>` 而非 `Record<'zh' | 'en', string>`：
+ * 新增语言时会**编译报错**，迫使补齐译文，而不是让收件人收到空白主题。
  */
 const subjects: Record<EmailTemplate, Record<Locale, string>> = {
   verifyEmail: { zh: '验证你的邮箱', en: 'Verify your email' },
@@ -29,26 +29,10 @@ type TemplateContext = {
 }
 
 /**
- * Per-template context schemas — strict() rejects unknown fields,
- * preventing __proto__ pollution and unexpected template behaviour.
- *
- * actionUrl fields in verifyEmail/forgotPassword are additionally validated
- * against a host allowlist (defense-in-depth; these templates are not
- * exposed through the public route — they are reserved for server-side
- * auth-flow calls with freshly-minted tokens).
- */
-/**
  * `actionUrl` 允许的主机后缀：站点自身主机及其子域。
  *
- * 此前这里是 `process.env.APP_DOMAIN ?? 'example.com'`，有两处问题：一是违反仓库
- * 「业务代码不得直接读 `process.env`」的不变量，二是 `APP_DOMAIN` 在全仓（env
- * schema、`.env.example`、`wrangler.jsonc`）**均未声明**，因此 Workers 运行时恒为
- * `'example.com'`——白名单实际从未生效，而 better-auth 生成的 `actionUrl` 指向真实
- * 站点域，会被这里拒绝、静默导致验证 / 重置邮件发不出去。
- *
- * 改为从站点自身的 base URL（`VITE_BASE_URL`，公开 env）取主机：既是唯一事实来源，
- * 又不引入第二个互相漂移的域名配置。**按调用求值**而非模块加载期固化，避免缓存住
- * 首次请求的配置。
+ * 主机取自 `VITE_BASE_URL` 而非独立域名配置，避免两处漂移。**按调用求值**，
+ * 不要在模块加载期固化，否则会缓存住首次请求的配置。
  */
 export function allowedHostSuffixes(baseUrl: string = getBaseUrl()): string[] {
   try {
@@ -79,6 +63,7 @@ const actionUrlSchema = z
     { message: 'URL must be https and match an allowed host' },
   )
 
+// strict() 拒绝未知字段，防止 __proto__ 污染与意外的模板行为。
 const contextSchemas = {
   verifyEmail: z
     .object({
@@ -122,9 +107,8 @@ export async function renderTemplate<K extends EmailTemplate>(
   const validatedContext = contextSchemas[params.template].parse(params.context)
   const { render } = await import('@react-email/render')
   const Component = templateMap[params.template] as FunctionComponent<TemplateContext[K]>
-  // `locale` 必须随 context 一起交给模板：此前只有**主题**按语言取值，正文写死中文，
-  // 英文收件人会收到「英文主题 + 中文正文」。模板各自决定是否使用它（联系表单的
-  // 收件人是站长，语言固定，忽略即可）。
+  // `locale` 必须随 context 一起交给模板，否则只有主题按语言取值、正文仍写死。
+  // 模板各自决定是否使用它（联系表单的收件人是站长，语言固定，忽略即可）。
   const html = await render(
     await Component({ ...(validatedContext as TemplateContext[K]), locale: params.locale }),
   )

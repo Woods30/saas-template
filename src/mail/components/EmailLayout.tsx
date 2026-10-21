@@ -1,14 +1,10 @@
 import { Body, Container, Heading, Html } from '@react-email/components'
 
 /**
- * 邮件配色：站点主题 token 的**静态快照**。
+ * 邮件配色：站点主题 token 的**静态快照**（取自 `globals.css` 浅色档）。
  *
- * 邮件客户端不执行站点的 CSS，`var(--primary)` / `light-dark()` 都读不到，颜色只能
- * 写成字面量。这里的值取自 `src/styles/globals.css` 的**浅色档**——邮件没有主题
- * 切换，深色客户端会自行反色，按浅色设计是通行做法。
- *
- * 改站点主题时这几个值要一起改：它们与 `--background` / `--foreground` / `--card` /
- * `--primary` 一一对应，`tests/unit/mail-theme.test.ts` 会校验漂移。
+ * 邮件客户端不执行站点 CSS，`var(--primary)` 读不到，颜色只能写字面量。
+ * 改主题时这些值要一起改，`tests/unit/mail-theme.test.ts` 会校验漂移。
  */
 export const EMAIL_THEME = {
   /** `--background` */

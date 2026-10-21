@@ -5,9 +5,7 @@ import { parsePublicEnv } from '@/env/public'
 import { parseServerEnv } from '@/env/server'
 import { formatServiceDiagnostics } from '../../scripts/lib/report-issues'
 
-/**
- * 构造独立配置，避免用例之间互相污染（`createWebsiteConfig` 每次返回新对象）。
- */
+/** 构造独立配置，避免用例之间互相污染。 */
 function makeConfig(mutate?: (config: WebsiteConfig) => void): WebsiteConfig {
   const config = createWebsiteConfig(parsePublicEnv({}))
   mutate?.(config)
@@ -15,11 +13,8 @@ function makeConfig(mutate?: (config: WebsiteConfig) => void): WebsiteConfig {
 }
 
 /**
- * 显式关闭全部服务模块的配置。
- *
- * `website.ts` 的开关随部署场景调整（本仓本地联调期打开了 payment / notification /
- * analytics），而本文件测的是 `getServiceStatuses` 的**分支逻辑**，不是出厂默认值。
- * 依赖默认值的「关闭时为 disabled」用例会随开关变更无谓变红，故显式关闭。
+ * 显式关闭全部服务模块的配置。本文件测的是 `getServiceStatuses` 的分支逻辑，
+ * 开关随部署场景调整，依赖默认值会让用例无谓变红。
  */
 function makeAllDisabledConfig(mutate?: (config: WebsiteConfig) => void): WebsiteConfig {
   const config = createWebsiteConfig(parsePublicEnv({}))
@@ -33,9 +28,7 @@ function makeAllDisabledConfig(mutate?: (config: WebsiteConfig) => void): Websit
   return config
 }
 
-// ---------------------------------------------------------------------------
-// getMailFrom —— provider 与 sender 归一化
-// ---------------------------------------------------------------------------
+// getMailFrom：provider 与 sender 归一化。
 describe('getMailFrom', () => {
   it('优先返回 MAIL_FROM', () => {
     const config = makeConfig((c) => {
@@ -69,9 +62,7 @@ describe('getMailFrom', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// mail 分支
-// ---------------------------------------------------------------------------
+// mail 分支。
 describe('getServiceStatuses — mail', () => {
   it('关闭时为 disabled 且不产出 issues（即便 secret 齐全）', () => {
     const statuses = getServiceStatuses({
@@ -192,9 +183,7 @@ describe('getServiceStatuses — mail', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// contact 分支
-// ---------------------------------------------------------------------------
+// contact 分支。
 describe('getServiceStatuses — contact', () => {
   it('关闭时为 disabled', () => {
     const statuses = getServiceStatuses({
@@ -250,9 +239,7 @@ describe('getServiceStatuses — contact', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// newsletter 分支
-// ---------------------------------------------------------------------------
+// newsletter 分支。
 describe('getServiceStatuses — newsletter', () => {
   it('关闭时为 disabled', () => {
     const statuses = getServiceStatuses({
@@ -315,9 +302,7 @@ describe('getServiceStatuses — newsletter', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// payment 分支
-// ---------------------------------------------------------------------------
+// payment 分支。
 describe('getServiceStatuses — payment', () => {
   it('关闭时为 disabled', () => {
     const statuses = getServiceStatuses({
@@ -368,9 +353,7 @@ describe('getServiceStatuses — payment', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// notification 分支
-// ---------------------------------------------------------------------------
+// notification 分支。
 describe('getServiceStatuses — notification', () => {
   it('关闭时为 disabled', () => {
     const statuses = getServiceStatuses({
@@ -432,9 +415,7 @@ describe('getServiceStatuses — notification', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// analytics 分支
-// ---------------------------------------------------------------------------
+// analytics 分支。
 describe('getServiceStatuses — analytics', () => {
   it('关闭时为 disabled', () => {
     const statuses = getServiceStatuses({
@@ -449,7 +430,7 @@ describe('getServiceStatuses — analytics', () => {
     const statuses = getServiceStatuses({
       config: makeConfig((c) => {
         c.analytics.enabled = true
-        // 默认配置已选中 ga；本用例要验证「选中为空」这一分支。
+        // 默认已选中 ga，本用例验证「选中为空」这一分支。
         c.analytics.providers = []
       }),
       publicEnv: parsePublicEnv({}),
@@ -563,9 +544,7 @@ describe('getServiceStatuses — analytics', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// auth 分支
-// ---------------------------------------------------------------------------
+// auth 分支。
 describe('getServiceStatuses — auth', () => {
   it('默认（不要求验证 + 邮件未配置）为 configured：开箱即用的注册登录必须可用', () => {
     const statuses = getServiceStatuses({
@@ -622,9 +601,7 @@ describe('getServiceStatuses — auth', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// 凭据不外泄
-// ---------------------------------------------------------------------------
+// 凭据不外泄。
 describe('getServiceStatuses — 凭据不外泄', () => {
   it('序列化结果不含任何合成 secret 值', () => {
     const statuses = getServiceStatuses({
@@ -650,7 +627,6 @@ describe('getServiceStatuses — 凭据不外泄', () => {
     expect(serialized).not.toContain('synthetic-stripe-key')
     expect(serialized).not.toContain('synthetic-webhook-secret')
     expect(serialized).not.toContain('synthetic-discord-token')
-    // issues 仅暴露字段名、原因与位置。
     for (const status of Object.values(statuses)) {
       for (const issue of status.issues) {
         expect(Object.keys(issue).sort()).toEqual(
@@ -661,12 +637,7 @@ describe('getServiceStatuses — 凭据不外泄', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// 完整配置判断（数据驱动）
-//
-// 每个已启用服务在「必要字段齐全」时为 configured、缺一个即为 incomplete；关闭时恒为
-// disabled，无论字段是否齐全。CLI 的 dev / prod 分支都依赖这一判断，故单独列表核对。
-// ---------------------------------------------------------------------------
+// 完整配置判断（数据驱动）：字段齐全为 configured，缺一为 incomplete，关闭恒为 disabled。
 describe('getServiceStatuses — 完整配置判断（数据驱动）', () => {
   type Case = {
     name: string
@@ -733,7 +704,7 @@ describe('getServiceStatuses — 完整配置判断（数据驱动）', () => {
   it.each(cases)('$name：关闭 disabled / 缺字段 incomplete / 齐全 configured', (testCase) => {
     const moduleName = testCase.name.split('（')[0] as keyof ReturnType<typeof getServiceStatuses>
 
-    // 关闭时：即便字段齐全也 disabled（显式关闭，不依赖出厂默认值）。
+    // 关闭时：即便字段齐全也 disabled。
     const disabled = getServiceStatuses({
       config: makeAllDisabledConfig(),
       publicEnv: parsePublicEnv(testCase.completePublic),
@@ -741,7 +712,7 @@ describe('getServiceStatuses — 完整配置判断（数据驱动）', () => {
     })
     expect(disabled[moduleName].state).toBe('disabled')
 
-    // 启用但缺字段：incomplete。
+    // 启用但缺字段。
     const incomplete = getServiceStatuses({
       config: makeConfig(testCase.mutate),
       publicEnv: parsePublicEnv({}),
@@ -749,7 +720,7 @@ describe('getServiceStatuses — 完整配置判断（数据驱动）', () => {
     })
     expect(incomplete[moduleName].state).toBe('incomplete')
 
-    // 启用且字段齐全：configured。
+    // 启用且字段齐全。
     const configured = getServiceStatuses({
       config: makeConfig(testCase.mutate),
       publicEnv: parsePublicEnv(testCase.completePublic),
@@ -759,9 +730,7 @@ describe('getServiceStatuses — 完整配置判断（数据驱动）', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// formatServiceDiagnostics —— CLI 共享诊断输出
-// ---------------------------------------------------------------------------
+// formatServiceDiagnostics：CLI 共享诊断输出。
 describe('formatServiceDiagnostics', () => {
   const statusesOf = (input: Parameters<typeof getServiceStatuses>[0]) => getServiceStatuses(input)
 
@@ -786,9 +755,8 @@ describe('formatServiceDiagnostics', () => {
   it('全部关闭时不产生 incomplete，且不输出任何字段值', () => {
     const result = formatServiceDiagnostics(
       statusesOf({
-        // auth 默认要求邮箱验证，因而默认配置下它必然 incomplete（缺 mail）——这正是
-        // 该规则的目的。本用例只关心「无 incomplete 时的输出与脱敏」，故显式关掉验证，
-        // 把 auth 也变成 configured；auth 与 mail 的死锁组合由上面的 auth 分支用例覆盖。
+        // auth 默认要求邮箱验证，缺 mail 时必然 incomplete；本用例只验证无 incomplete
+        // 时的输出与脱敏，故关掉验证。
         config: makeAllDisabledConfig((c) => {
           c.auth.requireEmailVerification = false
         }),
@@ -821,8 +789,7 @@ describe('formatServiceDiagnostics', () => {
         config: makeAllDisabledConfig((c) => {
           c.payment.enabled = true
           c.payment.allowedPriceIds = ['price_1']
-          // 同上一用例：本用例只验证「齐全时 configured 且不泄漏 secret」，
-          // 关掉邮箱验证以隔离 auth 与 mail 的组合判定。
+          // 同上：只验证齐全时 configured 且不泄漏 secret，故关掉邮箱验证。
           c.auth.requireEmailVerification = false
         }),
         publicEnv: parsePublicEnv({}),
@@ -841,9 +808,7 @@ describe('formatServiceDiagnostics', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// validateWebsiteConfig
-// ---------------------------------------------------------------------------
+// validateWebsiteConfig。
 describe('validateWebsiteConfig', () => {
   it('默认配置无 issues', () => {
     expect(validateWebsiteConfig(makeConfig())).toEqual([])

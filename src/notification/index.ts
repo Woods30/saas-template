@@ -10,8 +10,7 @@ type ProviderFactory = () => NotificationProvider
 type NotificationEnv = Pick<ServerEnv, 'DISCORD_WEBHOOK_URL' | 'FEISHU_WEBHOOK_URL'>
 
 /**
- * 按当前请求 env 构建 notification provider 注册表。
- * 在 src/server.ts 的 als.run() 中调用，结果注入 ServerContext.notificationProviderRegistry。
+ * 按当前请求 env 构建 notification provider 注册表，在 `src/server.ts` 的 `als.run()` 中调用。
  * 只消费 `parseServerEnv` 归一化后的字段。
  */
 export function buildNotificationProviderRegistry(

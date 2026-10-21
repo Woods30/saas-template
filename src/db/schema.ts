@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm'
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
-// Better Auth 自动生成的表（与 better-auth CLI 输出一致）
+// Better Auth 表：需与 better-auth CLI 输出保持一致。
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
@@ -12,9 +12,8 @@ export const users = sqliteTable('users', {
   banned: integer('banned', { mode: 'boolean' }).default(false),
   banReason: text('ban_reason'),
   banExpires: integer('ban_expires', { mode: 'timestamp' }),
-  // 注意：这里**没有**软删除列。admin 插件的 `removeUser` 是硬删除（连同会话与账号
-  // 一并级联），写任何软删除字段都不会有人读；需要「可恢复删除」时应改用自定义
-  // 插件或 `adminUpdateUser` + 自有字段，而不是留一个永远为 null 的列。
+  // 没有软删除列：admin 插件的 `removeUser` 是硬删除，写软删除字段不会有人读；
+  // 需要「可恢复删除」应改用自定义插件，而不是留一个永远为 null 的列。
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 })
@@ -31,7 +30,6 @@ export const sessions = sqliteTable('sessions', {
   // better-auth admin 插件：记录「被谁 impersonate」的管理员 id（可空）。
   impersonatedBy: text('impersonated_by'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-  // better-auth 1.7.10 的 session 模型要求 updatedAt（required，onUpdate）。
   // 缺列会让 drizzle 适配器在运行时报 `SchemaMismatchError: Missing columns: session.updatedAt`。
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 })
@@ -76,13 +74,10 @@ export const verifications = sqliteTable('verifications', {
 /**
  * 订阅。
  *
- * `customerId` / `subscriptionId` 是**外部系统主键**，列名不绑定供应商（见
- * `payments` 的说明）。`subscription_id` / `customer_id` / `user_id` 三列各建一个
- * 普通索引：webhook 每个事件都按 subscription_id 更新、按 customer_id 反查用户，
- * 而工作台与 portal 端点都按 user_id 取当前订阅。此前三者都无索引，是整表扫描。
+ * 三列各建普通索引对应三条热点查询：webhook 按 subscription_id 更新、按 customer_id
+ * 反查用户，工作台与 portal 按 user_id 取当前订阅。
  *
- * 不建唯一索引：Stripe 允许同一用户有多个订阅（历史遗留、升降级并存），
- * 强行唯一会在合法场景下让 webhook 写入失败。
+ * 不建唯一索引：Stripe 允许同一用户有多个订阅（升降级并存），唯一约束会让 webhook 写入失败。
  */
 export const subscriptions = sqliteTable(
   'subscriptions',
@@ -114,19 +109,14 @@ export const subscriptions = sqliteTable(
 /**
  * 支付流水。
  *
- * 列名刻意保持**供应商中立**（`provider` / `invoiceId` / `chargeId` 而非
- * `stripeInvoiceId`）：Stripe 是当前唯一的 provider，但模板的 provider 注册表允许
- * 接入 Creem / Waffo 等。若把供应商写进列名，新增 provider 时要么改表、要么在新列
- * 里重复同一语义，两种做法都会让「一个用户的所有流水」查询变成按 provider 分支。
- *
- * `subscriptionId` / `customerId` 同理：它们是外部系统的主键，语义跨供应商一致。
+ * 列名刻意保持供应商中立（`provider` / `invoiceId` / `chargeId` 而非 `stripeInvoiceId`）：
+ * 把供应商写进列名，新增 provider 时要么改表、要么重复语义，查询还会按 provider 分支。
  */
 export const payments = sqliteTable(
   'payments',
   {
     id: text('id').primaryKey(),
     userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
-    /** 产生该流水的 provider（`stripe` / 未来的 `creem` 等）。 */
     provider: text('provider').notNull().default('stripe'),
     type: text('type').notNull(),
     invoiceId: text('invoice_id'),
@@ -161,9 +151,8 @@ export const files = sqliteTable('files', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 })
 
-// Better Auth `@better-auth/api-key` 插件生成的表。
-// 列以插件内置的 `apiKeySchema`（node_modules/@better-auth/api-key）为唯一依据：
-// 21 个声明字段 + 自动 id = 22 列；索引在 config_id / reference_id / key（均为普通索引，非 unique）。
+// `@better-auth/api-key` 插件生成的表，列以插件内置的 `apiKeySchema` 为唯一依据：
+// 21 个声明字段 + 自动 id = 22 列；索引均为普通索引（非 unique）。
 export const apikey = sqliteTable(
   'apikey',
   {
@@ -207,23 +196,21 @@ export const newsletterSubscriptions = sqliteTable('newsletter_subscriptions', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 })
 
-// 幂等表：所有外部 webhook 统一落点，避免重投/乱序造成重复副作用。
-// 业务 handler 在 transaction 中先 INSERT event id，成功后 UPDATE processedAt；
-// 失败 DELETE 整行让源端重投。
+// 幂等表：所有外部 webhook 统一落点。业务 handler 先 INSERT event id，
+// 成功后 UPDATE processedAt，失败 DELETE 整行让源端重投。
 export const webhookEvents = sqliteTable(
   'webhook_events',
   {
     id: text('id').primaryKey(), // source event id (e.g. `evt_xxx` for Stripe)
-    source: text('source').notNull(), // 'stripe' / 'github' / ...
+    source: text('source').notNull(),
     type: text('type').notNull(),
-    payload: text('payload').notNull(), // raw JSON for replay
+    payload: text('payload').notNull(),
     receivedAt: integer('received_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
     processedAt: integer('processed_at', { mode: 'timestamp' }),
   },
   (table) => ({
-    // 补处理：扫描「已收未处理」的事件（进程在 UPDATE processedAt 前崩溃会留下这类行）。
+    // 扫描「已收未处理」的事件（进程在 UPDATE processedAt 前崩溃会留下这类行）。
     processedIdx: index('webhook_events_processed_idx').on(table.processedAt),
-    // 排障按来源 + 类型过滤。
     sourceTypeIdx: index('webhook_events_source_type_idx').on(table.source, table.type),
   }),
 )

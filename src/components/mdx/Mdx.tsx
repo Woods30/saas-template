@@ -22,21 +22,12 @@ import { m } from '@/locale/paraglide/messages.js'
 import '@/styles/mdx.css'
 
 /**
- * 最小 markdown 渲染：把 Content Collections 文档字符串转为 JSX.
- *
- * 支持：# / ## / ### 标题、代码块（```...```）、表格（`| a | b |` + 分隔行）、
- * 无序列表（`- `）、引用块（`> `）、段落、独占一行的图片
- * （`![说明](/path.png)`，可带 `"标题"`），以及行内 `code` / **bold** / [链接](地址)。
- * 不支持：有序列表、嵌套列表、HTML（v0.2 升级到 @mdx-js/rollup 后开启）。
- *
- * 表格与链接是配置类文档的刚需——没有它们，字段表会退化成一行竖线，
- * 交叉链接会原样显示 `[文字](地址)`。
+ * 最小 markdown 渲染：标题、代码块、表格、无序列表、引用块、段落、
+ * 独占一行的图片，以及行内 code / bold / 链接。不支持有序列表、嵌套列表与 HTML。
  */
 export function Mdx({ source }: { source: string }) {
-  // 正文开头的 `# 标题` 与 frontmatter 的 `title` 重复（调用方都已用
-  // frontmatter 标题渲染页面 `<h1>`），丢弃首个 h1 块避免页面出现两个标题。
+  // 丢弃正文首个 h1：调用方已用 frontmatter 的 `title` 渲染页面标题。
   const blocks = useMemo(() => stripLeadingHeading(parseBlocks(source)), [source])
-  // 连续的 `###` 小节包成时间线（见 `groupSteps`）。
   const sections = useMemo(() => groupSteps(blocks), [blocks])
 
   return (
@@ -52,10 +43,10 @@ export function Mdx({ source }: { source: string }) {
   )
 }
 
-/** 单个块级元素的渲染。抽出来是因为时间线内部要复用同一套渲染。 */
+/** 单个块级元素的渲染；时间线内部复用同一套渲染。 */
 function BlockView({ block: b }: { block: AnyBlock }) {
   if (b.kind === 'h1') return <h1>{b.text}</h1>
-  // h2 / h3 带锚点 id，供右侧目录的 `#id` 链接跳转（id 由 headingId 统一生成）。
+  // h2 / h3 的锚点 id 供右侧目录跳转，必须与 headingId 保持同一算法。
   if (b.kind === 'h2') return <h2 id={headingId(b.text)}>{b.text}</h2>
   if (b.kind === 'h3') return <h3 id={headingId(b.text)}>{b.text}</h3>
   if (b.kind === 'code') return <Code block={b} />
@@ -74,7 +65,6 @@ function BlockView({ block: b }: { block: AnyBlock }) {
     return (
       <ListTag>
         {b.items.map((item) => (
-          // 列表项为纯文本，内容本身即可作为稳定 key。
           <li key={item}>{renderInline(item)}</li>
         ))}
       </ListTag>
@@ -89,14 +79,8 @@ type RenderSection =
   | { kind: 'steps'; key: string; steps: Array<{ block: AnyBlock; body: AnyBlock[] }> }
 
 /**
- * 把连续的 `###` 小节收拢成时间线。
- *
- * 判定条件：某个 `##` 标题之后紧跟至少两个 `###`，就把这些 `###`（以及各自的正文）
- * 当作一组步骤，渲染成带编号与竖线的序列。
- *
- * 为什么不是「所有 `###` 都变成步骤」：`###` 在文档里也用来划分同级小节（如
- * `auth.zh.md` 的「验证链接 / 重置链接」）。只有**成组出现**时才是操作序列；
- * 孤立的 `###` 保持普通标题。这条规则不需要内容作者额外标注，也不会误伤。
+ * 连续至少两个 `###` 小节收拢为步骤时间线；孤立 `###` 仍按普通标题渲染，
+ * 因为 `###` 也用于并列小节（如「验证链接 / 重置链接」），不能一律当步骤。
  */
 function groupSteps(blocks: AnyBlock[]): RenderSection[] {
   const sections: RenderSection[] = []
@@ -112,7 +96,6 @@ function groupSteps(blocks: AnyBlock[]): RenderSection[] {
       continue
     }
 
-    // 收集连续的 `###` 小节：每个小节 = 标题 + 直到下一个 h2/h3 的正文。
     const steps: Array<{ block: AnyBlock; body: AnyBlock[] }> = []
     while (i < blocks.length && blocks[i]?.kind === 'h3') {
       const heading = blocks[i] as Block
@@ -127,7 +110,7 @@ function groupSteps(blocks: AnyBlock[]): RenderSection[] {
       steps.push({ block: heading, body })
     }
 
-    // 只有一个小节不构成序列——退回普通标题渲染，避免给单个小节套一条孤立竖线。
+    // 单个小节不构成序列，退回普通标题渲染。
     if (steps.length < 2) {
       const [only] = steps
       if (only) {
@@ -146,13 +129,8 @@ function groupSteps(blocks: AnyBlock[]): RenderSection[] {
 }
 
 /**
- * 步骤时间线：左侧编号圆点 + 贯穿竖线，右侧是小节标题与正文。
- *
- * 参照 docs.tanstarter.dev 的 `fd-steps`。用「编号 + 竖线」而不是普通小标题，是因为
- * 配置类文档的 `###` 是**有先后顺序的操作**（先建 bucket 才能绑 binding），
- * 平铺的小标题读起来像并列选项，容易跳步。
- *
- * 标题仍保留 `h3` 与锚点 id：右侧目录、`#锚点` 深链、读屏软件的标题导航都依赖它。
+ * 步骤时间线：编号圆点 + 竖线。配置类文档的 `###` 常有先后顺序，平铺小标题
+ * 容易被当成并列选项而跳步。标题仍保留 `h3` 与锚点 id，目录与深链依赖它们。
  */
 function Steps({ steps }: { steps: Array<{ block: AnyBlock; body: AnyBlock[] }> }) {
   return (
@@ -209,10 +187,7 @@ interface QuoteBlock {
 
 /**
  * 图片块：独占一行的 `![alt](/path.png)`，可选 `![alt](/path.png "标题")`。
- *
- * 只识别独占一行的写法：行内图片在段落里会打断文字流，文档站用不到，也不值得为它
- * 扩展行内解析器。`alt` 同时用作 `<figcaption>`——截图没有说明文字时读者不知道
- * 自己在看哪一屏。
+ * 只识别独占一行写法；`alt` 在没有 `"标题"` 时充当图注。
  */
 interface ImageBlock {
   kind: 'image'
@@ -224,15 +199,7 @@ interface ImageBlock {
 
 type AnyBlock = Block | TableBlock | ListBlock | QuoteBlock | ImageBlock
 
-/**
- * 代码块的标题栏文案：优先显示文件名，其次语言名，都没有时显示「代码」。
- *
- * 围栏支持两种写法（与 fumadocs 一致）：
- * - ```` ```ts ````：语言名，标题栏显示 `ts`；
- * - ```` ```ts title="wrangler.jsonc" ````：带文件名，标题栏显示文件名。
- *
- * 文件名对配置类文档很关键：读者要知道这段 JSON 该粘进哪个文件。
- */
+/** 代码块标题栏文案：文件名 > 语言名 > 「代码」。 */
 function codeTitle(lang: string, meta: string): string {
   const file = /title="([^"]+)"/.exec(meta)?.[1]
   if (file) return file
@@ -240,18 +207,12 @@ function codeTitle(lang: string, meta: string): string {
   return m.docs_code_block()
 }
 
-/** 终端类语言用终端图标，其余用文件图标——与参考站一致，让读者一眼分辨「命令」与「文件内容」。 */
+/** 终端类语言用终端图标，其余用文件图标。 */
 const TERMINAL_LANGS = new Set(['bash', 'sh', 'shell', 'zsh', 'console', 'powershell', 'cmd'])
 
 /**
- * 代码块：文件图标 + 文件名标题栏 + 复制按钮。
- *
- * 用 shadcn 的 `CodeBlock` 系列而不是裸 `<pre>`：复制按钮、`copied` 反馈、
- * `aria-live` 播报都在原件里，自己写一份只会漏掉其中几项。
- *
- * **标题栏始终渲染**（参照 docs.tanstarter.dev）：它同时承担「这是哪个文件 / 哪门语言」
- * 与「和正文分割开」两个职责。没有标题栏时，代码块与段落只靠一圈细边框区分，
- * 长文档里很容易看混。
+ * 代码块：文件图标 + 标题栏 + 复制按钮。用 shadcn 的 `CodeBlock` 系列而非裸
+ * `<pre>`，复制反馈与 `aria-live` 播报由原件提供。标题栏始终渲染，兼作与正文的分隔。
  */
 function Code({ block }: { block: Block }) {
   const lang = block.lang ?? ''
@@ -260,10 +221,8 @@ function Code({ block }: { block: Block }) {
 
   return (
     <CodeBlock className="not-prose my-4">
-      {/* 头部定高 38px 并居中（参照站是 `h-9.5`）。原件只给了 `pt-3` 没有 `pb`，
-          内容因此贴着下边框，看起来「偏下」——这里补成对称内边距。
-          标题颜色压到 `muted-foreground`：原件默认用 `text-foreground`，和正文代码
-          同色，会抢走对代码本身的注意力。文件名是辅助信息，弱一档更合适。 */}
+      {/* 原件只有 `pt-3` 没有 `pb`，补成对称内边距；标题压到 `muted-foreground`，
+          避免与正文代码同色而抢注意力。 */}
       <CodeBlockHeader className="h-9.5 items-center border-b border-border bg-muted/60 px-4 pt-0">
         <FileIcon className="size-3.5 shrink-0" aria-hidden />
         <CodeBlockTitle className="text-xs font-normal text-muted-foreground">
@@ -280,13 +239,7 @@ function Code({ block }: { block: Block }) {
   )
 }
 
-/**
- * 独占一行的图片：圆角外框 + 细描边，`alt` 作为说明文字。
- *
- * 用 `<img>` 而非框架的图片组件：文档截图是本地静态资源，不需要布局位移占位；
- * 显式写 `loading="lazy"` 让长文档里的下方截图不参与首屏。
- * `not-prose` 隔离 typography 对 `img` 的默认外边距。
- */
+/** 独占一行的图片：`<img>` + 懒加载，`not-prose` 隔离 typography 的默认外边距。 */
 function Figure({ image }: { image: ImageBlock }) {
   return (
     <figure className="not-prose my-5">
@@ -306,9 +259,7 @@ function Figure({ image }: { image: ImageBlock }) {
 
 function Table({ table }: { table: TableBlock }) {
   return (
-    // `not-prose`：表格样式由 ui/table 提供，不叠加 typography 的表格排版。
-    // 外框、圆角、表头底色都由 globals.css 的 `[data-slot='table-*']` 规则统一给，
-    // 调用处不重复写。
+    // `not-prose`：表格样式由 ui/table 与 globals.css 的 `[data-slot='table-*']` 提供。
     <div className="not-prose mb-4">
       <UITable>
         <TableHeader>
@@ -340,10 +291,7 @@ function isNoteQuote(text: string): boolean {
   return /^\s*\*\*(Note|Notes|注意事项)\*\*/.test(text)
 }
 
-/**
- * 丢弃正文开头的 `# 标题` 块（若存在）。所有调用方已用 frontmatter 的
- * `title` 渲染页面标题，正文里重复的 h1 会造成页面上出现两个 `<h1>`。
- */
+/** 丢弃正文开头的 `# 标题`，避免与 frontmatter 标题重复成两个 `<h1>`。 */
 function stripLeadingHeading(blocks: AnyBlock[]): AnyBlock[] {
   return blocks[0]?.kind === 'h1' ? blocks.slice(1) : blocks
 }
@@ -366,11 +314,8 @@ function splitTableRow(line: string): string[] {
 }
 
 /**
- * 独占一行的图片：`![alt](src)` 或 `![alt](src "标题")`。
- *
- * 地址走 {@link safeHref} 同一套 scheme 白名单——文档内容可能来自外部投稿，
- * `![x](javascript:...)` 不应有机会进入 `src`。地址非法时返回 `undefined`，
- * 该行退回普通段落（原样显示，便于作者发现写错）。
+ * 解析独占一行的图片。地址走 {@link safeHref} 的 scheme 白名单，非法时返回
+ * `undefined`，该行退回普通段落。
  */
 function parseImageLine(line: string): ImageBlock | undefined {
   const match = /^\s*!\[([^\]]*)\]\(\s*([^)\s]+)\s*(?:"([^"]*)")?\s*\)\s*$/.exec(line)
@@ -418,8 +363,7 @@ function parseBlocks(source: string): AnyBlock[] {
       } else {
         flushPara()
         inCode = true
-        // 围栏信息串：```` ```ts title="a.jsonc" ```` → 语言 `ts` + 其余标记。
-        // 只用于标题栏标注，不做语法高亮。
+        // 围栏信息串拆成语言与其余标记，仅用于标题栏，不做语法高亮。
         const info = line.slice(3).trim()
         codeLang = info.split(/\s+/)[0] ?? ''
         codeMeta = info.slice(codeLang.length).trim()
@@ -431,7 +375,6 @@ function parseBlocks(source: string): AnyBlock[] {
       continue
     }
 
-    // 表格：连续 `|` 行；第二行为分隔行时第一行是表头，否则整体按数据行处理。
     if (isTableRow(line)) {
       flushPara()
       const raw: string[] = []
@@ -441,7 +384,6 @@ function parseBlocks(source: string): AnyBlock[] {
       }
       i--
       const body = raw.filter((row) => !isTableDivider(row))
-      // 仅当第二行是分隔行（`|---|---|`）时，第一行才是表头；否则整块按数据行渲染。
       const hasHeader = raw.length > 1 && isTableDivider(raw[1] ?? '')
       const headerRow = hasHeader ? body[0] : undefined
       const rows = hasHeader ? body.slice(1) : body
@@ -453,8 +395,7 @@ function parseBlocks(source: string): AnyBlock[] {
       continue
     }
 
-    // 图片：独占一行的 `![alt](src)`，可选 `"标题"`。
-    // 放在段落之前：否则它会被当作普通段落，`![](...)` 原样显示成文字。
+    // 图片必须放在段落分支之前，否则 `![](...)` 会被当成普通段落原样显示。
     const image = parseImageLine(line)
     if (image) {
       flushPara()
@@ -462,7 +403,6 @@ function parseBlocks(source: string): AnyBlock[] {
       continue
     }
 
-    // 引用块：连续的 `> ` 行合并，去掉前导 `>` 后按段落拼接。
     if (/^\s{0,3}>/.test(line)) {
       flushPara()
       const parts: string[] = []
@@ -475,7 +415,6 @@ function parseBlocks(source: string): AnyBlock[] {
       continue
     }
 
-    // 列表：连续的 `- ` / `* `（无序）或 `1. `（有序）行合并成一个列表。
     if (isListItem(line) || isOrderedItem(line)) {
       flushPara()
       const ordered = isOrderedItem(line)
@@ -510,12 +449,7 @@ function parseBlocks(source: string): AnyBlock[] {
   return out
 }
 
-/**
- * 把行内 markdown 转成 JSX 子元素。
- *
- * 按 `code` → `**bold**` → `[文字](地址)` 的顺序整体扫描，保持出现顺序。
- * 链接文字递归解析，因此 `[**重要**说明](./a)` 里的粗体仍然生效。
- */
+/** 行内 markdown → JSX：`code`、`**bold**`、`[文字](地址)`；链接文字递归解析。 */
 function renderInline(text: string): React.ReactNode {
   const parts: React.ReactNode[] = []
   const re = /`([^`]+)`|\*\*([^*]+)\*\*|\[([^\]]+)\]\(([^)\s]+)\)/g
@@ -531,8 +465,7 @@ function renderInline(text: string): React.ReactNode {
       parts.push(<strong key={match.index}>{match[2]}</strong>)
     } else if (match[3] !== undefined && match[4] !== undefined) {
       const href = safeHref(match[4])
-      // scheme 不在白名单内时不生成 a 元素，只保留链接文字：React 不拦截
-      // `javascript:` 地址（开发期仅改写并告警，生产期原样输出），必须在此丢弃。
+      // 非法 scheme 只保留文字：React 生产期不拦截 `javascript:` 地址，必须在此丢弃。
       parts.push(
         href === undefined ? (
           <Fragment key={match.index}>{renderInline(match[3])}</Fragment>
@@ -560,18 +493,13 @@ function externalLinkAttrs(href: string): { rel?: string } {
 }
 
 /**
- * 校验链接地址的 scheme，只放行 `http` / `https` / `mailto` 与相对路径、锚点。
- *
- * 其余显式 scheme（`javascript:`、`data:`、`vbscript:` 等）一律返回 `undefined`，
- * 由调用方降级为纯文本。React 不会在生产期拦截 `javascript:` 地址，渲染器又是通用
- * 组件，因此不能依赖内容源的信任级别来兜底。
+ * 只放行 `http` / `https` / `mailto` 与相对路径、锚点；其余 scheme 返回 `undefined`。
+ * 渲染器是通用组件，不能依赖内容源的信任级别兜底。
  */
 function safeHref(href: string): string | undefined {
   const value = href.trim()
   if (/^(https?:|mailto:)/i.test(value)) return value
-  // 出现 `scheme:` 形式的显式协议但不在白名单内 → 丢弃。
   if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return undefined
-  // 相对路径（`./x`、`../x`、`/x`）与锚点（`#x`）保留。
   return value
 }
 

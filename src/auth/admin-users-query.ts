@@ -4,9 +4,7 @@ import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
 /**
  * 管理员用户列表的筛选条件与类型。
  *
- * 单独一个模块（而不是塞进 `admin-users.ts`）是为了让它在不引入
- * server-context / auth / D1 的前提下被测试引用：这里只依赖 drizzle，
- * 服务端与测试两端共用同一份实现，避免「测试跑的逻辑和线上不同」。
+ * 单独成模块：只依赖 drizzle，服务端与测试共用同一实现。
  */
 
 /** `users` 表里本页要用的字段。`role` 可空：非 admin 插件写入前可能为空。 */
@@ -44,19 +42,16 @@ export interface AdminUsersResult {
 /**
  * LIKE 通配符转义。
  *
- * `contains` 之类的辅助函数对 `%` / `_` **不转义**：搜 `a_b` 会命中 `axb`，
- * 搜 `%` 会命中几乎所有行。管理员是把它当「邮箱片段精确查找」用的，故这里显式
- * 转义后再交给 `like`。`\\` 自身也转义，否则无法搜索字面反斜杠。
+ * `contains` 等辅助函数不转义 `%` / `_`：搜 `a_b` 会命中 `axb`，搜 `%` 几乎命中所有行。
  */
 export function escapeLike(input: string): string {
   return input.replace(/([%_\\])/g, '\\$1')
 }
 
 /**
- * 拼 `where` 条件；三个筛选缺省时返回 `undefined`（无 `where`）。
+ * 拼 `where` 条件；三个筛选缺省时返回 `undefined`。
  *
- * 按列拆分，每个条件独立可空，最后用 `and` 组合——这样任何组合（含全空）
- * 都走同一条路径，不需要为「两个」「三个」各写一遍。
+ * 每个条件独立可空，最后用 `and` 组合，任何组合都走同一条路径。
  */
 export function buildUserWhere(
   users: {
@@ -69,8 +64,7 @@ export function buildUserWhere(
   const needle = query.search?.trim()
   const conditions = [
     needle
-      ? // SQLite 的 LIKE 只对 ASCII 大小写不敏感，转成小写让比较不依赖 collation，
-        // 同时也覆盖非 ASCII 的本地大小写差异。
+      ? // SQLite 的 LIKE 只对 ASCII 大小写不敏感，转小写让比较不依赖 collation。
         like(sql`lower(${users.email})`, `%${escapeLike(needle)}%`)
       : undefined,
     query.role && query.role !== 'all' ? eq(users.role, query.role) : undefined,

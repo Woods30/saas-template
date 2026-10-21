@@ -58,10 +58,8 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/api-keys')({
 const SECONDS_PER_DAY = 86_400
 
 /**
- * 有效期选项（天）。「永不过期」由下面的 `'never'` 单独表示，不放进这个数组。
- *
- * 上限卡在 365 天：插件 `keyExpiration.maxExpiresIn` 默认就是 365，超出会返回
- * `EXPIRES_IN_IS_TOO_LARGE`——把界面上限对齐服务端默认值，用户不会选到一个必然被拒的值。
+ * 有效期选项（天）。上限 365 对齐插件 `keyExpiration.maxExpiresIn` 默认值，
+ * 超出会返回 `EXPIRES_IN_IS_TOO_LARGE`。
  */
 const EXPIRY_OPTIONS = [30, 90, 365] as const
 const DEFAULT_EXPIRY_DAYS = 30
@@ -83,17 +81,14 @@ interface ApiKeyEntry {
 function ApiKeysPage() {
   const [keys, setKeys] = useState<ApiKeyEntry[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // 名称过滤：与 admin 用户管理同一套做法——输入即时回显，过滤在渲染时本地生效。
   const [searchValue, setSearchValue] = useState('')
 
-  // 创建弹窗：输入名称 + 选有效期 → 提交；成功后切到「一次性展示」弹窗。
   const [createOpen, setCreateOpen] = useState(false)
   const [name, setName] = useState('')
   const [expiry, setExpiry] = useState<ExpiryChoice>(DEFAULT_EXPIRY_DAYS)
   const [creating, setCreating] = useState(false)
   const [createdKey, setCreatedKey] = useState<string | null>(null)
 
-  // 删除确认：记录待删条目（null 表示无）。
   const [pendingDelete, setPendingDelete] = useState<ApiKeyEntry | null>(null)
 
   const load = useCallback(async () => {
@@ -113,8 +108,7 @@ function ApiKeysPage() {
   async function onCreate() {
     setCreating(true)
     setError(null)
-    // `never` 时传 `null`：插件的 `expiresIn` 语义就是「null = 不过期」，
-    // 省略字段则会落到 `keyExpiration.defaultExpiresIn`（未配置时同样为 null）。
+    // `never` 传 `null`：省略字段会落到 `keyExpiration.defaultExpiresIn`。
     const expiresIn = expiry === 'never' ? null : expiry * SECONDS_PER_DAY
     const { data, error: createError } = await authClient.apiKey.create({
       name: name.trim(),
@@ -125,7 +119,7 @@ function ApiKeysPage() {
       setError(createError.message?.split('\n')[0] ?? m.settings_error_generic())
       return
     }
-    // 明文 `key` 只在此刻返回一次；列表接口永远不会再给出它。
+    // 明文 `key` 只在此刻返回一次，列表接口不会再给出。
     setCreatedKey(data?.key ?? null)
     setCreateOpen(false)
     setName('')
@@ -145,8 +139,7 @@ function ApiKeysPage() {
     toast.add({ type: 'success', title: m.settings_api_keys_deleted_toast() })
   }
 
-  // 名称过滤：本地过滤（`apiKey.list` 没有查询参数，也没有分页），
-  // 空关键词等于不过滤，显示全部。
+  // `apiKey.list` 无查询参数与分页，只能在本地过滤。
   const visibleKeys: ApiKeyEntry[] | null = useMemo(() => {
     const needle = searchValue.trim().toLowerCase()
     if (keys === null) return null
@@ -161,15 +154,7 @@ function ApiKeysPage() {
         <p className="mt-1 text-sm text-muted-foreground">{m.settings_api_keys_description()}</p>
       </div>
 
-      {/* 表格直接放在内容区，外面不再套 `Card`。
-
-          按 shadcn `dashboard-01` 示例的写法，表格自带外框就够：`Table` 的滚动容器
-          （`data-slot="table-container"`）由 globals.css 统一给了边框 + 圆角，
-          `TableHeader` 给 `sticky top-0 bg-muted`，页面再套一层 `Card` 就出现
-          「框里套框」的双边框——一圈是卡片的，一圈是表格的，两侧间距还不一致。
-
-          同理，工具行（搜索 + 创建按钮）与分页行都贴在表格外侧、用 `flex justify-between`
-          与表格共享同一套留白，不另起一张卡。 */}
+      {/* 不外套 `Card`：`Table` 的边框与圆角已由 globals.css 统一提供，套上会成双边框。 */}
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Input
@@ -195,9 +180,7 @@ function ApiKeysPage() {
             <Spinner />
           </div>
         ) : visibleKeys.length === 0 ? (
-          /* 空态自带主操作：按 shadcn `Empty` 的组合约定，操作按钮放 `EmptyContent`，
-             与图标 / 文案一起垂直居中。不要留在 `Empty` 外面——`Empty` 带 `flex-1`，
-             外面再放一个按钮会被挤到下一行左侧。 */
+          /* 主操作必须放 `EmptyContent`：`Empty` 带 `flex-1`，放外面会被挤到下一行左侧。 */
           <Empty>
             <EmptyHeader>
               <EmptyMedia variant="icon">
@@ -215,8 +198,7 @@ function ApiKeysPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                {/* 窄屏只留「名称 / 密钥 / 操作」，时间列按断点放出；
-                    理由同 sessions 页：横向滚动会把「删除」推出可视区。 */}
+                {/* 窄屏收起时间列：横向滚动会把「删除」推出可视区。 */}
                 <TableHead>{m.settings_api_keys_table_name()}</TableHead>
                 <TableHead>{m.settings_api_keys_table_key()}</TableHead>
                 <TableHead className="hidden sm:table-cell">
@@ -231,9 +213,7 @@ function ApiKeysPage() {
             <TableBody>
               {visibleKeys.map((entry) => (
                 <TableRow key={entry.id}>
-                  {/* 名称由用户输入，React 默认转义，无需手工处理。 */}
-                  {/* 密钥用等宽：掩码里的 `••••••` 与前后缀需要字符对齐，这是唯一
-                      有语义的等宽场景。字号不缩小，与同行其它单元格保持一致。 */}
+                  {/* 密钥用等宽：掩码需与前后缀字符对齐。 */}
                   <TableCell className="w-40 truncate">{entry.name ?? '—'}</TableCell>
                   <TableCell className="font-mono">{maskKey(entry)}</TableCell>
                   <TableCell className="hidden sm:table-cell">
@@ -261,7 +241,6 @@ function ApiKeysPage() {
         )}
       </div>
 
-      {/* 创建：输入名称 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
@@ -279,8 +258,7 @@ function ApiKeysPage() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="api-key-expiry">{m.settings_api_keys_expires_label()}</Label>
-            {/* 原生 `<select>`：选项是固定 4 项短文案，不需要搜索或分组，
-                原生控件在移动端会调起正确的滚轮 / 操作表，且零 JS 即可用。 */}
+            {/* 原生 `<select>`：固定 4 项短文案，移动端会调起正确的操作表。 */}
             <NativeSelect
               id="api-key-expiry"
               value={expiry === 'never' ? 'never' : String(expiry)}
@@ -292,8 +270,7 @@ function ApiKeysPage() {
                 )
               }
             >
-              {/* 选项列表在渲染期构造：`m.*()` 调用时才读当前语言，
-                  提到模块级会把首次加载的语言固化下来。 */}
+              {/* 选项在渲染期构造：提到模块级会固化首次加载的语言。 */}
               {EXPIRY_OPTIONS.map((days) => (
                 <NativeSelectOption key={days} value={String(days)}>
                   {m.settings_api_keys_expires_in_days({ days })}
@@ -315,7 +292,7 @@ function ApiKeysPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 一次性展示：明文 key 只出现这一次 */}
+      {/* 明文 key 只出现这一次。 */}
       <Dialog open={createdKey !== null} onOpenChange={(open) => !open && setCreatedKey(null)}>
         <DialogContent>
           <DialogHeader>
@@ -331,7 +308,6 @@ function ApiKeysPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 删除确认 */}
       <AlertDialog
         open={pendingDelete !== null}
         onOpenChange={(open) => !open && setPendingDelete(null)}

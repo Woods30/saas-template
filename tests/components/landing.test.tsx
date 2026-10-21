@@ -167,15 +167,14 @@ describe('LandingPage', () => {
     },
   )
 
-  // 首页定价模块由 `payment.enabled` 门禁：模块关闭时不应出现付不了钱的方案卡片。
-  // 链接指向 `/pricing`，那条路由自带同一道门禁，关闭时是 404 而不是死链。
+  // 定价模块受 `payment.enabled` 门禁；链接指向的 `/pricing` 自带同一道门禁。
   it.each(['zh', 'en'] as const)('%s 首页展示方案概览并导流定价页', (locale) => {
     setLocale(locale, { reload: false })
     const { container } = render(<LandingPage />)
 
     const plans = container.querySelector('#plans')
     expect(plans).not.toBeNull()
-    // 只展示付费方案：免费版没有价格，在「先看清楚价格」这个区块里是噪音。
+    // 只展示付费方案：免费版没有价格，在这个区块里是噪音。
     expect(plans).toHaveTextContent(locale === 'zh' ? '专业版' : 'Pro')
     expect(plans).toHaveTextContent(locale === 'zh' ? '终身版' : 'Lifetime')
     expect(plans).not.toHaveTextContent(locale === 'zh' ? '免费版' : 'Free')

@@ -15,7 +15,7 @@ import { websiteConfig } from '@/config/website'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 import { getRouter } from '@/router'
 
-// 站点配置是模块级单例，部分用例需要临时改开关；afterEach 用快照整体复原，避免相互污染。
+// 站点配置是模块级单例，afterEach 用快照整体复原，避免用例相互污染。
 const originalConfig = structuredClone(websiteConfig)
 
 beforeEach(() => setLocale('en', { reload: false }))
@@ -25,7 +25,7 @@ afterEach(() => {
   Object.assign(websiteConfig, structuredClone(originalConfig))
 })
 
-/** 用真实 Router + memory history 渲染真实页面（Navbar / Footer 均在其中）。 */
+/** 用真实 Router + memory history 渲染真实页面。 */
 async function renderRoute(path: string) {
   const router = getRouter()
   router.update({
@@ -37,11 +37,8 @@ async function renderRoute(path: string) {
 }
 
 /**
- * 用最小 Router 只挂载 Navbar。
- *
- * 只给**需要交互**的用例用：真实 routeTree 的 `shellComponent` 会在 jsdom 里渲染
- * 嵌套 `<html>`，之后任何 state 更新都不返回（见下方用例的注释）。只渲染 Navbar
- * 既能覆盖触发按钮、面板与 Escape 行为，又不触碰那一层 shell。
+ * 用最小 Router 只挂载 Navbar，供需要交互的用例使用：真实 routeTree 的 `shellComponent`
+ * 会在 jsdom 里渲染嵌套 `<html>`，之后任何 state 更新都不返回。
  */
 async function renderNavbar() {
   const rootRoute = createRootRoute({ component: () => <Navbar /> })
@@ -54,7 +51,7 @@ async function renderNavbar() {
   return render(<RouterProvider router={router} />)
 }
 
-/** 用独立真实 Router 只挂载 MenuItems fixture，隔离验证共享 renderer 的结构。 */
+/** 用独立 Router 只挂载 MenuItems fixture，隔离验证共享 renderer。 */
 async function renderMenuItems(items: MenuItem[], variant: 'navbar' | 'footer') {
   const rootRoute = createRootRoute({
     component: () => <MenuItems items={items} variant={variant} />,
@@ -109,21 +106,16 @@ describe('Navbar 消费菜单配置（真实 Router）', () => {
     )
   })
 
-  // 这条用例不走 `renderRoute`（真实 routeTree）：`__root` 的 `shellComponent`
-  // 会渲染 `<html><head>…<Scripts/></body></html>`，jsdom 下嵌套 html 元素会让
-  // React 的挂载进入循环，此后**任何** state 更新都不返回——不止这条用例，
-  // 同文件后续用例连同个 run 里的其他文件都会被拖死。
-  // 因此这里用最小 Router 只挂 `Navbar`，与 `renderMenuItems` 同一思路。
+  // 不走 `renderRoute`：`shellComponent` 渲染的嵌套 `<html>` 会让 React 挂载进入循环，
+  // 此后任何 state 更新都不返回，还会拖死同 run 的其他文件。
   it('移动端 Escape 关闭面板并把焦点还给触发按钮', async () => {
     await renderNavbar()
     const header = within(screen.getByRole('banner'))
     const trigger = screen.getByRole('button', { name: 'Open navigation menu' })
-    // 面板关闭时只有桌面导航里的一份 Docs。
     expect(header.getAllByRole('link', { name: 'Docs' })).toHaveLength(1)
 
     fireEvent.click(trigger)
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
-    // 打开后桌面与移动面板各有一份 Docs。
     expect(header.getAllByRole('link', { name: 'Docs' })).toHaveLength(2)
 
     fireEvent.keyDown(window, { key: 'Escape' })
@@ -237,7 +229,7 @@ describe('MenuItems 共享 renderer', () => {
 
     const summary = screen.getByText('More')
     expect(summary.tagName).toBe('SUMMARY')
-    // 原生 <summary> 天然可聚焦；键盘 Enter / Space 展开由浏览器默认行为提供。
+    // 原生 <summary> 天然可聚焦，Enter / Space 由浏览器默认行为提供。
     summary.focus()
     expect(summary).toHaveFocus()
     const details = summary.closest('details')

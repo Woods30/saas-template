@@ -4,12 +4,9 @@ import type { NotificationPayload, NotificationProvider } from '../types'
 const REQUEST_TIMEOUT_MS = 5_000
 
 /**
- * Discord channel webhook。
+ * Discord channel webhook（URL 格式由 env 层校验）。
  *
- * URL 由 env 层校验（必须以 `https://discord.com/api/webhooks/` 开头）。
- *
- * 只判断 `res.ok`：Discord 的错误确实体现在 HTTP 状态上（429 限流、401 失效、
- * 400 格式错误），响应体里没有「200 但业务失败」这种形态，因此不需要解析 body。
+ * 只判断 `res.ok`：Discord 的错误都体现在 HTTP 状态上，没有「200 但业务失败」的形态。
  * 429 不在这里重试——重试语义属于调用方，provider 只如实返回 `false`。
  */
 export class DiscordNotificationProvider implements NotificationProvider {

@@ -1,11 +1,9 @@
 /**
  * 服务端请求上下文。
  *
- * 使用 AsyncLocalStorage（ALS）在整个请求生命周期内存储 env，
- * 使业务代码无需逐层透传即可访问 Cloudflare bindings。
- *
- * 在 `src/server.ts` 的 fetch handler 中通过 `als.run({ env }, ...)`
- * 注入，每个请求相互隔离。
+ * 使用 AsyncLocalStorage（ALS）在整个请求生命周期内存储 env，使业务代码无需逐层
+ * 透传即可访问 Cloudflare bindings。由 `src/server.ts` 的 fetch handler 注入，
+ * 每个请求相互隔离。
  */
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { KVCacheProvider } from '@/cache/provider/kv'
@@ -22,8 +20,7 @@ import type { R2StorageProvider } from '@/storage/provider/r2'
 
 interface ServerContext {
   /**
-   * 每请求归一化 env：`src/server.ts` 在请求入口把 `parseServerEnv` 的结果合并进原始
-   * binding 对象后写入，故此处同时具备已校验的字符串字段与原始资源 binding
+   * 每请求归一化 env：同时具备已校验的字符串字段与原始资源 binding
    * （DB / CACHE / BUCKET / EMAIL）。
    */
   env: Env & ServerEnv
@@ -34,36 +31,23 @@ interface ServerContext {
   notificationProviderRegistry?: Partial<Record<NotificationChannel, () => NotificationProvider>>
   paymentProviderRegistry?: Partial<Record<PaymentProviderName, () => PaymentProvider>>
   /**
-   * Per-request CSP nonce。`src/server.ts` 在每个请求入口生成，并通过 ALS
-   * 注入；`streamHandlerWithNonce` 读取后写入 `router.options.ssr.nonce`，
-   * 让 TanStack Router 的 `Asset` / `HydrationScriptsOwner` 把它展开到
-   * 所有 SSR 输出的 `<script>` 上。没有 nonce，CSP `script-src` 就会
-   * 阻止这些 inline 脚本并导致 `window.$_TSR` 缺失，进而 hydration 失败。
+   * Per-request CSP nonce，写入 `router.options.ssr.nonce`，由 TanStack Router 展开到
+   * 所有 SSR 输出的 `<script>`。缺失会让 CSP 阻止 inline 脚本，导致 hydration 失败。
    */
   nonce: string
-  /**
-   * 请求主题（来自 `THEME` cookie，缺失为 `system`）。由 `src/server.ts` 在
-   * 请求入口写入；`__root.tsx` 据此输出 `<html data-theme>`，避免首屏闪烁。
-   */
+  /** 请求主题（来自 `THEME` cookie），`__root.tsx` 据此输出 `<html data-theme>` 避免首屏闪烁。 */
   theme: Theme
-  /**
-   * 文档侧边栏是否收起（来自 `DOCS_SIDEBAR` cookie）。由 `src/server.ts` 在请求
-   * 入口写入；`DocsLayout` 据此决定首屏是否渲染侧栏，避免 hydration 时闪一下。
-   */
+  /** 文档侧边栏是否收起（来自 `DOCS_SIDEBAR` cookie），用于避免 hydration 闪烁。 */
   docsSidebarCollapsed: boolean
 }
 
 const als = new AsyncLocalStorage<ServerContext>()
 
-/**
- * 获取当前请求的 env。仅在 server-side 代码中有效，
- * 客户端调用会得到 undefined。
- */
+/** 获取当前请求的上下文。仅在 server-side 代码中有效，客户端调用会得到宽松兜底对象。 */
 export function getServerContext(): ServerContext {
   const ctx = als.getStore()
   if (!ctx) {
-    // 客户端调用或 outside of ALS context — 典型于测试环境
-    // 返回带 undefined env 的宽松对象，调用方需自行防御
+    // 客户端调用或不在 ALS context 中（典型于测试环境）：调用方需自行防御。
     return {
       env: undefined as unknown as Env & ServerEnv,
       cacheProvider: undefined as unknown as KVCacheProvider,
@@ -71,11 +55,8 @@ export function getServerContext(): ServerContext {
       newsletterProviderRegistry: undefined,
       notificationProviderRegistry: undefined,
       paymentProviderRegistry: undefined,
-      // 客户端 / 测试环境无 per-request nonce；空串会被 CSP 拒绝但不会让代码崩
       nonce: '',
-      // 客户端 / 测试环境无 per-request 主题；回退为跟随系统。
       theme: defaultTheme,
-      // 客户端 / 测试环境无 per-request 偏好；侧边栏默认展开。
       docsSidebarCollapsed: false,
     }
   }

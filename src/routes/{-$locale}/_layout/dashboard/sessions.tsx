@@ -43,8 +43,8 @@ interface SessionEntry {
 function SessionsPage() {
   const [sessions, setSessions] = useState<SessionEntry[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // 当前会话的 token：`listSessions` 不标注哪条是「本机」，靠 `getSession` 对照。
-  // 没有它，用户会看到一行可以「注销」的当前设备——点下去等于把自己踢下线。
+  // `listSessions` 不标注哪条是「本机」，需靠 `getSession` 对照；
+  // 否则用户点「注销」当前设备会把自己踢下线。
   const [currentToken, setCurrentToken] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -178,8 +178,7 @@ function SessionsPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        // 当前设备走「注销其他设备」的反面没有意义——想下线就直接登出。
-                        // 这里禁用而非隐藏：让用户知道这条就是自己，而不是以为漏了一行。
+                        // 禁用而非隐藏：让用户知道这条就是自己，而不是以为漏了一行。
                         disabled={isCurrent}
                         onClick={() => onRevoke(session.token)}
                       >

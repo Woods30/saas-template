@@ -1,14 +1,11 @@
 import { defineConfig } from 'drizzle-kit'
 
-// Local dev config: uses a local SQLite file via better-sqlite3 / libsql.
-// No `driver` key = plain SQLite connection via dbCredentials.url.
-// drizzle-kit@0.31.11 supports { dialect: 'sqlite', dbCredentials: { url: string } }.
+// 本地：不设 `driver` 即按 `dbCredentials.url` 连普通 SQLite 文件。
 export default defineConfig({
   schema: './src/db/schema.ts',
   out: './src/db/migrations',
   dialect: 'sqlite',
   dbCredentials: {
-    // file path is relative to cwd (project root)
     url: process.env.DATABASE_URL ?? 'file:./src/db/migrations/dev.db',
   },
   verbose: true,

@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Mock node:fs before importing the module under test.
+// 必须在导入前 mock node:fs。
 vi.mock('node:fs', () => ({
   readFileSync: vi.fn<(filePath: string, encoding: string) => string>(),
   writeFileSync: vi.fn<(filePath: string, content: string) => void>(),
   existsSync: vi.fn<(filePath: string) => boolean>(),
 }))
 
-// Import after vi.mock so mocks are active.
+// 在 vi.mock 之后导入，mock 才生效。
 import { readEnv, writeEnv } from '../../scripts/setup'
 
 const { readFileSync, writeFileSync, existsSync } = await import('node:fs')

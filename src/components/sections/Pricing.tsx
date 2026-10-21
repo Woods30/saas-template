@@ -5,12 +5,12 @@ export interface PricingPlan {
   id: string
   name: string
   description?: string
-  /** 月付/年付/一次性价格；空数组表示 free 方案 */
+  /** 月付/年付/一次性价格，`amount` 以分为单位；空数组表示 free 方案。 */
   prices: Array<{
-    amount: number // 以分为单位
+    amount: number
     currency: string
     interval?: 'month' | 'year' | 'one_time'
-    label?: string // 例如 "月付"
+    label?: string
   }>
   features: string[]
   cta: { label: string; href: string }
@@ -24,24 +24,13 @@ export interface PricingProps {
   plans: PricingPlan[]
   /** 渲染自定义 CTA（用于接 authClient + createCheckoutSession） */
   renderCta?: (plan: PricingPlan) => ReactNode
-  /**
-   * 当前选中的计费周期，决定每个 plan 显示哪一行价格。
-   *
-   * 不传时退回 `prices[0]`：一个 plan 只配一个周期（模板默认状态）时行为不变，
-   * 不需要调用方额外传参。
-   */
+  /** 当前计费周期；不传时退回 `prices[0]`，单周期 plan 无需额外传参。 */
   selectedInterval?: 'month' | 'year' | 'one_time'
 }
 
 /**
- * 定价卡片列表。
- *
- * `selectedInterval` 决定显示哪个周期的价格。一个 plan 配了月付与年付两个 Price 时，
- * 两行同时渲染会让用户以为要付两份钱；这里由调用方（定价页的周期切换器）指定显示
- * 哪一个，未指定时退回列表第一个。
- *
- * 渲染的是**展示价**（`pricingPlans` 里的静态金额），不是 Stripe 上的实际售价——
- * 两者必须由人保持一致，组件无从校验。
+ * 定价卡片列表。一个 plan 配多个周期时只显示选中的那个，避免被误读成要付两份钱。
+ * 渲染的是展示价（`pricingPlans` 里的静态金额），与 Stripe 实际售价需人工保持一致。
  */
 export function Pricing({ title, subtitle, plans, renderCta, selectedInterval }: PricingProps) {
   return (
@@ -50,7 +39,6 @@ export function Pricing({ title, subtitle, plans, renderCta, selectedInterval }:
       {subtitle && <p className="mt-2 text-center text-muted-foreground">{subtitle}</p>}
       <div className="mt-10 grid gap-6 md:grid-cols-3">
         {plans.map((plan) => {
-          // 一次性方案没有周期可切，永远显示它自己那一行。
           const price = plan.prices.find((p) => p.interval === selectedInterval) ?? plan.prices[0]
           return (
             <div

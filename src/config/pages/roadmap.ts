@@ -3,10 +3,8 @@ import type { RoadmapProps } from '@/components/sections/Roadmap'
 import { m } from '@/locale/paraglide/messages.js'
 
 /**
- * 路线图页的块内容。
- *
- * getter 的理由同 `home.ts`：`m.*()` 必须在读取时求值，否则首次请求的语言会被模块
- * 缓存固化，SSR 下所有后续请求都显示同一种语言。
+ * 路线图页的块内容。getter 的理由同 `home.ts`：`m.*()` 必须在读取时求值，
+ * 否则首次请求的语言会被模块缓存固化。
  */
 export const roadmapBlocks = {
   get Hero(): HeroProps {

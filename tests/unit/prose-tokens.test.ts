@@ -2,11 +2,8 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 /**
- * prose 排版接入守卫。
- *
- * 此前 `prose` 是死类名（插件未安装，Tailwind 静默不生成），文档正文排版全靠手写
- * mdx.css。本测试断言 globals.css 已 @plugin 且把 prose 变量映射到品牌令牌，
- * 防止插件被移除后 `prose` 再次静默失效。
+ * prose 排版接入守卫：`prose` 曾是死类名（插件未装，Tailwind 静默不生成）。
+ * 断言 globals.css 已 @plugin 且 prose 变量映射到品牌令牌。
  */
 const globals = readFileSync(new URL('../../src/styles/globals.css', import.meta.url), 'utf-8')
 

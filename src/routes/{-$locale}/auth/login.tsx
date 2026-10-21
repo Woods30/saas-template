@@ -17,13 +17,11 @@ import { m } from '@/locale/paraglide/messages.js'
 export const Route = createFileRoute('/{-$locale}/auth/login')({
   beforeLoad: async () => {
     assertPageEnabled('auth')
-    // 社交登录凭据是服务端 secret，客户端 bundle 读不到，因此经 server function 取；
-    // SSR 阶段就地执行，客户端导航时降级为一次 RPC，两条路径结果一致。
+    // 社交登录凭据是服务端 secret，客户端读不到，必须经 server function 取。
     return fetchAuthProviderAvailability()
   },
-  // 定价页在未登录时把用户送到这里并带上 `?redirect=/pricing`，登录后回到原处
-  // 继续结账。只接受站内相对路径，避免开放重定向（校验逻辑见 `safeInternalPath`：
-  // 浏览器解析前会剥离控制字符、把 `\` 当 `/`，因此不能只查字符串前缀）。
+  // 只接受站内相对路径，避免开放重定向。不能只查字符串前缀：浏览器解析前会
+  // 剥离控制字符、把 `\` 当 `/`，故须走 `safeInternalPath`。
   validateSearch: (search: Record<string, unknown>): { redirect?: SafeInternalPath } => {
     const path = safeInternalPath(search.redirect)
     return path === undefined ? {} : { redirect: path }
@@ -34,9 +32,8 @@ export const Route = createFileRoute('/{-$locale}/auth/login')({
 function LoginPage() {
   const { redirect } = Route.useSearch()
   const { google } = Route.useRouteContext()
-  // 字段值、字段级校验错误、提交态全部由 TanStack Form 持有；`serverError` 是**页面级**提示，
-  // 不是字段状态，TanStack Form 1.33 也没有「设置任意页面级错误」的类型安全入口
-  // （`errorMap.onServer` 需要先声明 `onServer` validator 才可写），故仍用一个 `useState`。
+  // `serverError` 是页面级提示而非字段状态，TanStack Form 1.33 无类型安全入口，
+  // 故仍用 `useState`。
   const [serverError, setServerError] = useState<string | null>(null)
   const form = useForm({
     defaultValues: { email: '', password: '' },
@@ -49,14 +46,12 @@ function LoginPage() {
         return
       }
       trackLogin()
-      // 登录后回来源页（定价页的结账引导会带 `?redirect=/pricing`）。
-      // `validateSearch` 已经过 `safeInternalPath`，这里再用一次是纵深防御。
+      // `validateSearch` 已过滤过，这里再走一次 `resolveRedirectTarget` 是纵深防御。
       window.location.assign(resolveRedirectTarget(redirect))
     },
   })
 
   function onGoogleClick() {
-    // 失败时 better-auth 会带 `error` 查询参数重定向回本站；这里只在发起阶段兜底复位。
     void signIn.social({
       provider: 'google',
       callbackURL: resolveRedirectTarget(redirect),
@@ -66,9 +61,8 @@ function LoginPage() {
   return (
     <AuthLayout title={m.auth_login_title()} description={m.auth_login_to_register()} legalNotice>
       {/*
-        `noValidate` 必填：`<Input type="email">` 会触发浏览器原生约束校验，值非法时
-        原生校验会直接拦下 `submit`，`onSubmit` 永远不执行、schema 校验与错误文案也就
-        永远不出现。校验权归 schema。
+        `noValidate` 必填：原生约束校验会拦下 `submit`，`onSubmit` 永不执行，
+        schema 校验与错误文案也就永远不出现。
       */}
       <form
         noValidate

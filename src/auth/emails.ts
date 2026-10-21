@@ -9,17 +9,10 @@ import type { EmailTemplate, SendEmailResult } from '@/mail/types'
 /**
  * better-auth 回调与 mail registry 之间的桥梁。
  *
- * 设计要点：
+ * 依赖由调用方注入（`getAuth(env)` 内拿不到 ALS 的 mail registry）。
  *
- * 1. **依赖注入**：`sendMail` / `config` / `serverEnv` 都由调用方传入。better-auth 的
- *    `getAuth(env)` 内没有 request，拿不到 ALS 的 mail registry；而注入让本模块可以在
- *    没有请求上下文的单测里直接验证。
- * 2. **绝不抛出**：`sendVerificationEmail` / `sendResetPassword` 由 better-auth 经
- *    `runInBackgroundOrAwait` 调用，回调抛错会让**注册 / 登录失败**。因此这里把所有
- *    异常收敛为 `{ ok: false, error }`，由调用方决定是否 `console.warn`。
- * 3. **邮件关闭即静默跳过**：`config.mail.enabled === false` 或发件人未配置时直接返回
- *    失败结果，不尝试发送。此时能否注册登录由 `auth.requireEmailVerification` 单独决定
- *    （见 `src/auth/flow.ts`）——邮件缺失不隐式降级该安全控制。
+ * 绝不抛出：回调经 `runInBackgroundOrAwait` 调用，抛错会让注册 / 登录失败，
+ * 故所有异常收敛为 `{ ok: false, error }`。
  */
 export type AuthEmailKind = Extract<EmailTemplate, 'verifyEmail' | 'forgotPassword' | 'welcome'>
 
@@ -40,12 +33,7 @@ export interface AuthEmailDeps {
   serverEnv: ServerEnv
 }
 
-/**
- * 发送一封认证流程邮件。
- *
- * 返回 `{ ok, error }` 而非抛出：调用方（better-auth 回调）只做日志，不因邮件失败而
- * 中断注册 / 登录。
- */
+/** 发送一封认证流程邮件；返回 `{ ok, error }` 而非抛出。 */
 export async function sendAuthEmail(
   input: AuthEmailInput,
   deps: AuthEmailDeps,
@@ -87,11 +75,7 @@ export type AuthEmailRequestInput =
 /**
  * better-auth 回调入口：从请求推导收件人语言后再发送。
  *
- * better-auth 的 `sendVerificationEmail` / `sendResetPassword` 第二个参数就是原始
- * `Request`，因此语言可以按「URL 前缀 → cookie → Accept-Language → 默认语言」解析，
- * 无需给 `getAuth(env)` 加 request 参数，也不依赖 ALS 时序。
- *
- * 请求缺失（测试或非 HTTP 调用路径）时回退默认语言。
+ * 回调第二个参数就是原始 `Request`，无需给 `getAuth(env)` 加参数。请求缺失时回退默认语言。
  */
 export async function sendAuthEmailForRequest(
   input: AuthEmailRequestInput,

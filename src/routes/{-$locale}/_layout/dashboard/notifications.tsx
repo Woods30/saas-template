@@ -11,7 +11,7 @@ import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/dashboard/notifications')({
-  // 通知偏好整块依赖 newsletter 模块：模块关闭时该页与菜单项一并消失。
+  // 模块关闭时该页与菜单项一并消失。
   beforeLoad: () => assertPageEnabled('newsletter'),
   head: () =>
     seo('/dashboard/notifications', {

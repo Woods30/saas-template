@@ -12,13 +12,8 @@ import {
 } from '@/auth/validation'
 
 /**
- * 认证表单的 Zod schema 工厂。
- *
- * 工厂**接收文案**而不是自己调 `m.*()`：校验逻辑因此不依赖 Paraglide 运行时，
- * 可以脱离组件单测，文案也随语言变化。
- *
- * 长度下限与 better-auth 的服务端约束（`minPasswordLength: 8`）保持一致，
- * 避免「客户端放行、服务端拒绝」的往返。
+ * 认证表单的 Zod schema 工厂：接收文案而非自调 `m.*()`，不依赖 Paraglide 运行时；
+ * 长度下限与 better-auth 的 `minPasswordLength: 8` 保持一致。
  */
 const msg: AuthFormMessages = {
   required: 'REQ',
@@ -26,7 +21,7 @@ const msg: AuthFormMessages = {
   passwordTooShort: 'SHORT',
 }
 
-/** 把 schema 的校验结果压成「字段 → 文案」映射，便于断言。 */
+/** 校验结果压成「字段 → 文案」映射。 */
 function fieldErrors(schema: { safeParse: (v: unknown) => unknown }, value: unknown) {
   const result = schema.safeParse(value) as
     | { success: true }
@@ -163,7 +158,7 @@ describe('profile schema', () => {
 
 describe('change password schema', () => {
   it('当前密码只判必填，不套用长度下限', () => {
-    // 老密码可能短于当前下限；若在这里卡长度，用户会因为「改不了密码」而无法自救。
+    // 老密码可能短于当前下限，卡长度会让用户无法自救。
     expect(
       fieldErrors(createChangePasswordSchema(msg), {
         currentPassword: 'short',

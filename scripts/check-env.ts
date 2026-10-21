@@ -1,14 +1,6 @@
 /**
- * 开发环境变量校验。
- *
- * 复用 `src/env` 的两套 Zod schema，校验 `.env` 与进程 env 合并后**已提供**的字段是否合法：
- * - 公开变量（`VITE_*`）：非法 URL、非法 enum 会失败；
- * - 服务端变量：已提供但过短 / 非法 URL 会失败；
- * - 源码配置（`src/config/website.ts`）：非法社交 / 图片 / supportEmail 会失败。
- *
- * 开发允许 optional 功能未配置（如未填 Stripe、Analytics），因此这里不强制任何 secret；
- * 已启用但必要字段缺失的服务只在 stdout 输出诊断并返回 0，让公共页面继续可开发。
- * 诊断只输出变量名、原因与位置，绝不打印值、`.env` 内容或 secret。
+ * 开发环境变量校验：复用 `src/env` 的 Zod schema 检查已提供的字段是否合法。
+ * 开发允许 optional 功能未配置，因此不强制 secret；缺配置只提示。绝不打印值。
  */
 import { ZodError } from 'zod'
 import { getServiceStatuses, validateWebsiteConfig } from '../src/config/service-status'
@@ -19,7 +11,7 @@ import { resolveRawEnv } from './lib/env-file'
 import { formatServiceDiagnostics, formatZodIssues } from './lib/report-issues'
 
 function main(): void {
-  // `.env` 不存在时回退到进程 env（CI 场景）；此时不再提示复制模板。
+  // `.env` 不存在时回退到进程 env（CI 场景）。
   const raw = resolveRawEnv()
 
   let publicEnv: ReturnType<typeof parsePublicEnv>

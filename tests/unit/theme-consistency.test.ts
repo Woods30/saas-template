@@ -3,16 +3,9 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * 硬编码配色守卫。
- *
- * 站点的所有颜色都必须来自 `src/styles/globals.css` 的语义 token（`bg-primary`、
- * `text-muted-foreground`…）。绕过 token 写死色阶或十六进制值有两个后果：
- * 换主题时这些地方不跟着变，明暗切换下还可能直接失去对比度——而两者都不会让
- * 任何功能测试失败，只在截图里看得出来。
- *
- * 扫描范围排除两类文件：
- * - `src/components/ui/`：shadcn 上游原件，本地不修改（见 AGENTS.md 关键不变量）；
- * - `src/mail/`：邮件客户端不执行站点 CSS，颜色必须是字面量，由 `EMAIL_THEME` 集中管理。
+ * 硬编码配色守卫：颜色必须来自 globals.css 的语义 token，写死色阶或 hex 会让换主题时
+ * 不跟随，且不会让任何功能测试失败。排除 `src/components/ui/`（上游原件）与
+ * `src/mail/`（邮件不执行站点 CSS，由 `EMAIL_THEME` 集中管理）。
  */
 
 const ROOT = new URL('../../src', import.meta.url).pathname
@@ -21,12 +14,8 @@ const ROOT = new URL('../../src', import.meta.url).pathname
 const EXEMPT_DIRS = ['components/ui/', 'mail/']
 
 /**
- * 允许出现字面量颜色的单个文件（相对 `src/`）。
- *
- * - `components/icons/LocaleFlags.tsx`：国旗的配色是法定识别色，不能跟主题走；
- * - `config/website.ts`：`ui.themeColor` 由浏览器在页面之外渲染（地址栏、状态栏），
- *   读不到 CSS 变量，只能写字面量。它与 `--background` 的一致性由
- *   `theme-colors.test.ts` 守住。
+ * 允许出现字面量颜色的单个文件：国旗是法定识别色；`ui.themeColor` 由浏览器在页面之外
+ * 渲染（地址栏 / 状态栏），读不到 CSS 变量，其一致性由 `theme-colors.test.ts` 守住。
  */
 const EXEMPT_FILES = ['components/icons/LocaleFlags.tsx', 'config/website.ts']
 
@@ -45,10 +34,10 @@ const files = sourceFiles(ROOT)
     ({ rel }) => !EXEMPT_DIRS.some((dir) => rel.startsWith(dir)) && !EXEMPT_FILES.includes(rel),
   )
 
-/** 十六进制 / rgb / hsl 字面量。注释里出现色值是说明文字，不算违规。 */
+/** 十六进制 / rgb / hsl 字面量。 */
 const COLOR_LITERAL = /(?<![\w-])#[0-9a-fA-F]{3,8}(?![\w-])|\brgba?\(|\bhsla?\(/
 
-/** Tailwind 的具体色阶（`bg-gray-500`、`text-zinc-100`…），不含语义 token。 */
+/** Tailwind 的具体色阶，不含语义 token。 */
 const PALETTE_CLASS =
   /\b(?:bg|text|border|ring|fill|stroke|from|via|to|outline|divide|decoration|caret|shadow)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/
 
@@ -73,8 +62,7 @@ describe('配色只走主题 token', () => {
   })
 
   it('业务代码里没有内联颜色样式', () => {
-    // `style={{ animationDelay }}` 这类非颜色的内联样式是允许的，
-    // 只有颜色属性（background / color / border…）走内联才算绕过主题。
+    // 非颜色的内联样式允许；只有颜色属性走内联才算绕过主题。
     const INLINE_COLOR = /style=\{\{[^}]*(?:background|color|borderColor|fill|stroke)\s*:/s
     const offenders = files
       .filter(({ path }) => INLINE_COLOR.test(stripComments(readFileSync(path, 'utf-8'))))
@@ -84,16 +72,13 @@ describe('配色只走主题 token', () => {
 })
 
 /**
- * 邮件模板的配色快照。
- *
- * 邮件读不到站点 CSS，`EMAIL_THEME` 是主题的静态副本。这份副本与 `globals.css`
- * 的浅色档之间没有任何运行时联系，改主题时极容易漏改——这里把两者绑起来。
+ * 邮件模板配色快照：`EMAIL_THEME` 是 globals.css 浅色档的静态副本，改主题时极易漏改。
  */
 describe('邮件配色与主题同步', () => {
   const globals = readFileSync(join(ROOT, 'styles/globals.css'), 'utf-8')
   const layout = readFileSync(join(ROOT, 'mail/components/EmailLayout.tsx'), 'utf-8')
 
-  /** 从 globals.css 取某个 token 的浅色档 hex（与 theme-colors.test.ts 同一套换算）。 */
+  /** 从 globals.css 取 token 的浅色档 hex。 */
   function lightHex(token: string): string {
     const match = globals.match(
       new RegExp(`--${token}:\\s*light-dark\\(\\s*oklch\\(([\\d.]+)\\s+([\\d.]+)\\s+([\\d.]+)\\)`),

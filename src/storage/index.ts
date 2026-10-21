@@ -1,11 +1,8 @@
 /**
  * Storage 模块。
  *
- * 使用 ALS 注入的 `R2StorageProvider`（per-request），而非 module-level 单例，
- * 与 `src/lib/server-context.ts` 的 env 注入模式保持一致。
- *
- * 调用方通过 `getServerContext().storageProvider` 访问 provider；
- * 无 ALS context 时（如测试环境）各函数自动降级为抛出错误。
+ * 使用 ALS 注入的 `R2StorageProvider`（per-request）而非 module-level 单例；
+ * 无 ALS context 时（如测试环境）各函数抛出错误。
  */
 import { getServerContext } from '@/lib/server-context'
 import type { R2StorageProvider } from './provider/r2'
@@ -13,10 +10,7 @@ import type { FileInfo, UploadOptions, UploadResult } from './types'
 
 export type { FileInfo, UploadOptions, UploadResult }
 
-/**
- * 获取当前请求的 storage provider。
- * ALS context 外调用会抛出错误。
- */
+/** 获取当前请求的 storage provider；ALS context 外调用会抛出错误。 */
 export function getStorageProvider(): R2StorageProvider {
   const { storageProvider } = getServerContext()
   if (!storageProvider) {
