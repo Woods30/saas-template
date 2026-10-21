@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveRedirectTarget, safeInternalPath } from '@/lib/urls'
+import { resolveRedirectTarget, safeInternalPath, safeSameOriginUrl } from '@/lib/urls'
 
 describe('safeInternalPath', () => {
   it('接受站内相对路径', () => {
@@ -61,5 +61,45 @@ describe('resolveRedirectTarget', () => {
     expect(resolveRedirectTarget('//evil.com')).toBe('/')
     expect(resolveRedirectTarget('/\t/evil.com')).toBe('/')
     expect(resolveRedirectTarget(undefined)).toBe('/')
+  })
+})
+
+describe('safeSameOriginUrl', () => {
+  it('接受与站点基址同源的绝对地址', () => {
+    expect(safeSameOriginUrl('https://example.com/zh/dashboard/billing?checkout=success')).toBe(
+      'https://example.com/zh/dashboard/billing?checkout=success',
+    )
+    expect(safeSameOriginUrl('https://example.com/pricing?checkout=cancelled')).toBe(
+      'https://example.com/pricing?checkout=cancelled',
+    )
+  })
+
+  it('拒绝外域地址', () => {
+    expect(safeSameOriginUrl('https://evil.com/phish')).toBeUndefined()
+    // 后缀相似但不同源：origin 比较要能挡住。
+    expect(safeSameOriginUrl('https://example.com.evil.com/phish')).toBeUndefined()
+    expect(safeSameOriginUrl('http://example.com/phish')).toBeUndefined()
+  })
+
+  it('拒绝非 http(s) 协议与相对路径', () => {
+    expect(safeSameOriginUrl('javascript:alert(1)')).toBeUndefined()
+    expect(safeSameOriginUrl('data:text/html,<script>alert(1)</script>')).toBeUndefined()
+    expect(safeSameOriginUrl('//example.com/x')).toBeUndefined()
+    expect(safeSameOriginUrl('/dashboard/billing')).toBeUndefined()
+  })
+
+  it('拒绝非字符串', () => {
+    expect(safeSameOriginUrl(undefined)).toBeUndefined()
+    expect(safeSameOriginUrl(null)).toBeUndefined()
+    expect(safeSameOriginUrl(42)).toBeUndefined()
+    expect(safeSameOriginUrl({ successUrl: 'https://example.com' })).toBeUndefined()
+  })
+
+  it('额外放行的 origin 也能通过', () => {
+    // 本地用 127.0.0.1 访问时基址仍写着 localhost，需要调用方补充 origin。
+    expect(
+      safeSameOriginUrl('http://127.0.0.1:3000/zh/dashboard/billing', ['http://127.0.0.1:3000']),
+    ).toBe('http://127.0.0.1:3000/zh/dashboard/billing')
+    expect(safeSameOriginUrl('http://127.0.0.1:3000/x', ['http://127.0.0.1:3001'])).toBeUndefined()
   })
 })

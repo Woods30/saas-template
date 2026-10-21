@@ -60,3 +60,49 @@ const SITE_ROOT = '/' as SafeInternalPath
 export function resolveRedirectTarget(value: unknown): SafeInternalPath {
   return safeInternalPath(value) ?? SITE_ROOT
 }
+
+/**
+ * 校验一个 URL 是否为**本站的绝对地址**，是则原样返回，否则返回 `undefined`。
+ *
+ * 支付回跳的 `successUrl` / `cancelUrl` / `returnUrl` 由客户端传入并原样交给
+ * Stripe：不校验等于把「付款后跳到哪里」的决定权交给客户端，是开放重定向与
+ * 钓鱼的入口——攻击者可以让受害者付完款后落在仿冒页上继续骗取信息。
+ *
+ * 与 `safeInternalPath` 的区别：这里只收**绝对地址**。Stripe 会把相对路径
+ * 解析到它自己账号配置的域名下，本站无法控制解析结果，交给它反而不可预期。
+ *
+ * 放行的 origin 取自 `VITE_BASE_URL`（配置即契约），加上调用方传入的额外
+ * origin（例如本地用 `127.0.0.1` 访问时补上它）。不看请求的 Host 头——那由
+ * 客户端控制。
+ */
+export function safeSameOriginUrl(
+  value: unknown,
+  extraOrigins: readonly string[] = [],
+): string | undefined {
+  if (typeof value !== 'string' || value.length === 0) return undefined
+  if (containsUnsafePathChar(value)) return undefined
+
+  let target: URL
+  try {
+    target = new URL(value)
+  } catch {
+    return undefined
+  }
+  if (target.protocol !== 'https:' && target.protocol !== 'http:') return undefined
+
+  const allowed = new Set<string>()
+  try {
+    allowed.add(new URL(getBaseUrl()).origin)
+  } catch {
+    return undefined
+  }
+  for (const origin of extraOrigins) {
+    try {
+      allowed.add(new URL(origin).origin)
+    } catch {
+      // 配不出来的 origin 直接忽略，不放行。
+    }
+  }
+
+  return allowed.has(target.origin) ? target.toString() : undefined
+}

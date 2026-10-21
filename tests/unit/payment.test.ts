@@ -1065,3 +1065,134 @@ describe('webhook 事件顺序无关', () => {
     expect(mockDb.update).toHaveBeenCalled()
   })
 })
+
+/**
+ * 回跳地址必须同源。
+ *
+ * 客户端传的 `successUrl` / `cancelUrl` / `returnUrl` 会被原样交给 Stripe：
+ * 不校验等于把「付款后跳到哪里」的决定权交给客户端，是开放重定向——攻击者可以让
+ * 受害者付完款后落在仿冒页上继续骗取信息。
+ */
+describe('回跳地址必须同源', () => {
+  beforeEach(() => {
+    vi.doUnmock('@/config/website')
+    vi.doUnmock('@/auth/auth')
+    vi.doUnmock('@/lib/rate-limit')
+    vi.resetModules()
+  })
+
+  /** 导入支付路由；`customerRows` 命中 `subscriptions.customerId` 查询（门户入口）。 */
+  async function importRoute(customerRows: unknown[] = []) {
+    vi.doMock('@/lib/server-context', () => ({
+      getServerContext: () => ({
+        env: { STRIPE_SECRET_KEY: 'sk_test', STRIPE_WEBHOOK_SECRET: 'whsec_test' },
+      }),
+      als: {
+        getStore: () => ({
+          paymentProviderRegistry: {},
+          mailProviderRegistry: {},
+          notificationProviderRegistry: {},
+        }),
+      },
+    }))
+    vi.doMock('@/auth/auth', () => ({
+      getAuth: () => ({
+        api: { getSession: async () => ({ user: { id: 'user_1', email: 'a@b.c' } }) },
+      }),
+    }))
+    vi.doMock('@/config/website', async () => {
+      const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
+      const { parsePublicEnv } =
+        await vi.importActual<typeof import('@/env/public')>('@/env/public')
+      const base = actual.createWebsiteConfig(
+        parsePublicEnv({
+          VITE_BASE_URL: 'https://jerbix.dev',
+          VITE_STRIPE_PRICE_PRO_MONTHLY: 'price_month',
+        }),
+      )
+      return { ...actual, websiteConfig: base }
+    })
+    vi.doMock('@/lib/rate-limit', () => ({ checkRateLimit: async () => true }))
+    mockDb.select = vi.fn().mockImplementation((fields: Record<string, unknown>) => {
+      const first = fields ? Object.values(fields)[0] : undefined
+      const name = (first as { name?: string } | undefined)?.name
+      return makeSelectChain(name === 'subscriptions.customerId' ? customerRows : []).selectMock()
+    })
+    return import('@/routes/api/payment/$')
+  }
+
+  const checkoutBody = {
+    priceId: 'price_month',
+    successUrl: 'https://jerbix.dev/zh/dashboard/billing?checkout=success',
+    cancelUrl: 'https://jerbix.dev/zh/pricing?checkout=cancelled',
+    mode: 'subscription' as const,
+  }
+
+  async function post(body: unknown) {
+    const { Route } = await importRoute()
+    const handlers = (
+      Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+    ).options.server.handlers
+    const handler = handlers.POST as (ctx: { request: Request }) => Promise<Response>
+    return handler({
+      request: new Request('https://jerbix.dev/api/payment', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    })
+  }
+
+  it('同源回跳地址照常创建 Checkout Session', async () => {
+    const response = await post(checkoutBody)
+    expect(response.status).toBe(200)
+    expect(mockCheckoutProvider.createCheckoutSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('外域 successUrl 返回 400，不创建 Checkout Session', async () => {
+    const response = await post({ ...checkoutBody, successUrl: 'https://evil.com/phish' })
+    expect(response.status).toBe(400)
+    expect(mockCheckoutProvider.createCheckoutSession).not.toHaveBeenCalled()
+  })
+
+  it('外域 cancelUrl 返回 400，不创建 Checkout Session', async () => {
+    const response = await post({ ...checkoutBody, cancelUrl: 'https://evil.com/phish' })
+    expect(response.status).toBe(400)
+    expect(mockCheckoutProvider.createCheckoutSession).not.toHaveBeenCalled()
+  })
+
+  it('外域门户 returnUrl 返回 400，不创建门户链接', async () => {
+    const { Route } = await importRoute([{ customerId: 'cus_1' }])
+    const handlers = (
+      Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+    ).options.server.handlers
+    const handler = handlers.DELETE as (ctx: { request: Request }) => Promise<Response>
+
+    const response = await handler({
+      request: new Request('https://jerbix.dev/api/payment', {
+        method: 'DELETE',
+        body: JSON.stringify({ returnUrl: 'https://evil.com/phish' }),
+      }),
+    })
+
+    expect(response.status).toBe(400)
+    expect(mockCheckoutProvider.createCustomerPortalLink).not.toHaveBeenCalled()
+  })
+
+  it('同源门户 returnUrl 照常创建门户链接', async () => {
+    const { Route } = await importRoute([{ customerId: 'cus_1' }])
+    const handlers = (
+      Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+    ).options.server.handlers
+    const handler = handlers.DELETE as (ctx: { request: Request }) => Promise<Response>
+
+    const response = await handler({
+      request: new Request('https://jerbix.dev/api/payment', {
+        method: 'DELETE',
+        body: JSON.stringify({ returnUrl: 'https://jerbix.dev/zh/dashboard/billing' }),
+      }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(mockCheckoutProvider.createCustomerPortalLink).toHaveBeenCalledTimes(1)
+  })
+})
