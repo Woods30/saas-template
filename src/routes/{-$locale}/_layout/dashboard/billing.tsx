@@ -184,6 +184,9 @@ function BillingPage() {
               <Button
                 variant="outline"
                 size="sm"
+                // 渲染的是 `<a>` 而非 `<button>`：不声明的话 Base UI 会按原生按钮
+                // 语义挂 role/键盘行为，并在开发期报「expected a native <button>」。
+                nativeButton={false}
                 render={<Link to="/{-$locale}/pricing" params={{ locale: getRequestLocale() }} />}
               >
                 {m.settings_billing_upgrade_cta()}
