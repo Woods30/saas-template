@@ -95,11 +95,11 @@ describe('safeSameOriginUrl', () => {
     expect(safeSameOriginUrl({ successUrl: 'https://example.com' })).toBeUndefined()
   })
 
-  it('额外放行的 origin 也能通过', () => {
-    // 本地用 127.0.0.1 访问时基址仍写着 localhost，需要调用方补充 origin。
-    expect(
-      safeSameOriginUrl('http://127.0.0.1:3000/zh/dashboard/billing', ['http://127.0.0.1:3000']),
-    ).toBe('http://127.0.0.1:3000/zh/dashboard/billing')
-    expect(safeSameOriginUrl('http://127.0.0.1:3000/x', ['http://127.0.0.1:3001'])).toBeUndefined()
+  it('配置基址之外的 origin 一律拒绝', () => {
+    // 单测环境的 `VITE_BASE_URL` 是 https://example.com。
+    // 请求自身的 origin 不算数：Host 头由客户端控制，攻击者自造 `Host: evil.com`
+    // 就能让外域 URL 通过校验，所以白名单只能来自配置。
+    expect(safeSameOriginUrl('http://127.0.0.1:3000/x')).toBeUndefined()
+    expect(safeSameOriginUrl('https://jerbix.dev/x')).toBeUndefined()
   })
 })

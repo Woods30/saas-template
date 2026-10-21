@@ -69,9 +69,15 @@ after checkout and keep harvesting credentials.
 
 The server therefore gates them through `safeSameOriginUrl` (`src/lib/urls.ts`), which
 accepts only **absolute URLs on the site's own origin** — the origin must equal
-`VITE_BASE_URL`'s origin or the origin of the current request. Relative paths are
-rejected too: Stripe resolves them against the domain configured on its own account,
-which this app does not control.
+`VITE_BASE_URL`'s origin. Relative paths are rejected too: Stripe resolves them against
+the domain configured on its own account, which this app does not control.
+
+The allowlist comes **only from configuration**. The request's own origin is
+deliberately excluded: `request.url`'s host comes from the `Host` header, which the
+client controls. An attacker can send `Host: evil.com` to make an off-site URL pass
+validation, then share the resulting Checkout link — the victim pays on Stripe and
+lands on a phishing page. Any additional domain has to be configured explicitly; it
+cannot come from a request header.
 
 `safeInternalPath` in the same module handles a different kind of input (in-site
 relative paths such as the post-login redirect). The two are not interchangeable.

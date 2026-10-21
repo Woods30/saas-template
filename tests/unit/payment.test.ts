@@ -338,6 +338,11 @@ describe('POST /api/payment 重复订阅守卫', () => {
       )
       return { ...actual, websiteConfig: base }
     })
+    // 同源校验以 `publicEnv.VITE_BASE_URL` 为准，必须与上面的站点一致。
+    vi.doMock('@/env/public', async () => {
+      const actual = await vi.importActual<typeof import('@/env/public')>('@/env/public')
+      return { ...actual, publicEnv: { ...actual.publicEnv, VITE_BASE_URL: 'https://jerbix.dev' } }
+    })
     vi.doMock('@/lib/rate-limit', () => ({ checkRateLimit: async () => true }))
     // 只劫持 subscriptions 查询；返回值必须是完整的链，路由不只用 `selectMock` 本身。
     mockDb.select = vi.fn().mockImplementation((fields: Record<string, unknown>) => {
@@ -1111,6 +1116,11 @@ describe('回跳地址必须同源', () => {
         }),
       )
       return { ...actual, websiteConfig: base }
+    })
+    // 同源校验以 `publicEnv.VITE_BASE_URL` 为准，必须与上面的站点一致。
+    vi.doMock('@/env/public', async () => {
+      const actual = await vi.importActual<typeof import('@/env/public')>('@/env/public')
+      return { ...actual, publicEnv: { ...actual.publicEnv, VITE_BASE_URL: 'https://jerbix.dev' } }
     })
     vi.doMock('@/lib/rate-limit', () => ({ checkRateLimit: async () => true }))
     mockDb.select = vi.fn().mockImplementation((fields: Record<string, unknown>) => {

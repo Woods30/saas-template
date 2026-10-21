@@ -71,14 +71,11 @@ export function resolveRedirectTarget(value: unknown): SafeInternalPath {
  * 与 `safeInternalPath` 的区别：这里只收**绝对地址**。Stripe 会把相对路径
  * 解析到它自己账号配置的域名下，本站无法控制解析结果，交给它反而不可预期。
  *
- * 放行的 origin 取自 `VITE_BASE_URL`（配置即契约），加上调用方传入的额外
- * origin（例如本地用 `127.0.0.1` 访问时补上它）。不看请求的 Host 头——那由
- * 客户端控制。
+ * 放行的 origin **只取自 `VITE_BASE_URL`**（配置即契约）。刻意不把请求自身的
+ * origin 算进来：`request.url` 的 host 来自 Host 头，客户端可自造，攻击者带上
+ * `Host: evil.com` 就能让外域 URL 通过校验。要放行别的域名，得显式写进配置。
  */
-export function safeSameOriginUrl(
-  value: unknown,
-  extraOrigins: readonly string[] = [],
-): string | undefined {
+export function safeSameOriginUrl(value: unknown): string | undefined {
   if (typeof value !== 'string' || value.length === 0) return undefined
   if (containsUnsafePathChar(value)) return undefined
 
@@ -90,19 +87,12 @@ export function safeSameOriginUrl(
   }
   if (target.protocol !== 'https:' && target.protocol !== 'http:') return undefined
 
-  const allowed = new Set<string>()
+  let allowedOrigin: string
   try {
-    allowed.add(new URL(getBaseUrl()).origin)
+    allowedOrigin = new URL(getBaseUrl()).origin
   } catch {
     return undefined
   }
-  for (const origin of extraOrigins) {
-    try {
-      allowed.add(new URL(origin).origin)
-    } catch {
-      // 配不出来的 origin 直接忽略，不放行。
-    }
-  }
 
-  return allowed.has(target.origin) ? target.toString() : undefined
+  return target.origin === allowedOrigin ? target.toString() : undefined
 }

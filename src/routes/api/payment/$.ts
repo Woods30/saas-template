@@ -91,9 +91,9 @@ export const Route = createFileRoute('/api/payment/$')({
 
         // 回跳地址必须同源：这两个 URL 会被原样交给 Stripe，客户端传什么就跳什么，
         // 等于把「付款后落点」的决定权交出去——开放重定向可用来钓鱼。
-        const requestOrigin = new URL(request.url).origin
-        const successUrl = safeSameOriginUrl(body.successUrl, [requestOrigin])
-        const cancelUrl = safeSameOriginUrl(body.cancelUrl, [requestOrigin])
+        // 只认配置里的站点 origin，不认请求自身的 origin（Host 头由客户端控制）。
+        const successUrl = safeSameOriginUrl(body.successUrl)
+        const cancelUrl = safeSameOriginUrl(body.cancelUrl)
         if (!successUrl || !cancelUrl) {
           return new Response('Invalid return URL', { status: 400 })
         }
@@ -168,7 +168,7 @@ export const Route = createFileRoute('/api/payment/$')({
         }
 
         // 回跳地址必须同源：门户链接打开后 Stripe 会把用户送回这个地址。
-        const returnUrl = safeSameOriginUrl(body.returnUrl, [new URL(request.url).origin])
+        const returnUrl = safeSameOriginUrl(body.returnUrl)
         if (!returnUrl) {
           return new Response('Invalid return URL', { status: 400 })
         }

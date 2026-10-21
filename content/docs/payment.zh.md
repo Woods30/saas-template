@@ -64,8 +64,13 @@ Stripe**——Stripe 结账结束后就是把用户送到这个地址。不校�
 继续骗取信息。
 
 服务端因此用 `safeSameOriginUrl`（`src/lib/urls.ts`）把关，只放行**与站点同源的绝对
-地址**：origin 必须等于 `VITE_BASE_URL` 的 origin，或等于本次请求的 origin。相对路径
-也不接受——Stripe 会把它解析到自己账号配置的域名下，本站控制不了解析结果。
+地址**：origin 必须等于 `VITE_BASE_URL` 的 origin。相对路径也不接受——Stripe 会把它
+解析到自己账号配置的域名下，本站控制不了解析结果。
+
+白名单**只来自配置**，不把请求自身的 origin 算进来：`request.url` 的 host 取自 Host
+头，客户端可以自造。攻击者带上 `Host: evil.com` 就能让外域 URL 通过校验，再把
+对应的 Checkout 链接发给受害者——受害者在 Stripe 上付完款就被送到钓鱼页。要放行
+别的域名，得显式写进配置，不能靠请求头。
 
 同一个模块里的 `safeInternalPath` 管的是另一类输入（登录回跳等站内相对路径），两者
 分工不同，不要混用。
