@@ -4,7 +4,7 @@ description: Stripe checkout, pricing map, billing page, and webhooks
 locale: en
 order: 14
 group: features
-updated: 2026-10-19
+updated: 2026-10-21
 ---
 
 The only built-in provider is **Stripe**, but the payment path is bounded by the
@@ -49,10 +49,27 @@ With no Price configured, the pricing page still renders, but paid plans degrade
 1. Click a plan on the pricing page → `startCheckout()` (`src/payment/checkout-client.ts`)
 2. Not signed in → redirect to login with `?redirect=/pricing`, then back
 3. Signed in → `POST /api/payment`: gate → session auth → rate limit (10 per IP per
-   minute) → body validation → Price ID allowlist → **existing-subscription check**
-   → create Checkout Session
+   minute) → body validation → Price ID allowlist → **return-URL same-origin check**
+   → **existing-subscription check** → create Checkout Session
 4. Redirect the whole page to Stripe Checkout
 5. On return, land on `/dashboard/billing?checkout=success`
+
+### Return URLs must be same-origin
+
+The client-supplied `successUrl` / `cancelUrl` (and the portal's `returnUrl`) are
+handed to Stripe **verbatim** — that is where Stripe sends the customer once payment
+completes. Not validating them means the client decides where the user lands after
+paying, which is an open redirect: an attacker can drop the victim on a lookalike page
+after checkout and keep harvesting credentials.
+
+The server therefore gates them through `safeSameOriginUrl` (`src/lib/urls.ts`), which
+accepts only **absolute URLs on the site's own origin** — the origin must equal
+`VITE_BASE_URL`'s origin or the origin of the current request. Relative paths are
+rejected too: Stripe resolves them against the domain configured on its own account,
+which this app does not control.
+
+`safeInternalPath` in the same module handles a different kind of input (in-site
+relative paths such as the post-login redirect). The two are not interchangeable.
 
 ### Monthly vs. yearly
 
@@ -177,6 +194,69 @@ Handled events:
 | `customer.subscription.created` / `updated` | status, price, and period |
 | `customer.subscription.deleted` | marks `canceled` |
 | `charge.refunded` | marks refunded by `chargeId` |
+
+### Local development
+
+**Stripe webhooks do not reach localhost on their own.** Without forwarding, the payment
+succeeds on Stripe's side but the local `webhook_events` / `payments` tables stay empty —
+so the billing page shows neither payment records nor subscription info. This is the
+easiest trap to fall into: the charge went through, yet the page acts like nothing
+happened.
+
+Forward events to localhost with the Stripe CLI:
+
+```bash
+# 1. Log in (once)
+stripe login
+
+# 2. Forward to the local webhook endpoint
+stripe listen --forward-to localhost:3000/api/webhooks/stripe
+```
+
+`stripe listen` prints a **Signing secret** (`whsec_...`) and then "Ready! You are now
+listening for events". Put the former in `.env`:
+
+```
+STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxx
+```
+
+That `whsec_` is **not** the endpoint secret generated in the Stripe Dashboard — mixing
+the two makes every signature check fail (400, nothing written).
+
+Enable these event types, in the Dashboard or via the CLI:
+
+| Event type | Why |
+|---|---|
+| `checkout.session.completed` | creates the subscription row / one-time payment row |
+| `customer.subscription.created` | fills in price and billing period |
+| `customer.subscription.updated` | status changes (cancel-at-period-end, …) |
+| `customer.subscription.deleted` | marks `canceled` |
+| `invoice.paid` | writes the transaction row (with `invoiceId` / `chargeId`) |
+| `charge.refunded` | marks the refund |
+
+The CLI forwards every event by default; `--events` narrows it down:
+
+```bash
+stripe listen --forward-to localhost:3000/api/webhooks/stripe \
+  --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,charge.refunded
+```
+
+### Event order is not guaranteed
+
+Stripe states it explicitly: *"Stripe doesn't guarantee the delivery of events in the
+order that they're generated."* `customer.subscription.created` can easily arrive before
+`checkout.session.completed`.
+
+Every handler must therefore cope with the target row not existing yet:
+
+- `customer.subscription.created` / `updated`: when the row is missing, rebuild it from
+  `metadata.userId` (Stripe copies the Checkout Session's metadata onto the
+  subscription).
+- `invoice.paid`: when the owner cannot be resolved, **throw** instead of writing an
+  orphan row with `user_id = NULL`. `payments.user_id` is nullable, so such a row is
+  silently invisible on the user's own billing page — money quietly lost. Throwing
+  deletes the event row and returns 500, and by the time Stripe retries, the
+  subscription row usually exists.
 
 > **Stripe API version note**: this repo pins `stripe@23` (API `2025-09-30.clover`).
 > That version moved two fields destructively, and the webhook reads the new shape:
