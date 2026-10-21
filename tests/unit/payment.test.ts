@@ -752,7 +752,8 @@ describe('handleSubscriptionUpsert — 周期字段读取自订阅项', () => {
     mockDb.update.mockReturnValue({
       set: vi.fn().mockImplementation((v: Record<string, unknown>) => {
         capturedSet.value = v
-        return { where: vi.fn().mockResolvedValue([]) }
+        // `returning` 判定订阅行是否已存在：空数组表示需要补建。
+        return { where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }) }
       }),
     })
   })
@@ -906,5 +907,161 @@ describe('handleSubscriptionUpsert — 周期字段读取自订阅项', () => {
     expect(capturedSet.value).not.toHaveProperty('amount')
     expect(capturedSet.value).not.toHaveProperty('currency')
     expect(capturedSet.value).not.toHaveProperty('interval')
+  })
+})
+
+/**
+ * 事件顺序无关性。
+ *
+ * Stripe 不保证 `checkout.session.completed` / `customer.subscription.created` /
+ * `invoice.paid` 三个事件的投递顺序。原实现只认「订阅行已存在」，事件抢跑就会
+ * 静默丢数据：付款记录写出一行 `user_id` 为 NULL 的孤儿行（用户永远查不到），
+ * 订阅的 Price / 周期则永远补不上。
+ */
+describe('webhook 事件顺序无关', () => {
+  it('invoice.paid 找不到归属时不写孤儿行，抛错让 Stripe 重投', async () => {
+    // 两次反查都落空：订阅行还没写。
+    mockDb.select.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([]) }),
+      }),
+    })
+    // insert 链必须完整：否则代码会在 `.values()` 处因 mock 缺陷而抛错，
+    // 测试就成了「因为 mock 坏了才通过」的假阳性。
+    const valuesMock = vi.fn().mockReturnValue({
+      onConflictDoNothing: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+    })
+    const insertSpy = vi.fn()
+    mockDb.insert.mockImplementation(() => {
+      insertSpy()
+      return { values: valuesMock }
+    })
+
+    const { handleInvoicePaid } = await import('@/routes/api/webhooks/stripe')
+
+    await expect(
+      handleInvoicePaid(mockDb as never, {
+        id: 'evt_orphan',
+        data: {
+          object: {
+            id: 'in_orphan',
+            customer: 'cus_orphan',
+            parent: { subscription_details: { subscription: 'sub_orphan' } },
+            payments: { data: [{ payment: { charge: 'ch_orphan' } }] },
+            amount_paid: 599,
+            currency: 'usd',
+            created: 1700000000,
+          },
+        },
+      }),
+    ).rejects.toThrow(/no matching subscription row/)
+
+    // 写出一行 user_id 为 NULL 的记录等于静默丢钱：用户在自己的账单页看不到它。
+    expect(insertSpy).not.toHaveBeenCalled()
+  })
+
+  it('customer.subscription.created 在订阅行缺失时用 metadata 补建', async () => {
+    // 反查订阅行落空。
+    mockDb.select.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([]) }),
+      }),
+    })
+    const insertSpy = vi.fn()
+    mockDb.insert.mockImplementation(() => {
+      insertSpy()
+      return {
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi
+            .fn()
+            .mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+        }),
+      }
+    })
+    mockDb.update.mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+      }),
+    })
+
+    const { handleSubscriptionUpsert } = await import('@/routes/api/webhooks/stripe')
+    await handleSubscriptionUpsert(mockDb as never, {
+      id: 'sub_race',
+      status: 'active',
+      cancel_at_period_end: false,
+      // Stripe 会把 Checkout Session 的 metadata 复制到 subscription。
+      metadata: { userId: 'user_race' },
+      customer: 'cus_race',
+      items: {
+        data: [
+          {
+            price: {
+              id: 'price_race',
+              currency: 'usd',
+              recurring: { interval: 'month' },
+              unit_amount: 599,
+            },
+            current_period_start: 1700000000,
+            current_period_end: 1702598400,
+          },
+        ],
+      },
+    })
+
+    expect(insertSpy).toHaveBeenCalled()
+  })
+
+  it('订阅行已存在时只更新，不重复插入', async () => {
+    mockDb.select.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi
+          .fn()
+          .mockReturnValue({ limit: vi.fn().mockResolvedValue([{ userId: 'user_exists' }]) }),
+      }),
+    })
+    const insertSpy = vi.fn()
+    mockDb.insert.mockImplementation(() => {
+      insertSpy()
+      return {
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi
+            .fn()
+            .mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+        }),
+      }
+    })
+    mockDb.update.mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi
+          .fn()
+          .mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'sub_exists' }]) }),
+      }),
+    })
+
+    const { handleSubscriptionUpsert } = await import('@/routes/api/webhooks/stripe')
+    await handleSubscriptionUpsert(mockDb as never, {
+      id: 'sub_exists',
+      status: 'active',
+      cancel_at_period_end: false,
+      metadata: { userId: 'user_exists' },
+      customer: 'cus_exists',
+      items: {
+        data: [
+          {
+            price: {
+              id: 'price_x',
+              currency: 'usd',
+              recurring: { interval: 'month' },
+              unit_amount: 599,
+            },
+            current_period_start: 1700000000,
+            current_period_end: 1702598400,
+          },
+        ],
+      },
+    })
+
+    expect(insertSpy).not.toHaveBeenCalled()
+    expect(mockDb.update).toHaveBeenCalled()
   })
 })

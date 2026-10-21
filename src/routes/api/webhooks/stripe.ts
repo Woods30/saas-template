@@ -62,6 +62,9 @@ interface SubscriptionObject {
   id: string
   status: string
   cancel_at_period_end?: boolean
+  /** Stripe 把 Checkout Session 的 metadata 复制到 subscription，故这里也带 userId。 */
+  metadata?: { userId?: string } | null
+  customer?: string | { id: string } | null
   items: {
     data: Array<{
       price: {
@@ -207,6 +210,10 @@ export async function handleCheckoutCompleted(
  *
  * userId 先按订阅 id 反查，再退回 customerId（订阅行尚未写入时的兜底）。
  * 不读已移除的 `inv.charge`，否则 `chargeId` 恒为 null，退款永远匹配不到行。
+ *
+ * 两种反查都落空时**不写**这一行：`payments.user_id` 允许为 NULL，写进去的
+ * 记录用户在自己的账单页永远查不到，等于静默丢钱。改为抛错让 Stripe 重投——
+ * 稍后重投时 `checkout.session.completed` 很可能已把订阅行写好，归属就找得到了。
  */
 export async function handleInvoicePaid(
   db: ReturnType<typeof createDb>,
@@ -235,6 +242,12 @@ export async function handleInvoicePaid(
     userId = rows[0]?.userId ?? null
   }
 
+  if (!userId) {
+    throw new Error(
+      `invoice ${inv.id ?? 'unknown'} has no matching subscription row, cannot attribute payment`,
+    )
+  }
+
   const paidAt = toDate(inv.created)
 
   await db
@@ -260,6 +273,11 @@ export async function handleInvoicePaid(
  * 周期字段挂在 `items.data[]` 上，只取第一项：本模板不支持多项订阅。
  * 只在有值时才写 amount / currency / interval，否则中间态会用 `undefined`
  * 擦掉上一次的正确值。
+ *
+ * Stripe 不保证事件顺序，`customer.subscription.created` 可能早于
+ * `checkout.session.completed` 到达。此时订阅行还不存在，UPDATE 影响 0 行，
+ * 订阅信息就永远补不上。故行不存在时用 `metadata.userId`（Stripe 会把
+ * Checkout Session 的 metadata 复制到 subscription）补建。
  */
 export async function handleSubscriptionUpsert(
   db: ReturnType<typeof createDb>,
@@ -278,20 +296,45 @@ export async function handleSubscriptionUpsert(
   // 一次性 Price 没有 `recurring`，interval 留空，账单页据此显示「终身」。
   const interval = item?.price.recurring?.interval?.trim() || undefined
 
-  await db
+  const values = {
+    status: sub.status as SubscriptionStatus,
+    priceId: item?.price.id ?? '',
+    ...(periodStart ? { currentPeriodStart: periodStart } : {}),
+    ...(periodEnd ? { currentPeriodEnd: periodEnd } : {}),
+    ...(amount !== undefined ? { amount } : {}),
+    ...(currency !== undefined ? { currency } : {}),
+    ...(interval !== undefined ? { interval } : {}),
+    cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
+    updatedAt: new Date(),
+  }
+
+  const updated = await db
     .update(schema.subscriptions)
-    .set({
-      status: sub.status as SubscriptionStatus,
-      priceId: item?.price.id ?? '',
-      ...(periodStart ? { currentPeriodStart: periodStart } : {}),
-      ...(periodEnd ? { currentPeriodEnd: periodEnd } : {}),
-      ...(amount !== undefined ? { amount } : {}),
-      ...(currency !== undefined ? { currency } : {}),
-      ...(interval !== undefined ? { interval } : {}),
-      cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
-      updatedAt: new Date(),
-    })
+    .set(values)
     .where(eq(schema.subscriptions.subscriptionId, sub.id))
+    .returning({ id: schema.subscriptions.id })
+
+  if (updated.length > 0) return
+
+  // 行不存在：只有拿得到归属才能建，`subscriptions.user_id` 是 NOT NULL。
+  const userId = sub.metadata?.userId?.trim()
+  if (!userId) {
+    console.warn(
+      `[stripe-webhook] customer.subscription.${sub.status}: subscription ${sub.id} not found and no metadata.userId`,
+    )
+    return
+  }
+
+  await db
+    .insert(schema.subscriptions)
+    .values({
+      id: sub.id,
+      userId,
+      customerId: idOf(sub.customer),
+      subscriptionId: sub.id,
+      ...values,
+    })
+    .onConflictDoNothing({ target: schema.subscriptions.id })
 }
 
 /**
