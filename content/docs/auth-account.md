@@ -58,6 +58,8 @@ The return value carries **only the fields the pages need** (`id` / `name` / `em
 
 ## The four sections
 
+![Account center · Sessions](/docs/screenshots/settings-sessions.png "Sessions: the current session plus past devices, revocable individually or all at once")
+
 | Section | better-auth calls | Components used |
 |---|---|---|
 | **Profile** | `updateUser({ name })`; `sendVerificationEmail({ email, callbackURL })` when unverified | `Field` / `Input` / `Button` / `Badge` |

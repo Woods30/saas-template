@@ -13,6 +13,8 @@ center at `/{locale}/dashboard/*`.
 
 ## Enabling
 
+![Sign-in page](/docs/screenshots/auth-login.png "Sign-in: email and password; third-party buttons appear once Google credentials are configured")
+
 Two fields in `websiteConfig.auth`, plus three environment variables:
 
 ```ts

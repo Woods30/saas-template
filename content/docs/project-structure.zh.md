@@ -44,6 +44,7 @@ src/
 
 content/                 文档 / 博客 / 更新日志 / 法务（Markdown）
 messages/                zh.json / en.json 界面文案
+public/docs/screenshots/ 文档正文引用的界面截图
 scripts/                 构建与校验脚本
 tests/                   unit / components / workers
 e2e/                     Playwright
@@ -63,6 +64,7 @@ e2e/                     Playwright
 | 新增 API | `src/routes/api/<name>/$` 或 `src/routes/api/<name>.ts` |
 | 数据库表 | `src/db/schema.ts`，然后 `pnpm db:generate` |
 | 新增服务模块 | 参考 `src/mail/` 的结构：`types.ts` + provider + `index.ts` |
+| 给文档加界面截图 | 图片放 `public/docs/screenshots/`，正文用 `![说明](/docs/screenshots/x.png "标题")` |
 
 ## 两条容易混淆的边界
 

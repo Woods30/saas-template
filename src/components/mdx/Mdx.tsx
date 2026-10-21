@@ -25,8 +25,9 @@ import '@/styles/mdx.css'
  * 最小 markdown 渲染：把 Content Collections 文档字符串转为 JSX.
  *
  * 支持：# / ## / ### 标题、代码块（```...```）、表格（`| a | b |` + 分隔行）、
- * 无序列表（`- `）、引用块（`> `）、段落，以及行内 `code` / **bold** / [链接](地址)。
- * 不支持：图片、有序列表、嵌套列表、HTML（v0.2 升级到 @mdx-js/rollup 后开启）。
+ * 无序列表（`- `）、引用块（`> `）、段落、独占一行的图片
+ * （`![说明](/path.png)`，可带 `"标题"`），以及行内 `code` / **bold** / [链接](地址)。
+ * 不支持：有序列表、嵌套列表、HTML（v0.2 升级到 @mdx-js/rollup 后开启）。
  *
  * 表格与链接是配置类文档的刚需——没有它们，字段表会退化成一行竖线，
  * 交叉链接会原样显示 `[文字](地址)`。
@@ -58,6 +59,7 @@ function BlockView({ block: b }: { block: AnyBlock }) {
   if (b.kind === 'h2') return <h2 id={headingId(b.text)}>{b.text}</h2>
   if (b.kind === 'h3') return <h3 id={headingId(b.text)}>{b.text}</h3>
   if (b.kind === 'code') return <Code block={b} />
+  if (b.kind === 'image') return <Figure image={b} />
   if (b.kind === 'table') return <Table table={b} />
   if (b.kind === 'quote')
     return isNoteQuote(b.text) ? (
@@ -205,7 +207,22 @@ interface QuoteBlock {
   text: string
 }
 
-type AnyBlock = Block | TableBlock | ListBlock | QuoteBlock
+/**
+ * 图片块：独占一行的 `![alt](/path.png)`，可选 `![alt](/path.png "标题")`。
+ *
+ * 只识别独占一行的写法：行内图片在段落里会打断文字流，文档站用不到，也不值得为它
+ * 扩展行内解析器。`alt` 同时用作 `<figcaption>`——截图没有说明文字时读者不知道
+ * 自己在看哪一屏。
+ */
+interface ImageBlock {
+  kind: 'image'
+  src: string
+  alt: string
+  /** `![alt](src "标题")` 里的标题；为空时不渲染 caption。 */
+  caption: string
+}
+
+type AnyBlock = Block | TableBlock | ListBlock | QuoteBlock | ImageBlock
 
 /**
  * 代码块的标题栏文案：优先显示文件名，其次语言名，都没有时显示「代码」。
@@ -260,6 +277,30 @@ function Code({ block }: { block: Block }) {
         <code>{block.text}</code>
       </CodeBlockContent>
     </CodeBlock>
+  )
+}
+
+/**
+ * 独占一行的图片：圆角外框 + 细描边，`alt` 作为说明文字。
+ *
+ * 用 `<img>` 而非框架的图片组件：文档截图是本地静态资源，不需要布局位移占位；
+ * 显式写 `loading="lazy"` 让长文档里的下方截图不参与首屏。
+ * `not-prose` 隔离 typography 对 `img` 的默认外边距。
+ */
+function Figure({ image }: { image: ImageBlock }) {
+  return (
+    <figure className="not-prose my-5">
+      <img
+        src={image.src}
+        alt={image.alt}
+        loading="lazy"
+        decoding="async"
+        className="w-full rounded-xl border border-border"
+      />
+      <figcaption className="mt-2 text-center text-xs text-muted-foreground">
+        {image.caption || image.alt}
+      </figcaption>
+    </figure>
   )
 }
 
@@ -322,6 +363,21 @@ function isTableDivider(line: string): boolean {
 function splitTableRow(line: string): string[] {
   const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '')
   return trimmed.split('|').map((cell) => cell.trim())
+}
+
+/**
+ * 独占一行的图片：`![alt](src)` 或 `![alt](src "标题")`。
+ *
+ * 地址走 {@link safeHref} 同一套 scheme 白名单——文档内容可能来自外部投稿，
+ * `![x](javascript:...)` 不应有机会进入 `src`。地址非法时返回 `undefined`，
+ * 该行退回普通段落（原样显示，便于作者发现写错）。
+ */
+function parseImageLine(line: string): ImageBlock | undefined {
+  const match = /^\s*!\[([^\]]*)\]\(\s*([^)\s]+)\s*(?:"([^"]*)")?\s*\)\s*$/.exec(line)
+  if (!match) return undefined
+  const src = safeHref(match[2] ?? '')
+  if (src === undefined) return undefined
+  return { kind: 'image', src, alt: (match[1] ?? '').trim(), caption: (match[3] ?? '').trim() }
 }
 
 /** 无序列表项：`- ` 或 `* ` 开头（三个空格内的缩进也算同一层）。 */
@@ -394,6 +450,15 @@ function parseBlocks(source: string): AnyBlock[] {
         header: headerRow ? splitTableRow(headerRow) : [],
         rows: rows.map(splitTableRow),
       })
+      continue
+    }
+
+    // 图片：独占一行的 `![alt](src)`，可选 `"标题"`。
+    // 放在段落之前：否则它会被当作普通段落，`![](...)` 原样显示成文字。
+    const image = parseImageLine(line)
+    if (image) {
+      flushPara()
+      out.push(image)
       continue
     }
 

@@ -28,6 +28,8 @@ only `start` (the first few characters), so an issued key can never be read back
 `/dashboard/api-keys` (`src/routes/{-$locale}/_layout/dashboard/api-keys.tsx`). Its entry
 appears in the dashboard sidebar and is governed by the `features.enableApiKeys` flag.
 
+![API keys page](/docs/screenshots/api-keys.png "API keys: name, masked key prefix, creation and expiry; the plaintext key is shown only once")
+
 - **Create**: enter a name and pick an expiry → `authClient.apiKey.create({ name, expiresIn })`.
   The response contains the **plaintext `key`**; the page shows it once in a second dialog and
   tells the user to save it.

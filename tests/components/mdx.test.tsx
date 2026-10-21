@@ -353,3 +353,33 @@ describe('Mdx 步骤时间线', () => {
     expect(document.querySelector('h3')?.textContent).toBe('验证链接')
   })
 })
+
+describe('Mdx 图片', () => {
+  it('独占一行的 ![](src) 渲染为带说明文字的 figure', () => {
+    render(<Mdx source={'![工作台截图](/docs/screenshots/dashboard.png)'} />)
+    const img = screen.getByRole('img')
+    expect(img).toHaveAttribute('src', '/docs/screenshots/dashboard.png')
+    expect(img).toHaveAttribute('alt', '工作台截图')
+    expect(img).toHaveAttribute('loading', 'lazy')
+    // alt 同时作为说明文字——截图没有说明时读者不知道自己在看哪一屏。
+    expect(document.querySelector('figcaption')?.textContent).toBe('工作台截图')
+  })
+
+  it('带标题的写法用标题覆盖说明文字', () => {
+    render(<Mdx source={'![alt 文本](/a.png "个人中心 · 资料")'} />)
+    expect(screen.getByRole('img')).toHaveAttribute('alt', 'alt 文本')
+    expect(document.querySelector('figcaption')?.textContent).toBe('个人中心 · 资料')
+  })
+
+  it('图片地址同样走 scheme 白名单，javascript: 不进入 src', () => {
+    // 内容可能来自外部投稿，图片地址与链接地址必须同一套校验。
+    render(<Mdx source={'![x](javascript:alert(1))'} />)
+    expect(document.querySelector('img')).toBeNull()
+  })
+
+  it('行内图片不打断段落（只识别独占一行的写法）', () => {
+    render(<Mdx source={'看这张图 ![x](/a.png) 即可。'} />)
+    expect(document.querySelector('img')).toBeNull()
+    expect(document.querySelector('p')?.textContent).toContain('看这张图')
+  })
+})

@@ -25,6 +25,8 @@ API 密钥基于 better-auth 的 `@better-auth/api-key` 插件。用户在个人
 `/dashboard/api-keys`（`src/routes/{-$locale}/_layout/dashboard/api-keys.tsx`）。
 入口在个人中心侧边栏，受功能开关 `features.enableApiKeys` 控制。
 
+![API 密钥页](/docs/screenshots/api-keys.png "API 密钥：名称、掩码后的密钥前缀、创建与过期时间；明文密钥只在创建时显示一次")
+
 - **创建**：输入名称 + 选有效期 → `authClient.apiKey.create({ name, expiresIn })`。返回体含
   **明文 `key`**，页面在第二个弹窗里一次性展示并提示立即保存。
 - **列表**：`authClient.apiKey.list()` → `{ apiKeys, total, limit, offset }`。条目不含

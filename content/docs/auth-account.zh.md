@@ -9,6 +9,8 @@ updated: 2026-10-20
 
 登录后的账号管理区域，位于 `/{locale}/dashboard/*`。从导航栏用户菜单的「个人中心」进入。
 
+![个人中心 · 资料页](/docs/screenshots/settings-profile.png "个人中心 · 资料：昵称与邮箱，邮箱未验证时提供验证入口")
+
 ## 路由结构
 
 `dashboard.tsx` 是 pathless layout 路由（与 `docs` 同一手法）：它只做守卫与外壳，不含页面
@@ -54,6 +56,8 @@ server function 在 SSR 阶段就地执行（无网络往返），客户端导�
 session。子页经 `Route.useRouteContext()` 取到它。
 
 ## 四个板块
+
+![个人中心 · 登录设备](/docs/screenshots/settings-sessions.png "登录设备：当前会话与历史设备，可单独吊销或一次性注销其他设备")
 
 | 板块 | better-auth 调用 | 用到的组件 |
 |---|---|---|

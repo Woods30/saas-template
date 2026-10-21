@@ -12,6 +12,8 @@ updated: 2026-10-15
 
 ## 启用
 
+![登录页](/docs/screenshots/auth-login.png "登录页：邮箱密码登录，配置 Google 凭据后自动出现第三方登录按钮")
+
 `websiteConfig.auth` 两个字段，加上三个环境变量：
 
 ```ts

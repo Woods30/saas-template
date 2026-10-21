@@ -44,6 +44,7 @@ src/
 
 content/                 Docs / blog / changelog / legal (Markdown)
 messages/                zh.json / en.json UI copy
+public/docs/screenshots/ UI screenshots referenced from docs
 scripts/                 Build and validation scripts
 tests/                   unit / components / workers
 e2e/                     Playwright
@@ -63,6 +64,7 @@ e2e/                     Playwright
 | Add an API route | `src/routes/api/<name>/$` or `src/routes/api/<name>.ts` |
 | Change a table | `src/db/schema.ts`, then `pnpm db:generate` |
 | Add a service module | Mirror `src/mail/`: `types.ts` + provider + `index.ts` |
+| Add a UI screenshot to docs | Put the image in `public/docs/screenshots/`, reference it as `![alt](/docs/screenshots/x.png "caption")` |
 
 ## Two boundaries that are easy to confuse
 
