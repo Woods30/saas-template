@@ -10,7 +10,12 @@ updated: 2026-10-21
 The only built-in provider is **Stripe**, but the payment path is bounded by the
 `PaymentProvider` interface (`src/payment/types.ts`). Adding Creem or Waffo means
 implementing that interface and registering it in `buildPaymentProviderRegistry` —
-pages, API routes, and tables stay unchanged.
+the **checkout and portal pages, API routes, and tables stay unchanged**.
+
+The **webhook handling is not part of that interface**, though: the persistence logic
+(`handleCheckoutCompleted` / `handleInvoicePaid` / `handleSubscriptionUpsert`) lives in
+the Stripe-specific `src/routes/api/webhooks/stripe.ts`. A second provider needs its own
+webhook route, and that persistence logic should be factored out per provider.
 
 The provider registers only when both `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`
 are present.

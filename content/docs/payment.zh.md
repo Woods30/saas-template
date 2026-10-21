@@ -9,7 +9,12 @@ updated: 2026-10-21
 
 当前唯一内置的 provider 是 **Stripe**，但支付链路以 `PaymentProvider` 接口为边界
 （`src/payment/types.ts`），新增 Creem / Waffo 时只需实现该接口并在
-`buildPaymentProviderRegistry` 注册——页面、API 路由与数据表都不需要改。
+`buildPaymentProviderRegistry` 注册——**结账与门户的页面、API 路由、数据表都不需要改**。
+
+不过 **webhook 的业务处理不在接口内**：事件落库的那段逻辑写在 Stripe 专用的
+`src/routes/api/webhooks/stripe.ts` 里（`handleCheckoutCompleted` / `handleInvoicePaid` /
+`handleSubscriptionUpsert`），换 provider 要另写一份自己的 webhook 路由，并把这段
+落库逻辑按 provider 抽出去。
 
 provider 注册需要 `STRIPE_SECRET_KEY` 与 `STRIPE_WEBHOOK_SECRET` 同时存在，否则不注册。
 
