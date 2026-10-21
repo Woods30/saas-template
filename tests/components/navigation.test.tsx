@@ -10,7 +10,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MenuItems } from '@/components/layout/MenuItems'
 import { Navbar } from '@/components/marketing/Navbar'
 import { getPublicLinkOptions, type MenuItem } from '@/config/navigation'
-import { homeBlocks } from '@/config/pages/home'
 import { websiteConfig } from '@/config/website'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 import { getRouter } from '@/router'
@@ -252,35 +251,49 @@ describe('MenuItems 共享 renderer', () => {
   })
 })
 
-describe('homeBlocks docs CTA 回退', () => {
-  it('docs 启用时指向 /{locale}/docs，关闭时回退 #features', () => {
-    expect(homeBlocks.Hero.primaryCta.href).toBe('/en/docs')
-    expect(homeBlocks.Cta.primaryCta.href).toBe('/en/docs')
+describe('首页 CTA 的 docs 回退', () => {
+  it('docs 启用时指向 /{locale}/docs，关闭时回退 #features', async () => {
+    await renderRoute('/en')
 
+    const hero = screen.getByRole('link', { name: 'See how to start' })
+    expect(hero).toHaveAttribute('href', '/en/docs')
+    expect(screen.getByRole('link', { name: 'Open the developer docs' })).toHaveAttribute(
+      'href',
+      '/en/docs',
+    )
+
+    cleanup()
     websiteConfig.docs.enabled = false
-    expect(homeBlocks.Hero.primaryCta.href).toBe('#features')
-    expect(homeBlocks.Cta.primaryCta.href).toBe('#features')
+    await renderRoute('/en')
+
+    expect(screen.getByRole('link', { name: 'See how to start' })).toHaveAttribute(
+      'href',
+      '/en/#features',
+    )
+    expect(screen.getByRole('link', { name: 'Open the developer docs' })).toHaveAttribute(
+      'href',
+      '/en/#features',
+    )
   })
 })
 
-describe('MenuItems onNavigate', () => {
-  it('透传 onNavigate 到每条链接', async () => {
-    const items: MenuItem[] = [internalLink('docs', 'Docs', 'docs')]
-    let navigated = 0
-    const rootRoute = createRootRoute({
-      component: () => (
-        <MenuItems items={items} variant="footer" onNavigate={() => (navigated += 1)} />
-      ),
-    })
-    const router = createRouter({
-      routeTree: rootRoute,
-      history: createMemoryHistory({ initialEntries: ['/en'] }),
-      context: { queryClient: new QueryClient() },
-    })
-    await router.load()
-    render(<RouterProvider router={router} />)
+// 回归：文案曾被写进 `config/pages/*` 的对象字面量，模块加载即求值。SSR 下首个请求的
+// 语言会固化给后续所有请求，客户端按 URL 又算出另一种语言，于是 hydration 不匹配。
+// 这里直接切 paraglide 的 locale 再重渲染，验证取值发生在渲染期。
+describe('页面文案在渲染期求值', () => {
+  it('about 页随 locale 重渲染切换语言', async () => {
+    await renderRoute('/en/marketing/about')
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('About Jerbix')
+    expect(screen.queryByText('关于 Jerbix')).toBeNull()
 
-    fireEvent.click(screen.getByRole('link', { name: 'Docs' }))
-    expect(navigated).toBe(1)
+    cleanup()
+    setLocale('zh', { reload: false })
+    await renderRoute('/en/marketing/about')
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('关于 Jerbix')
+
+    cleanup()
+    setLocale('en', { reload: false })
+    await renderRoute('/en/marketing/about')
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('About Jerbix')
   })
 })

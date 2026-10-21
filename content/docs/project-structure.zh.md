@@ -16,7 +16,6 @@ src/
 ├── routes/              文件路由。`{-$locale}` 是可选的 locale 前缀
 ├── config/              站点配置
 │   ├── website.ts       总开关：名称、Logo、模块开关、功能开关
-│   ├── pages/           每个页面的文案与区块编排
 │   ├── navigation.ts    菜单类型与过滤规则
 │   ├── navbar-config.ts 导航栏
 │   ├── footer-config.ts 页脚
@@ -55,7 +54,7 @@ e2e/                     Playwright
 | 想改什么 | 去哪里 |
 |---|---|
 | 站点名、Logo、模块开关 | `src/config/website.ts` |
-| 首页 / 关于 / 定价页的文案 | `src/config/pages/<page>.ts` |
+| 首页 / 关于 / 定价页的文案 | 对应的路由组件，如 `src/routes/{-$locale}/index.tsx` |
 | 界面上的按钮、提示文案 | `messages/zh.json`、`messages/en.json` |
 | 导航栏、页脚链接 | `src/config/navbar-config.ts`、`footer-config.ts` |
 | 文档内容 | `content/docs/*.md`（中文加 `.zh`） |
@@ -75,10 +74,14 @@ e2e/                     Playwright
 - `marketing/` 是**页面级装配**：`LandingPage` 把多个 section 按顺序拼起来，
   `MarketingLayout` 管导航与页脚。
 
-**`config/pages/` 与 `config/website.ts`**
+**路由组件内的文案 与 `config/website.ts`**
 
 - `website.ts` 是**全局开关与身份**：站点叫什么、哪些模块开着。
-- `pages/` 是**单个页面的内容**：首页 Hero 写什么、定价页有哪些套餐。
+- 页面文案写在路由组件里，紧挨着它渲染的那个区块；改文案不必跳到另一个文件。
+
+页面文案一律在**渲染期**调用 `m.*()`，不要提到模块顶层常量：Paraglide 在调用时才读
+当前语言，模块加载期求值会把首次请求的语言固化给之后所有请求（SSR 下表现为整页语言
+不对，客户端再按 URL 算出另一种语言，于是 hydration 不匹配）。
 
 ## 不手改的生成物
 

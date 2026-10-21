@@ -1,6 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Cta, Hero, Stats } from '@/components/sections'
-import { aboutBlocks } from '@/config/pages'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
@@ -19,9 +18,18 @@ export const Route = createFileRoute('/{-$locale}/_layout/marketing/about')({
 function AboutPage() {
   return (
     <>
-      <Hero {...aboutBlocks.Hero} />
-      <Stats {...aboutBlocks.Stats} />
-      <Cta {...aboutBlocks.Cta} />
+      <Hero title={m.about_hero_title()} subtitle={m.about_hero_subtitle()} />
+      <Stats
+        items={[
+          { value: '7+', label: m.about_stat_modules() },
+          { value: '4+', label: m.about_stat_providers() },
+          { value: 'zh/en', label: m.about_stat_i18n() },
+        ]}
+      />
+      <Cta
+        title={m.about_cta_title()}
+        primaryCta={{ label: m.about_cta_primary(), href: '/docs' }}
+      />
     </>
   )
 }

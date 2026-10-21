@@ -7,8 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { getPricingPlans, pricingBlocks } from '@/config/pages'
 import { availableIntervals, isPlanPurchasable } from '@/config/payment'
+import { getPricingPlans } from '@/config/pricing'
 import { websiteConfig } from '@/config/website'
 import { trackBeginCheckout } from '@/lib/analytics/events'
 import { assertPageEnabled } from '@/lib/module-access'
@@ -143,7 +143,7 @@ function PricingPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
-      <Hero {...pricingBlocks.Hero} />
+      <Hero title={m.pricing_hero_title()} subtitle={m.pricing_hero_subtitle()} />
       {showIntervalSwitch && (
         <div className="mt-6 flex flex-col items-center gap-2">
           <ToggleGroup
@@ -185,7 +185,10 @@ function PricingPage() {
           )
         }}
       />
-      <Cta {...pricingBlocks.Cta} />
+      <Cta
+        title={m.pricing_cta_title()}
+        primaryCta={{ label: m.pricing_cta_primary(), href: '/auth/register' }}
+      />
       {/* 未配置 Price 时给一条明确线索：这个模板默认不带支付凭据。 */}
       {!hasAnyConfiguredPrice() && (
         <p className="mt-6 text-center text-sm text-muted-foreground">

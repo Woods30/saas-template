@@ -1,6 +1,5 @@
-import type { CtaProps, HeroProps } from '@/components/sections'
-import type { PricingPlan } from '@/components/sections/Pricing'
 import { m } from '@/locale/paraglide/messages.js'
+import type { PricingPlan } from '@/types/pricing'
 
 /**
  * 定价方案。
@@ -45,23 +44,4 @@ export function getPricingPlans(): PricingPlan[] {
       cta: { label: m.pricing_lifetime_cta(), href: '/auth/register?plan=lifetime' },
     },
   ]
-}
-
-/**
- * 页面级文案块。与 `homeBlocks` 同理必须用 getter：写成普通字段会把首次请求的语言
- * 固化给所有后续请求（SSR 下整页语言不对 + hydration mismatch）。
- */
-export const pricingBlocks = {
-  get Hero() {
-    return {
-      title: m.pricing_hero_title(),
-      subtitle: m.pricing_hero_subtitle(),
-    } satisfies HeroProps
-  },
-  get Cta() {
-    return {
-      title: m.pricing_cta_title(),
-      primaryCta: { label: m.pricing_cta_primary(), href: '/auth/register' },
-    } satisfies CtaProps
-  },
 }

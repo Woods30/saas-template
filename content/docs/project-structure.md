@@ -16,7 +16,6 @@ src/
 ├── routes/              File routes. `{-$locale}` is the optional locale prefix
 ├── config/              Site configuration
 │   ├── website.ts       Global switches: name, logo, module and feature flags
-│   ├── pages/           Per-page copy and block composition
 │   ├── navigation.ts    Menu types and filtering rules
 │   ├── navbar-config.ts Navbar
 │   ├── footer-config.ts Footer
@@ -55,7 +54,7 @@ e2e/                     Playwright
 | Want to change | Go to |
 |---|---|
 | Site name, logo, module switches | `src/config/website.ts` |
-| Home / about / pricing copy | `src/config/pages/<page>.ts` |
+| Home / about / pricing copy | The route component, e.g. `src/routes/{-$locale}/index.tsx` |
 | Button labels and UI copy | `messages/zh.json`, `messages/en.json` |
 | Navbar and footer links | `src/config/navbar-config.ts`, `footer-config.ts` |
 | Docs content | `content/docs/*.md` (Chinese uses `.zh`) |
@@ -75,11 +74,16 @@ e2e/                     Playwright
 - `marketing/` holds **page-level assembly**: `LandingPage` composes sections in order,
   `MarketingLayout` owns the navbar and footer.
 
-**`config/pages/` vs `config/website.ts`**
+**Route components vs `config/website.ts`**
 
 - `website.ts` is **global switches and identity**: what the site is called, which modules
   are on.
-- `pages/` is **per-page content**: what the home Hero says, which plans the pricing page has.
+- Page copy lives in the route component, right next to the block that renders it.
+
+Always call `m.*()` during render, never at module top level: Paraglide reads the current
+locale at call time, so a top-level constant freezes the language of the first request for
+every later one (SSR renders the whole page in the wrong language, the client then derives
+another language from the URL, and hydration mismatches).
 
 ## Generated files — do not edit
 

@@ -39,7 +39,7 @@ Drizzle ORM + D1、Vitest + Playwright。
 ```
 src/
 ├── routes/          文件路由（`{-$locale}` 是可选的 locale 前缀）
-├── config/          站点配置：website.ts（总开关）、pages/（页面文案与区块编排）
+├── config/          站点配置：website.ts（总开关）、navigation.ts、payment.ts 等
 ├── components/
 │   ├── sections/    可复用内容区块（Hero / Features / Pricing…），单文件含类型
 │   ├── marketing/   页面级装配（LandingPage / MarketingLayout / Navbar / Footer）
@@ -60,7 +60,7 @@ messages/            zh.json / en.json 界面文案
 scripts/             构建与校验脚本
 ```
 
-**改哪里**：站点信息 → `config/website.ts`；首页文案 → `config/pages/home.ts`；
+**改哪里**：站点信息 → `config/website.ts`；页面文案 → 对应路由组件；
 界面文案 → `messages/*.json`；文档内容 → `content/docs/`；设计 token →
 `styles/globals.css`（规则见 `DESIGN.md`）。
 
@@ -73,11 +73,14 @@ scripts/             构建与校验脚本
 2. **`VITE_` 前缀 = 公开**：构建时进入客户端 bundle，任何人可见，**不得**存放 secret。
 3. **服务端 secret** 只经 Workers binding 读取，绝不能设成 `VITE_` 前缀。
 4. **消息键配对**：新增消息键必须在所有 locale 文件中同时存在，改完跑 `pnpm locale:sort`。
-5. **不手改生成物**：`src/routeTree.gen.ts`、`src/locale/paraglide/**`、
+5. **文案在渲染期求值**：`m.*()` 只能在组件渲染或函数调用时求值，**不得**写进模块顶层
+   常量或 props 对象字面量——会把首次请求的语言固化给后续所有请求，且 SSR 首屏与
+   hydration 语言不一致。
+6. **不手改生成物**：`src/routeTree.gen.ts`、`src/locale/paraglide/**`、
    `.content-collections/generated/**`。
-6. **Workers 运行时**不是 Node.js，含 native binding 的包不可用。
-7. **`src/components/ui` 只放上游原件**，不本地修改；调外观在调用处传 `className`。
-8. **不硬编码颜色**：只用语义 token，规则见 `DESIGN.md`。
+7. **Workers 运行时**不是 Node.js，含 native binding 的包不可用。
+8. **`src/components/ui` 只放上游原件**，不本地修改；调外观在调用处传 `className`。
+9. **不硬编码颜色**：只用语义 token，规则见 `DESIGN.md`。
 
 ## 工作方式
 

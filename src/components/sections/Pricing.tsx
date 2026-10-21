@@ -1,22 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
+import type { PricingInterval, PricingPlan } from '@/types/pricing'
 
-export interface PricingPlan {
-  id: string
-  name: string
-  description?: string
-  /** 月付/年付/一次性价格，`amount` 以分为单位；空数组表示 free 方案。 */
-  prices: Array<{
-    amount: number
-    currency: string
-    interval?: 'month' | 'year' | 'one_time'
-    label?: string
-  }>
-  features: string[]
-  cta: { label: string; href: string }
-  highlighted?: boolean
-  badge?: string
-}
+export type { PricingInterval, PricingPlan } from '@/types/pricing'
 
 export interface PricingProps {
   title?: string
@@ -25,7 +11,7 @@ export interface PricingProps {
   /** 渲染自定义 CTA（用于接 authClient + createCheckoutSession） */
   renderCta?: (plan: PricingPlan) => ReactNode
   /** 当前计费周期；不传时退回 `prices[0]`，单周期 plan 无需额外传参。 */
-  selectedInterval?: 'month' | 'year' | 'one_time'
+  selectedInterval?: PricingInterval
 }
 
 /**

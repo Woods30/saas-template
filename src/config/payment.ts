@@ -1,4 +1,4 @@
-import { getPricingPlans } from '@/config/pages'
+import { getPricingPlans } from '@/config/pricing'
 
 /**
  * 定价方案 ↔ Stripe Price ID 的显式映射。

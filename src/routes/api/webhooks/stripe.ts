@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { eq } from 'drizzle-orm'
-import { getPricingPlans } from '@/config/pages'
 import { findPlanIdByPriceId } from '@/config/payment'
+import { getPricingPlans } from '@/config/pricing'
 import { websiteConfig } from '@/config/website'
 import { createDb, schema } from '@/db'
 import { getServerContext } from '@/lib/server-context'

@@ -1,5 +1,5 @@
-import { getPricingPlans } from '@/config/pages'
 import { findPlanIdByPriceId } from '@/config/payment'
+import { getPricingPlans } from '@/config/pricing'
 
 /**
  * 账单页的行数据形状。单独成模块，让客户端组件只引类型而不把 D1 binding 带进 bundle。

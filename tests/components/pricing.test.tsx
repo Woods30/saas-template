@@ -3,7 +3,7 @@ import type React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PricingPlan } from '@/components/sections'
 import { Pricing } from '@/components/sections/Pricing'
-import { getPricingPlans } from '@/config/pages/pricing'
+import { getPricingPlans } from '@/config/pricing'
 import { getLocale, setLocale } from '@/locale/paraglide/runtime.js'
 
 // Mock @tanstack/react-router：Pricing 依赖 <Link>，但测试无需路由上下文。

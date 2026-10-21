@@ -3,11 +3,13 @@ import {
   IconBraces,
   IconBulb,
   IconCheck,
+  IconCloud,
   IconCloudUpload,
   IconCode,
   IconCreditCard,
   IconDatabase,
   IconFile,
+  IconLanguage,
   IconMail,
   IconPlayerPause,
   IconPlayerPlay,
@@ -16,15 +18,19 @@ import {
   IconShieldLock,
 } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
-import { type PointerEvent, useEffect, useId, useRef, useState } from 'react'
+import { createElement, type PointerEvent, useEffect, useId, useRef, useState } from 'react'
 import { Cta, Faq, Features, Hero } from '@/components/sections'
-import { homeBlocks } from '@/config/pages/home'
-import { getPricingPlans } from '@/config/pages/pricing'
+import { getPricingPlans } from '@/config/pricing'
 import { websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 
 const MAX_TILT_DEGREES = 4
+
+/** docs 开关启用时指向当前语言的文档入口，关闭时回退首页锚点。 */
+function docsCtaHref(): string {
+  return websiteConfig.docs.enabled ? `/${getLocale()}/docs` : '#features'
+}
 
 function LeapJourney({ paused }: { paused: boolean }) {
   const [selected, setSelected] = useState(0)
@@ -601,11 +607,53 @@ function CapabilityIllustration({ index }: { index: number }) {
 }
 
 function CapabilityFeatures() {
-  const features = homeBlocks.Features
+  const items = [
+    {
+      icon: createElement(IconShieldLock, { size: 22 }),
+      title: m.home_features_auth_title(),
+      description: m.home_features_auth_description(),
+      detail: m.home_features_auth_detail(),
+      wide: true,
+    },
+    {
+      icon: createElement(IconCreditCard, { size: 22 }),
+      title: m.home_features_payment_title(),
+      description: m.home_features_payment_description(),
+      detail: m.home_features_payment_detail(),
+      wide: true,
+    },
+    {
+      icon: createElement(IconCloud, { size: 22 }),
+      title: m.home_features_edge_title(),
+      description: m.home_features_edge_description(),
+      detail: m.home_features_edge_detail(),
+    },
+    {
+      icon: createElement(IconDatabase, { size: 22 }),
+      title: m.home_features_storage_title(),
+      description: m.home_features_storage_description(),
+      detail: m.home_features_storage_detail(),
+    },
+    {
+      icon: createElement(IconMail, { size: 22 }),
+      title: m.home_features_email_title(),
+      description: m.home_features_email_description(),
+      detail: m.home_features_email_detail(),
+    },
+    {
+      icon: createElement(IconLanguage, { size: 22 }),
+      title: m.home_features_i18n_title(),
+      description: m.home_features_i18n_description(),
+      detail: m.home_features_i18n_detail(),
+    },
+  ]
   return (
     <Features
-      {...features}
-      items={features.items.map((item, index) => ({
+      eyebrow={m.home_features_eyebrow()}
+      title={m.home_features_title()}
+      subtitle={m.home_features_subtitle()}
+      variant="bento"
+      items={items.map((item, index) => ({
         ...item,
         visual: <CapabilityIllustration index={index} />,
       }))}
@@ -668,7 +716,18 @@ export function LandingPage() {
             {paused ? m.home_motion_resume() : m.home_motion_pause()}
           </button>
         </div>
-        <Hero {...homeBlocks.Hero} visual={<LeapJourney paused={paused || !pageVisible} />} />
+        <Hero
+          title={m.home_hero_title()}
+          titleLang="en"
+          titleEmphasis={m.home_hero_title_emphasis()}
+          eyebrow={m.home_hero_eyebrow()}
+          description={m.home_hero_description()}
+          note={m.home_hero_note()}
+          primaryCta={{ label: m.home_hero_primary_cta(), href: docsCtaHref() }}
+          secondaryCta={{ label: m.home_hero_secondary_cta(), href: '#features' }}
+          variant="split"
+          visual={<LeapJourney paused={paused || !pageVisible} />}
+        />
       </div>
       <TechnologyStrip />
       <StackAndToolkit />
@@ -684,10 +743,26 @@ export function LandingPage() {
       </div>
       <BrandStory />
       <section id="faq" className="lab-reveal scroll-mt-16">
-        <Faq {...homeBlocks.Faq} />
+        <Faq
+          eyebrow={m.home_faq_eyebrow()}
+          title={m.home_faq_title()}
+          variant="split"
+          items={[
+            { question: m.home_faq_q1(), answer: m.home_faq_a1() },
+            { question: m.home_faq_q2(), answer: m.home_faq_a2() },
+            { question: m.home_faq_q3(), answer: m.home_faq_a3() },
+            { question: m.home_faq_q4(), answer: m.home_faq_a4() },
+            { question: m.home_faq_q5(), answer: m.home_faq_a5() },
+          ]}
+        />
       </section>
       <div className="lab-reveal">
-        <Cta {...homeBlocks.Cta} />
+        <Cta
+          title={m.home_cta_title()}
+          description={m.home_cta_description()}
+          primaryCta={{ label: m.home_cta_primary(), href: docsCtaHref() }}
+          variant="quiet"
+        />
       </div>
     </div>
   )
