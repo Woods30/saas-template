@@ -1,5 +1,5 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { fetchSession } from '@/auth/session'
 import { Cta, Hero } from '@/components/sections'
 import { Pricing as PricingBlock } from '@/components/sections/Pricing'
@@ -10,6 +10,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { availableIntervals, isPlanPurchasable } from '@/config/payment'
 import { getPricingPlans } from '@/config/pricing'
 import { websiteConfig } from '@/config/website'
+import { useCheckoutNotice } from '@/hooks/use-checkout-notice'
 import { trackBeginCheckout } from '@/lib/analytics/events'
 import { assertPageEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
@@ -60,15 +61,18 @@ function PricingPage() {
   const [interval, setInterval] = useState<'month' | 'year' | 'one_time'>(defaultInterval)
 
   // 必须 `replace`：否则刷新会再弹一次早已过期的「结账未完成」。
-  useEffect(() => {
-    if (checkout !== 'cancelled') return
-    toast.add({ type: 'info', title: m.settings_billing_checkout_cancelled() })
-    void router.navigate({
-      to: '/{-$locale}/pricing',
-      params: { locale: getLocale() },
-      replace: true,
-    })
-  }, [checkout, router])
+  useCheckoutNotice({
+    checkout,
+    type: 'info',
+    title: m.settings_billing_checkout_cancelled(),
+    clearUrl: () => {
+      void router.navigate({
+        to: '/{-$locale}/pricing',
+        params: { locale: getLocale() },
+        replace: true,
+      })
+    },
+  })
 
   async function onSelectPlan(planId: string) {
     const plan = getPricingPlans().find((p) => p.id === planId)

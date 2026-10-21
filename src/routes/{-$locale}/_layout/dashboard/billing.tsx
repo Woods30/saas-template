@@ -21,8 +21,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { toast } from '@/components/ui/toast'
 import { websiteConfig } from '@/config/website'
+import { useCheckoutNotice } from '@/hooks/use-checkout-notice'
 import { trackPurchase } from '@/lib/analytics/events'
 import { getRequestLocale } from '@/lib/locale'
 import { assertPageEnabled } from '@/lib/module-access'
@@ -88,15 +88,18 @@ function BillingPage() {
   }, [load])
 
   // 展示完用 `replace` 抹掉 `?checkout=`，否则刷新会再弹一次旧消息。
-  useEffect(() => {
-    if (checkout !== 'success') return
-    toast.add({ type: 'success', title: m.settings_billing_checkout_success() })
-    void router.navigate({
-      to: '/{-$locale}/dashboard/billing',
-      params: { locale: getRequestLocale() },
-      replace: true,
-    })
-  }, [checkout, router])
+  useCheckoutNotice({
+    checkout,
+    type: 'success',
+    title: m.settings_billing_checkout_success(),
+    clearUrl: () => {
+      void router.navigate({
+        to: '/{-$locale}/dashboard/billing',
+        params: { locale: getRequestLocale() },
+        replace: true,
+      })
+    },
+  })
 
   // `purchase` 事件必须在浏览器补发：webhook 跑在 Workers，拿不到分析全局对象，
   // `checkout=success` 是唯一能确认归属本会话的信号。
