@@ -45,13 +45,12 @@ describe('websiteConfig 品牌信息', () => {
     expect(config.mail).toEqual({ enabled: false, provider: 'resend', supportEmail: '' })
     expect(config.contact.enabled).toBe(false)
     expect(config.newsletter).toEqual({ enabled: false, provider: 'resend' })
-    // `priceMap` 由 `VITE_STRIPE_PRICE_*` 派生，未配置时 `allowedPriceIds` 同为空。
+    // `lookupKeyMap` 由 `VITE_STRIPE_LOOKUP_*` 派生，未配置时为空。
     // 服务模块开关是部署场景的决定，断言跟着当前默认值走。
     expect(config.payment).toEqual({
       enabled: true,
       provider: 'stripe',
-      allowedPriceIds: [],
-      priceMap: {},
+      lookupKeyMap: {},
     })
     expect(config.notification).toEqual({ enabled: true, provider: 'discord' })
     expect(config.analytics).toEqual({ enabled: true, providers: ['ga'] })
@@ -73,11 +72,11 @@ describe('websiteConfig 品牌信息', () => {
   it('每次工厂调用使用传入 env 并返回独立配置', () => {
     expect(createWebsiteConfig).toBeTypeOf('function')
     const first = createWebsiteConfig(parsePublicEnv({ VITE_BASE_URL: 'https://first.example' }))
-    first.payment.allowedPriceIds.push('price_test')
+    first.payment.lookupKeyMap.pro_monthly = { month: 'pro_monthly' }
     first.docs.enabled = false
     const second = createWebsiteConfig(parsePublicEnv({ VITE_BASE_URL: 'https://second.example' }))
     expect(second.baseUrl).toBe('https://second.example')
-    expect(second.payment.allowedPriceIds).toEqual([])
+    expect(second.payment.lookupKeyMap).toEqual({})
     expect(second.docs.enabled).toBe(true)
   })
 })

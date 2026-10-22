@@ -1,9 +1,12 @@
 import type { Locale } from '@/config/locale'
-import { resolveMode, resolvePriceId } from '@/config/payment'
+import { resolveLookupKey } from '@/config/payment'
 import { websiteConfig } from '@/config/website'
 
 /**
- * 浏览器端发起结账：解析 Price ID → POST `/api/payment` → 整页跳转到 Stripe Checkout。
+ * 浏览器端发起结账：POST `/api/payment` → 整页跳转到 Stripe Checkout。
+ *
+ * 只传 **plan id + 计费周期**，不传 Price id：价格由服务端按 `lookup_key` 解析。
+ * 好处有两层——改价不必改前端；客户端也指定不了别的价格。
  *
  * 用整页跳转而非 `window.open`：Checkout 完成后要回到本站 success_url，新标签页会让
  * 用户落在原标签的旧页面上。
@@ -37,8 +40,10 @@ function returnUrls(locale: Locale): { successUrl: string; cancelUrl: string } {
 }
 
 export async function startCheckout(params: StartCheckoutParams): Promise<CheckoutOutcome> {
-  const priceId = resolvePriceId(websiteConfig.payment.priceMap, params.planId, params.interval)
-  if (!priceId) return { kind: 'not-configured' }
+  // 未配置 lookup key 就别发请求：直接给「先注册」更贴近真实可做的事。
+  if (!resolveLookupKey(websiteConfig.payment.lookupKeyMap, params.planId, params.interval)) {
+    return { kind: 'not-configured' }
+  }
 
   const { successUrl, cancelUrl } = returnUrls(params.locale)
 
@@ -48,10 +53,10 @@ export async function startCheckout(params: StartCheckoutParams): Promise<Checko
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        priceId,
+        planId: params.planId,
+        interval: params.interval,
         successUrl,
         cancelUrl,
-        mode: resolveMode(params.planId, websiteConfig.payment.priceMap),
         locale: params.locale,
       }),
     })
@@ -73,7 +78,7 @@ export async function startCheckout(params: StartCheckoutParams): Promise<Checko
   return { kind: 'redirect', url: body.url }
 }
 
-/** 该 plan 是否已配置可购买的 Price（用于禁用按钮）。 */
+/** 该 plan 是否已配置可购买的价格（用于禁用按钮）。 */
 export function isCheckoutConfigured(planId: string, interval?: string): boolean {
-  return Boolean(resolvePriceId(websiteConfig.payment.priceMap, planId, interval))
+  return Boolean(resolveLookupKey(websiteConfig.payment.lookupKeyMap, planId, interval))
 }

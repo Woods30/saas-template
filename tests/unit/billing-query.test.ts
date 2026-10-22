@@ -1,50 +1,34 @@
 import { describe, expect, it } from 'vitest'
-import { findPlanIdByPriceId, type PriceMap } from '@/config/payment'
 import { getPricingPlans } from '@/config/pricing'
 import {
   paymentStatusMessageKey,
-  planNameForSubscription,
+  planNameForPlanId,
   subscriptionIntervalMessageKey,
   subscriptionStatusMessageKey,
 } from '@/payment/billing-query'
 
-const priceMap: PriceMap = {
-  pro_monthly: { month: 'price_month', year: 'price_year' },
-  lifetime: { one_time: 'price_lifetime' },
-}
-
 /**
- * 账单页展示逻辑：套餐名必须由 Price id 反查（不能让用户看 `price_xxx`），
+ * 账单页展示逻辑：套餐名必须由方案 id 查出（不能让用户看 `price_xxx`），
  * 周期徽标不能把未知周期硬说成「按月」。
  */
 describe('billing-query 展示映射', () => {
-  describe('planNameForSubscription', () => {
-    it('按 Price id 反查出定价页上的套餐名', () => {
-      expect(planNameForSubscription('price_month', priceMap)).toBe(
+  describe('planNameForPlanId', () => {
+    it('按方案 id 查出定价页上的套餐名', () => {
+      expect(planNameForPlanId('pro_monthly')).toBe(
         getPricingPlans().find((plan) => plan.id === 'pro_monthly')?.name,
       )
-      expect(planNameForSubscription('price_year', priceMap)).toBe(
-        getPricingPlans().find((plan) => plan.id === 'pro_monthly')?.name,
-      )
-      expect(planNameForSubscription('price_lifetime', priceMap)).toBe(
+      expect(planNameForPlanId('lifetime')).toBe(
         getPricingPlans().find((plan) => plan.id === 'lifetime')?.name,
       )
     })
 
-    it('月付与年付映射到同一个套餐', () => {
-      // pro_monthly 挂两个 Price，不能显示成两个套餐。
-      expect(planNameForSubscription('price_month', priceMap)).toBe(
-        planNameForSubscription('price_year', priceMap),
-      )
+    it('方案不存在时返回 undefined，调用方退回显示 Price id', () => {
+      expect(planNameForPlanId('enterprise')).toBeUndefined()
     })
 
-    it('Price 不在映射里时返回 undefined，调用方退回显示 Price id', () => {
-      expect(planNameForSubscription('price_手工创建的', priceMap)).toBeUndefined()
-    })
-
-    it('priceId 为空时返回 undefined', () => {
-      expect(planNameForSubscription(null, priceMap)).toBeUndefined()
-      expect(planNameForSubscription('', priceMap)).toBeUndefined()
+    it('planId 为空时返回 undefined', () => {
+      expect(planNameForPlanId(null)).toBeUndefined()
+      expect(planNameForPlanId('')).toBeUndefined()
     })
   })
 
@@ -96,15 +80,5 @@ describe('billing-query 展示映射', () => {
     it('未知状态落到原始值，不冒充已支付', () => {
       expect(paymentStatusMessageKey('pending')).toBe('settings_billing_payment_status')
     })
-  })
-})
-
-describe('findPlanIdByPriceId 跨周期查重', () => {
-  it('月付年付同属一个 plan', () => {
-    expect(findPlanIdByPriceId(priceMap, 'price_year')).toBe('pro_monthly')
-  })
-
-  it('空映射返回 undefined', () => {
-    expect(findPlanIdByPriceId({}, 'price_month')).toBeUndefined()
   })
 })

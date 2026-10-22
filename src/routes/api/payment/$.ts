@@ -3,6 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { getAuth } from '@/auth/auth'
 import { type Locale, localeSchema } from '@/config/locale'
+import { availableIntervals, resolveLookupKey } from '@/config/payment'
 import { websiteConfig } from '@/config/website'
 import { createDb, schema } from '@/db'
 import { getModuleUnavailableResponse } from '@/lib/module-access.server'
@@ -10,12 +11,20 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import { getServerContext } from '@/lib/server-context'
 import { safeSameOriginUrl } from '@/lib/urls'
 import { getPaymentProvider } from '@/payment'
+import { getPriceCatalog } from '@/payment/price-catalog.server'
 
 const checkoutBodySchema = z.object({
-  priceId: z.string(),
+  /**
+   * 定价方案 id，不是 Price id。
+   *
+   * 客户端**不传** Price id：价格由服务端按 `lookup_key` 解析，改价不必改前端，
+   * 客户端也无法指定任意价格。
+   */
+  planId: z.string(),
+  /** 计费周期；不传时取该方案第一个已配置的周期。 */
+  interval: z.enum(['month', 'year', 'one_time']).optional(),
   successUrl: z.string(),
   cancelUrl: z.string(),
-  mode: z.enum(['subscription', 'payment']),
   locale: localeSchema.optional(),
 })
 
@@ -42,6 +51,7 @@ export async function createCheckoutSession(params: {
   locale?: Locale
   userId: string
   customerEmail: string
+  planId?: string
 }): Promise<{ url: string; sessionId: string }> {
   const provider = getPaymentProvider(websiteConfig.payment.provider)
   return provider.createCheckoutSession(params)
@@ -83,10 +93,15 @@ export const Route = createFileRoute('/api/payment/$')({
           return new Response('Bad Request', { status: 400 })
         }
 
-        // priceId 必须过白名单，不能直接信任客户端传入的值。
-        const { allowedPriceIds } = websiteConfig.payment
-        if (allowedPriceIds.length > 0 && !allowedPriceIds.includes(body.priceId)) {
-          return new Response('Disallowed priceId', { status: 400 })
+        // 价格由服务端解析：plan + 周期 → lookup_key → Stripe Price。
+        // 客户端无从指定 Price id，既堵住了「换个价格下单」，也让改价不必改前端。
+        const interval =
+          body.interval ?? availableIntervals(websiteConfig.payment.lookupKeyMap, body.planId)[0]
+        const lookupKey = interval
+          ? resolveLookupKey(websiteConfig.payment.lookupKeyMap, body.planId, interval)
+          : undefined
+        if (!lookupKey) {
+          return new Response('Unknown plan', { status: 400 })
         }
 
         // 回跳地址必须同源：这两个 URL 会被原样交给 Stripe，客户端传什么就跳什么，
@@ -98,10 +113,29 @@ export const Route = createFileRoute('/api/payment/$')({
           return new Response('Invalid return URL', { status: 400 })
         }
 
+        // 计费模式以 **Stripe 上的 Price** 为准，而不是配置里的猜测：
+        // 一次性 Price 没有 `recurring`，订阅 Price 有。
+        let price: { priceId: string; recurring: boolean }
+        try {
+          const catalog = await getPriceCatalog()
+          const found = catalog[lookupKey]
+          if (!found) {
+            return new Response('Price not configured', { status: 400 })
+          }
+          price = { priceId: found.priceId, recurring: found.recurring }
+        } catch (err) {
+          console.error(
+            '[payment-checkout] 取价失败：',
+            err instanceof Error ? err.message.split('\n')[0] : 'unknown',
+          )
+          return new Response('Price lookup failed', { status: 502 })
+        }
+        const mode = price.recurring ? 'subscription' : 'payment'
+
         // 拒绝重复订阅：一个用户只能有一份订阅，换方案走 Billing Portal 折算迁移。
         // 一次性支付不在此列。这是应用侧守卫，与 Stripe 后台的「限一个客户一个订阅」
         // 互为两层——后者挡得住绕过本站的 Checkout 链接。
-        if (body.mode === 'subscription') {
+        if (mode === 'subscription') {
           const db = createDb(env.DB)
           const existing = await db
             .select({ id: schema.subscriptions.id })
@@ -120,13 +154,14 @@ export const Route = createFileRoute('/api/payment/$')({
 
         try {
           const result = await createCheckoutSession({
-            priceId: body.priceId,
+            priceId: price.priceId,
             successUrl,
             cancelUrl,
-            mode: body.mode,
+            mode,
             locale: body.locale,
             userId,
             customerEmail: customerEmail ?? '',
+            planId: body.planId,
           })
           return Response.json(result, { status: 200 })
         } catch (err) {

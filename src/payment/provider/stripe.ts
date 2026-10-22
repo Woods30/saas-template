@@ -6,6 +6,7 @@ import type {
   PaymentProvider,
   PortalParams,
   PortalResult,
+  ProviderPrice,
 } from '../types'
 
 /**
@@ -32,6 +33,7 @@ export class StripePaymentProvider implements PaymentProvider {
   }
 
   async createCheckoutSession(params: CheckoutParams): Promise<CheckoutResult> {
+    const metadata = { userId: params.userId, ...(params.planId ? { planId: params.planId } : {}) }
     const session = await this.stripe.checkout.sessions.create({
       mode: params.mode,
       line_items: [{ price: params.priceId, quantity: 1 }],
@@ -40,19 +42,35 @@ export class StripePaymentProvider implements PaymentProvider {
       cancel_url: params.cancelUrl,
       // 兜底用站点默认语言，而非「非 zh 即 en」，否则新增语言会被当成 en 提交。
       locale: params.locale ?? defaultLocale,
-      metadata: { userId: params.userId },
+      metadata,
       // Checkout Session 自己的 metadata **不会**被 Stripe 复制到 Subscription
       // （实测订阅对象上的 metadata 是空的）。归属必须显式写进
       // `subscription_data.metadata`：否则 `customer.subscription.created` 早于
       // `checkout.session.completed` 到达时，这条订阅无从知道属于谁——
       // 补建不了，价格与周期也就永远补不上。
-      ...(params.mode === 'subscription'
-        ? { subscription_data: { metadata: { userId: params.userId } } }
-        : {}),
+      ...(params.mode === 'subscription' ? { subscription_data: { metadata } } : {}),
       ...(params.mode === 'payment' ? { invoice_creation: { enabled: true } } : {}),
       ...(params.mode === 'payment' ? { allow_promotion_codes: true } : {}),
     })
     return { url: session.url ?? '', sessionId: session.id }
+  }
+
+  /**
+   * 按 `lookup_key` 批量取价。
+   *
+   * 用 `lookup_keys[]` 而非逐个查 id：一次请求拿完所有展示价，且 key 换 Price 后
+   * 不用改代码。`prices.list` 默认只返回 active 的 Price。
+   */
+  async listPricesByLookupKey(lookupKeys: string[]): Promise<ProviderPrice[]> {
+    if (lookupKeys.length === 0) return []
+    const prices = await this.stripe.prices.list({ lookup_keys: lookupKeys })
+    return prices.data.map((price) => ({
+      id: price.id,
+      lookupKey: price.lookup_key,
+      amount: price.unit_amount,
+      currency: price.currency,
+      recurring: Boolean(price.recurring),
+    }))
   }
 
   async createCustomerPortalLink(params: PortalParams): Promise<PortalResult> {

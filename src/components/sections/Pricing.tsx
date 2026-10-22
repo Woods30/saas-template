@@ -16,7 +16,9 @@ export interface PricingProps {
 
 /**
  * 定价卡片列表。一个 plan 配多个周期时只显示选中的那个，避免被误读成要付两份钱。
- * 渲染的是展示价（`pricingPlans` 里的静态金额），与 Stripe 实际售价需人工保持一致。
+ *
+ * 渲染的金额来自 Stripe 的实时价格（`plan.prices` 由 `mergePricingPlans` 填好），
+ * 不是写死的文案常量：展示价与实际扣款价必须是同一个数。
  */
 export function Pricing({ title, subtitle, plans, renderCta, selectedInterval }: PricingProps) {
   return (

@@ -143,7 +143,7 @@ describe('assertPageEnabled', () => {
       assertPageEnabled(
         'payment',
         makeConfig({
-          payment: { enabled: false, provider: 'stripe', allowedPriceIds: [], priceMap: {} },
+          payment: { enabled: false, provider: 'stripe', lookupKeyMap: {} },
         }),
       ),
     )
@@ -227,10 +227,10 @@ describe('getModuleUnavailableResponse', () => {
     ).toBeUndefined()
   })
 
-  it('payment 已启用但缺少 allowedPriceIds 返回 503', () => {
+  it('payment 已启用但缺少 lookup key 返回 503', () => {
     const res = getModuleUnavailableResponse('payment', {
       config: makeConfig({
-        payment: { enabled: true, provider: 'stripe', allowedPriceIds: [], priceMap: {} },
+        payment: { enabled: true, provider: 'stripe', lookupKeyMap: {} },
       }),
       publicEnv,
       serverEnv: creds,
@@ -272,8 +272,7 @@ describe('getSitemapPaths', () => {
       payment: {
         enabled: true,
         provider: 'stripe',
-        allowedPriceIds: ['price_1'],
-        priceMap: { pro_monthly: { month: 'price_1' } },
+        lookupKeyMap: { pro_monthly: { month: 'pro_monthly' } },
       },
       contact: { enabled: true },
     })

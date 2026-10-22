@@ -4,9 +4,16 @@ import { treatEmptyAsUndefined } from './normalize'
 const schema = z.object({
   VITE_BASE_URL: z.url().default('http://localhost:3000'),
   VITE_PAYMENT_PROVIDER: z.enum(['stripe']).optional(),
-  VITE_STRIPE_PRICE_PRO_MONTHLY: z.string().optional(),
-  VITE_STRIPE_PRICE_PRO_YEARLY: z.string().optional(),
-  VITE_STRIPE_PRICE_LIFETIME: z.string().optional(),
+  /**
+   * Stripe Price 的 `lookup_key`，不是 Price ID。
+   *
+   * 官方推荐用它做「页面展示价 ↔ 实际扣款价」的锚点：换价时把 key 迁到新 Price 上
+   * （`transfer_lookup_key=true`），页面与代码都不用动。Price ID 一换就得改代码重新
+   * 部署，且极易与后台配置漂移。
+   */
+  VITE_STRIPE_LOOKUP_PRO_MONTHLY: z.string().optional(),
+  VITE_STRIPE_LOOKUP_PRO_YEARLY: z.string().optional(),
+  VITE_STRIPE_LOOKUP_LIFETIME: z.string().optional(),
   VITE_GA_ID: z.string().optional(),
   VITE_PLAUSIBLE_DOMAIN: z.string().optional(),
   VITE_UMAMI_WEBSITE_ID: z.string().optional(),

@@ -18,13 +18,19 @@ import { resolveRedirectTarget } from '@/lib/urls'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 import { startCheckout } from '@/payment/checkout-client'
+import { mergePricingPlans } from '@/payment/price-catalog'
+import { fetchPriceCatalog } from '@/payment/pricing'
 
 export const Route = createFileRoute('/{-$locale}/pricing')({
   // 独立定价页由 payment 开关控制；首页 #pricing 锚点不受影响。
   beforeLoad: () => assertPageEnabled('payment'),
   // 必须用 server function 而非 `useSession()`：后者 SSR 首帧 pending，
   // 按钮文案会在水合后跳变一次。
-  loader: () => fetchSession(),
+  // 价格也走 server function：展示价来自 Stripe，不写死在代码里。
+  loader: async () => {
+    const [session, catalog] = await Promise.all([fetchSession(), fetchPriceCatalog()])
+    return { session, catalog }
+  },
   // 不声明这个参数，`?checkout=cancelled` 会被当成未知 search 丢掉，
   // 用户取消结账回来就没有任何提示。
   validateSearch: (search: Record<string, unknown>): { checkout?: 'cancelled' } =>
@@ -39,26 +45,29 @@ export const Route = createFileRoute('/{-$locale}/pricing')({
 })
 
 /**
- * 周期切换的默认值：`pro_monthly` 第一个配好 Price 的周期。
+ * 周期切换的默认值：`pro_monthly` 第一个配好价格的周期。
  * 模块加载期求值即可：只依赖 env，不含随请求变化的 locale 文案。
  */
 const defaultInterval: 'month' | 'year' | 'one_time' =
-  availableIntervals(websiteConfig.payment.priceMap, 'pro_monthly')[0] ?? 'month'
+  availableIntervals(websiteConfig.payment.lookupKeyMap, 'pro_monthly')[0] ?? 'month'
 
 /**
  * 定价页。
  *
- * CTA 行为由**是否配置了 Price ID** 决定，而非只看 `payment.enabled`：
+ * CTA 行为由**是否配置了价格**决定，而非只看 `payment.enabled`：
  * 未配置时不能给一个点了就 502 的按钮，也不该暗示「立即购买」。
- * 月付 / 年付是 `pro_monthly` 下挂的多个 Price，没配年付就不渲染「按年」选项。
+ * 月付 / 年付是 `pro_monthly` 下挂的两个价格，没配年付就不渲染「按年」选项。
  */
 function PricingPage() {
   const router = useRouter()
   const { checkout } = Route.useSearch()
-  const session = Route.useLoaderData()
+  const { session, catalog } = Route.useLoaderData()
   const authenticated = session !== null
   const [pendingPlanId, setPendingPlanId] = useState<string | null>(null)
   const [interval, setInterval] = useState<'month' | 'year' | 'one_time'>(defaultInterval)
+
+  // 展示价来自 Stripe：方案文案（`getPricingPlans`）+ 实时价格（`catalog`）。
+  const plans = mergePricingPlans(getPricingPlans(), catalog)
 
   // 必须 `replace`：否则刷新会再弹一次早已过期的「结账未完成」。
   useCheckoutNotice({
@@ -75,8 +84,10 @@ function PricingPage() {
   })
 
   async function onSelectPlan(planId: string) {
-    const plan = getPricingPlans().find((p) => p.id === planId)
-    const planInterval = plan?.prices[0]?.interval === 'one_time' ? 'one_time' : interval
+    // 周期取自配置而不是展示价：取价失败时 `plans[].prices` 是空的，
+    // 从那里读周期会退化成默认的「月付」，买断方案就会去提交一个不存在的周期。
+    const intervals = availableIntervals(websiteConfig.payment.lookupKeyMap, planId)
+    const planInterval = intervals.includes('one_time') ? 'one_time' : interval
     const locale = getLocale()
 
     // 免费档要看会话：已登录用户再注册一次只会拿到「该邮箱已注册」。
@@ -88,7 +99,7 @@ function PricingPage() {
       return
     }
 
-    if (!isPlanPurchasable(planId, websiteConfig.payment.priceMap)) {
+    if (!isPlanPurchasable(planId, websiteConfig.payment.lookupKeyMap)) {
       router.navigate({
         to: '/{-$locale}/auth/register',
         params: { locale },
@@ -141,7 +152,7 @@ function PricingPage() {
   }
 
   /** 可切换的周期；只有一个周期（或全都没配）时不渲染切换器。 */
-  const proIntervals = availableIntervals(websiteConfig.payment.priceMap, 'pro_monthly')
+  const proIntervals = availableIntervals(websiteConfig.payment.lookupKeyMap, 'pro_monthly')
   const showIntervalSwitch =
     proIntervals.length > 1 && proIntervals.some((value) => value !== 'one_time')
 
@@ -167,14 +178,14 @@ function PricingPage() {
                 </ToggleGroupItem>
               ))}
           </ToggleGroup>
-          {interval === 'year' && <YearlySavingHint />}
+          {interval === 'year' && <YearlySavingHint plans={plans} />}
         </div>
       )}
       <PricingBlock
-        plans={getPricingPlans()}
+        plans={plans}
         selectedInterval={interval}
         renderCta={(plan) => {
-          const configured = isPlanPurchasable(plan.id, websiteConfig.payment.priceMap)
+          const configured = isPlanPurchasable(plan.id, websiteConfig.payment.lookupKeyMap)
           const pending = pendingPlanId === plan.id
           // 按钮文字跟随点击后真正会发生的事，而不是固定的营销文案。
           const label = configured
@@ -193,7 +204,7 @@ function PricingPage() {
         title={m.pricing_cta_title()}
         primaryCta={{ label: m.pricing_cta_primary(), href: '/auth/register' }}
       />
-      {/* 未配置 Price 时给一条明确线索：这个模板默认不带支付凭据。 */}
+      {/* 未配置价格时给一条明确线索：这个模板默认不带支付凭据。 */}
       {!hasAnyConfiguredPrice() && (
         <p className="mt-6 text-center text-sm text-muted-foreground">
           {m.payment_checkout_not_configured()}
@@ -206,10 +217,10 @@ function PricingPage() {
 /**
  * 年付相对月付的月度节省比例。
  *
- * 展示价与 Price 映射是两份数据，这里只算展示价折扣，是营销文案，不参与校验。
+ * 两个数都是 Stripe 上的真实价格（不是写死的展示文案），所以这个折扣不会骗人。
  */
-function YearlySavingHint() {
-  const pro = getPricingPlans().find((plan) => plan.id === 'pro_monthly')
+function YearlySavingHint({ plans }: { plans: ReturnType<typeof mergePricingPlans> }) {
+  const pro = plans.find((plan) => plan.id === 'pro_monthly')
   const month = pro?.prices.find((price) => price.interval === 'month')
   const year = pro?.prices.find((price) => price.interval === 'year')
   if (!month?.amount || !year?.amount) return null
@@ -226,9 +237,9 @@ function YearlySavingHint() {
   )
 }
 
-/** 任一 plan 配了 Price 时才隐藏「暂未开放购买」提示。 */
+/** 任一 plan 配了价格时才隐藏「暂未开放购买」提示。 */
 function hasAnyConfiguredPrice(): boolean {
   return getPricingPlans().some((plan) =>
-    isPlanPurchasable(plan.id, websiteConfig.payment.priceMap),
+    isPlanPurchasable(plan.id, websiteConfig.payment.lookupKeyMap),
   )
 }

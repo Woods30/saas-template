@@ -80,5 +80,27 @@ export const fetchBillingOverview = createServerFn({ method: 'GET' })
         .limit(data.limit),
     ])
 
-    return { subscriptions, payments }
+    // 套餐名要靠 Price id 反查方案 id：映射来自 Stripe 的实时价格目录。
+    // 取不到就退化为 null（页面显示 Price id），不能因此让整个账单页失败。
+    let planIdByPriceId: Record<string, string> = {}
+    try {
+      const [{ getPriceCatalog }, { buildPlanIdByPriceId }] = await Promise.all([
+        import('./price-catalog.server'),
+        import('./price-catalog'),
+      ])
+      planIdByPriceId = buildPlanIdByPriceId(await getPriceCatalog())
+    } catch (err) {
+      console.warn(
+        '[billing-overview] 取价目录失败，套餐名退回 Price id：',
+        err instanceof Error ? err.message.split('\n')[0] : 'unknown',
+      )
+    }
+
+    return {
+      subscriptions: subscriptions.map((sub) => ({
+        ...sub,
+        planId: sub.priceId ? (planIdByPriceId[sub.priceId] ?? null) : null,
+      })),
+      payments,
+    }
   })

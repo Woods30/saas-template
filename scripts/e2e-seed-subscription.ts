@@ -10,6 +10,8 @@ import { parseEnv } from 'node:util'
  * 用法：`pnpm exec tsx scripts/e2e-seed-subscription.ts <email>`
  *
  * `amount` / `currency` / `interval` 必须一并填上，否则账单页金额列渲染成 `—`。
+ * 这些值从 Stripe 按 `lookup_key` 实时取：写死金额会让 E2E 断言的是一个
+ * 早已不存在的价格。
  */
 
 /** 与本地 D1 的 `subscriptions` 列一一对应，避免拼 SQL 时漏字段。 */
@@ -21,16 +23,46 @@ interface SeedSubscription {
   status: 'active'
   priceId: string
   amount: number
-  currency: 'usd'
-  interval: 'month'
+  currency: string
+  interval: string
   /** Unix 秒；写未来时间，让用例能断言「续费日期」确实渲染了具体时刻。 */
   currentPeriodEnd: number
 }
 
-/** 读 `.env` 里的 Price ID；空串由调用方报错。 */
+/** 读 `.env` 里的值；空串由调用方报错。 */
 function readEnv(key: string): string {
   const parsed = parseEnv(readFileSync('.env', 'utf-8')) as Record<string, string>
   return parsed[key]?.trim() ?? ''
+}
+
+/** Stripe Price 的必要字段。 */
+interface StripePrice {
+  id: string
+  unit_amount: number | null
+  currency: string
+  recurring: { interval?: string } | null
+}
+
+/**
+ * 按 `lookup_key` 取 Stripe 上的 Price。
+ *
+ * 与线上取值走同一条链路（`lookup_keys[]` → Prices API），保证 E2E 造出来的
+ * 订阅行与真实订阅在价格、币种、周期上一致。
+ */
+export async function fetchPriceByLookupKey(
+  lookupKey: string,
+  secretKey: string,
+): Promise<StripePrice> {
+  const url = new URL('https://api.stripe.com/v1/prices')
+  url.searchParams.append('lookup_keys[]', lookupKey)
+  const response = await fetch(url, { headers: { authorization: `Bearer ${secretKey}` } })
+  if (!response.ok) {
+    throw new Error(`Stripe Prices API 返回 ${response.status}`)
+  }
+  const body = (await response.json()) as { data?: StripePrice[] }
+  const price = body.data?.[0]
+  if (!price) throw new Error(`Stripe 上没有 lookup_key=${lookupKey} 的 Price`)
+  return price
 }
 
 /** 按邮箱查本地 D1 的 users 表。 */
@@ -69,16 +101,34 @@ export function buildSeedSql(sub: SeedSubscription): string {
   return `INSERT INTO subscriptions (id, user_id, customer_id, subscription_id, status, price_id, amount, currency, interval, current_period_end) VALUES (${quoted.join(', ')})`
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const email = process.argv[2]
   if (!email) {
     console.error('用法：pnpm exec tsx scripts/e2e-seed-subscription.ts <email>')
     process.exit(1)
   }
 
-  const priceId = readEnv('VITE_STRIPE_PRICE_PRO_MONTHLY')
-  if (!priceId) {
-    console.error('❌ .env 未配置 VITE_STRIPE_PRICE_PRO_MONTHLY，无法构造与线上一致的订阅行')
+  const lookupKey = readEnv('VITE_STRIPE_LOOKUP_PRO_MONTHLY')
+  if (!lookupKey) {
+    console.error('❌ .env 未配置 VITE_STRIPE_LOOKUP_PRO_MONTHLY，无法构造与线上一致的订阅行')
+    process.exit(1)
+  }
+  const secretKey = readEnv('STRIPE_SECRET_KEY')
+  if (!secretKey) {
+    console.error('❌ .env 未配置 STRIPE_SECRET_KEY，无法向 Stripe 查询真实价格')
+    process.exit(1)
+  }
+
+  // 价格取自 Stripe：写死金额会让 E2E 断言一个早已不存在的价格。
+  let price: StripePrice
+  try {
+    price = await fetchPriceByLookupKey(lookupKey, secretKey)
+  } catch (err) {
+    console.error(`❌ 取价失败：${err instanceof Error ? err.message : 'unknown'}`)
+    process.exit(1)
+  }
+  if (price.unit_amount === null) {
+    console.error('❌ 该 Price 是阶梯计价，没有单一金额，无法构造订阅行')
     process.exit(1)
   }
 
@@ -96,10 +146,10 @@ function main(): void {
     customerId: `cus_e2e_${unique}`,
     subscriptionId: `sub_e2e_stripe_${unique}`,
     status: 'active',
-    priceId,
-    amount: 599,
-    currency: 'usd',
-    interval: 'month',
+    priceId: price.id,
+    amount: price.unit_amount,
+    currency: price.currency,
+    interval: price.recurring?.interval ?? 'one_time',
     currentPeriodEnd: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
   })
 
@@ -111,5 +161,8 @@ function main(): void {
 
 // 与 set-admin.ts 同一约定：被 import 时不执行 main。
 if (process.argv[1]?.includes('e2e-seed-subscription')) {
-  main()
+  main().catch((err) => {
+    console.error(`❌ ${err instanceof Error ? err.message : 'unknown'}`)
+    process.exit(1)
+  })
 }

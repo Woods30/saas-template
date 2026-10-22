@@ -20,6 +20,7 @@ const mockStripeInstance = vi.hoisted(() => ({
     type: 'checkout.session.completed',
     data: { object: {} },
   }),
+  pricesList: vi.fn().mockResolvedValue({ data: [] }),
 }))
 
 vi.mock('stripe', () => ({
@@ -27,10 +28,22 @@ vi.mock('stripe', () => ({
     static createFetchHttpClient = mockStripeInstance.createFetchHttpClient
     static createSubtleCryptoProvider = mockStripeInstance.createSubtleCryptoProvider
     checkout = { sessions: { create: mockStripeInstance.sessionsCreate } }
+    prices = { list: mockStripeInstance.pricesList }
     billingPortal = { sessions: { create: mockStripeInstance.portalCreate } }
     webhooks = { constructEventAsync: mockStripeInstance.constructEventAsync }
   },
 }))
+
+/**
+ * 价格目录替身：服务端按 lookup key 解析出的 Price。
+ *
+ * `recurring` 决定计费模式：周期价格走订阅守卫，一次性价格不受「已有订阅」限制。
+ */
+const mockPriceCatalog = {
+  pro_monthly: { priceId: 'price_month', amount: 990, currency: 'usd', recurring: true },
+  pro_yearly: { priceId: 'price_year', amount: 9900, currency: 'usd', recurring: true },
+  lifetime: { priceId: 'price_life', amount: 9900, currency: 'usd', recurring: false },
+}
 
 // @/payment mock —— 保留真实导出，只覆盖 getPaymentProvider。
 
@@ -197,6 +210,59 @@ describe('StripePaymentProvider', () => {
     expect(result).toHaveProperty('sessionId')
   })
 
+  it('listPricesByLookupKey 按 key 批量取价，返回金额与是否周期计费', async () => {
+    mockStripeInstance.pricesList = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'price_123',
+          lookup_key: 'pro_monthly',
+          unit_amount: 990,
+          currency: 'usd',
+          recurring: { interval: 'month' },
+        },
+        {
+          id: 'price_456',
+          lookup_key: 'lifetime',
+          unit_amount: 9900,
+          currency: 'usd',
+          recurring: null,
+        },
+      ],
+    })
+    const { StripePaymentProvider } = await import('@/payment')
+    const provider = new StripePaymentProvider('sk_test', 'whsec_test')
+    const prices = await provider.listPricesByLookupKey(['pro_monthly', 'lifetime'])
+
+    expect(mockStripeInstance.pricesList).toHaveBeenCalledWith({
+      lookup_keys: ['pro_monthly', 'lifetime'],
+    })
+    expect(prices).toEqual([
+      {
+        id: 'price_123',
+        lookupKey: 'pro_monthly',
+        amount: 990,
+        currency: 'usd',
+        recurring: true,
+      },
+      {
+        id: 'price_456',
+        lookupKey: 'lifetime',
+        amount: 9900,
+        currency: 'usd',
+        recurring: false,
+      },
+    ])
+    // 复原，避免影响后续用例。
+    mockStripeInstance.pricesList = vi.fn().mockResolvedValue({ data: [] })
+  })
+
+  it('listPricesByLookupKey 空 key 列表不打 API', async () => {
+    const { StripePaymentProvider } = await import('@/payment')
+    const provider = new StripePaymentProvider('sk_test', 'whsec_test')
+    expect(await provider.listPricesByLookupKey([])).toEqual([])
+    expect(mockStripeInstance.pricesList).not.toHaveBeenCalled()
+  })
+
   it('createCustomerPortalLink calls stripe.billingPortal.sessions.create with correct params', async () => {
     const { StripePaymentProvider } = await import('@/payment')
     const provider = new StripePaymentProvider('sk_test', 'whsec_test')
@@ -245,6 +311,12 @@ describe('buildPaymentProviderRegistry', () => {
         STRIPE_WEBHOOK_SECRET: 'whsec_test',
       }),
     )
+    expect(typeof registry.stripe).toBe('function')
+  })
+
+  it('只有 secret key 时也能注册 —— 取价不需要 webhook secret', () => {
+    // 定价页要能取到价格，即便还没接 webhook。
+    const registry = buildPaymentProviderRegistry(parseServerEnv({ STRIPE_SECRET_KEY: 'sk_test' }))
     expect(typeof registry.stripe).toBe('function')
   })
 })
@@ -349,7 +421,7 @@ describe('POST /api/payment 重复订阅守卫', () => {
     vi.doMock('@/auth/auth', () => ({
       getAuth: () => ({ api: { getSession: async () => ({ user: { id: 'user_1' } }) } }),
     }))
-    // 必须配齐 Price：`allowedPriceIds` 为空时会放行任意 priceId，白名单分支就测不到。
+    // 必须配齐 lookup key：没有 key 时 /api/payment 解析不出价格，直接 400。
     vi.doMock('@/config/website', async () => {
       const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
       const { parsePublicEnv } =
@@ -357,13 +429,18 @@ describe('POST /api/payment 重复订阅守卫', () => {
       const base = actual.createWebsiteConfig(
         parsePublicEnv({
           VITE_BASE_URL: 'https://jerbix.dev',
-          VITE_STRIPE_PRICE_PRO_MONTHLY: 'price_month',
-          VITE_STRIPE_PRICE_PRO_YEARLY: 'price_year',
-          VITE_STRIPE_PRICE_LIFETIME: 'price_life',
+          VITE_STRIPE_LOOKUP_PRO_MONTHLY: 'pro_monthly',
+          VITE_STRIPE_LOOKUP_PRO_YEARLY: 'pro_yearly',
+          VITE_STRIPE_LOOKUP_LIFETIME: 'lifetime',
         }),
       )
       return { ...actual, websiteConfig: base }
     })
+    // 价格目录：服务端按 lookup key 解析出 Price id 与计费模式。
+    vi.doMock('@/payment/price-catalog.server', () => ({
+      getPriceCatalog: async () => mockPriceCatalog,
+      findPlanIdByPriceId: async () => undefined,
+    }))
     // 同源校验以 `publicEnv.VITE_BASE_URL` 为准，必须与上面的站点一致。
     vi.doMock('@/env/public', async () => {
       const actual = await vi.importActual<typeof import('@/env/public')>('@/env/public')
@@ -381,11 +458,11 @@ describe('POST /api/payment 重复订阅守卫', () => {
   }
 
   const subscribeBody = {
-    // 必须落在上面配置的 `allowedPriceIds` 白名单里。
-    priceId: 'price_month',
+    // 客户端只给 plan + 周期；Price id 与计费模式由服务端按 lookup key 解析。
+    planId: 'pro_monthly',
+    interval: 'month' as const,
     successUrl: 'https://jerbix.dev/dashboard/billing?checkout=success',
     cancelUrl: 'https://jerbix.dev/pricing?checkout=cancelled',
-    mode: 'subscription' as const,
   }
 
   it('已有 active 订阅时返回 409，且不创建 Checkout Session', async () => {
@@ -434,7 +511,13 @@ describe('POST /api/payment 重复订阅守卫', () => {
 
     const request = new Request('https://jerbix.dev/api/payment', {
       method: 'POST',
-      body: JSON.stringify({ ...subscribeBody, mode: 'payment' }),
+      // 买断：目录里 lifetime 是非周期价格，服务端据此判定为一次性支付。
+      body: JSON.stringify({
+        planId: 'lifetime',
+        interval: 'one_time',
+        successUrl: subscribeBody.successUrl,
+        cancelUrl: subscribeBody.cancelUrl,
+      }),
     })
 
     const response = await handler({ request })
@@ -1193,11 +1276,16 @@ describe('回跳地址必须同源', () => {
       const base = actual.createWebsiteConfig(
         parsePublicEnv({
           VITE_BASE_URL: 'https://jerbix.dev',
-          VITE_STRIPE_PRICE_PRO_MONTHLY: 'price_month',
+          VITE_STRIPE_LOOKUP_PRO_MONTHLY: 'pro_monthly',
         }),
       )
       return { ...actual, websiteConfig: base }
     })
+    // 价格目录：服务端按 lookup key 解析出 Price id 与计费模式。
+    vi.doMock('@/payment/price-catalog.server', () => ({
+      getPriceCatalog: async () => mockPriceCatalog,
+      findPlanIdByPriceId: async () => undefined,
+    }))
     // 同源校验以 `publicEnv.VITE_BASE_URL` 为准，必须与上面的站点一致。
     vi.doMock('@/env/public', async () => {
       const actual = await vi.importActual<typeof import('@/env/public')>('@/env/public')
@@ -1213,10 +1301,10 @@ describe('回跳地址必须同源', () => {
   }
 
   const checkoutBody = {
-    priceId: 'price_month',
+    planId: 'pro_monthly',
+    interval: 'month' as const,
     successUrl: 'https://jerbix.dev/zh/dashboard/billing?checkout=success',
     cancelUrl: 'https://jerbix.dev/zh/pricing?checkout=cancelled',
-    mode: 'subscription' as const,
   }
 
   async function post(body: unknown) {

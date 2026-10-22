@@ -5,6 +5,7 @@ import type { PricingPlan } from '@/components/sections'
 import { Pricing } from '@/components/sections/Pricing'
 import { getPricingPlans } from '@/config/pricing'
 import { getLocale, setLocale } from '@/locale/paraglide/runtime.js'
+import type { PricingPlanDefinition } from '@/types/pricing'
 
 // Mock @tanstack/react-router：Pricing 依赖 <Link>，但测试无需路由上下文。
 vi.mock('@tanstack/react-router', () => ({
@@ -38,16 +39,15 @@ describe('getPricingPlans 语言响应', () => {
     expect(zhPro?.name).toBe('专业版')
     expect(enPro?.name).toBe('Pro')
     expect(zhPro?.id).toBe(enPro?.id)
-    expect(zhPro?.prices.map((price) => [price.interval, price.amount])).toEqual(
-      enPro?.prices.map((price) => [price.interval, price.amount]),
-    )
-    expect(zhPro?.prices[0]?.label).not.toBe(enPro?.prices[0]?.label)
+    // 方案定义里没有金额（金额来自 Stripe），文案仍随语言变化。
+    expect(zhPro?.features[0]).not.toBe(enPro?.features[0])
+    expect(zhPro?.cta.label).not.toBe(enPro?.cta.label)
   })
 })
 
 // pricingPlans 配置形状。
 /** 按 id 取 plan；缺失即抛错，避免散落非空断言。 */
-function requirePlan(id: string): PricingPlan {
+function requirePlan(id: string): PricingPlanDefinition {
   const plan = getPricingPlans().find((p) => p.id === id)
   if (!plan) throw new Error(`未找到 plan: ${id}`)
   return plan
@@ -62,44 +62,29 @@ describe('pricingPlans config', () => {
     ).toEqual(['free', 'lifetime', 'pro_monthly'])
   })
 
-  it('free 方案无价格', () => {
+  it('free 方案有卖点与 CTA', () => {
     const free = requirePlan('free')
-    expect(free.prices).toHaveLength(0)
     expect(free.features.length).toBeGreaterThan(0)
     expect(free.cta.label).toBeTruthy()
   })
 
-  it('pro_monthly 同时挂月付与年付两个 Price', () => {
+  it('pro_monthly 是推荐方案', () => {
     const pro = requirePlan('pro_monthly')
-    // 两个周期都要存在，否则「按年付」永远不会被选中。
-    expect(pro.prices.map((price) => price.interval)).toEqual(['month', 'year'])
     expect(pro.highlighted).toBe(true)
     expect(pro.badge).toBeTruthy()
   })
 
-  it('pro_monthly 月付 $5.99、年付 $281.00', () => {
-    const pro = requirePlan('pro_monthly')
-    const month = pro.prices.find((price) => price.interval === 'month')
-    const year = pro.prices.find((price) => price.interval === 'year')
-    expect(month?.amount).toBe(599)
-    expect(month?.currency).toBe('USD')
-    expect(year?.amount).toBe(28100)
-    expect(year?.currency).toBe('USD')
-  })
-
-  it('lifetime 方案价格为 $14.00 一次性', () => {
-    const lifetime = requirePlan('lifetime')
-    const [lifetimePrice] = lifetime.prices
-    expect(lifetime.prices).toHaveLength(1)
-    expect(lifetimePrice?.amount).toBe(1400)
-    expect(lifetimePrice?.interval).toBe('one_time')
+  it('方案定义里没有金额 —— 金额来自 Stripe', () => {
+    // 写死金额会让页面显示与实际扣款分属两份数据，改价必然漂移。
+    for (const plan of getPricingPlans()) {
+      expect(plan, `plan ${plan.id}: 方案定义不应带价格`).not.toHaveProperty('prices')
+    }
   })
 
   it('每个 plan 都有 required fields', () => {
     for (const plan of getPricingPlans()) {
       expect(plan.id, `plan ${plan.id}: missing id`).toBeTruthy()
       expect(plan.name, `plan ${plan.id}: missing name`).toBeTruthy()
-      expect(Array.isArray(plan.prices), `plan ${plan.id}: prices not array`).toBe(true)
       expect(Array.isArray(plan.features), `plan ${plan.id}: features not array`).toBe(true)
       expect(plan.cta, `plan ${plan.id}: missing cta`).toBeTruthy()
       expect(plan.cta.href, `plan ${plan.id}: cta missing href`).toBeTruthy()

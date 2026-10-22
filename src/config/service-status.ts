@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { PublicEnv } from '@/env/public'
 import type { ServerEnv } from '@/env/server'
-import { findOrphanPlanIds } from './payment'
+import { collectLookupKeys, findOrphanPlanIds } from './payment'
 import type { ServiceModule, WebsiteConfig } from './website'
 
 /**
@@ -135,10 +135,10 @@ export function getServiceStatuses(input: {
   check('payment', [
     ['STRIPE_SECRET_KEY', !!env.STRIPE_SECRET_KEY, 'env'],
     ['STRIPE_WEBHOOK_SECRET', !!env.STRIPE_WEBHOOK_SECRET, 'env'],
-    // 空白名单会让 /api/payment 放行任意 priceId，故作为必需项。
+    // 一个 lookup key 都没配：定价页取不到任何价格，结账也无从下手。
     [
-      'payment.allowedPriceIds',
-      config.payment.allowedPriceIds.some((id) => id.trim().length > 0),
+      'payment.lookupKeyMap',
+      collectLookupKeys(config.payment.lookupKeyMap).length > 0,
       'src/config/website.ts',
     ],
   ])
@@ -233,12 +233,12 @@ export function validateWebsiteConfig(config: WebsiteConfig): ConfigIssue[] {
     }
   }
 
-  // 配了 Price 但定价页没有对应方案：用户永远买不到，配置校验却是「完整」。
-  for (const planId of findOrphanPlanIds(config.payment.priceMap)) {
+  // 配了 lookup key 但定价页没有对应方案：用户永远买不到，配置校验却是「完整」。
+  for (const planId of findOrphanPlanIds(config.payment.lookupKeyMap)) {
     issues.push({
-      key: `payment.priceMap.${planId}`,
+      key: `payment.lookupKeyMap.${planId}`,
       location,
-      reason: '该 plan id 在定价页方案中不存在，配了 Price 也无法购买',
+      reason: '该 plan id 在定价页方案中不存在，配了价格也无法购买',
     })
   }
 

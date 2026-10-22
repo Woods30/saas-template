@@ -1,4 +1,3 @@
-import { findPlanIdByPriceId } from '@/config/payment'
 import { getPricingPlans } from '@/config/pricing'
 
 /**
@@ -17,6 +16,14 @@ export interface SubscriptionRecord {
   subscriptionId?: string | null
   status: string
   priceId?: string | null
+  /**
+   * 定价方案 id。
+   *
+   * 由服务端按 `lookup_key` 反查得出：DB 里只存 Stripe 的 Price id，而 Price id
+   * 与「用户买的是哪个套餐」之间隔着一次映射。取不到时为 `null`，页面退回显示
+   * Price id（真实数据，好过编一个名字）。
+   */
+  planId?: string | null
   amount?: number | null
   currency?: string | null
   interval?: BillingInterval | null
@@ -72,16 +79,14 @@ export function subscriptionStatusMessageKey(
 }
 
 /**
- * 订阅 → 展示用套餐名，反查同一份 `priceMap`，无需另维护对照表。
+ * 定价方案 id → 展示用套餐名。
  *
- * 查不到时返回 `undefined`：Price 可能是在 Stripe 后台手工创建的，调用方退回显示 Price id。
+ * 名字按**当前语言**取自 `getPricingPlans()`，不在服务端算：server function 拿不到
+ * 页面的 locale，算出来的名字可能与页面语言对不上。
+ *
+ * 查不到时返回 `undefined`：方案可能已下线，调用方退回显示 Price id。
  */
-export function planNameForSubscription(
-  priceId: string | null | undefined,
-  priceMap: import('@/config/payment').PriceMap,
-): string | undefined {
-  if (!priceId) return undefined
-  const planId = findPlanIdByPriceId(priceMap, priceId)
+export function planNameForPlanId(planId: string | null | undefined): string | undefined {
   if (!planId) return undefined
   return getPricingPlans().find((plan) => plan.id === planId)?.name
 }

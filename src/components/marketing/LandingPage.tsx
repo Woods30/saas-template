@@ -24,6 +24,7 @@ import { getPricingPlans } from '@/config/pricing'
 import { websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
+import { mergePricingPlans, type PriceCatalog } from '@/payment/price-catalog'
 
 const MAX_TILT_DEGREES = 4
 
@@ -392,10 +393,12 @@ function Workflow() {
 /**
  * 首页定价概览，仅在 `payment.enabled` 时渲染。周期切换与结账在独立定价页，
  * CTA 只做导流，不在这里承担付款。
+ *
+ * 金额来自 Stripe 的实时价格目录（`catalog`），与定价页同源。
  */
-function HomePricing() {
+function HomePricing({ catalog }: { catalog: PriceCatalog }) {
   if (!websiteConfig.payment.enabled) return null
-  const plans = getPricingPlans().filter((plan) => plan.id !== 'free')
+  const plans = mergePricingPlans(getPricingPlans(), catalog).filter((plan) => plan.id !== 'free')
   return (
     <section id="plans" className="lab-reveal mx-auto max-w-6xl scroll-mt-16 px-6 py-16 md:py-24">
       <p className="text-xs font-semibold tracking-widest text-primary">
@@ -661,7 +664,12 @@ function CapabilityFeatures() {
   )
 }
 
-export function LandingPage() {
+export interface LandingPageProps {
+  /** Stripe 实时价格目录；由首页路由的 loader 取。 */
+  catalog?: PriceCatalog
+}
+
+export function LandingPage({ catalog = {} }: LandingPageProps) {
   const [paused, setPaused] = useState(false)
   const [pageVisible, setPageVisible] = useState(true)
   const root = useRef<HTMLDivElement>(null)
@@ -737,7 +745,7 @@ export function LandingPage() {
       <div className="lab-reveal">
         <Workflow />
       </div>
-      <HomePricing />
+      <HomePricing catalog={catalog} />
       <div className="lab-reveal">
         <SourceOverview />
       </div>

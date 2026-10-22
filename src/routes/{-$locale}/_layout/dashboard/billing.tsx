@@ -21,7 +21,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { websiteConfig } from '@/config/website'
 import { useCheckoutNotice } from '@/hooks/use-checkout-notice'
 import { trackPurchase } from '@/lib/analytics/events'
 import { getRequestLocale } from '@/lib/locale'
@@ -35,7 +34,7 @@ import {
 } from '@/payment/billing'
 import {
   paymentStatusMessageKey,
-  planNameForSubscription,
+  planNameForPlanId,
   subscriptionIntervalMessageKey,
   subscriptionStatusMessageKey,
 } from '@/payment/billing-query'
@@ -275,7 +274,7 @@ function SubscriptionCard({
   managing: boolean
   onManage: () => void
 }) {
-  const plan = planNameForSubscription(sub.priceId, websiteConfig.payment.priceMap)
+  const plan = planNameForPlanId(sub.planId)
   const statusKey = subscriptionStatusMessageKey(sub.status)
   // 周期可能尚未同步（两个 webhook 之间），此时只显示金额。
   const intervalLabel = (() => {

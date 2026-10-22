@@ -97,8 +97,9 @@ test.describe('Payment', () => {
     await expect(section.getByText('专业版')).toBeVisible({ timeout: 15000 })
     // 只有日期不足以判断「今天会不会扣款」，所以必须带具体时刻。
     await expect(section.getByText(/\d{1,2}:\d{2}/)).toBeVisible()
-    // 金额缺失时这里渲染成 `—`。
-    await expect(section.getByText(/\$5\.99 \/ 按月/)).toBeVisible()
+    // 金额缺失时这里渲染成 `—`。金额来自 Stripe 的实时价格，不写死具体数字：
+    // 写死会在改价后立刻失效，且掩盖「展示价与实际扣款价不同步」这类缺陷。
+    await expect(section.getByText(/\$\d+(\.\d{2})? \/ 按月/)).toBeVisible()
     // 周期为空曾被误归为终身，于是「订阅行已建、周期未补」会显示成买断版。
     await expect(section.getByText('终身')).toHaveCount(0)
     // 一页通常只有一条订阅，卡片比横向四列的表格合适。

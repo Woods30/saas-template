@@ -71,7 +71,7 @@ const scrubKeys = [...dotenvKeys, ...EXTRA_ENV_KEYS]
 const ENABLED_SERVICES_ENV: Record<string, string> = {
   STRIPE_SECRET_KEY: 'sk_test_synthetic',
   STRIPE_WEBHOOK_SECRET: 'whsec_synthetic',
-  VITE_STRIPE_PRICE_PRO_MONTHLY: 'price_synthetic',
+  VITE_STRIPE_LOOKUP_PRO_MONTHLY: 'pro_monthly',
   DISCORD_WEBHOOK_URL: 'https://discord.com/api/webhooks/1/synthetic',
   VITE_GA_ID: 'G-SYNTHETIC',
 }

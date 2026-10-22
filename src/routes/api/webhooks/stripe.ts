@@ -1,6 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { eq } from 'drizzle-orm'
-import { findPlanIdByPriceId } from '@/config/payment'
 import { getPricingPlans } from '@/config/pricing'
 import { websiteConfig } from '@/config/website'
 import { createDb, schema } from '@/db'
@@ -128,14 +127,23 @@ function priceIdFromInvoice(invoice: InvoicePaidObject): string | undefined {
 /**
  * Price id → 展示用套餐名。
  *
- * 反向查 `priceMap`，新增 plan 时无需改这里。查不到返回 `undefined`：Price 可能是
- * 后台手工创建的，调用方退回显示 Price id。
+ * 反查走 Stripe 的实时价格目录（Price id → lookup_key → plan id），新增 plan 时
+ * 无需改这里。查不到返回 `undefined`：Price 可能是后台手工创建的，调用方退回
+ * 显示 Price id。
+ *
+ * 取价失败**不算** webhook 失败：通知里的套餐名只是运营参考，不值得让 Stripe
+ * 为此重投一整条事件。
  */
-function planNameForPrice(priceId: string | undefined): string | undefined {
+async function planNameForPrice(priceId: string | undefined): Promise<string | undefined> {
   if (!priceId) return undefined
-  const planId = findPlanIdByPriceId(websiteConfig.payment.priceMap, priceId)
-  if (!planId) return undefined
-  return getPricingPlans().find((plan) => plan.id === planId)?.name
+  try {
+    const { findPlanIdByPriceId } = await import('@/payment/price-catalog.server')
+    const planId = await findPlanIdByPriceId(priceId)
+    if (!planId) return undefined
+    return getPricingPlans().find((plan) => plan.id === planId)?.name
+  } catch {
+    return undefined
+  }
 }
 
 /**
@@ -439,7 +447,7 @@ export const Route = createFileRoute('/api/webhooks/stripe')({
                     amount: inv.amount_paid,
                     currency: inv.currency,
                     kind: 'subscription',
-                    plan: planNameForPrice(priceId) ?? priceId,
+                    plan: (await planNameForPrice(priceId)) ?? priceId,
                   })
                 }
               }
