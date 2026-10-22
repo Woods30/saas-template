@@ -4,7 +4,7 @@ description: Stripe 结账、定价页映射、账单页与 Webhook
 locale: zh
 order: 14
 group: features
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 当前唯一内置的 provider 是 **Stripe**，但支付链路以 `PaymentProvider` 接口为边界
@@ -16,7 +16,41 @@ updated: 2026-10-21
 `handleSubscriptionUpsert`），换 provider 要另写一份自己的 webhook 路由，并把这段
 落库逻辑按 provider 抽出去。
 
-provider 注册需要 `STRIPE_SECRET_KEY` 与 `STRIPE_WEBHOOK_SECRET` 同时存在，否则不注册。
+provider 注册只需要 `STRIPE_SECRET_KEY`：`STRIPE_WEBHOOK_SECRET` 是**验签**用的，
+取价（列表、创建 Checkout）不需要它。webhook 端点自己守卫这两个变量。
+
+## 价格从 Stripe 读，不写死在代码里
+
+定价页显示的金额**不是**代码里的常量，而是运行时从 Stripe 取的 Price 当前值。
+Stripe 官方对这件事有明确建议：
+
+> If these prices are hard-coded and you want to change them, the process is often
+> manual and requires you to deploy new code. To better manage these scenarios, you can
+> use the `lookup_key` attribute on the Price object.
+>
+> —— [Manage prices](https://docs.stripe.com/products-prices/manage-prices)
+
+所以本仓用 Price 上的 `lookup_key` 作为「价格 ↔ 页面」之间的锚点：
+
+- **env 里存 key，不存 Price ID**。改价时把 key 迁到新 Price 上
+  （`transfer_lookup_key=true`），页面与代码都不用动；Price ID 一换就得改代码重新
+  部署。
+- **展示价与扣款价是同一个 Price**。页面显示 $9.90，Stripe 收的就是 $9.90，
+  不存在「两处数据人工同步」的漂移。
+- **结账时客户端传 plan id + 周期，不传 Price id**。服务端按 key 解析出 Price，
+  客户端既改不了价格，也选不了别的 Price——比「白名单校验 priceId」更难绕过。
+
+取值链路：
+
+```text
+VITE_STRIPE_LOOKUP_*  →  lookup_key  →  Prices API（服务端，KV 缓存 10 分钟）
+                                            ├→ 定价页展示价
+                                            └→ /api/payment 解析出的 Price id
+```
+
+官方也提醒取价要加缓存层（"To improve performance, you might want to add a caching
+layer to only reload the price occasionally"），否则每次渲染都打一次 Stripe API。
+缓存 key 里带 lookup key 列表，改 env 后自动失效。
 
 ## 配置
 
@@ -25,25 +59,24 @@ provider 注册需要 `STRIPE_SECRET_KEY` 与 `STRIPE_WEBHOOK_SECRET` 同时存�
 payment: {
   enabled: true,
   provider: 'stripe',
-  // 由 VITE_STRIPE_PRICE_* 派生，不需要手写
-  allowedPriceIds: collectPriceIds(buildPriceMap(env)),
-  priceMap: buildPriceMap(env),
+  // 由 VITE_STRIPE_LOOKUP_* 派生，不需要手写
+  lookupKeyMap: buildLookupKeyMap(env),
 },
 ```
 
-`priceMap` 把定价页的 plan id 映射到 Stripe Price ID：
+`lookupKeyMap` 把定价页的 plan id 映射到 Stripe Price 的 `lookup_key`：
 
-| 环境变量 | plan id | 计费周期 |
-|---|---|---|
-| `VITE_STRIPE_PRICE_PRO_MONTHLY` | `pro_monthly` | 月付 |
-| `VITE_STRIPE_PRICE_PRO_YEARLY` | `pro_monthly` | 年付 |
-| `VITE_STRIPE_PRICE_LIFETIME` | `lifetime` | 一次性 |
+| 环境变量 | plan id | 计费周期 | Price 上的 `lookup_key` |
+|---|---|---|---|
+| `VITE_STRIPE_LOOKUP_PRO_MONTHLY` | `pro_monthly` | 月付 | `pro_monthly` |
+| `VITE_STRIPE_LOOKUP_PRO_YEARLY` | `pro_monthly` | 年付 | `pro_yearly` |
+| `VITE_STRIPE_LOOKUP_LIFETIME` | `lifetime` | 一次性 | `lifetime` |
 
-`allowedPriceIds` 与 `priceMap` **同源**（都从同一份 env 汇总），避免出现「白名单里
-有、映射里没有」这种会让结账 502 的配置。白名单为空时 `/api/payment` 不做校验，
-因此真实部署必须配 Price——`getServiceStatuses()` 会把它报为 `incomplete`。
+先在 Stripe 后台给每个 Price 填上 `lookup_key`（Dashboard → Products → 对应 Price →
+Advanced → Lookup key），再把同样的值写进 `.env`。两边对不上时定价页取不到价，
+`getServiceStatuses()` 也会把它报为 `incomplete`。
 
-未配置 Price 时定价页仍然可看，付费方案的按钮退化为「先注册」，不会给用户一个
+未配置 key 时定价页仍然可看，付费方案的按钮退化为「先注册」，不会给用户一个
 点了就 502 的按钮。
 
 ## 结账流程
@@ -51,7 +84,7 @@ payment: {
 1. 定价页点击方案 → `startCheckout()`（`src/payment/checkout-client.ts`）
 2. 未登录 → 跳登录页并带 `?redirect=/pricing`，登录后回到定价页继续
 3. 已登录 → `POST /api/payment`：门禁 → 会话鉴权 → 限流（每 IP 每分钟 10 次）
-   → body 校验 → Price ID 白名单 → **回跳地址同源校验** → **已有订阅检查**
+   → body 校验 → **按 lookup key 解析价格** → **回跳地址同源校验** → **已有订阅检查**
    → 创建 Checkout Session
 4. 成功后整页跳转到 Stripe Checkout
 5. 完成后回到 `/dashboard/billing?checkout=success`，账单页显示订阅与流水
@@ -77,10 +110,14 @@ Stripe**——Stripe 结账结束后就是把用户送到这个地址。不校�
 
 ### 月付 / 年付怎么选
 
-`pro_monthly` 一个 plan 下挂两个 Price：`VITE_STRIPE_PRICE_PRO_MONTHLY`（月付）与
-`VITE_STRIPE_PRICE_PRO_YEARLY`（年付）。只配其中一个时，定价页的周期切换器只列出
+`pro_monthly` 一个 plan 下挂两个 Price：`VITE_STRIPE_LOOKUP_PRO_MONTHLY`（月付）与
+`VITE_STRIPE_LOOKUP_PRO_YEARLY`（年付）。只配其中一个时，定价页的周期切换器只列出
 配好的那个周期——不会出现一个点了就 502 的「按年付」选项。`lifetime` 是
 `one_time` Price，没有周期可选。
+
+计费模式（订阅 / 一次性）**以 Stripe 上的 Price 为准**：有 `recurring` 是订阅，
+没有是一次性支付。配置只管「卖哪个周期」，管不了「Stripe 上那个 Price 到底是不是
+周期价」。
 
 ### 已有订阅不能再买
 
@@ -129,8 +166,9 @@ Stripe 按 **Customer 对象（Session 里带了的那个）或邮箱**匹配已
 
 `/dashboard/billing` 分两个区块：
 
-- **当前订阅**——一行一张订阅卡，而不是表格行：套餐名（Price id 反查映射）、状态、
-  价格与计费周期、下次续费的具体时刻都在卡内一屏看完，管理入口也在卡上。这份数据
+- **当前订阅**——一行一张订阅卡，而不是表格行：套餐名（Price id 经价格目录反查
+  回 plan id）、状态、价格与计费周期、下次续费的具体时刻都在卡内一屏看完，
+  管理入口也在卡上。这份数据
   一页通常只有一条，横向四列对不上表头，用表格没有信息密度收益。
 - **交易记录**——表格（保留表头）。第一列标示这笔钱的性质（订阅扣款 / 一次性
   购买），第二列日期，第三列状态徽章加金额。
@@ -249,8 +287,10 @@ delivery of events in the order that they're generated"）。`customer.subscript
 
 因此 webhook 的每个 handler 都必须能处理「目标行还不存在」的情况：
 
-- `customer.subscription.created` / `updated`：行不存在时用 `metadata.userId`
-  （Stripe 会把 Checkout Session 的 metadata 复制到 subscription）补建。
+- `customer.subscription.created` / `updated`：行不存在时用 `metadata.userId` 补建。
+  注意这个 metadata 来自创建 session 时**显式写入**的 `subscription_data.metadata`
+  ——Stripe **不会**自动把 Checkout Session 的 metadata 复制到 Subscription
+  （实测订阅对象上的 metadata 是空的）。不显式写，这条订阅就无从知道属于谁。
 - `invoice.paid`：反查不到归属时**抛错**而不是写入 `user_id = NULL` 的孤儿行——
   `payments.user_id` 允许为 NULL，写进去的记录用户在自己账单页永远查不到，等于
   静默丢钱。抛错会删除事件行并返回 500，Stripe 重投时订阅行往往已经写好。
@@ -272,6 +312,7 @@ delivery of events in the order that they're generated"）。`customer.subscript
 
 ## 参考资料
 
+- [Manage prices](https://docs.stripe.com/products-prices/manage-prices)——`lookup_key` 与价格展示的官方建议
 - [Stripe API keys](https://docs.stripe.com/keys)——密钥类型、webhook 签名密钥与轮换
 - [Stripe Checkout](https://docs.stripe.com/payments/checkout)——会话创建与 success/cancel URL
 - [Stripe Billing Portal](https://docs.stripe.com/customer-management/integrate-customer-portal)——管理订阅入口

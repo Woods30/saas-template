@@ -4,7 +4,7 @@ description: Stripe checkout, pricing map, billing page, and webhooks
 locale: en
 order: 14
 group: features
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 The only built-in provider is **Stripe**, but the payment path is bounded by the
@@ -17,8 +17,45 @@ The **webhook handling is not part of that interface**, though: the persistence 
 the Stripe-specific `src/routes/api/webhooks/stripe.ts`. A second provider needs its own
 webhook route, and that persistence logic should be factored out per provider.
 
-The provider registers only when both `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`
-are present.
+The provider registers with `STRIPE_SECRET_KEY` alone. `STRIPE_WEBHOOK_SECRET` is only
+needed for **signature verification** — listing prices and creating a Checkout Session
+don't use it. The webhook endpoint guards both variables on its own.
+
+## Prices come from Stripe, not from constants
+
+The amounts on the pricing page are **not** constants in the code — they are the
+current values of the Stripe Prices, read at runtime. Stripe is explicit about this:
+
+> If these prices are hard-coded and you want to change them, the process is often
+> manual and requires you to deploy new code. To better manage these scenarios, you can
+> use the `lookup_key` attribute on the Price object.
+>
+> — [Manage prices](https://docs.stripe.com/products-prices/manage-prices)
+
+So this project anchors "price ↔ page" on the Price's `lookup_key`:
+
+- **The env holds keys, not Price IDs.** When a price changes, move the key to the new
+  Price (`transfer_lookup_key=true`); neither the page nor the code changes. A new
+  Price ID would require a code change and a redeploy.
+- **The displayed price and the charged price are the same Price.** The page shows
+  $9.90 and Stripe charges $9.90 — there is no second copy of the number to keep in
+  sync by hand.
+- **Checkout sends a plan id + interval, never a Price ID.** The server resolves the
+  Price from the key, so the client can neither change the amount nor pick a different
+  Price — harder to work around than allowlisting a Price ID.
+
+The lookup path:
+
+```text
+VITE_STRIPE_LOOKUP_*  →  lookup_key  →  Prices API (server side, cached in KV for 10 min)
+                                            ├→ the amount shown on the pricing page
+                                            └→ the Price id used by /api/payment
+```
+
+Stripe also recommends a caching layer for price reads ("To improve performance, you
+might want to add a caching layer to only reload the price occasionally"), otherwise
+every render hits the API. The cache key includes the lookup key list, so changing the
+env invalidates it.
 
 ## Configuration
 
@@ -27,26 +64,25 @@ are present.
 payment: {
   enabled: true,
   provider: 'stripe',
-  // Derived from VITE_STRIPE_PRICE_* — not written by hand
-  allowedPriceIds: collectPriceIds(buildPriceMap(env)),
-  priceMap: buildPriceMap(env),
+  // Derived from VITE_STRIPE_LOOKUP_* — not written by hand
+  lookupKeyMap: buildLookupKeyMap(env),
 },
 ```
 
-`priceMap` maps the pricing page's plan id to a Stripe Price ID:
+`lookupKeyMap` maps the pricing page's plan id to a Price's `lookup_key`:
 
-| Env var | Plan id | Billing interval |
-|---|---|---|
-| `VITE_STRIPE_PRICE_PRO_MONTHLY` | `pro_monthly` | Monthly |
-| `VITE_STRIPE_PRICE_PRO_YEARLY` | `pro_monthly` | Yearly |
-| `VITE_STRIPE_PRICE_LIFETIME` | `lifetime` | One-time |
+| Env var | Plan id | Billing interval | Price `lookup_key` |
+|---|---|---|---|
+| `VITE_STRIPE_LOOKUP_PRO_MONTHLY` | `pro_monthly` | Monthly | `pro_monthly` |
+| `VITE_STRIPE_LOOKUP_PRO_YEARLY` | `pro_monthly` | Yearly | `pro_yearly` |
+| `VITE_STRIPE_LOOKUP_LIFETIME` | `lifetime` | One-time | `lifetime` |
 
-`allowedPriceIds` and `priceMap` are **derived from the same env** so that a Price
-can never be allowlisted without also being mapped. An empty allowlist disables the
-check in `/api/payment`, which is why real deployments must configure Prices —
-`getServiceStatuses()` reports `incomplete` otherwise.
+Set the `lookup_key` on each Price in the Stripe dashboard first (Products → the
+Price → Advanced → Lookup key), then put the same values in `.env`. When the two
+disagree the pricing page finds no price, and `getServiceStatuses()` reports
+`incomplete`.
 
-With no Price configured, the pricing page still renders, but paid plans degrade to
+With no key configured, the pricing page still renders, but paid plans degrade to
 "sign up first" rather than a button that 502s.
 
 ## Checkout flow
@@ -54,8 +90,9 @@ With no Price configured, the pricing page still renders, but paid plans degrade
 1. Click a plan on the pricing page → `startCheckout()` (`src/payment/checkout-client.ts`)
 2. Not signed in → redirect to login with `?redirect=/pricing`, then back
 3. Signed in → `POST /api/payment`: gate → session auth → rate limit (10 per IP per
-   minute) → body validation → Price ID allowlist → **return-URL same-origin check**
-   → **existing-subscription check** → create Checkout Session
+   minute) → body validation → **resolve the price from the lookup key**
+   → **return-URL same-origin check** → **existing-subscription check**
+   → create Checkout Session
 4. Redirect the whole page to Stripe Checkout
 5. On return, land on `/dashboard/billing?checkout=success`
 
@@ -84,8 +121,8 @@ relative paths such as the post-login redirect). The two are not interchangeable
 
 ### Monthly vs. yearly
 
-`pro_monthly` is a single plan with two Prices: `VITE_STRIPE_PRICE_PRO_MONTHLY`
-(monthly) and `VITE_STRIPE_PRICE_PRO_YEARLY` (yearly). If only one is configured, the
+`pro_monthly` is a single plan with two Prices: `VITE_STRIPE_LOOKUP_PRO_MONTHLY`
+(monthly) and `VITE_STRIPE_LOOKUP_PRO_YEARLY` (yearly). If only one is configured, the
 pricing page's billing-period switcher lists only the configured period — there is no
 "yearly" option that would 502 on click. `lifetime` is a `one_time` Price and has no
 billing period to switch.
@@ -278,8 +315,10 @@ order that they're generated."* `customer.subscription.created` can easily arriv
 Every handler must therefore cope with the target row not existing yet:
 
 - `customer.subscription.created` / `updated`: when the row is missing, rebuild it from
-  `metadata.userId` (Stripe copies the Checkout Session's metadata onto the
-  subscription).
+  `metadata.userId`. That metadata comes from the `subscription_data.metadata` written
+  **explicitly** when the session was created — Stripe does **not** copy a Checkout
+  Session's metadata onto the Subscription (the subscription's metadata is empty in
+  practice). Without writing it, the subscription has no way to know whose it is.
 - `invoice.paid`: when the owner cannot be resolved, **throw** instead of writing an
   orphan row with `user_id = NULL`. `payments.user_id` is nullable, so such a row is
   silently invisible on the user's own billing page — money quietly lost. Throwing

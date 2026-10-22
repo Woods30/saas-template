@@ -4,7 +4,7 @@ description: The two-layer env model, the VITE_ rule, and production config
 locale: en
 order: 4
 group: config
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 Environment variables come in two layers, validated by two Zod schemas. Business code must
@@ -29,7 +29,7 @@ page can read them**.
 
 | Prefix | Meaning | Examples |
 |---|---|---|
-| `VITE_` | Public | `VITE_BASE_URL`, `VITE_STRIPE_PRICE_PRO_MONTHLY` |
+| `VITE_` | Public | `VITE_BASE_URL`, `VITE_STRIPE_LOOKUP_PRO_MONTHLY` |
 | No prefix | Server secret | `BETTER_AUTH_SECRET`, `STRIPE_SECRET_KEY` |
 
 > **Never put a secret behind `VITE_`.** `pnpm check:client-bundle` scans the build output
@@ -41,9 +41,9 @@ page can read them**.
 |---|---|---|
 | `VITE_BASE_URL` | `http://localhost:3000` | Site base URL for canonical, OG, sitemap |
 | `VITE_PAYMENT_PROVIDER` | — | Payment provider (only `stripe`) |
-| `VITE_STRIPE_PRICE_PRO_MONTHLY` | — | Monthly Price ID |
-| `VITE_STRIPE_PRICE_PRO_YEARLY` | — | Yearly Price ID |
-| `VITE_STRIPE_PRICE_LIFETIME` | — | One-time Price ID |
+| `VITE_STRIPE_LOOKUP_PRO_MONTHLY` | — | `lookup_key` of the monthly Price |
+| `VITE_STRIPE_LOOKUP_PRO_YEARLY` | — | `lookup_key` of the yearly Price |
+| `VITE_STRIPE_LOOKUP_LIFETIME` | — | `lookup_key` of the one-time Price |
 | `VITE_GA_ID` | — | Google Analytics |
 | `VITE_PLAUSIBLE_DOMAIN` | — | Plausible |
 | `VITE_UMAMI_WEBSITE_ID` | — | Umami |

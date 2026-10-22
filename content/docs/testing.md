@@ -4,7 +4,7 @@ description: The three test layers, common commands, and when to add an E2E
 locale: en
 order: 22
 group: develop
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 **E2E only guards "can a user complete a task"; detailed interactions belong in component
@@ -51,7 +51,7 @@ locale only.
 | `site-config.spec.ts` | Disabled module APIs return 404 rather than a fake success |
 | `payment.spec.ts` | Cannot buy twice; billing page shows plan, renewal date, and amount |
 
-> `payment.spec.ts` needs `VITE_PAYMENT_PROVIDER` and the three `VITE_STRIPE_PRICE_*`
+> `payment.spec.ts` needs `VITE_PAYMENT_PROVIDER` and the three `VITE_STRIPE_LOOKUP_*`
 > values in `.env`. Without them the cases **skip** rather than fail — shipping without
 > credentials is the normal state. It never calls Stripe: it writes an `active`
 > subscription into local D1 via `scripts/e2e-seed-subscription.ts` and exercises the real

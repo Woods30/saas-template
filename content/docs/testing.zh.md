@@ -4,7 +4,7 @@ description: 三层测试的分工、常用命令与新增用例的取舍
 locale: zh
 order: 22
 group: develop
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 **E2E 只守「用户能不能完成一件事」，细节交互交给组件测试。** 这页讲怎么分工，
@@ -50,7 +50,7 @@ locale 上跑主流程。
 | `payment.spec.ts` | 已订阅后不能再买；账单页显示套餐名 / 续费日期 / 金额 |
 
 > `payment.spec.ts` 需要 `.env` 里配好 `VITE_PAYMENT_PROVIDER` 与三个
-> `VITE_STRIPE_PRICE_*`。未配置时**跳过**而不是失败——模板开箱没有凭据是正常状态。
+> `VITE_STRIPE_LOOKUP_*`。未配置时**跳过**而不是失败——模板开箱没有凭据是正常状态。
 > 它不真的打 Stripe：用 `scripts/e2e-seed-subscription.ts` 往本地 D1 写一条 `active`
 > 订阅来复现「已订阅」。
 

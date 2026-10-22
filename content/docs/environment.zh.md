@@ -4,7 +4,7 @@ description: 两层 env 模型、VITE_ 规则与生产配置
 locale: zh
 order: 4
 group: config
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 环境变量分两层，由两个 Zod schema 分别校验。业务代码**不得**直接读 `process.env` /
@@ -27,7 +27,7 @@ updated: 2026-10-21
 
 | 前缀 | 含义 | 例子 |
 |---|---|---|
-| `VITE_` | 公开值 | `VITE_BASE_URL`、`VITE_STRIPE_PRICE_PRO_MONTHLY` |
+| `VITE_` | 公开值 | `VITE_BASE_URL`、`VITE_STRIPE_LOOKUP_PRO_MONTHLY` |
 | 无前缀 | 服务端 secret | `BETTER_AUTH_SECRET`、`STRIPE_SECRET_KEY` |
 
 > **绝不能把 secret 设成 `VITE_` 前缀。** `pnpm check:client-bundle` 会扫描构建产物，
@@ -39,9 +39,9 @@ updated: 2026-10-21
 |---|---|---|
 | `VITE_BASE_URL` | `http://localhost:3000` | 站点基址，用于 canonical、OG、sitemap |
 | `VITE_PAYMENT_PROVIDER` | — | 支付 provider（目前只有 `stripe`） |
-| `VITE_STRIPE_PRICE_PRO_MONTHLY` | — | 月度订阅 Price ID |
-| `VITE_STRIPE_PRICE_PRO_YEARLY` | — | 年度订阅 Price ID |
-| `VITE_STRIPE_PRICE_LIFETIME` | — | 买断 Price ID |
+| `VITE_STRIPE_LOOKUP_PRO_MONTHLY` | — | 月度订阅 Price 的 `lookup_key` |
+| `VITE_STRIPE_LOOKUP_PRO_YEARLY` | — | 年度订阅 Price 的 `lookup_key` |
+| `VITE_STRIPE_LOOKUP_LIFETIME` | — | 买断 Price 的 `lookup_key` |
 | `VITE_GA_ID` | — | Google Analytics |
 | `VITE_PLAUSIBLE_DOMAIN` | — | Plausible |
 | `VITE_UMAMI_WEBSITE_ID` | — | Umami |
