@@ -92,9 +92,12 @@ test.describe('Payment', () => {
     await page.goto('/zh/dashboard/billing')
     await page.waitForURL(/\/zh\/dashboard\/billing/)
 
-    const section = page.locator('section', { hasText: '当前订阅' }).first()
-    // 套餐名来自 Price id 反查，显示成 `price_1US...` 说明映射没生效。
+    const section = page.locator('section', { hasText: '我的方案' }).first()
+    // 产品名来自产品 id 反查，显示成 `price_1US...` 说明映射没生效。
     await expect(section.getByText('专业版')).toBeVisible({ timeout: 15000 })
+    // 生效中的订阅带「当前生效」徽章：买断接管后徽章会移走，这是页面上唯一的
+    // 「到底哪份在扣费」信号。
+    await expect(section.getByText('当前生效')).toBeVisible()
     // 只有日期不足以判断「今天会不会扣款」，所以必须带具体时刻。
     await expect(section.getByText(/\d{1,2}:\d{2}/)).toBeVisible()
     // 金额缺失时这里渲染成 `—`。金额来自 Stripe 的实时价格，不写死具体数字：

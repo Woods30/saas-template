@@ -2,6 +2,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { parseEnv } from 'node:util'
+import { resolveLookupKey } from '../src/config/products'
 
 /**
  * 为 E2E 写入一条「已订阅」记录：E2E 不能真打 Stripe，故直接写本地 D1。
@@ -22,6 +23,10 @@ interface SeedSubscription {
   subscriptionId: string
   status: 'active'
   priceId: string
+  /** 本站产品 id。 */
+  productId: string
+  /** Stripe Product id；买断接管旧订阅的兜底判据。 */
+  stripeProductId: string | null
   amount: number
   currency: string
   interval: string
@@ -41,6 +46,8 @@ interface StripePrice {
   unit_amount: number | null
   currency: string
   recurring: { interval?: string } | null
+  /** Stripe Product id；买断接管旧订阅的兜底判据。 */
+  product?: string | { id?: string } | null
 }
 
 /**
@@ -91,6 +98,8 @@ export function buildSeedSql(sub: SeedSubscription): string {
     sub.subscriptionId,
     sub.status,
     sub.priceId,
+    sub.productId,
+    sub.stripeProductId,
     sub.amount,
     sub.currency,
     sub.interval,
@@ -98,7 +107,7 @@ export function buildSeedSql(sub: SeedSubscription): string {
     sub.currentPeriodEnd,
   ]
   const quoted = values.map((v) => (typeof v === 'number' ? v : `'${escapeSql(String(v))}'`))
-  return `INSERT INTO subscriptions (id, user_id, customer_id, subscription_id, status, price_id, amount, currency, interval, current_period_end) VALUES (${quoted.join(', ')})`
+  return `INSERT INTO subscriptions (id, user_id, customer_id, subscription_id, status, price_id, product_id, stripe_product_id, amount, currency, interval, current_period_end) VALUES (${quoted.join(', ')})`
 }
 
 async function main(): Promise<void> {
@@ -108,9 +117,10 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  const lookupKey = readEnv('VITE_STRIPE_LOOKUP_PRO_MONTHLY')
+  // lookup_key 写在产品配置里（`src/config/products.ts`），不再从 env 读。
+  const lookupKey = resolveLookupKey('pro', 'month')
   if (!lookupKey) {
-    console.error('❌ .env 未配置 VITE_STRIPE_LOOKUP_PRO_MONTHLY，无法构造与线上一致的订阅行')
+    console.error('❌ 产品配置里没有 pro 产品的月付 lookup_key，无法构造订阅行')
     process.exit(1)
   }
   const secretKey = readEnv('STRIPE_SECRET_KEY')
@@ -147,6 +157,9 @@ async function main(): Promise<void> {
     subscriptionId: `sub_e2e_stripe_${unique}`,
     status: 'active',
     priceId: price.id,
+    productId: 'pro',
+    stripeProductId:
+      typeof price.product === 'string' ? price.product : (price.product?.id ?? null),
     amount: price.unit_amount,
     currency: price.currency,
     interval: price.recurring?.interval ?? 'one_time',

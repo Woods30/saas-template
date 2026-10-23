@@ -40,9 +40,27 @@ vi.mock('stripe', () => ({
  * `recurring` 决定计费模式：周期价格走订阅守卫，一次性价格不受「已有订阅」限制。
  */
 const mockPriceCatalog = {
-  pro_monthly: { priceId: 'price_month', amount: 990, currency: 'usd', recurring: true },
-  pro_yearly: { priceId: 'price_year', amount: 9900, currency: 'usd', recurring: true },
-  lifetime: { priceId: 'price_life', amount: 9900, currency: 'usd', recurring: false },
+  pro_monthly: {
+    priceId: 'price_month',
+    amount: 990,
+    currency: 'usd',
+    recurring: true,
+    stripeProductId: 'prod_pro',
+  },
+  pro_yearly: {
+    priceId: 'price_year',
+    amount: 9900,
+    currency: 'usd',
+    recurring: true,
+    stripeProductId: 'prod_pro',
+  },
+  lifetime: {
+    priceId: 'price_life',
+    amount: 9900,
+    currency: 'usd',
+    recurring: false,
+    stripeProductId: 'prod_lifetime',
+  },
 }
 
 // @/payment mock —— 保留真实导出，只覆盖 getPaymentProvider。
@@ -127,9 +145,12 @@ const mockSchema = {
 
 // select().from().where().limit() 的可链式替身。
 const makeSelectChain = (resolvedRows: unknown[]) => {
-  const whereMock = vi.fn().mockReturnValue({
+  // `where` 的结果既要能被 `await`（不带 limit 的查询），也要支持 `.limit()`。
+  // 少一条就会在 `purchases.some(...)` 这类直接 await 的地方炸掉。
+  const whereResult = Object.assign(Promise.resolve(resolvedRows), {
     limit: vi.fn().mockResolvedValue(resolvedRows),
   })
+  const whereMock = vi.fn().mockReturnValue(whereResult)
   const fromMock = vi.fn().mockReturnValue({ where: whereMock })
   const selectMock = vi.fn().mockReturnValue({ from: fromMock })
   return { selectMock, whereMock, fromMock }
@@ -219,6 +240,7 @@ describe('StripePaymentProvider', () => {
           unit_amount: 990,
           currency: 'usd',
           recurring: { interval: 'month' },
+          product: 'prod_pro',
         },
         {
           id: 'price_456',
@@ -226,6 +248,7 @@ describe('StripePaymentProvider', () => {
           unit_amount: 9900,
           currency: 'usd',
           recurring: null,
+          product: { id: 'prod_lifetime' },
         },
       ],
     })
@@ -243,6 +266,8 @@ describe('StripePaymentProvider', () => {
         amount: 990,
         currency: 'usd',
         recurring: true,
+        // Stripe Product id：配置没声明互斥关系时的兜底判据。
+        stripeProductId: 'prod_pro',
       },
       {
         id: 'price_456',
@@ -250,6 +275,7 @@ describe('StripePaymentProvider', () => {
         amount: 9900,
         currency: 'usd',
         recurring: false,
+        stripeProductId: 'prod_lifetime',
       },
     ])
     // 复原，避免影响后续用例。
@@ -421,7 +447,6 @@ describe('POST /api/payment 重复订阅守卫', () => {
     vi.doMock('@/auth/auth', () => ({
       getAuth: () => ({ api: { getSession: async () => ({ user: { id: 'user_1' } }) } }),
     }))
-    // 必须配齐 lookup key：没有 key 时 /api/payment 解析不出价格，直接 400。
     vi.doMock('@/config/website', async () => {
       const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
       const { parsePublicEnv } =
@@ -429,9 +454,6 @@ describe('POST /api/payment 重复订阅守卫', () => {
       const base = actual.createWebsiteConfig(
         parsePublicEnv({
           VITE_BASE_URL: 'https://jerbix.dev',
-          VITE_STRIPE_LOOKUP_PRO_MONTHLY: 'pro_monthly',
-          VITE_STRIPE_LOOKUP_PRO_YEARLY: 'pro_yearly',
-          VITE_STRIPE_LOOKUP_LIFETIME: 'lifetime',
         }),
       )
       return { ...actual, websiteConfig: base }
@@ -439,7 +461,6 @@ describe('POST /api/payment 重复订阅守卫', () => {
     // 价格目录：服务端按 lookup key 解析出 Price id 与计费模式。
     vi.doMock('@/payment/price-catalog.server', () => ({
       getPriceCatalog: async () => mockPriceCatalog,
-      findPlanIdByPriceId: async () => undefined,
     }))
     // 同源校验以 `publicEnv.VITE_BASE_URL` 为准，必须与上面的站点一致。
     vi.doMock('@/env/public', async () => {
@@ -458,8 +479,8 @@ describe('POST /api/payment 重复订阅守卫', () => {
   }
 
   const subscribeBody = {
-    // 客户端只给 plan + 周期；Price id 与计费模式由服务端按 lookup key 解析。
-    planId: 'pro_monthly',
+    // 客户端只给产品 + 周期；Price id 与计费模式由服务端按 lookup key 解析。
+    productId: 'pro',
     interval: 'month' as const,
     successUrl: 'https://jerbix.dev/dashboard/billing?checkout=success',
     cancelUrl: 'https://jerbix.dev/pricing?checkout=cancelled',
@@ -513,7 +534,7 @@ describe('POST /api/payment 重复订阅守卫', () => {
       method: 'POST',
       // 买断：目录里 lifetime 是非周期价格，服务端据此判定为一次性支付。
       body: JSON.stringify({
-        planId: 'lifetime',
+        productId: 'lifetime',
         interval: 'one_time',
         successUrl: subscribeBody.successUrl,
         cancelUrl: subscribeBody.cancelUrl,
@@ -544,7 +565,15 @@ describe('POST /api/payment 重复订阅守卫', () => {
       })
 
       // 取守卫查询的 where 入参：`and(eq(userId), inArray(status, [...]))`。
-      const selectResult = mockDb.select.mock.results.at(-1)?.value as {
+      // 路由会发两次 select（订阅守卫 + 买断互斥检查），要取**订阅**那一次。
+      const selectCalls = mockDb.select.mock.calls
+      const subIndex = selectCalls.findIndex((args) => {
+        const fields = args[0] as Record<string, unknown> | undefined
+        const first = fields ? Object.values(fields)[0] : undefined
+        return (first as { name?: string } | undefined)?.name === 'subscriptions.id'
+      })
+      expect(subIndex, '应查询过 subscriptions').toBeGreaterThanOrEqual(0)
+      const selectResult = mockDb.select.mock.results[subIndex]?.value as {
         from: { mock: { results: Array<{ value: { where: { mock: { calls: unknown[][] } } } }> } }
       }
       const whereMock = selectResult.from.mock.results.at(-1)?.value.where
@@ -1040,11 +1069,7 @@ describe('handleSubscriptionUpsert — 周期字段读取自订阅项', () => {
 describe('webhook 事件顺序无关', () => {
   it('invoice.paid 找不到归属时不写孤儿行，抛错让 Stripe 重投', async () => {
     // 两次反查都落空：订阅行还没写。
-    mockDb.select.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([]) }),
-      }),
-    })
+    mockDb.select.mockReturnValue(makeSelectChain([]).selectMock())
     // insert 链必须完整：否则代码会在 `.values()` 处因 mock 缺陷而抛错，
     // 测试就成了「因为 mock 坏了才通过」的假阳性。
     const valuesMock = vi.fn().mockReturnValue({
@@ -1081,11 +1106,7 @@ describe('webhook 事件顺序无关', () => {
 
   it('customer.subscription.created 在订阅行缺失时用 metadata 补建', async () => {
     // 反查订阅行落空。
-    mockDb.select.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([]) }),
-      }),
-    })
+    mockDb.select.mockReturnValue(makeSelectChain([]).selectMock())
     const insertSpy = vi.fn()
     mockDb.insert.mockImplementation(() => {
       insertSpy()
@@ -1181,13 +1202,7 @@ describe('webhook 事件顺序无关', () => {
   })
 
   it('订阅行已存在时只更新，不重复插入', async () => {
-    mockDb.select.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi
-          .fn()
-          .mockReturnValue({ limit: vi.fn().mockResolvedValue([{ userId: 'user_exists' }]) }),
-      }),
-    })
+    mockDb.select.mockReturnValue(makeSelectChain([{ userId: 'user_exists' }]).selectMock())
     const insertSpy = vi.fn()
     mockDb.insert.mockImplementation(() => {
       insertSpy()
@@ -1276,7 +1291,6 @@ describe('回跳地址必须同源', () => {
       const base = actual.createWebsiteConfig(
         parsePublicEnv({
           VITE_BASE_URL: 'https://jerbix.dev',
-          VITE_STRIPE_LOOKUP_PRO_MONTHLY: 'pro_monthly',
         }),
       )
       return { ...actual, websiteConfig: base }
@@ -1284,7 +1298,6 @@ describe('回跳地址必须同源', () => {
     // 价格目录：服务端按 lookup key 解析出 Price id 与计费模式。
     vi.doMock('@/payment/price-catalog.server', () => ({
       getPriceCatalog: async () => mockPriceCatalog,
-      findPlanIdByPriceId: async () => undefined,
     }))
     // 同源校验以 `publicEnv.VITE_BASE_URL` 为准，必须与上面的站点一致。
     vi.doMock('@/env/public', async () => {
@@ -1301,7 +1314,7 @@ describe('回跳地址必须同源', () => {
   }
 
   const checkoutBody = {
-    planId: 'pro_monthly',
+    productId: 'pro',
     interval: 'month' as const,
     successUrl: 'https://jerbix.dev/zh/dashboard/billing?checkout=success',
     cancelUrl: 'https://jerbix.dev/zh/pricing?checkout=cancelled',

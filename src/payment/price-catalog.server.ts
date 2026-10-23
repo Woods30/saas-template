@@ -1,6 +1,6 @@
 import { createCacheKey, getOrSetCache } from '@/cache'
 import { CACHE_TTL } from '@/cache/constants'
-import { collectLookupKeys, findPlanIdByLookupKey } from '@/config/payment'
+import { collectLookupKeys, findProductIdByLookupKey } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import { getPaymentProvider } from '@/payment'
 import type { PriceCatalog } from './price-catalog'
@@ -12,7 +12,7 @@ import type { PriceCatalog } from './price-catalog'
  * （"To improve performance, you might want to add a caching layer to only reload the
  * price occasionally"）。没有缓存的话，定价页每次渲染都要打一次 Stripe API。
  *
- * 缓存 key 里带上 lookup key 列表：改了 env 里的 key 就自动换缓存，不会读到旧价。
+ * 缓存 key 里带上 lookup key 列表：改了产品配置里的 key 就自动换缓存，不会读到旧价。
  */
 
 /**
@@ -22,7 +22,7 @@ import type { PriceCatalog } from './price-catalog'
  * 不能拿一个空目录糊弄过去。
  */
 export async function getPriceCatalog(): Promise<PriceCatalog> {
-  const keys = collectLookupKeys(websiteConfig.payment.lookupKeyMap)
+  const keys = collectLookupKeys()
   if (keys.length === 0) return {}
 
   return getOrSetCache({
@@ -41,6 +41,7 @@ export async function getPriceCatalog(): Promise<PriceCatalog> {
           amount: price.amount,
           currency: price.currency,
           recurring: price.recurring,
+          stripeProductId: price.stripeProductId,
         }
       }
       return catalog
@@ -49,15 +50,15 @@ export async function getPriceCatalog(): Promise<PriceCatalog> {
 }
 
 /**
- * Stripe Price id → 定价方案 id。
+ * Stripe Price id → 产品 id。
  *
- * webhook 与账单页手上只有 Price id，要显示套餐名就得反查。取不到时返回
+ * webhook 与账单页手上只有 Price id，要显示产品名就得反查。取不到时返回
  * `undefined`：Price 可能是后台手工创建的，不该假装认识它。
  */
-export async function findPlanIdByPriceId(priceId: string): Promise<string | undefined> {
+export async function findProductIdByPriceId(priceId: string): Promise<string | undefined> {
   if (!priceId) return undefined
   const catalog = await getPriceCatalog()
   const lookupKey = Object.keys(catalog).find((key) => catalog[key]?.priceId === priceId)
   if (!lookupKey) return undefined
-  return findPlanIdByLookupKey(websiteConfig.payment.lookupKeyMap, lookupKey)
+  return findProductIdByLookupKey(lookupKey)
 }

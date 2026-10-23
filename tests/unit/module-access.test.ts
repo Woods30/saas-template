@@ -143,7 +143,7 @@ describe('assertPageEnabled', () => {
       assertPageEnabled(
         'payment',
         makeConfig({
-          payment: { enabled: false, provider: 'stripe', lookupKeyMap: {} },
+          payment: { enabled: false, provider: 'stripe' },
         }),
       ),
     )
@@ -227,15 +227,29 @@ describe('getModuleUnavailableResponse', () => {
     ).toBeUndefined()
   })
 
-  it('payment 已启用但缺少 lookup key 返回 503', () => {
+  it('payment 已启用但缺少 Stripe 凭据返回 503', () => {
+    // 价格锚点（lookup_key）在 `src/config/products.ts` 里，网站配置管不到；
+    // 门禁判的是 Stripe 凭据齐不齐。
     const res = getModuleUnavailableResponse('payment', {
       config: makeConfig({
-        payment: { enabled: true, provider: 'stripe', lookupKeyMap: {} },
+        payment: { enabled: true, provider: 'stripe' },
       }),
       publicEnv,
-      serverEnv: creds,
+      serverEnv: parseServerEnv({}),
     })
     expect(res?.status).toBe(503)
+  })
+
+  it('payment 已启用且凭据齐全时放行', () => {
+    expect(
+      getModuleUnavailableResponse('payment', {
+        config: makeConfig({
+          payment: { enabled: true, provider: 'stripe' },
+        }),
+        publicEnv,
+        serverEnv: creds,
+      }),
+    ).toBeUndefined()
   })
 })
 
@@ -272,7 +286,6 @@ describe('getSitemapPaths', () => {
       payment: {
         enabled: true,
         provider: 'stripe',
-        lookupKeyMap: { pro_monthly: { month: 'pro_monthly' } },
       },
       contact: { enabled: true },
     })

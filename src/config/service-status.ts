@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { PublicEnv } from '@/env/public'
 import type { ServerEnv } from '@/env/server'
-import { collectLookupKeys, findOrphanPlanIds } from './payment'
+import { collectLookupKeys, findDuplicateLookupKeys, findUnknownExclusiveRefs } from './products'
 import type { ServiceModule, WebsiteConfig } from './website'
 
 /**
@@ -13,7 +13,7 @@ import type { ServiceModule, WebsiteConfig } from './website'
 export type ConfigIssue = {
   key: string
   reason: string
-  location: 'src/config/website.ts' | 'env' | 'Cloudflare binding'
+  location: 'src/config/website.ts' | 'src/config/products.ts' | 'env' | 'Cloudflare binding'
   manual?: boolean
   /** 配置矛盾（字段存在但取值互斥），而非字段缺失。仅影响诊断文案的分组标签。 */
   conflict?: boolean
@@ -132,16 +132,19 @@ export function getServiceStatuses(input: {
         ],
   )
 
-  check('payment', [
-    ['STRIPE_SECRET_KEY', !!env.STRIPE_SECRET_KEY, 'env'],
-    ['STRIPE_WEBHOOK_SECRET', !!env.STRIPE_WEBHOOK_SECRET, 'env'],
-    // 一个 lookup key 都没配：定价页取不到任何价格，结账也无从下手。
+  check(
+    'payment',
     [
-      'payment.lookupKeyMap',
-      collectLookupKeys(config.payment.lookupKeyMap).length > 0,
-      'src/config/website.ts',
+      ['STRIPE_SECRET_KEY', !!env.STRIPE_SECRET_KEY, 'env'],
+      ['STRIPE_WEBHOOK_SECRET', !!env.STRIPE_WEBHOOK_SECRET, 'env'],
+      // 一个 lookup key 都没配：定价页取不到任何价格，结账也无从下手。
+      ['payment.products', collectLookupKeys().length > 0, 'src/config/products.ts'],
     ],
-  ])
+    [],
+    // 产品配置写错（重复 key、互斥指向不存在的产品）会让归属判定出错，
+    // 属于「配置矛盾」：字段都在，但组合起来是错的。
+    validateProductConfig(),
+  )
 
   // 只校验当前选中 provider 对应的 webhook：配了 Discord 却选 feishu 仍是 incomplete。
   const notificationWebhookKey =
@@ -233,12 +236,35 @@ export function validateWebsiteConfig(config: WebsiteConfig): ConfigIssue[] {
     }
   }
 
-  // 配了 lookup key 但定价页没有对应方案：用户永远买不到，配置校验却是「完整」。
-  for (const planId of findOrphanPlanIds(config.payment.lookupKeyMap)) {
+  return issues
+}
+
+/**
+ * 校验产品配置里的**结构性**问题。
+ *
+ * 这些不是「字段缺失」，而是「配置写错了」：重复的 lookup_key 会让价格归属有歧义，
+ * 指向不存在产品的互斥关系会**静默失效**——用户同时付月费和终身费，却看不到任何
+ * 提示。类型系统守不住这两种错配，必须在自检里挑出来。
+ */
+export function validateProductConfig(): ConfigIssue[] {
+  const issues: ConfigIssue[] = []
+  const location = 'src/config/products.ts' as const
+
+  // 同一个 lookup key 挂到两个产品上：Price → 产品的反查有歧义，归属会漂。
+  for (const key of findDuplicateLookupKeys()) {
     issues.push({
-      key: `payment.lookupKeyMap.${planId}`,
+      key: `payment.products.duplicateLookupKey.${key}`,
       location,
-      reason: '该 plan id 在定价页方案中不存在，配了价格也无法购买',
+      reason: '同一个 lookup_key 配在了多个产品上，价格归属会不明确',
+    })
+  }
+
+  // 互斥关系指向不存在的产品：互斥不生效，用户会同时付两份钱。
+  for (const ref of findUnknownExclusiveRefs()) {
+    issues.push({
+      key: `payment.products.exclusiveWith.${ref}`,
+      location,
+      reason: '互斥关系指向的产品不存在，该互斥不会生效',
     })
   }
 

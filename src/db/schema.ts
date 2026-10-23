@@ -90,6 +90,20 @@ export const subscriptions = sqliteTable(
     subscriptionId: text('subscription_id'),
     status: text('status').notNull(),
     priceId: text('price_id'),
+    /**
+     * 本站产品 id（`src/config/products.ts` 里定义，如 `pro`）。
+     *
+     * 互斥判定的**权威**依据：同一个产品内，买断取代订阅（月付 / 年付 / 终身是同一件
+     * 东西的不同付费方式）。跨产品是否互斥看配置里的 `exclusiveWith`。
+     */
+    productId: text('product_id'),
+    /**
+     * Stripe Product id。
+     *
+     * 配置没声明互斥关系时的**兜底**判据：挂在同一个 Stripe Product 下的价格是同
+     * 一个东西的不同价位。空值时判定为「不同产品」——宁可漏接管，也不误伤订阅。
+     */
+    stripeProductId: text('stripe_product_id'),
     amount: integer('amount'),
     currency: text('currency'),
     interval: text('interval'),
@@ -125,6 +139,28 @@ export const payments = sqliteTable(
     amount: integer('amount').notNull(),
     currency: text('currency').notNull(),
     description: text('description'),
+    /**
+     * 本站产品 id（`src/config/products.ts` 里定义，如 `pro`）。
+     *
+     * 买断也要知道买的是哪个产品：账单页要显示产品名而不是一个 Price id，也要靠它
+     * 区分「同产品的买断」与「另一个产品的买断」。
+     */
+    productId: text('product_id'),
+    /**
+     * Stripe Product id；与 `subscriptions.stripe_product_id` 同一套兜底判据。
+     *
+     * 一次性付款没有订阅行可比对，但「买断是否接管旧订阅」要按 Product 判定，
+     * 所以买断这一侧也必须记下 Product id。
+     */
+    stripeProductId: text('stripe_product_id'),
+    /**
+     * 计费周期（`month` / `year`）。
+     *
+     * 一次性付款留空——它本身没有周期；账单页按 `type` 区分「终身 / 一次性」与订阅。
+     */
+    interval: text('interval'),
+    /** Stripe Customer id；账单门户与归属反查要靠它。 */
+    customerId: text('customer_id'),
     paidAt: integer('paid_at', { mode: 'timestamp' }),
     refundedAt: integer('refunded_at', { mode: 'timestamp' }),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
@@ -134,6 +170,7 @@ export const payments = sqliteTable(
     invoiceIdx: index('payments_invoice_idx').on(table.invoiceId),
     chargeIdx: index('payments_charge_idx').on(table.chargeId),
     userIdx: index('payments_user_idx').on(table.userId),
+    customerIdx: index('payments_customer_idx').on(table.customerId),
   }),
 )
 

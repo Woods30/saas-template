@@ -1,34 +1,34 @@
 import { describe, expect, it } from 'vitest'
-import { getPricingPlans } from '@/config/pricing'
+import { getProducts } from '@/config/products'
 import {
   paymentStatusMessageKey,
-  planNameForPlanId,
+  productNameForProductId,
   subscriptionIntervalMessageKey,
   subscriptionStatusMessageKey,
 } from '@/payment/billing-query'
 
 /**
- * 账单页展示逻辑：套餐名必须由方案 id 查出（不能让用户看 `price_xxx`），
+ * 账单页展示逻辑：产品名必须由产品 id 查出（不能让用户看 `price_xxx`），
  * 周期徽标不能把未知周期硬说成「按月」。
  */
 describe('billing-query 展示映射', () => {
-  describe('planNameForPlanId', () => {
-    it('按方案 id 查出定价页上的套餐名', () => {
-      expect(planNameForPlanId('pro_monthly')).toBe(
-        getPricingPlans().find((plan) => plan.id === 'pro_monthly')?.name,
+  describe('productNameForProductId', () => {
+    it('按产品 id 查出定价页上的产品名', () => {
+      expect(productNameForProductId('pro')).toBe(
+        getProducts().find((product) => product.id === 'pro')?.name,
       )
-      expect(planNameForPlanId('lifetime')).toBe(
-        getPricingPlans().find((plan) => plan.id === 'lifetime')?.name,
+      expect(productNameForProductId('lifetime')).toBe(
+        getProducts().find((product) => product.id === 'lifetime')?.name,
       )
     })
 
-    it('方案不存在时返回 undefined，调用方退回显示 Price id', () => {
-      expect(planNameForPlanId('enterprise')).toBeUndefined()
+    it('产品不存在时返回 undefined，调用方退回显示 Price id', () => {
+      expect(productNameForProductId('enterprise')).toBeUndefined()
     })
 
-    it('planId 为空时返回 undefined', () => {
-      expect(planNameForPlanId(null)).toBeUndefined()
-      expect(planNameForPlanId('')).toBeUndefined()
+    it('产品 id 为空时返回 undefined', () => {
+      expect(productNameForProductId(null)).toBeUndefined()
+      expect(productNameForProductId('')).toBeUndefined()
     })
   })
 

@@ -41,17 +41,20 @@ export function trackLogin(): void {
   trackEvent(ANALYTICS_EVENTS.login)
 }
 
-export function trackBeginCheckout(params: { planId: string; mode: 'subscription' | 'payment' }) {
+export function trackBeginCheckout(params: {
+  productId: string
+  mode: 'subscription' | 'payment'
+}) {
   trackEvent(ANALYTICS_EVENTS.beginCheckout, {
-    plan_id: params.planId,
+    product_id: params.productId,
     mode: params.mode,
   })
 }
 
 /** 支付完成。金额以**分**为单位，避免浮点误差。 */
-export function trackPurchase(params: { planId: string; value: number; currency: string }) {
+export function trackPurchase(params: { productId: string; value: number; currency: string }) {
   trackEvent(ANALYTICS_EVENTS.purchase, {
-    plan_id: params.planId,
+    product_id: params.productId,
     value: params.value,
     currency: params.currency,
   })

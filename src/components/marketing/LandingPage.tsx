@@ -20,11 +20,11 @@ import {
 import { Link } from '@tanstack/react-router'
 import { createElement, type PointerEvent, useEffect, useId, useRef, useState } from 'react'
 import { Cta, Faq, Features, Hero } from '@/components/sections'
-import { getPricingPlans } from '@/config/pricing'
+import { getProducts } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
-import { mergePricingPlans, type PriceCatalog } from '@/payment/price-catalog'
+import { mergePricingProducts, type PriceCatalog } from '@/payment/price-catalog'
 
 const MAX_TILT_DEGREES = 4
 
@@ -398,7 +398,9 @@ function Workflow() {
  */
 function HomePricing({ catalog }: { catalog: PriceCatalog }) {
   if (!websiteConfig.payment.enabled) return null
-  const plans = mergePricingPlans(getPricingPlans(), catalog).filter((plan) => plan.id !== 'free')
+  const products = mergePricingProducts(getProducts(), catalog).filter(
+    (product) => product.id !== 'free',
+  )
   return (
     <section id="plans" className="lab-reveal mx-auto max-w-6xl scroll-mt-16 px-6 py-16 md:py-24">
       <p className="text-xs font-semibold tracking-widest text-primary">
@@ -411,35 +413,42 @@ function HomePricing({ catalog }: { catalog: PriceCatalog }) {
         {m.home_pricing_description()}
       </p>
       <ul className="mt-8 grid gap-4 md:grid-cols-3">
-        {plans.map((plan) => {
-          const price = plan.prices[0]
-          return (
-            <li
-              key={plan.id}
-              className="lab-feature-card flex min-w-0 flex-col rounded-2xl border border-border bg-card p-6"
-            >
-              <h3 className="text-lg font-semibold">{plan.name}</h3>
-              {plan.description && (
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {plan.description}
-                </p>
-              )}
-              <p className="mt-5 text-2xl font-bold">
-                {price
-                  ? (price.amount / 100).toLocaleString('en-US', {
-                      style: 'currency',
-                      currency: price.currency.toUpperCase(),
-                    })
-                  : '—'}
-                {price?.label && (
-                  <span className="ml-1 text-sm font-normal text-muted-foreground">
-                    {price.label}
-                  </span>
-                )}
+        {products.map((product) => (
+          <li
+            key={product.id}
+            className="lab-feature-card flex min-w-0 flex-col rounded-2xl border border-border bg-card p-6"
+          >
+            <h3 className="text-lg font-semibold">{product.name}</h3>
+            {product.description && (
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                {product.description}
               </p>
-            </li>
-          )
-        })}
+            )}
+            {/* 多个付费方式时逐行列出：首页只做概览，切换与结账在定价页。 */}
+            {product.options.length > 0 ? (
+              <ul className="mt-5 space-y-1">
+                {product.options.map((option) => (
+                  <li
+                    key={`${option.kind}-${option.interval ?? 'once'}`}
+                    className="text-2xl font-bold"
+                  >
+                    {(option.amount / 100).toLocaleString('en-US', {
+                      style: 'currency',
+                      currency: option.currency.toUpperCase(),
+                    })}
+                    {option.label && (
+                      <span className="ml-1 text-sm font-normal text-muted-foreground">
+                        {option.label}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-5 text-2xl font-bold">—</p>
+            )}
+          </li>
+        ))}
       </ul>
       <Link
         to="/{-$locale}/pricing"

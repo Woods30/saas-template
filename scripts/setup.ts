@@ -121,9 +121,6 @@ async function main() {
     env.VITE_PAYMENT_PROVIDER = 'stripe'
     env.STRIPE_SECRET_KEY = await password({ message: 'STRIPE_SECRET_KEY' })
     env.STRIPE_WEBHOOK_SECRET = await password({ message: 'STRIPE_WEBHOOK_SECRET' })
-    env.VITE_STRIPE_LOOKUP_PRO_MONTHLY = await input({ message: 'VITE_STRIPE_LOOKUP_PRO_MONTHLY' })
-    env.VITE_STRIPE_LOOKUP_PRO_YEARLY = await input({ message: 'VITE_STRIPE_LOOKUP_PRO_YEARLY' })
-    env.VITE_STRIPE_LOOKUP_LIFETIME = await input({ message: 'VITE_STRIPE_LOOKUP_LIFETIME' })
   }
 
   const mailProvider = await select({

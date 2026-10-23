@@ -1,6 +1,6 @@
 ---
 title: 支付
-description: Stripe 结账、定价页映射、账单页与 Webhook
+description: 产品配置、Stripe 结账、账单页与 Webhook
 locale: zh
 order: 14
 group: features
@@ -19,10 +19,51 @@ updated: 2026-10-22
 provider 注册只需要 `STRIPE_SECRET_KEY`：`STRIPE_WEBHOOK_SECRET` 是**验签**用的，
 取价（列表、创建 Checkout）不需要它。webhook 端点自己守卫这两个变量。
 
-## 价格从 Stripe 读，不写死在代码里
+## 先分清「产品」与「付费方式」
 
-定价页显示的金额**不是**代码里的常量，而是运行时从 Stripe 取的 Price 当前值。
-Stripe 官方对这件事有明确建议：
+本仓把「卖什么」与「怎么卖」分成两层，对齐 Stripe 的模型：
+
+| 本站概念 | Stripe 概念 | 例子 |
+|---|---|---|
+| **产品**（`productId`） | Product | 专业版、终身版 |
+| **付费方式**（`options`） | Price | 月付、年付、一次性买断 |
+
+于是「专业版的月付和年付」是**同一个产品的两种付费方式**，不是两个方案；「终身版」
+是另一个产品，天然与专业版不同。定价页按产品分卡，卡内切换该产品自己的付费方式。
+
+这个区分是后面所有判定（谁接管谁、买什么算同一件事）的基础。
+
+## 产品配置
+
+产品在 `src/config/products.ts` 里配。它是「页面 ↔ 价格」的唯一锚点：
+
+```ts
+const PRODUCT_OPTIONS: Record<string, ProductOption[]> = {
+  free: [], // 免费档不卖：按钮走注册而不是结账
+  pro: [
+    { kind: 'subscription', interval: 'month', lookupKey: 'pro_monthly' },
+    { kind: 'subscription', interval: 'year', lookupKey: 'pro_yearly' },
+  ],
+  lifetime: [{ kind: 'one_time', interval: 'one_time', lookupKey: 'lifetime' }],
+}
+
+const PRODUCT_EXCLUSIVITY: Record<string, string[]> = {
+  lifetime: ['pro'],
+}
+```
+
+配置分两层：
+
+- **结构层**（`PRODUCT_OPTIONS` / `PRODUCT_EXCLUSIVITY`）不依赖语言，诊断脚本、服务端
+  任务与单测都能直接读；
+- **文案层**（`getProducts()`）在渲染时求值，随请求语言变化。写成模块级常量会把首次
+  请求的语言固化给后续请求（SSR 下表现为整页语言不对 + hydration mismatch）。
+
+### 为什么 lookup_key 不放 env
+
+`lookup_key` 是 Price 的稳定对外名，改价时把 key 迁到新 Price 上
+（`transfer_lookup_key=true`），页面与代码都不用动；Price ID 一换就得改代码重新部署，
+且极易与后台配置漂移。Stripe 官方对这件事有明确建议：
 
 > If these prices are hard-coded and you want to change them, the process is often
 > manual and requires you to deploy new code. To better manage these scenarios, you can
@@ -30,64 +71,41 @@ Stripe 官方对这件事有明确建议：
 >
 > —— [Manage prices](https://docs.stripe.com/products-prices/manage-prices)
 
-所以本仓用 Price 上的 `lookup_key` 作为「价格 ↔ 页面」之间的锚点：
-
-- **env 里存 key，不存 Price ID**。改价时把 key 迁到新 Price 上
-  （`transfer_lookup_key=true`），页面与代码都不用动；Price ID 一换就得改代码重新
-  部署。
-- **展示价与扣款价是同一个 Price**。页面显示 $9.90，Stripe 收的就是 $9.90，
-  不存在「两处数据人工同步」的漂移。
-- **结账时客户端传 plan id + 周期，不传 Price id**。服务端按 key 解析出 Price，
-  客户端既改不了价格，也选不了别的 Price——比「白名单校验 priceId」更难绕过。
+它**曾经**放在 env（`VITE_STRIPE_LOOKUP_*`），现在收进产品配置：env 与代码两处各存
+一份必然漂移——改价时只改了一处，页面上就会出现对不上的价格。而 env 是「部署环境」的
+概念，价格锚点是「这个产品怎么卖」的概念，后者属于产品配置。
 
 取值链路：
 
 ```text
-VITE_STRIPE_LOOKUP_*  →  lookup_key  →  Prices API（服务端，KV 缓存 10 分钟）
-                                            ├→ 定价页展示价
-                                            └→ /api/payment 解析出的 Price id
+src/config/products.ts  →  lookup_key  →  Prices API（服务端，KV 缓存 10 分钟）
+                                                ├→ 定价页展示价
+                                                └→ /api/payment 解析出的 Price id
 ```
 
 官方也提醒取价要加缓存层（"To improve performance, you might want to add a caching
 layer to only reload the price occasionally"），否则每次渲染都打一次 Stripe API。
-缓存 key 里带 lookup key 列表，改 env 后自动失效。
-
-## 配置
-
-```ts
-// src/config/website.ts
-payment: {
-  enabled: true,
-  provider: 'stripe',
-  // 由 VITE_STRIPE_LOOKUP_* 派生，不需要手写
-  lookupKeyMap: buildLookupKeyMap(env),
-},
-```
-
-`lookupKeyMap` 把定价页的 plan id 映射到 Stripe Price 的 `lookup_key`：
-
-| 环境变量 | plan id | 计费周期 | Price 上的 `lookup_key` |
-|---|---|---|---|
-| `VITE_STRIPE_LOOKUP_PRO_MONTHLY` | `pro_monthly` | 月付 | `pro_monthly` |
-| `VITE_STRIPE_LOOKUP_PRO_YEARLY` | `pro_monthly` | 年付 | `pro_yearly` |
-| `VITE_STRIPE_LOOKUP_LIFETIME` | `lifetime` | 一次性 | `lifetime` |
+缓存 key 里带 lookup key 列表，改配置后自动失效。
 
 先在 Stripe 后台给每个 Price 填上 `lookup_key`（Dashboard → Products → 对应 Price →
-Advanced → Lookup key），再把同样的值写进 `.env`。两边对不上时定价页取不到价，
-`getServiceStatuses()` 也会把它报为 `incomplete`。
+Advanced → Lookup key），再把同样的值写进 `src/config/products.ts`。两边对不上时定价页
+取不到价，`getServiceStatuses()` 也会把它报为 `incomplete`。
 
-未配置 key 时定价页仍然可看，付费方案的按钮退化为「先注册」，不会给用户一个
-点了就 502 的按钮。
+未配置 key 时定价页仍然可看，付费产品的按钮退化为「先注册」，不会给用户一个点了就
+502 的按钮。
 
 ## 结账流程
 
-1. 定价页点击方案 → `startCheckout()`（`src/payment/checkout-client.ts`）
+1. 定价页点击产品 → `startCheckout()`（`src/payment/checkout-client.ts`）
 2. 未登录 → 跳登录页并带 `?redirect=/pricing`，登录后回到定价页继续
 3. 已登录 → `POST /api/payment`：门禁 → 会话鉴权 → 限流（每 IP 每分钟 10 次）
-   → body 校验 → **按 lookup key 解析价格** → **回跳地址同源校验** → **已有订阅检查**
+   → body 校验 → **按产品 + 周期解析价格** → **回跳地址同源校验** → **重复订阅检查**
    → 创建 Checkout Session
 4. 成功后整页跳转到 Stripe Checkout
-5. 完成后回到 `/dashboard/billing?checkout=success`，账单页显示订阅与流水
+5. 完成后回到 `/dashboard/billing?checkout=success`，账单页显示方案与流水
+
+客户端只传 `productId` + `interval`，**不传 Price id**：服务端按 lookup key 解析出
+Price，客户端既改不了价格，也选不了别的 Price——比「白名单校验 priceId」更难绕过。
 
 ### 回跳地址必须同源
 
@@ -110,14 +128,54 @@ Stripe**——Stripe 结账结束后就是把用户送到这个地址。不校�
 
 ### 月付 / 年付怎么选
 
-`pro_monthly` 一个 plan 下挂两个 Price：`VITE_STRIPE_LOOKUP_PRO_MONTHLY`（月付）与
-`VITE_STRIPE_LOOKUP_PRO_YEARLY`（年付）。只配其中一个时，定价页的周期切换器只列出
-配好的那个周期——不会出现一个点了就 502 的「按年付」选项。`lifetime` 是
-`one_time` Price，没有周期可选。
+专业版下挂两个 Price：`pro_monthly`（月付）与 `pro_yearly`（年付）。只配其中一个时，
+定价页的周期切换器只列出配好的那个周期——不会出现一个点了就 502 的「按年付」选项。
+终身版是 `one_time` Price，没有周期可选，切换器也不出现（只有一种付费方式时，切换器
+没有意义）。
 
 计费模式（订阅 / 一次性）**以 Stripe 上的 Price 为准**：有 `recurring` 是订阅，
 没有是一次性支付。配置只管「卖哪个周期」，管不了「Stripe 上那个 Price 到底是不是
 周期价」。
+
+## 互斥：买断与订阅
+
+「互斥」只在两种情况下成立：
+
+1. **同一个产品内**：一次性买断取代订阅——买断是那个东西的更高档位，留着订阅就是让
+   用户为同一份权益付两次钱。
+2. **跨产品**，且配置显式声明了 `exclusiveWith`。
+
+判据以**产品配置**为准，没声明时退回 **Stripe Product** 判定：同一个 Stripe Product
+下的价格是同一个东西的不同价位（月付 / 年付 / 终身）。
+
+```ts
+const PRODUCT_EXCLUSIVITY: Record<string, string[]> = {
+  lifetime: ['pro'], // 买了终身版就不要再订专业版
+  merch: [], // 实物商品：显式不与任何东西互斥，可与订阅并存，也可买多件
+}
+```
+
+互斥关系写在这里，是因为 Stripe 的 Product 结构表达不了它：Stripe 只知道「哪些 Price
+挂在同一个 Product 下」，管不了「买断是否顶替订阅」。**不写就是并存**——跨产品的两个
+订阅同时存在是正常业务，不是 bug。
+
+互斥关系是**双向**的：A 声明与 B 互斥，等于 A 与 B 互斥。只写一边会让「谁取代谁」
+取决于判定方向，是最容易出错的地方。
+
+判定逻辑在 `src/payment/plan-state.ts`（纯函数，无副作用）：
+
+| 函数 | 作用 |
+|---|---|
+| `isSupersededByPurchase` | 买断是否取代某条订阅（互斥判定） |
+| `findSupersededSubscriptions` | 买断会接管哪些订阅（仍生效 + 互斥） |
+| `resolveProductHoldings` | 按产品归集持有物，算出每个产品「当前生效的那一份」 |
+| `resolveCurrentPlan` | 唯一当前方案；多个产品并存时返回 `null` |
+
+### 一次性购买可以有多笔
+
+**唯一性只约束订阅，不约束一次性购买。** 实物商品买三件就是三笔订单，彼此独立、各自
+生效，不能因为「已经买过」就拦下第二单。所以结账守卫只在 `mode: 'subscription'` 时
+生效；一次性支付完全不受「已有即重复」的限制。
 
 ### 已有订阅不能再买
 
@@ -148,11 +206,14 @@ Stripe 按 **Customer 对象（Session 里带了的那个）或邮箱**匹配已
 
 `canceled` 与 `incomplete_expired` **不**挡：它们已经结束，用户可以正常重新订阅。
 
+同一层守卫还挡**互斥买断**：已经买断与它互斥的产品，就不能再订它，返回
+`409 ALREADY_OWNED_EXCLUSIVE_PRODUCT`。
+
 两层都要：Stripe 那层按邮箱 / Customer 匹配，改邮箱就绕过了；应用这层按本站
 `userId` 判定，且能给出明确的 409 文案让页面停在定价页解释原因。
 
 换方案走 Stripe Billing Portal（账户页的「管理订阅」），它会把旧订阅折算迁移，不会
-多出一份。一次性支付（终身版）不受此限制，买断没有「已有即重复」的概念。
+多出一份。
 
 失败返回 502；409 时停留在定价页并用 toast 提示去管理已有的订阅；配置缺失或网络
 错误时退回注册引导。
@@ -162,18 +223,35 @@ Stripe 按 **Customer 对象（Session 里带了的那个）或邮箱**匹配已
 （`?checkout=success`），取消回跳落在定价页（`?checkout=cancelled`），两处都在展示
 后立刻用 `replace` 清掉查询参数，避免刷新时重复弹同一条。
 
+## 买断接管旧订阅
+
+买了互斥产品的买断后，原订阅**立即取消并按比例退款**：
+
+1. `checkout.session.completed` 写入买断行（`payments.type = 'one_time'`）
+2. 查出与它互斥、且仍在生效的订阅
+3. 在 Stripe 上取消该订阅（`prorate: true, invoice_now: true`）——折算额进入客户
+   余额，即「没用掉的时间退给客户」
+4. 改本地状态为 `canceled`
+
+顺序不能反：本地先标「已取消」而 Stripe 上还在扣款，页面就会骗用户。取消失败直接
+抛出去——webhook 会返回 500 并让 Stripe 重投，重投时这笔买断行已经在了（幂等插入），
+不会重复记账。
+
+**两个方向都判**：`checkout.session.completed` 先到时由它取消旧订阅；
+`customer.subscription.created` 后到时（Stripe 不保证事件顺序）由它发现「已有互斥
+买断」并立刻停掉新订阅。否则会出现「买断在先、订阅后到、两边都留着」的漏网情况——
+用户同时付着两份钱。
+
 ## 账单页
 
-`/dashboard/billing` 分两个区块：
+`/dashboard/billing` 分三个区块：
 
-- **当前订阅**——一行一张订阅卡，而不是表格行：套餐名（Price id 经价格目录反查
-  回 plan id）、状态、价格与计费周期、下次续费的具体时刻都在卡内一屏看完，
-  管理入口也在卡上。这份数据
-  一页通常只有一条，横向四列对不上表头，用表格没有信息密度收益。
+- **我的方案**——买断卡与订阅卡各自成卡。真正生效的那一份带「当前生效」徽章；被
+  买断接管的订阅仍会列出，但标出「已被买断接管」，用户不会以为自己还被扣着钱。
 - **交易记录**——表格（保留表头）。第一列标示这笔钱的性质（订阅扣款 / 一次性
   购买），第二列日期，第三列状态徽章加金额。
 
-状态词表两套，不能互用：「当前订阅」走订阅状态（生效中 / 逾期 / 试用中 / 已取消），
+状态词表两套，不能互用：「我的方案」走订阅状态（生效中 / 逾期 / 试用中 / 已取消），
 「交易记录」走付款状态（已支付 / 已退款）。两者的取值域不同——`payments.status` 只有
 `paid` 与 `refunded`，复用订阅文案会让每笔付款都显示成「生效中」。
 
@@ -186,6 +264,37 @@ Stripe 按 **Customer 对象（Session 里带了的那个）或邮箱**匹配已
 
 服务端从数据库反查当前用户的 `customerId`（不接受客户端传入），因此不存在越权打开
 他人账单门户的问题。订阅与流水的查询都按 `userId` 走索引。
+
+## 为什么不用 Stripe 权益（Entitlements）
+
+Stripe 有官方的 Entitlements 模型：产品挂上 feature，客户购买或订阅后，Stripe 自动维护
+一条 Active Entitlement，用来回答「**这个用户有没有这个权限**」。
+
+本仓**不接**它。原因是本仓要回答的问题不是权限，而是**归属**：
+
+- 「用户买的是什么」——产品配置 + `plan-state` 负责；
+- 「买的东西之间谁接管谁」——互斥判定负责；
+- 「用户有没有某个功能」——**自己写**门禁逻辑即可。
+
+Entitlements 解决的是第三件事，而第三件事在模板里恰恰是最不该预设的：功能门禁是每个
+项目自己的业务规则，写死在模板里反而要花力气拆掉。 Entitlements 还要多建一张
+`entitlements` 表、多接一个 `entitlements.active_entitlement_summary.updated` 事件，
+换来的却是本仓用不上的第二份数据源——同一件事要查两个地方，迟早对不上。
+
+需要权限门禁时，直接查本站的 `subscriptions` / `payments` 表（按 `product_id` 判定即可），
+语义清晰且不额外依赖 Stripe 的 feature 体系。
+
+## 配置自检
+
+`getServiceStatuses()`（`src/config/service-status.ts`）会检查支付模块是否可用，
+并额外校验产品配置的**结构性**问题——这些不是「字段缺失」，而是「配置写错了」：
+
+| 问题 | 后果 |
+|---|---|
+| 同一个 `lookup_key` 挂到多个产品上 | Price → 产品的反查有歧义，归属会漂 |
+| `exclusiveWith` 指向不存在的产品 | 互斥**静默失效**——用户同时付两份钱却看不到提示 |
+
+两种错配类型系统都守不住，必须在自检里挑出来。
 
 ## 免费档按钮的去向
 
@@ -216,7 +325,7 @@ Stripe 按 **Customer 对象（Session 里带了的那个）或邮箱**匹配已
 |---|---|
 | `checkout.session.completed` | 订阅写 `subscriptions`；一次性支付写 `payments` |
 | `invoice.paid` | 写 `payments`（含 `invoiceId` / `chargeId`） |
-| `customer.subscription.created` / `updated` | 更新状态、价格与周期 |
+| `customer.subscription.created` / `updated` | 更新状态、价格与周期；发现互斥买断则停掉订阅 |
 | `customer.subscription.deleted` | 标记 `canceled` |
 | `charge.refunded` | 按 `chargeId` 标记退款 |
 
@@ -309,6 +418,16 @@ delivery of events in the order that they're generated"）。`customer.subscript
 `subscriptions` 与 `payments` 的列名保持**供应商中立**（`provider`、`invoiceId`、
 `chargeId`，而不是 `stripeInvoiceId`）。这是为了接入第二个 provider 时不必改表：
 同一语义在两个渠道下是同一列，按用户查全部流水不需要按 provider 分支。
+
+产品归属靠两列：
+
+| 列 | 含义 |
+|---|---|
+| `product_id` | 本站产品 id（`pro` / `lifetime`）。互斥判定的权威依据 |
+| `stripe_product_id` | Stripe Product id。配置没声明互斥关系时的兜底判据 |
+
+`subscriptions` 与 `payments` 都有这两列；功能门禁直接按 `product_id` 判定，不需要
+额外的权益表。
 
 ## 参考资料
 

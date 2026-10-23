@@ -51,11 +51,11 @@ locale only.
 | `site-config.spec.ts` | Disabled module APIs return 404 rather than a fake success |
 | `payment.spec.ts` | Cannot buy twice; billing page shows plan, renewal date, and amount |
 
-> `payment.spec.ts` needs `VITE_PAYMENT_PROVIDER` and the three `VITE_STRIPE_LOOKUP_*`
-> values in `.env`. Without them the cases **skip** rather than fail — shipping without
-> credentials is the normal state. It never calls Stripe: it writes an `active`
-> subscription into local D1 via `scripts/e2e-seed-subscription.ts` and exercises the real
-> API and page.
+> `payment.spec.ts` needs `VITE_PAYMENT_PROVIDER` and `STRIPE_SECRET_KEY` in `.env`.
+> Without them the cases **skip** rather than fail — shipping without credentials is the
+> normal state. It never calls Stripe: it writes an `active` subscription into local D1
+> via `scripts/e2e-seed-subscription.ts` and exercises the real API and page. The price
+> anchors (`lookup_key`) live in `src/config/products.ts`, not in env.
 
 ### Two traps
 

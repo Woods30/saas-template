@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
-import type { PaymentRecord, SubscriptionRecord } from './billing-query'
+import type { CurrentPlan, PaymentRecord, SubscriptionRecord } from './billing-query'
 
 /**
  * 账单页数据的 server function。
@@ -11,11 +11,13 @@ import type { PaymentRecord, SubscriptionRecord } from './billing-query'
  * 只按**当前用户**取数，不接受调用方传入 userId，否则任何登录用户都能越权读取。
  */
 
-export type { PaymentRecord, SubscriptionRecord } from './billing-query'
+export type { CurrentPlan, PaymentRecord, SubscriptionRecord } from './billing-query'
 
 export interface BillingOverview {
   subscriptions: SubscriptionRecord[]
   payments: PaymentRecord[]
+  /** 当前生效的方案；多个产品并存时为 `null`（没有唯一当前方案）。 */
+  currentPlan: CurrentPlan | null
 }
 
 const querySchema = z.object({
@@ -50,6 +52,8 @@ export const fetchBillingOverview = createServerFn({ method: 'GET' })
           subscriptionId: schema.subscriptions.subscriptionId,
           status: schema.subscriptions.status,
           priceId: schema.subscriptions.priceId,
+          productId: schema.subscriptions.productId,
+          stripeProductId: schema.subscriptions.stripeProductId,
           amount: schema.subscriptions.amount,
           currency: schema.subscriptions.currency,
           interval: schema.subscriptions.interval,
@@ -70,6 +74,9 @@ export const fetchBillingOverview = createServerFn({ method: 'GET' })
           amount: schema.payments.amount,
           currency: schema.payments.currency,
           description: schema.payments.description,
+          productId: schema.payments.productId,
+          stripeProductId: schema.payments.stripeProductId,
+          interval: schema.payments.interval,
           paidAt: schema.payments.paidAt,
           refundedAt: schema.payments.refundedAt,
           createdAt: schema.payments.createdAt,
@@ -80,27 +87,86 @@ export const fetchBillingOverview = createServerFn({ method: 'GET' })
         .limit(data.limit),
     ])
 
-    // 套餐名要靠 Price id 反查方案 id：映射来自 Stripe 的实时价格目录。
+    // 产品 id 要靠 Price id 反查：DB 里只存 Stripe 的 Price id。
     // 取不到就退化为 null（页面显示 Price id），不能因此让整个账单页失败。
-    let planIdByPriceId: Record<string, string> = {}
+    let productIdByPriceId: Record<string, string> = {}
     try {
-      const [{ getPriceCatalog }, { buildPlanIdByPriceId }] = await Promise.all([
+      const [{ getPriceCatalog }, { buildProductIdByPriceId }] = await Promise.all([
         import('./price-catalog.server'),
         import('./price-catalog'),
       ])
-      planIdByPriceId = buildPlanIdByPriceId(await getPriceCatalog())
+      productIdByPriceId = buildProductIdByPriceId(await getPriceCatalog())
     } catch (err) {
       console.warn(
-        '[billing-overview] 取价目录失败，套餐名退回 Price id：',
+        '[billing-overview] 取价目录失败，产品名退回 Price id：',
         err instanceof Error ? err.message.split('\n')[0] : 'unknown',
       )
     }
 
+    const subscriptionRecords: SubscriptionRecord[] = subscriptions.map((sub) => ({
+      ...sub,
+      productId: sub.productId ?? (sub.priceId ? (productIdByPriceId[sub.priceId] ?? null) : null),
+    }))
+
+    // 当前生效方案按**产品**判定：买断与订阅属于同一产品时买断接管；不同产品并存
+    // 则各自生效，没有唯一当前方案。
+    const [{ resolveCurrentPlan, resolveProductHoldings }, { productExclusivityMap }] =
+      await Promise.all([import('./plan-state'), import('@/config/products')])
+    const exclusivityByProductId = productExclusivityMap()
+
+    const ownedSubscriptions = subscriptionRecords.map((sub) => ({
+      kind: 'subscription' as const,
+      id: sub.id,
+      subscriptionId: sub.subscriptionId ?? null,
+      status: sub.status,
+      productId: sub.productId ?? null,
+      stripeProductId: sub.stripeProductId ?? null,
+    }))
+    const ownedPurchases = payments
+      .filter((payment) => payment.type === 'one_time')
+      .map((payment) => ({
+        kind: 'one_time' as const,
+        id: payment.id,
+        status: payment.status,
+        productId: payment.productId ?? null,
+        stripeProductId: payment.stripeProductId ?? null,
+      }))
+
+    const current = resolveCurrentPlan({
+      subscriptions: ownedSubscriptions,
+      purchases: ownedPurchases,
+      exclusivityByProductId,
+    })
+    const holdings = resolveProductHoldings({
+      subscriptions: ownedSubscriptions,
+      purchases: ownedPurchases,
+      exclusivityByProductId,
+    })
+
+    // 每条记录标注「是否当前生效」，页面据此打「当前生效」标记：
+    // 一个产品内买断接管订阅后，订阅还在列表里，但已经不再生效。
+    const currentIds = new Set(
+      holdings.flatMap((group) => (group.current ? [group.current.id] : [])),
+    )
+    const supersededIds = new Set(holdings.flatMap((group) => group.supersededSubscriptionIds))
+
     return {
-      subscriptions: subscriptions.map((sub) => ({
+      subscriptions: subscriptionRecords.map((sub) => ({
         ...sub,
-        planId: sub.priceId ? (planIdByPriceId[sub.priceId] ?? null) : null,
+        isCurrent: currentIds.has(sub.id),
+        superseded: supersededIds.has(sub.id),
       })),
-      payments,
+      payments: payments.map((payment) => ({
+        ...payment,
+        isCurrent: currentIds.has(payment.id),
+      })),
+      currentPlan: current
+        ? {
+            kind: current.kind,
+            id: current.id,
+            productId: current.productId ?? null,
+            stripeProductId: current.stripeProductId ?? null,
+          }
+        : null,
     }
   })

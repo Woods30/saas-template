@@ -3,7 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { getAuth } from '@/auth/auth'
 import { type Locale, localeSchema } from '@/config/locale'
-import { availableIntervals, resolveLookupKey } from '@/config/payment'
+import { productExclusivityMap, productIntervals, resolveLookupKey } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import { createDb, schema } from '@/db'
 import { getModuleUnavailableResponse } from '@/lib/module-access.server'
@@ -11,17 +11,18 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import { getServerContext } from '@/lib/server-context'
 import { safeSameOriginUrl } from '@/lib/urls'
 import { getPaymentProvider } from '@/payment'
+import { ACTIVE_SUBSCRIPTION_STATUSES, isSupersededByPurchase } from '@/payment/plan-state'
 import { getPriceCatalog } from '@/payment/price-catalog.server'
 
 const checkoutBodySchema = z.object({
   /**
-   * 定价方案 id，不是 Price id。
+   * 本站产品 id（如 `pro`），不是 Price id。
    *
    * 客户端**不传** Price id：价格由服务端按 `lookup_key` 解析，改价不必改前端，
    * 客户端也无法指定任意价格。
    */
-  planId: z.string(),
-  /** 计费周期；不传时取该方案第一个已配置的周期。 */
+  productId: z.string(),
+  /** 计费周期；不传时取该产品第一个已配置的周期。 */
   interval: z.enum(['month', 'year', 'one_time']).optional(),
   successUrl: z.string(),
   cancelUrl: z.string(),
@@ -37,7 +38,7 @@ const portalBodySchema = z.object({
  *
  * 不止 `active`：`past_due` / `unpaid` 是扣款失败但订阅仍在，此时再买一份会叠加账单。
  */
-const BLOCKING_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due', 'unpaid', 'paused']
+const BLOCKING_SUBSCRIPTION_STATUSES = [...ACTIVE_SUBSCRIPTION_STATUSES]
 
 function getClientIp(request: Request): string {
   return request.headers.get('cf-connecting-ip') ?? 'unknown'
@@ -51,7 +52,8 @@ export async function createCheckoutSession(params: {
   locale?: Locale
   userId: string
   customerEmail: string
-  planId?: string
+  productId?: string
+  stripeProductId?: string
 }): Promise<{ url: string; sessionId: string }> {
   const provider = getPaymentProvider(websiteConfig.payment.provider)
   return provider.createCheckoutSession(params)
@@ -93,15 +95,12 @@ export const Route = createFileRoute('/api/payment/$')({
           return new Response('Bad Request', { status: 400 })
         }
 
-        // 价格由服务端解析：plan + 周期 → lookup_key → Stripe Price。
+        // 价格由服务端解析：产品 + 周期 → lookup_key → Stripe Price。
         // 客户端无从指定 Price id，既堵住了「换个价格下单」，也让改价不必改前端。
-        const interval =
-          body.interval ?? availableIntervals(websiteConfig.payment.lookupKeyMap, body.planId)[0]
-        const lookupKey = interval
-          ? resolveLookupKey(websiteConfig.payment.lookupKeyMap, body.planId, interval)
-          : undefined
+        const interval = body.interval ?? productIntervals(body.productId)[0]
+        const lookupKey = interval ? resolveLookupKey(body.productId, interval) : undefined
         if (!lookupKey) {
-          return new Response('Unknown plan', { status: 400 })
+          return new Response('Unknown product', { status: 400 })
         }
 
         // 回跳地址必须同源：这两个 URL 会被原样交给 Stripe，客户端传什么就跳什么，
@@ -115,14 +114,18 @@ export const Route = createFileRoute('/api/payment/$')({
 
         // 计费模式以 **Stripe 上的 Price** 为准，而不是配置里的猜测：
         // 一次性 Price 没有 `recurring`，订阅 Price 有。
-        let price: { priceId: string; recurring: boolean }
+        let price: { priceId: string; recurring: boolean; stripeProductId: string | null }
         try {
           const catalog = await getPriceCatalog()
           const found = catalog[lookupKey]
           if (!found) {
             return new Response('Price not configured', { status: 400 })
           }
-          price = { priceId: found.priceId, recurring: found.recurring }
+          price = {
+            priceId: found.priceId,
+            recurring: found.recurring,
+            stripeProductId: found.stripeProductId,
+          }
         } catch (err) {
           console.error(
             '[payment-checkout] 取价失败：',
@@ -150,6 +153,45 @@ export const Route = createFileRoute('/api/payment/$')({
           if (existing.length > 0) {
             return Response.json({ error: 'ALREADY_SUBSCRIBED' }, { status: 409 })
           }
+
+          // 已经买断**与它互斥**的产品就不能再订它：买断是那个东西的更高档位，
+          // 再订一份等于让用户为同一份权益付两次钱。
+          //
+          // 互斥关系按产品配置声明（`exclusiveWith`，同一产品内天然互斥），没声明时
+          // 按 Stripe Product 兜底。这条守卫只管订阅——一次性购买不受唯一性限制：
+          // 实物商品可以买多件，多笔订单各自独立。
+          const purchases = await db
+            .select({
+              productId: schema.payments.productId,
+              stripeProductId: schema.payments.stripeProductId,
+            })
+            .from(schema.payments)
+            .where(
+              and(
+                eq(schema.payments.userId, userId),
+                eq(schema.payments.type, 'one_time'),
+                eq(schema.payments.status, 'paid'),
+              ),
+            )
+          if (purchases.length > 0) {
+            const exclusivityByProductId = productExclusivityMap()
+            const exclusive = purchases.some((purchase) =>
+              isSupersededByPurchase({
+                purchase: {
+                  productId: purchase.productId,
+                  stripeProductId: purchase.stripeProductId,
+                },
+                subscription: {
+                  productId: body.productId,
+                  stripeProductId: price.stripeProductId,
+                },
+                exclusivityByProductId,
+              }),
+            )
+            if (exclusive) {
+              return Response.json({ error: 'ALREADY_OWNED_EXCLUSIVE_PRODUCT' }, { status: 409 })
+            }
+          }
         }
 
         try {
@@ -161,7 +203,8 @@ export const Route = createFileRoute('/api/payment/$')({
             locale: body.locale,
             userId,
             customerEmail: customerEmail ?? '',
-            planId: body.planId,
+            productId: body.productId,
+            stripeProductId: price.stripeProductId ?? undefined,
           })
           return Response.json(result, { status: 200 })
         } catch (err) {

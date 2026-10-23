@@ -1,5 +1,4 @@
 import { type PublicEnv, publicEnv } from '@/env/public'
-import { buildLookupKeyMap, type LookupKeyMap } from './payment'
 
 export type PaymentProviderName = 'stripe'
 export type AnalyticsName = 'ga' | 'plausible' | 'umami' | 'clarity'
@@ -53,14 +52,14 @@ export interface WebsiteConfig {
    *
    * 支付链路以 provider 为边界，新增供应商只需扩 `PaymentProviderName` 并实现接口；
    * `subscriptions` / `payments` 表用供应商中立的列名也是同一目的。
-   * `lookupKeyMap` 由 `VITE_STRIPE_LOOKUP_*` 派生，是「plan id + 计费周期 → Stripe
-   * Price」的唯一定位依据：它给出 Price 的 `lookup_key`，真正的 Price id 与金额由
-   * Stripe 在运行时给出（见 `src/payment/price-catalog.ts`）。
+   *
+   * 「卖什么、怎么卖」不在这里，而在 `src/config/products.ts`：产品、付费方式与
+   * Stripe Price 的 `lookup_key` 都在那儿定义。真正的 Price id 与金额由 Stripe 在
+   * 运行时给出（见 `src/payment/price-catalog.ts`）。
    */
   payment: {
     enabled: boolean
     provider: PaymentProviderName
-    lookupKeyMap: LookupKeyMap
   }
   notification: { enabled: boolean; provider: 'discord' | 'feishu' }
   analytics: { enabled: boolean; providers: AnalyticsName[] }
@@ -120,9 +119,6 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       // 模板发布给他人时改回 false，让未配置凭据的部署保持「模块关闭」而非「503」。
       enabled: true,
       provider: 'stripe',
-      // 取价依据只有一个来源：env 里的 lookup key。Price id 与金额运行时从
-      // Stripe 取，客户端无法指定——比「白名单校验 priceId」更难绕过。
-      lookupKeyMap: buildLookupKeyMap(env),
     },
     notification: { enabled: true, provider: 'discord' },
     analytics: { enabled: true, providers: ['ga'] },

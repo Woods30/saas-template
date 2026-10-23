@@ -3,13 +3,9 @@ import { useState } from 'react'
 import { fetchSession } from '@/auth/session'
 import { Cta, Hero } from '@/components/sections'
 import { Pricing as PricingBlock } from '@/components/sections/Pricing'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { availableIntervals, isPlanPurchasable } from '@/config/payment'
-import { getPricingPlans } from '@/config/pricing'
-import { websiteConfig } from '@/config/website'
+import { getProducts, isProductPurchasable, productIntervals } from '@/config/products'
 import { useCheckoutNotice } from '@/hooks/use-checkout-notice'
 import { trackBeginCheckout } from '@/lib/analytics/events'
 import { assertPageEnabled } from '@/lib/module-access'
@@ -18,7 +14,7 @@ import { resolveRedirectTarget } from '@/lib/urls'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 import { startCheckout } from '@/payment/checkout-client'
-import { mergePricingPlans } from '@/payment/price-catalog'
+import { mergePricingProducts } from '@/payment/price-catalog'
 import { fetchPriceCatalog } from '@/payment/pricing'
 
 export const Route = createFileRoute('/{-$locale}/pricing')({
@@ -45,29 +41,24 @@ export const Route = createFileRoute('/{-$locale}/pricing')({
 })
 
 /**
- * 周期切换的默认值：`pro_monthly` 第一个配好价格的周期。
- * 模块加载期求值即可：只依赖 env，不含随请求变化的 locale 文案。
- */
-const defaultInterval: 'month' | 'year' | 'one_time' =
-  availableIntervals(websiteConfig.payment.lookupKeyMap, 'pro_monthly')[0] ?? 'month'
-
-/**
  * 定价页。
+ *
+ * 页面结构由**产品配置**决定：每个产品一张卡，卡内可切换它自己的付费方式
+ * （订阅产品有月付 / 年付，买断产品只有一次性）。「一个全局周期切换器」表达不了
+ * 「切到一次性」对买断产品意味着什么，所以切换器在卡内。
  *
  * CTA 行为由**是否配置了价格**决定，而非只看 `payment.enabled`：
  * 未配置时不能给一个点了就 502 的按钮，也不该暗示「立即购买」。
- * 月付 / 年付是 `pro_monthly` 下挂的两个价格，没配年付就不渲染「按年」选项。
  */
 function PricingPage() {
   const router = useRouter()
   const { checkout } = Route.useSearch()
   const { session, catalog } = Route.useLoaderData()
   const authenticated = session !== null
-  const [pendingPlanId, setPendingPlanId] = useState<string | null>(null)
-  const [interval, setInterval] = useState<'month' | 'year' | 'one_time'>(defaultInterval)
+  const [pendingProductId, setPendingProductId] = useState<string | null>(null)
 
-  // 展示价来自 Stripe：方案文案（`getPricingPlans`）+ 实时价格（`catalog`）。
-  const plans = mergePricingPlans(getPricingPlans(), catalog)
+  // 展示价来自 Stripe：产品文案（`getProducts`）+ 实时价格（`catalog`）。
+  const products = mergePricingProducts(getProducts(), catalog)
 
   // 必须 `replace`：否则刷新会再弹一次早已过期的「结账未完成」。
   useCheckoutNotice({
@@ -83,15 +74,11 @@ function PricingPage() {
     },
   })
 
-  async function onSelectPlan(planId: string) {
-    // 周期取自配置而不是展示价：取价失败时 `plans[].prices` 是空的，
-    // 从那里读周期会退化成默认的「月付」，买断方案就会去提交一个不存在的周期。
-    const intervals = availableIntervals(websiteConfig.payment.lookupKeyMap, planId)
-    const planInterval = intervals.includes('one_time') ? 'one_time' : interval
+  async function onSelectProduct(productId: string, interval?: 'month' | 'year' | 'one_time') {
     const locale = getLocale()
 
     // 免费档要看会话：已登录用户再注册一次只会拿到「该邮箱已注册」。
-    if (planId === 'free') {
+    if (productId === 'free') {
       router.navigate({
         to: authenticated ? '/{-$locale}/dashboard' : '/{-$locale}/auth/register',
         params: { locale },
@@ -99,24 +86,34 @@ function PricingPage() {
       return
     }
 
-    if (!isPlanPurchasable(planId, websiteConfig.payment.lookupKeyMap)) {
+    if (!isProductPurchasable(productId)) {
       router.navigate({
         to: '/{-$locale}/auth/register',
         params: { locale },
-        search: { plan: planId },
+        search: { plan: productId },
       })
       return
     }
 
-    setPendingPlanId(planId)
+    // 周期取自配置而不是展示价：取价失败时 `product.options` 是空的，
+    // 从那里读周期会退化成默认的「月付」，买断产品就会去提交一个不存在的周期。
+    const intervals = productIntervals(productId)
+    const productInterval = intervals.includes('one_time')
+      ? 'one_time'
+      : interval && intervals.includes(interval)
+        ? interval
+        : intervals[0]
+    if (!productInterval) return
+
+    setPendingProductId(productId)
     try {
-      const outcome = await startCheckout({ planId, interval: planInterval, locale })
+      const outcome = await startCheckout({ productId, interval: productInterval, locale })
       switch (outcome.kind) {
         case 'redirect':
           // 埋点在跳转前发：结账意图已成立，是否付成功由 purchase 事件记录。
           trackBeginCheckout({
-            planId,
-            mode: planInterval === 'one_time' ? 'payment' : 'subscription',
+            productId,
+            mode: productInterval === 'one_time' ? 'payment' : 'subscription',
           })
           window.location.assign(outcome.url)
           return
@@ -143,58 +140,34 @@ function PricingPage() {
           router.navigate({
             to: '/{-$locale}/auth/register',
             params: { locale },
-            search: { plan: planId },
+            search: { plan: productId },
           })
       }
     } finally {
-      setPendingPlanId(null)
+      setPendingProductId(null)
     }
   }
-
-  /** 可切换的周期；只有一个周期（或全都没配）时不渲染切换器。 */
-  const proIntervals = availableIntervals(websiteConfig.payment.lookupKeyMap, 'pro_monthly')
-  const showIntervalSwitch =
-    proIntervals.length > 1 && proIntervals.some((value) => value !== 'one_time')
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
       <Hero title={m.pricing_hero_title()} subtitle={m.pricing_hero_subtitle()} />
-      {showIntervalSwitch && (
-        <div className="mt-6 flex flex-col items-center gap-2">
-          <ToggleGroup
-            value={[interval]}
-            onValueChange={(value) => {
-              const next = value[0]
-              // 取消选中时 Base UI 给空数组：保留当前值，否则点一下已选项就丢失选择。
-              if (next) setInterval(next as 'month' | 'year')
-            }}
-            aria-label={m.pricing_switch_month()}
-          >
-            {proIntervals
-              .filter((value) => value !== 'one_time')
-              .map((value) => (
-                <ToggleGroupItem key={value} value={value}>
-                  {value === 'month' ? m.pricing_switch_month() : m.pricing_switch_year()}
-                </ToggleGroupItem>
-              ))}
-          </ToggleGroup>
-          {interval === 'year' && <YearlySavingHint plans={plans} />}
-        </div>
-      )}
       <PricingBlock
-        plans={plans}
-        selectedInterval={interval}
-        renderCta={(plan) => {
-          const configured = isPlanPurchasable(plan.id, websiteConfig.payment.lookupKeyMap)
-          const pending = pendingPlanId === plan.id
+        products={products}
+        renderCta={(product, option) => {
+          const configured = isProductPurchasable(product.id)
+          const pending = pendingProductId === product.id
           // 按钮文字跟随点击后真正会发生的事，而不是固定的营销文案。
           const label = configured
-            ? plan.cta.label
-            : authenticated && plan.id === 'free'
+            ? product.cta.label
+            : authenticated && product.id === 'free'
               ? m.pricing_goto_dashboard()
               : m.pricing_free_cta()
           return (
-            <Button className="w-full" disabled={pending} onClick={() => onSelectPlan(plan.id)}>
+            <Button
+              className="w-full"
+              disabled={pending}
+              onClick={() => onSelectProduct(product.id, option?.interval)}
+            >
               {pending ? m.payment_checkout_redirecting() : label}
             </Button>
           )
@@ -214,32 +187,7 @@ function PricingPage() {
   )
 }
 
-/**
- * 年付相对月付的月度节省比例。
- *
- * 两个数都是 Stripe 上的真实价格（不是写死的展示文案），所以这个折扣不会骗人。
- */
-function YearlySavingHint({ plans }: { plans: ReturnType<typeof mergePricingPlans> }) {
-  const pro = plans.find((plan) => plan.id === 'pro_monthly')
-  const month = pro?.prices.find((price) => price.interval === 'month')
-  const year = pro?.prices.find((price) => price.interval === 'year')
-  if (!month?.amount || !year?.amount) return null
-  const monthlyEquivalent = year.amount / 12
-  const percent = Math.round((1 - monthlyEquivalent / month.amount) * 100)
-  if (!Number.isFinite(percent) || percent <= 0) return null
-  return (
-    <p className="text-sm text-muted-foreground">
-      <Badge variant="secondary" className="mr-2">
-        -{percent}%
-      </Badge>
-      {m.pricing_yearly_hint({ percent })}
-    </p>
-  )
-}
-
-/** 任一 plan 配了价格时才隐藏「暂未开放购买」提示。 */
+/** 任一产品配了价格时才隐藏「暂未开放购买」提示。 */
 function hasAnyConfiguredPrice(): boolean {
-  return getPricingPlans().some((plan) =>
-    isPlanPurchasable(plan.id, websiteConfig.payment.lookupKeyMap),
-  )
+  return getProducts().some((product) => isProductPurchasable(product.id))
 }

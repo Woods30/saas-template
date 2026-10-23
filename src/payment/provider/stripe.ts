@@ -10,6 +10,17 @@ import type {
 } from '../types'
 
 /**
+ * Stripe 的「资源不存在」错误。
+ *
+ * 已取消的订阅再取消一次，Stripe 返回 `resource_missing`（"No such subscription"），
+ * 而这正是「已经停掉」的目标状态，不该当成失败。
+ */
+function isResourceMissing(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false
+  return (err as { code?: unknown }).code === 'resource_missing'
+}
+
+/**
  * Stripe payment provider — Cloudflare Workers 适配。
  *
  * 必须用 `createFetchHttpClient()`，且验签走 `constructEventAsync` +
@@ -33,7 +44,11 @@ export class StripePaymentProvider implements PaymentProvider {
   }
 
   async createCheckoutSession(params: CheckoutParams): Promise<CheckoutResult> {
-    const metadata = { userId: params.userId, ...(params.planId ? { planId: params.planId } : {}) }
+    const metadata = {
+      userId: params.userId,
+      ...(params.productId ? { productId: params.productId } : {}),
+      ...(params.stripeProductId ? { stripeProductId: params.stripeProductId } : {}),
+    }
     const session = await this.stripe.checkout.sessions.create({
       mode: params.mode,
       line_items: [{ price: params.priceId, quantity: 1 }],
@@ -70,7 +85,33 @@ export class StripePaymentProvider implements PaymentProvider {
       amount: price.unit_amount,
       currency: price.currency,
       recurring: Boolean(price.recurring),
+      stripeProductId:
+        typeof price.product === 'string' ? price.product : (price.product?.id ?? null),
     }))
+  }
+
+  /**
+   * 取消订阅；`proration` 为真时按未使用时间折算退款。
+   *
+   * `prorate + invoice_now` 的组合会立刻生成一张金额为负的发票：折算额进入客户
+   * 余额（余额为负 = 客户有钱），即「没用掉的时间退给客户」。
+   */
+  async cancelSubscription(
+    subscriptionId: string,
+    options?: { proration?: boolean },
+  ): Promise<void> {
+    try {
+      await this.stripe.subscriptions.cancel(
+        subscriptionId,
+        options?.proration ? { prorate: true, invoice_now: true } : undefined,
+      )
+    } catch (err) {
+      // 订阅已经不在了（首次取消已成功，这次是 webhook 重投）：目标状态已达成，
+      // 不算失败。不这样处理的话，重投会永远撞上「No such subscription」，
+      // 事件再也处理不完。
+      if (isResourceMissing(err)) return
+      throw err
+    }
   }
 
   async createCustomerPortalLink(params: PortalParams): Promise<PortalResult> {

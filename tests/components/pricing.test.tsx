@@ -1,11 +1,10 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PricingPlan } from '@/components/sections'
 import { Pricing } from '@/components/sections/Pricing'
-import { getPricingPlans } from '@/config/pricing'
+import { getProducts } from '@/config/products'
 import { getLocale, setLocale } from '@/locale/paraglide/runtime.js'
-import type { PricingPlanDefinition } from '@/types/pricing'
+import type { PricingProduct, ProductDefinition } from '@/types/pricing'
 
 // Mock @tanstack/react-router：Pricing 依赖 <Link>，但测试无需路由上下文。
 vi.mock('@tanstack/react-router', () => ({
@@ -27,68 +26,84 @@ afterEach(() => setLocale(originalLocale, { reload: false }))
 
 // 文案随请求语言变化：必须用工厂函数。模块级常量会在 import 时求值，
 // 切换语言不生效，SSR 下还会把首次请求的语言固化给后续请求。
-describe('getPricingPlans 语言响应', () => {
+describe('getProducts 语言响应', () => {
   it('文案随运行时 locale 变化', () => {
     setLocale('zh', { reload: false })
-    const zh = getPricingPlans()
+    const zh = getProducts()
     setLocale('en', { reload: false })
-    const en = getPricingPlans()
+    const en = getProducts()
 
-    const zhPro = zh.find((plan) => plan.id === 'pro_monthly')
-    const enPro = en.find((plan) => plan.id === 'pro_monthly')
+    const zhPro = zh.find((product) => product.id === 'pro')
+    const enPro = en.find((product) => product.id === 'pro')
     expect(zhPro?.name).toBe('专业版')
     expect(enPro?.name).toBe('Pro')
     expect(zhPro?.id).toBe(enPro?.id)
-    // 方案定义里没有金额（金额来自 Stripe），文案仍随语言变化。
+    // 产品定义里没有金额（金额来自 Stripe），文案仍随语言变化。
     expect(zhPro?.features[0]).not.toBe(enPro?.features[0])
     expect(zhPro?.cta.label).not.toBe(enPro?.cta.label)
   })
 })
 
-// pricingPlans 配置形状。
-/** 按 id 取 plan；缺失即抛错，避免散落非空断言。 */
-function requirePlan(id: string): PricingPlanDefinition {
-  const plan = getPricingPlans().find((p) => p.id === id)
-  if (!plan) throw new Error(`未找到 plan: ${id}`)
-  return plan
+// 产品配置形状。
+/** 按 id 取产品；缺失即抛错，避免散落非空断言。 */
+function requireProduct(id: string): ProductDefinition {
+  const product = getProducts().find((p) => p.id === id)
+  if (!product) throw new Error(`未找到产品: ${id}`)
+  return product
 }
 
-describe('pricingPlans config', () => {
-  it('有 3 个 plan: free, pro_monthly, lifetime', () => {
+describe('产品配置', () => {
+  it('有 3 个产品: free, pro, lifetime', () => {
     expect(
-      getPricingPlans()
+      getProducts()
         .map((p) => p.id)
         .sort(),
-    ).toEqual(['free', 'lifetime', 'pro_monthly'])
+    ).toEqual(['free', 'lifetime', 'pro'])
   })
 
-  it('free 方案有卖点与 CTA', () => {
-    const free = requirePlan('free')
+  it('free 产品有卖点与 CTA，但没有付费方式', () => {
+    const free = requireProduct('free')
     expect(free.features.length).toBeGreaterThan(0)
     expect(free.cta.label).toBeTruthy()
+    expect(free.options).toEqual([])
   })
 
-  it('pro_monthly 是推荐方案', () => {
-    const pro = requirePlan('pro_monthly')
+  it('pro 是推荐产品', () => {
+    const pro = requireProduct('pro')
     expect(pro.highlighted).toBe(true)
     expect(pro.badge).toBeTruthy()
   })
 
-  it('方案定义里没有金额 —— 金额来自 Stripe', () => {
+  it('pro 的月付与年付是同一个产品的两种付费方式', () => {
+    const pro = requireProduct('pro')
+    expect(pro.options.map((option) => option.interval)).toEqual(['month', 'year'])
+  })
+
+  it('lifetime 是一次性买断，且与 pro 互斥', () => {
+    const lifetime = requireProduct('lifetime')
+    expect(lifetime.options.map((option) => option.kind)).toEqual(['one_time'])
+    expect(lifetime.exclusiveWith).toEqual(['pro'])
+  })
+
+  it('产品定义里没有金额 —— 金额来自 Stripe', () => {
     // 写死金额会让页面显示与实际扣款分属两份数据，改价必然漂移。
-    for (const plan of getPricingPlans()) {
-      expect(plan, `plan ${plan.id}: 方案定义不应带价格`).not.toHaveProperty('prices')
+    // 产品定义里有「付费方式」，但没有金额——金额由 Stripe 的 Price 决定。
+    for (const product of getProducts()) {
+      for (const option of product.options) {
+        expect(option, `产品 ${product.id}: 付费方式不应带金额`).not.toHaveProperty('amount')
+        expect(option, `产品 ${product.id}: 付费方式不应带币种`).not.toHaveProperty('currency')
+      }
     }
   })
 
-  it('每个 plan 都有 required fields', () => {
-    for (const plan of getPricingPlans()) {
-      expect(plan.id, `plan ${plan.id}: missing id`).toBeTruthy()
-      expect(plan.name, `plan ${plan.id}: missing name`).toBeTruthy()
-      expect(Array.isArray(plan.features), `plan ${plan.id}: features not array`).toBe(true)
-      expect(plan.cta, `plan ${plan.id}: missing cta`).toBeTruthy()
-      expect(plan.cta.href, `plan ${plan.id}: cta missing href`).toBeTruthy()
-      expect(plan.cta.label, `plan ${plan.id}: cta missing label`).toBeTruthy()
+  it('每个产品都有 required fields', () => {
+    for (const product of getProducts()) {
+      expect(product.id, `产品 ${product.id}: missing id`).toBeTruthy()
+      expect(product.name, `产品 ${product.id}: missing name`).toBeTruthy()
+      expect(Array.isArray(product.features), `产品 ${product.id}: features not array`).toBe(true)
+      expect(product.cta, `产品 ${product.id}: missing cta`).toBeTruthy()
+      expect(product.cta.href, `产品 ${product.id}: cta missing href`).toBeTruthy()
+      expect(product.cta.label, `产品 ${product.id}: cta missing label`).toBeTruthy()
     }
   })
 })
@@ -119,12 +134,12 @@ describe('formatPrice (extracted pure fn)', () => {
 
 // Pricing 区块渲染。
 describe('Pricing block render', () => {
-  const fixture: PricingPlan[] = [
+  const fixture: PricingProduct[] = [
     {
       id: 'test_free',
       name: 'Free Plan',
       description: 'For individuals',
-      prices: [],
+      options: [],
       features: ['Feature A', 'Feature B'],
       cta: { label: 'Get Started', href: '/register' },
     },
@@ -132,7 +147,15 @@ describe('Pricing block render', () => {
       id: 'test_pro',
       name: 'Pro Plan',
       description: 'For teams',
-      prices: [{ amount: 1900, currency: 'USD', interval: 'month', label: 'per month' }],
+      options: [
+        {
+          kind: 'subscription',
+          amount: 1900,
+          currency: 'USD',
+          interval: 'month',
+          label: 'per month',
+        },
+      ],
       features: ['Feature A', 'Feature B', 'Feature C'],
       cta: { label: 'Subscribe', href: '/register?plan=pro' },
       highlighted: true,
@@ -140,8 +163,8 @@ describe('Pricing block render', () => {
     },
   ]
 
-  it('渲染 plan name 与 description', () => {
-    render(<Pricing plans={fixture} />)
+  it('渲染产品名与描述', () => {
+    render(<Pricing products={fixture} />)
     expect(screen.getByText('Free Plan')).toBeInTheDocument()
     expect(screen.getByText('For individuals')).toBeInTheDocument()
     expect(screen.getByText('Pro Plan')).toBeInTheDocument()
@@ -149,61 +172,75 @@ describe('Pricing block render', () => {
   })
 
   it('渲染 feature 列表', () => {
-    render(<Pricing plans={fixture} />)
+    render(<Pricing products={fixture} />)
     expect(screen.getAllByText('Feature A')).toHaveLength(2)
     expect(screen.getByText('Feature C')).toBeInTheDocument()
   })
 
-  it('渲染 highlighted plan 的 badge', () => {
-    render(<Pricing plans={fixture} />)
+  it('渲染 highlighted 产品的 badge', () => {
+    render(<Pricing products={fixture} />)
     expect(screen.getByText('Recommended')).toBeInTheDocument()
   })
 
   it('渲染 CTA label', () => {
-    render(<Pricing plans={fixture} />)
+    render(<Pricing products={fixture} />)
     expect(screen.getByText('Get Started')).toBeInTheDocument()
     expect(screen.getByText('Subscribe')).toBeInTheDocument()
   })
 
   it('自定义 renderCta 覆盖默认 CTA 渲染', () => {
     const customCta = vi.fn().mockReturnValue(<button type="button">Custom CTA</button>)
-    render(<Pricing plans={fixture} renderCta={customCta} />)
-    expect(customCta).toHaveBeenCalledWith(fixture[0])
-    expect(customCta).toHaveBeenCalledWith(fixture[1])
+    render(<Pricing products={fixture} renderCta={customCta} />)
+    // 免费档没有付费方式，但仍要渲染 CTA：它走「注册 / 进控制台」而不是结账。
+    expect(customCta).toHaveBeenCalledWith(fixture[0], undefined)
+    expect(customCta).toHaveBeenCalledWith(fixture[1], fixture[1]?.options[0])
     expect(screen.getAllByText('Custom CTA')).toHaveLength(2)
   })
 
-  // 只显示选中的周期，两行金额并排会让用户以为要付两份。
-  const dualIntervalPlan: PricingPlan = {
+  // 只显示选中的付费方式，两行金额并排会让用户以为要付两份。
+  const dualIntervalProduct: PricingProduct = {
     id: 'dual',
     name: 'Dual Plan',
-    prices: [
-      { amount: 1900, currency: 'USD', interval: 'month', label: 'per month' },
-      { amount: 19000, currency: 'USD', interval: 'year', label: 'per year' },
+    options: [
+      {
+        kind: 'subscription',
+        amount: 1900,
+        currency: 'USD',
+        interval: 'month',
+        label: 'per month',
+      },
+      { kind: 'subscription', amount: 19000, currency: 'USD', interval: 'year', label: 'per year' },
     ],
     features: ['Feature A'],
     cta: { label: 'Subscribe', href: '/register' },
   }
 
-  it('selectedInterval 决定显示哪一行价格', () => {
-    const { rerender } = render(<Pricing plans={[dualIntervalPlan]} selectedInterval="month" />)
+  it('默认显示第一个付费方式的价格', () => {
+    render(<Pricing products={[dualIntervalProduct]} />)
     expect(screen.getByText('$19.00')).toBeInTheDocument()
     expect(screen.queryByText('$190.00')).not.toBeInTheDocument()
+  })
 
-    rerender(<Pricing plans={[dualIntervalPlan]} selectedInterval="year" />)
+  it('切换器切到年付后只显示年付价格', () => {
+    render(<Pricing products={[dualIntervalProduct]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'per year' }))
     expect(screen.getByText('$190.00')).toBeInTheDocument()
     expect(screen.queryByText('$19.00')).not.toBeInTheDocument()
   })
 
-  it('不传 selectedInterval 时退回第一行价格', () => {
-    render(<Pricing plans={[dualIntervalPlan]} />)
-    expect(screen.getByText('$19.00')).toBeInTheDocument()
-    expect(screen.queryByText('$190.00')).not.toBeInTheDocument()
-  })
-
-  it('selectedInterval 在该 plan 上不存在时仍退回第一行', () => {
-    // lifetime 没有 month/year，切换器不生效但不能渲染成空白。
-    render(<Pricing plans={[dualIntervalPlan]} selectedInterval="one_time" />)
-    expect(screen.getByText('$19.00')).toBeInTheDocument()
+  it('切换器只在该产品有多个订阅周期时出现', () => {
+    // 买断产品只有一种付费方式，切换器没有意义。
+    const buyout: PricingProduct = {
+      id: 'buyout',
+      name: 'Buyout',
+      options: [
+        { kind: 'one_time', amount: 9900, currency: 'USD', interval: 'one_time', label: 'once' },
+      ],
+      features: ['Feature A'],
+      cta: { label: 'Buy', href: '/register' },
+    }
+    render(<Pricing products={[buyout]} />)
+    expect(screen.queryByRole('button', { name: 'once' })).not.toBeInTheDocument()
+    expect(screen.getByText('$99.00')).toBeInTheDocument()
   })
 })

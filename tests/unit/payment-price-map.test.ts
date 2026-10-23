@@ -1,251 +1,331 @@
 import { describe, expect, it } from 'vitest'
 import {
-  availableIntervals,
-  buildLookupKeyMap,
   collectLookupKeys,
-  findOrphanPlanIds,
-  findPlanIdByLookupKey,
-  isPlanPurchasable,
+  findDuplicateLookupKeys,
+  findProductIdByLookupKey,
+  findUnknownExclusiveRefs,
+  isExclusiveProduct,
+  isProductPurchasable,
+  productExclusivityMap,
+  productIntervals,
+  productOptions,
   resolveLookupKey,
-} from '@/config/payment'
-import { buildPlanIdByPriceId, mergePricingPlans, type PriceCatalog } from '@/payment/price-catalog'
+} from '@/config/products'
+import {
+  buildProductIdByPriceId,
+  mergePricingProducts,
+  type PriceCatalog,
+  productGroupMismatch,
+} from '@/payment/price-catalog'
+import type { ProductDefinition } from '@/types/pricing'
 
 /**
- * 定价方案 ↔ Stripe Price `lookup_key` 映射：空串不算有效配置（Vite 会把空变量
- * 注入为 `''`）、周期必须与 key 配对、无 key 的 plan 不可购买、plan id 必须存在。
+ * 产品配置 ↔ Stripe Price `lookup_key` 映射。
+ *
+ * `lookup_key` 写在 `src/config/products.ts`（不在 env），它是「页面 ↔ 价格」的唯一
+ * 锚点：一个产品下的多个付费方式（月付 / 年付 / 买断）各自对应一个 key。
  */
 
-const lookupKeyMap = buildLookupKeyMap({
-  VITE_STRIPE_LOOKUP_PRO_MONTHLY: 'pro_monthly',
-  VITE_STRIPE_LOOKUP_PRO_YEARLY: 'pro_yearly',
-  VITE_STRIPE_LOOKUP_LIFETIME: 'lifetime',
+describe('产品配置的付费方式', () => {
+  it('专业版配了月付与年付两种订阅周期', () => {
+    expect(productOptions('pro').map((option) => option.lookupKey)).toEqual([
+      'pro_monthly',
+      'pro_yearly',
+    ])
+  })
+
+  it('买断产品只有一次性付费方式', () => {
+    expect(productOptions('lifetime').map((option) => option.kind)).toEqual(['one_time'])
+  })
+
+  it('免费档没有付费方式：按钮走注册而不是结账', () => {
+    expect(productOptions('free')).toEqual([])
+    expect(isProductPurchasable('free')).toBe(false)
+  })
+
+  it('配了付费方式的产品可购买', () => {
+    expect(isProductPurchasable('pro')).toBe(true)
+    expect(isProductPurchasable('lifetime')).toBe(true)
+  })
+
+  it('未知产品没有付费方式', () => {
+    expect(productOptions('enterprise')).toEqual([])
+    expect(isProductPurchasable('enterprise')).toBe(false)
+  })
 })
 
-describe('buildLookupKeyMap', () => {
-  it('全空时返回空映射', () => {
-    expect(buildLookupKeyMap({})).toEqual({})
+describe('productIntervals', () => {
+  it('按固定顺序返回可用周期', () => {
+    expect(productIntervals('pro')).toEqual(['month', 'year'])
   })
 
-  it('空字符串视为未配置', () => {
-    expect(
-      buildLookupKeyMap({
-        VITE_STRIPE_LOOKUP_PRO_MONTHLY: '',
-        VITE_STRIPE_LOOKUP_PRO_YEARLY: '   ',
-        VITE_STRIPE_LOOKUP_LIFETIME: '',
-      }),
-    ).toEqual({})
+  it('买断产品只返回 one_time', () => {
+    expect(productIntervals('lifetime')).toEqual(['one_time'])
   })
 
-  it('按月付与年付分别落到 pro_monthly 的不同周期', () => {
-    expect(
-      buildLookupKeyMap({
-        VITE_STRIPE_LOOKUP_PRO_MONTHLY: 'pro_monthly',
-        VITE_STRIPE_LOOKUP_PRO_YEARLY: 'pro_yearly',
-      }),
-    ).toEqual({ pro_monthly: { month: 'pro_monthly', year: 'pro_yearly' } })
-  })
-
-  it('lifetime 落到 one_time', () => {
-    expect(buildLookupKeyMap({ VITE_STRIPE_LOOKUP_LIFETIME: 'lifetime' })).toEqual({
-      lifetime: { one_time: 'lifetime' },
-    })
-  })
-
-  it('只配一个周期时不补另一个周期', () => {
-    const map = buildLookupKeyMap({ VITE_STRIPE_LOOKUP_PRO_MONTHLY: 'pro_monthly' })
-    expect(map.pro_monthly).toEqual({ month: 'pro_monthly' })
-    expect(map.pro_monthly?.year).toBeUndefined()
+  it('未知产品返回空数组', () => {
+    expect(productIntervals('enterprise')).toEqual([])
   })
 })
 
 describe('collectLookupKeys', () => {
-  it('汇总所有 key 并去重保序', () => {
-    expect(collectLookupKeys(lookupKeyMap)).toEqual(['pro_monthly', 'pro_yearly', 'lifetime'])
-  })
-
-  it('空串不入列', () => {
-    expect(collectLookupKeys({ pro_monthly: { month: '' } })).toEqual([])
+  it('汇总所有产品的 key 并去重保序', () => {
+    expect(collectLookupKeys()).toEqual(['pro_monthly', 'pro_yearly', 'lifetime'])
   })
 })
 
 describe('resolveLookupKey', () => {
-  it('按 plan + 周期取到对应 key', () => {
-    expect(resolveLookupKey(lookupKeyMap, 'pro_monthly', 'month')).toBe('pro_monthly')
-    expect(resolveLookupKey(lookupKeyMap, 'pro_monthly', 'year')).toBe('pro_yearly')
-    expect(resolveLookupKey(lookupKeyMap, 'lifetime', 'one_time')).toBe('lifetime')
+  it('按产品 + 周期取到对应 key', () => {
+    expect(resolveLookupKey('pro', 'month')).toBe('pro_monthly')
+    expect(resolveLookupKey('pro', 'year')).toBe('pro_yearly')
+    expect(resolveLookupKey('lifetime', 'one_time')).toBe('lifetime')
   })
 
   it('未配置的周期返回 undefined，不跨周期回退', () => {
-    const partial = buildLookupKeyMap({ VITE_STRIPE_LOOKUP_PRO_MONTHLY: 'pro_monthly' })
     // 年付没配时不能回退到月付价。
-    expect(resolveLookupKey(partial, 'pro_monthly', 'year')).toBeUndefined()
+    expect(resolveLookupKey('lifetime', 'year')).toBeUndefined()
   })
 
-  it('未知 plan 返回 undefined', () => {
-    expect(resolveLookupKey(lookupKeyMap, 'enterprise', 'month')).toBeUndefined()
+  it('未知产品返回 undefined', () => {
+    expect(resolveLookupKey('enterprise', 'month')).toBeUndefined()
   })
 
-  it('缺 interval 时返回 undefined', () => {
-    expect(resolveLookupKey(lookupKeyMap, 'pro_monthly')).toBeUndefined()
-  })
-})
-
-describe('isPlanPurchasable', () => {
-  it('没有任何 key 时不可购买', () => {
-    expect(isPlanPurchasable('pro_monthly', {})).toBe(false)
-    expect(isPlanPurchasable('free', {})).toBe(false)
-  })
-
-  it('有至少一个非空 key 时可购买', () => {
-    expect(
-      isPlanPurchasable(
-        'pro_monthly',
-        buildLookupKeyMap({ VITE_STRIPE_LOOKUP_PRO_MONTHLY: 'pro_monthly' }),
-      ),
-    ).toBe(true)
-  })
-
-  it('映射里全是空串时不可购买', () => {
-    expect(isPlanPurchasable('pro_monthly', { pro_monthly: { month: '' } })).toBe(false)
+  it('不给周期时取第一个已配置的付费方式', () => {
+    expect(resolveLookupKey('pro')).toBe('pro_monthly')
   })
 })
 
-describe('availableIntervals', () => {
-  it('按月付与年付都配好时按固定顺序返回', () => {
-    const map = buildLookupKeyMap({
-      VITE_STRIPE_LOOKUP_PRO_MONTHLY: 'pro_monthly',
-      VITE_STRIPE_LOOKUP_PRO_YEARLY: 'pro_yearly',
-    })
-    expect(availableIntervals(map, 'pro_monthly')).toEqual(['month', 'year'])
+describe('findProductIdByLookupKey', () => {
+  it('月付与年付都映射回同一个产品', () => {
+    expect(findProductIdByLookupKey('pro_monthly')).toBe('pro')
+    expect(findProductIdByLookupKey('pro_yearly')).toBe('pro')
   })
 
-  it('只配月付时不返回 year —— 定价页不应出现点了就 502 的选项', () => {
-    const map = buildLookupKeyMap({ VITE_STRIPE_LOOKUP_PRO_MONTHLY: 'pro_monthly' })
-    expect(availableIntervals(map, 'pro_monthly')).toEqual(['month'])
+  it('一次性 key 映射回买断产品', () => {
+    expect(findProductIdByLookupKey('lifetime')).toBe('lifetime')
   })
 
-  it('一次性方案只返回 one_time', () => {
-    const map = buildLookupKeyMap({ VITE_STRIPE_LOOKUP_LIFETIME: 'lifetime' })
-    expect(availableIntervals(map, 'lifetime')).toEqual(['one_time'])
-  })
-
-  it('空串 key 不计入可用周期', () => {
-    expect(availableIntervals({ pro_monthly: { month: '' } }, 'pro_monthly')).toEqual([])
-  })
-
-  it('未知 plan 返回空数组', () => {
-    expect(availableIntervals(lookupKeyMap, 'unknown_plan')).toEqual([])
+  it('配置里没有的 key 返回 undefined —— 不假装认识手工创建的 Price', () => {
+    expect(findProductIdByLookupKey('unknown')).toBeUndefined()
   })
 })
 
-describe('findPlanIdByLookupKey', () => {
-  it('月付与年付都映射回同一个 plan', () => {
-    expect(findPlanIdByLookupKey(lookupKeyMap, 'pro_monthly')).toBe('pro_monthly')
-    expect(findPlanIdByLookupKey(lookupKeyMap, 'pro_yearly')).toBe('pro_monthly')
+describe('互斥关系', () => {
+  it('买断与订阅产品的互斥关系写在配置里', () => {
+    expect(productExclusivityMap().lifetime).toEqual(['pro'])
   })
 
-  it('一次性 key 映射回 lifetime', () => {
-    expect(findPlanIdByLookupKey(lookupKeyMap, 'lifetime')).toBe('lifetime')
+  it('互斥是双向的：A 与 B 互斥，等于 B 与 A 互斥', () => {
+    expect(isExclusiveProduct('lifetime', 'pro')).toBe(true)
+    expect(isExclusiveProduct('pro', 'lifetime')).toBe(true)
   })
 
-  it('映射里没有的 key 返回 undefined —— 不假装认识手工创建的 Price', () => {
-    expect(findPlanIdByLookupKey(lookupKeyMap, 'unknown')).toBeUndefined()
+  it('没声明互斥的两个产品可以并存', () => {
+    expect(isExclusiveProduct('pro', 'free')).toBe(false)
+  })
+
+  it('产品 id 缺失时不判定互斥', () => {
+    expect(isExclusiveProduct(null, 'pro')).toBe(false)
+    expect(isExclusiveProduct('lifetime', undefined)).toBe(false)
   })
 })
 
-describe('findOrphanPlanIds', () => {
-  it('映射里的 plan 都在定价页时返回空', () => {
-    const map = buildLookupKeyMap({
-      VITE_STRIPE_LOOKUP_PRO_MONTHLY: 'pro_monthly',
-      VITE_STRIPE_LOOKUP_LIFETIME: 'lifetime',
-    })
-    expect(findOrphanPlanIds(map)).toEqual([])
+describe('产品配置自检', () => {
+  it('当前配置没有重复的 lookup key', () => {
+    // 同一个 key 挂到两个产品上会让「Price → 产品」的反查有歧义。
+    expect(findDuplicateLookupKeys()).toEqual([])
   })
 
-  it('返回定价页上不存在的 plan id', () => {
-    expect(findOrphanPlanIds({ enterprise: { month: 'ent_monthly' } })).toEqual(['enterprise'])
+  it('当前配置的互斥关系都指向存在的产品', () => {
+    // 指向不存在的产品会让互斥静默失效：用户同时付两份钱却看不到提示。
+    expect(findUnknownExclusiveRefs()).toEqual([])
   })
 })
 
 /**
- * 价格目录的纯逻辑：方案定义 + lookup key + Stripe 价格 → 可渲染的定价方案。
+ * 价格目录的纯逻辑：产品定义 + Stripe 价格 → 可渲染的定价产品。
  */
-describe('mergePricingPlans', () => {
+describe('mergePricingProducts', () => {
   const catalog: PriceCatalog = {
-    pro_monthly: { priceId: 'price_m', amount: 990, currency: 'usd', recurring: true },
-    pro_yearly: { priceId: 'price_y', amount: 9900, currency: 'usd', recurring: true },
-    lifetime: { priceId: 'price_life', amount: 9900, currency: 'usd', recurring: false },
+    pro_monthly: {
+      priceId: 'price_m',
+      amount: 990,
+      currency: 'usd',
+      recurring: true,
+      stripeProductId: 'prod_pro',
+    },
+    pro_yearly: {
+      priceId: 'price_y',
+      amount: 9900,
+      currency: 'usd',
+      recurring: true,
+      stripeProductId: 'prod_pro',
+    },
+    lifetime: {
+      priceId: 'price_life',
+      amount: 9900,
+      currency: 'usd',
+      recurring: false,
+      stripeProductId: 'prod_lifetime',
+    },
   }
 
-  const definitions = [
+  const definitions: ProductDefinition[] = [
     {
-      id: 'pro_monthly',
+      id: 'pro',
       name: 'Pro',
       features: ['a'],
       cta: { label: 'Buy', href: '/register' },
+      options: [
+        { kind: 'subscription', interval: 'month', lookupKey: 'pro_monthly' },
+        { kind: 'subscription', interval: 'year', lookupKey: 'pro_yearly' },
+      ],
     },
     {
       id: 'lifetime',
       name: 'Lifetime',
       features: ['b'],
       cta: { label: 'Buy', href: '/register' },
+      options: [{ kind: 'one_time', interval: 'one_time', lookupKey: 'lifetime' }],
     },
   ]
 
   it('金额来自 Stripe，不是写死的文案', () => {
-    const plans = mergePricingPlans(definitions, catalog, lookupKeyMap)
-    const pro = plans.find((plan) => plan.id === 'pro_monthly')
-    expect(pro?.prices.map((price) => [price.interval, price.amount])).toEqual([
+    const products = mergePricingProducts(definitions, catalog)
+    const pro = products.find((product) => product.id === 'pro')
+    expect(pro?.options.map((option) => [option.interval, option.amount])).toEqual([
       ['month', 990],
       ['year', 9900],
     ])
-    expect(pro?.prices[0]?.currency).toBe('usd')
+    expect(pro?.options[0]?.currency).toBe('usd')
   })
 
-  it('一次买断方案只有一个周期', () => {
-    const plans = mergePricingPlans(definitions, catalog, lookupKeyMap)
-    const lifetime = plans.find((plan) => plan.id === 'lifetime')
-    expect(lifetime?.prices).toHaveLength(1)
-    expect(lifetime?.prices[0]?.interval).toBe('one_time')
+  it('一个产品的多个付费方式归在同一个产品下', () => {
+    // 月付与年付是同一个东西的两种价位，不是两个方案。
+    const products = mergePricingProducts(definitions, catalog)
+    expect(products).toHaveLength(2)
+    expect(products.find((product) => product.id === 'pro')?.options).toHaveLength(2)
   })
 
-  it('目录里缺某个 key 时该周期不展示（其余周期照常）', () => {
+  it('买断产品只有一个付费方式', () => {
+    const products = mergePricingProducts(definitions, catalog)
+    const lifetime = products.find((product) => product.id === 'lifetime')
+    expect(lifetime?.options).toHaveLength(1)
+    expect(lifetime?.options[0]?.interval).toBe('one_time')
+  })
+
+  it('目录里缺某个 key 时该付费方式不展示（其余照常）', () => {
     const partial: PriceCatalog = {
-      pro_monthly: { priceId: 'price_m', amount: 990, currency: 'usd', recurring: true },
+      pro_monthly: {
+        priceId: 'price_m',
+        amount: 990,
+        currency: 'usd',
+        recurring: true,
+        stripeProductId: 'prod_pro',
+      },
     }
-    const plans = mergePricingPlans(definitions, partial, lookupKeyMap)
-    const pro = plans.find((plan) => plan.id === 'pro_monthly')
-    expect(pro?.prices.map((price) => price.interval)).toEqual(['month'])
+    const products = mergePricingProducts(definitions, partial)
+    const pro = products.find((product) => product.id === 'pro')
+    expect(pro?.options.map((option) => option.interval)).toEqual(['month'])
   })
 
-  it('目录为空时方案仍在，只是没有价格', () => {
-    const plans = mergePricingPlans(definitions, {}, lookupKeyMap)
-    expect(plans).toHaveLength(2)
-    expect(plans.every((plan) => plan.prices.length === 0)).toBe(true)
+  it('目录为空时产品仍在，只是没有价格', () => {
+    const products = mergePricingProducts(definitions, {})
+    expect(products).toHaveLength(2)
+    expect(products.every((product) => product.options.length === 0)).toBe(true)
   })
 
-  it('保留方案定义的名称、卖点与 CTA', () => {
-    const plans = mergePricingPlans(definitions, catalog, lookupKeyMap)
-    expect(plans[0]?.name).toBe('Pro')
-    expect(plans[0]?.features).toEqual(['a'])
-    expect(plans[0]?.cta.href).toBe('/register')
+  it('保留产品定义的名称、卖点与 CTA', () => {
+    const products = mergePricingProducts(definitions, catalog)
+    expect(products[0]?.name).toBe('Pro')
+    expect(products[0]?.features).toEqual(['a'])
+    expect(products[0]?.cta.href).toBe('/register')
   })
 })
 
-describe('buildPlanIdByPriceId', () => {
+describe('buildProductIdByPriceId', () => {
   const catalog: PriceCatalog = {
-    pro_monthly: { priceId: 'price_m', amount: 990, currency: 'usd', recurring: true },
-    lifetime: { priceId: 'price_life', amount: 9900, currency: 'usd', recurring: false },
+    pro_monthly: {
+      priceId: 'price_m',
+      amount: 990,
+      currency: 'usd',
+      recurring: true,
+      stripeProductId: 'prod_pro',
+    },
+    lifetime: {
+      priceId: 'price_life',
+      amount: 9900,
+      currency: 'usd',
+      recurring: false,
+      stripeProductId: 'prod_lifetime',
+    },
   }
 
-  it('Price id 反查回 plan id', () => {
-    expect(buildPlanIdByPriceId(catalog, lookupKeyMap)).toEqual({
-      price_m: 'pro_monthly',
+  it('Price id 反查回产品 id', () => {
+    expect(buildProductIdByPriceId(catalog)).toEqual({
+      price_m: 'pro',
       price_life: 'lifetime',
     })
   })
 
-  it('目录外的 Price id 查不到 —— 不编造套餐', () => {
-    expect(buildPlanIdByPriceId(catalog, lookupKeyMap).price_unknown).toBeUndefined()
+  it('目录外的 Price id 查不到 —— 不编造产品', () => {
+    expect(buildProductIdByPriceId(catalog).price_unknown).toBeUndefined()
+  })
+})
+
+describe('productGroupMismatch', () => {
+  const definition: ProductDefinition = {
+    id: 'pro',
+    name: 'Pro',
+    features: ['a'],
+    cta: { label: 'Buy', href: '/register' },
+    options: [
+      { kind: 'subscription', interval: 'month', lookupKey: 'pro_monthly' },
+      { kind: 'subscription', interval: 'year', lookupKey: 'pro_yearly' },
+    ],
+  }
+
+  it('一个产品的付费方式都挂在同一个 Stripe Product 上时一致', () => {
+    const catalog: PriceCatalog = {
+      pro_monthly: {
+        priceId: 'price_m',
+        amount: 990,
+        currency: 'usd',
+        recurring: true,
+        stripeProductId: 'prod_pro',
+      },
+      pro_yearly: {
+        priceId: 'price_y',
+        amount: 9900,
+        currency: 'usd',
+        recurring: true,
+        stripeProductId: 'prod_pro',
+      },
+    }
+    expect(productGroupMismatch(definition, catalog)).toBeNull()
+  })
+
+  it('跨到不同 Stripe Product 时报出不一致', () => {
+    // 这是「月付 / 年付算升级还是两个东西」的事实依据，对不上就要在自检里暴露。
+    const catalog: PriceCatalog = {
+      pro_monthly: {
+        priceId: 'price_m',
+        amount: 990,
+        currency: 'usd',
+        recurring: true,
+        stripeProductId: 'prod_a',
+      },
+      pro_yearly: {
+        priceId: 'price_y',
+        amount: 9900,
+        currency: 'usd',
+        recurring: true,
+        stripeProductId: 'prod_b',
+      },
+    }
+    expect(productGroupMismatch(definition, catalog)).toEqual({
+      expected: 'prod_a',
+      found: ['prod_a', 'prod_b'],
+    })
   })
 })

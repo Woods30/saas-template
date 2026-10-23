@@ -49,10 +49,11 @@ locale 上跑主流程。
 | `site-config.spec.ts` | 关闭模块的 API 返回 404 而非假成功 |
 | `payment.spec.ts` | 已订阅后不能再买；账单页显示套餐名 / 续费日期 / 金额 |
 
-> `payment.spec.ts` 需要 `.env` 里配好 `VITE_PAYMENT_PROVIDER` 与三个
-> `VITE_STRIPE_LOOKUP_*`。未配置时**跳过**而不是失败——模板开箱没有凭据是正常状态。
+> `payment.spec.ts` 需要 `.env` 里配好 `VITE_PAYMENT_PROVIDER` 与 `STRIPE_SECRET_KEY`。
+> 未配置时**跳过**而不是失败——模板开箱没有凭据是正常状态。
 > 它不真的打 Stripe：用 `scripts/e2e-seed-subscription.ts` 往本地 D1 写一条 `active`
-> 订阅来复现「已订阅」。
+> 订阅来复现「已订阅」。价格锚点（`lookup_key`）写在 `src/config/products.ts` 里，
+> 不在 env。
 
 ### 写测试的两个坑
 

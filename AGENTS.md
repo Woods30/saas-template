@@ -39,7 +39,7 @@ Drizzle ORM + D1、Vitest + Playwright。
 ```
 src/
 ├── routes/          文件路由（`{-$locale}` 是可选的 locale 前缀）
-├── config/          站点配置：website.ts（总开关）、navigation.ts、payment.ts 等
+├── config/          站点配置：website.ts（总开关）、products.ts（产品与价格锚点）、navigation.ts 等
 ├── components/
 │   ├── sections/    可复用内容区块（Hero / Features / Pricing…），单文件含类型
 │   ├── marketing/   页面级装配（LandingPage / MarketingLayout / Navbar / Footer）

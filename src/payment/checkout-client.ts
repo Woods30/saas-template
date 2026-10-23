@@ -1,18 +1,19 @@
 import type { Locale } from '@/config/locale'
-import { resolveLookupKey } from '@/config/payment'
+import { resolveLookupKey } from '@/config/products'
 import { websiteConfig } from '@/config/website'
+import type { PricingInterval } from '@/types/pricing'
 
 /**
  * 浏览器端发起结账：POST `/api/payment` → 整页跳转到 Stripe Checkout。
  *
- * 只传 **plan id + 计费周期**，不传 Price id：价格由服务端按 `lookup_key` 解析。
+ * 只传 **产品 id + 计费周期**，不传 Price id：价格由服务端按 `lookup_key` 解析。
  * 好处有两层——改价不必改前端；客户端也指定不了别的价格。
  *
  * 用整页跳转而非 `window.open`：Checkout 完成后要回到本站 success_url，新标签页会让
  * 用户落在原标签的旧页面上。
  *
  * 各 outcome 对应不同后续动作：未登录跳注册页、未配置 Price 应禁用按钮、
- * 已有订阅（409）应提示去「管理订阅」换方案。
+ * 已有互斥订阅（409）应提示去「管理订阅」换方案。
  */
 
 export type CheckoutOutcome =
@@ -23,8 +24,9 @@ export type CheckoutOutcome =
   | { kind: 'error'; message: string }
 
 export interface StartCheckoutParams {
-  planId: string
-  /** 计费周期；一次性方案传 `one_time`。 */
+  /** 本站产品 id（如 `pro`）。 */
+  productId: string
+  /** 计费周期；买断传 `one_time`。 */
   interval?: 'month' | 'year' | 'one_time'
   locale: Locale
 }
@@ -41,7 +43,7 @@ function returnUrls(locale: Locale): { successUrl: string; cancelUrl: string } {
 
 export async function startCheckout(params: StartCheckoutParams): Promise<CheckoutOutcome> {
   // 未配置 lookup key 就别发请求：直接给「先注册」更贴近真实可做的事。
-  if (!resolveLookupKey(websiteConfig.payment.lookupKeyMap, params.planId, params.interval)) {
+  if (!resolveLookupKey(params.productId, params.interval)) {
     return { kind: 'not-configured' }
   }
 
@@ -53,7 +55,7 @@ export async function startCheckout(params: StartCheckoutParams): Promise<Checko
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        planId: params.planId,
+        productId: params.productId,
         interval: params.interval,
         successUrl,
         cancelUrl,
@@ -78,7 +80,7 @@ export async function startCheckout(params: StartCheckoutParams): Promise<Checko
   return { kind: 'redirect', url: body.url }
 }
 
-/** 该 plan 是否已配置可购买的价格（用于禁用按钮）。 */
-export function isCheckoutConfigured(planId: string, interval?: string): boolean {
-  return Boolean(resolveLookupKey(websiteConfig.payment.lookupKeyMap, planId, interval))
+/** 该产品的这个付费方式是否已配置可购买的价格（用于禁用按钮）。 */
+export function isCheckoutConfigured(productId: string, interval?: PricingInterval): boolean {
+  return Boolean(resolveLookupKey(productId, interval))
 }

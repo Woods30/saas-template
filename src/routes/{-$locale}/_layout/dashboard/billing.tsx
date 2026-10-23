@@ -34,7 +34,7 @@ import {
 } from '@/payment/billing'
 import {
   paymentStatusMessageKey,
-  planNameForPlanId,
+  productNameForProductId,
   subscriptionIntervalMessageKey,
   subscriptionStatusMessageKey,
 } from '@/payment/billing-query'
@@ -109,7 +109,10 @@ function BillingPage() {
     trackedRef.current = true
     const latest = payments?.find((p) => p.status === 'paid')
     trackPurchase({
-      planId: subscriptions?.find((s) => s.status === 'active')?.priceId ?? '',
+      productId:
+        subscriptions?.find((s) => s.isCurrent)?.productId ??
+        payments?.find((p) => p.isCurrent)?.productId ??
+        '',
       value: latest?.amount ?? 0,
       currency: latest?.currency ?? 'usd',
     })
@@ -142,6 +145,11 @@ function BillingPage() {
     }
   }
 
+  // 买断订单（一次性购买）单独成列：它们与订阅是两种「付费物」，
+  // 页面上必须能看出「买断已经接管了订阅」这件事。
+  const purchases = payments?.filter((payment) => payment.type === 'one_time') ?? []
+  const hasAnyPlan = (subscriptions?.length ?? 0) + purchases.length > 0
+
   return (
     <div className="space-y-8">
       <header>
@@ -163,14 +171,14 @@ function BillingPage() {
         </p>
       )}
 
-      {/* 当前订阅：管理入口放在卡内，状态与「怎么改它」保持同一视线。 */}
+      {/* 我的方案：买断与订阅各自成卡，「当前生效」标在真正生效的那一份上。 */}
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-muted-foreground">
-          {m.settings_billing_current_plan()}
+          {m.settings_billing_my_plans()}
         </h2>
-        {subscriptions === null ? (
+        {subscriptions === null || payments === null ? (
           <Spinner className="size-5" />
-        ) : subscriptions.length === 0 ? (
+        ) : !hasAnyPlan ? (
           <Empty>
             <EmptyHeader>
               <EmptyMedia>
@@ -194,6 +202,9 @@ function BillingPage() {
           </Empty>
         ) : (
           <div className="space-y-4">
+            {purchases.map((purchase) => (
+              <PurchaseCard key={purchase.id} purchase={purchase} />
+            ))}
             {subscriptions.map((sub) => (
               <SubscriptionCard
                 key={sub.id}
@@ -262,7 +273,7 @@ function BillingPage() {
 /**
  * 单条订阅的摘要卡。
  *
- * 一页通常只有一条订阅，卡片比表格更能一屏读完「套餐、下次扣款、怎么改」。
+ * 一页通常只有一条订阅，卡片比表格更能一屏读完「方案、下次扣款、怎么改」。
  * `past_due` 是唯一需要用户立刻行动的状态，故单独用 `destructive`。
  */
 function SubscriptionCard({
@@ -274,7 +285,7 @@ function SubscriptionCard({
   managing: boolean
   onManage: () => void
 }) {
-  const plan = planNameForPlanId(sub.planId)
+  const productName = productNameForProductId(sub.productId)
   const statusKey = subscriptionStatusMessageKey(sub.status)
   // 周期可能尚未同步（两个 webhook 之间），此时只显示金额。
   const intervalLabel = (() => {
@@ -291,7 +302,8 @@ function SubscriptionCard({
       <CardHeader className="flex-row items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <CardTitle className="text-lg">{plan ?? planFallback(sub)}</CardTitle>
+            <CardTitle className="text-lg">{productName ?? productFallback(sub)}</CardTitle>
+            {sub.isCurrent && <Badge variant="default">{m.settings_billing_active_now()}</Badge>}
             <Badge variant={statusKey === 'settings_billing_past_due' ? 'destructive' : 'outline'}>
               {cancellingAtPeriodEnd ? m.settings_billing_status_cancel_soon() : m[statusKey]()}
             </Badge>
@@ -320,6 +332,12 @@ function SubscriptionCard({
             <span className="font-medium tabular-nums">{formatDateTime(sub.currentPeriodEnd)}</span>
           </div>
         )}
+        {sub.superseded && (
+          <div className="flex items-start gap-2 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+            <IconAlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" />
+            <span>{m.settings_billing_superseded_hint()}</span>
+          </div>
+        )}
         {cancellingAtPeriodEnd && (
           <div className="flex items-start gap-2 rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
             <IconAlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" />
@@ -338,11 +356,42 @@ function SubscriptionCard({
 }
 
 /**
- * 订阅卡的套餐名兜底。
+ * 买断订单的摘要卡。
+ *
+ * 与订阅卡并列展示：买断是「已经拥有」，订阅是「还在付钱」。买断接管订阅后，
+ * 两张卡都在列表里，但只有买断那一张带「当前生效」。
+ */
+function PurchaseCard({ purchase }: { purchase: PaymentRecord }) {
+  const productName = productNameForProductId(purchase.productId)
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start justify-between gap-4">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle className="text-lg">
+              {productName ?? m.settings_billing_pay_type_one_time()}
+            </CardTitle>
+            {purchase.isCurrent && (
+              <Badge variant="default">{m.settings_billing_active_now()}</Badge>
+            )}
+            <Badge variant="outline">{m.settings_billing_pay_type_one_time()}</Badge>
+          </div>
+          <CardDescription>
+            {formatAmount(purchase.amount, purchase.currency)}
+            {purchase.paidAt ? ` · ${formatDate(purchase.paidAt)}` : ''}
+          </CardDescription>
+        </div>
+      </CardHeader>
+    </Card>
+  )
+}
+
+/**
+ * 订阅卡的产品名兜底。
  *
  * Price 不在映射里时退回显示 Price id：至少是真实数据，能看出是后台手工创建的。
  */
-function planFallback(sub: SubscriptionRecord): string {
+function productFallback(sub: SubscriptionRecord): string {
   return sub.priceId || sub.subscriptionId || sub.id
 }
 

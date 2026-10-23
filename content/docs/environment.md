@@ -29,7 +29,7 @@ page can read them**.
 
 | Prefix | Meaning | Examples |
 |---|---|---|
-| `VITE_` | Public | `VITE_BASE_URL`, `VITE_STRIPE_LOOKUP_PRO_MONTHLY` |
+| `VITE_` | Public | `VITE_BASE_URL`, `VITE_GA_ID` |
 | No prefix | Server secret | `BETTER_AUTH_SECRET`, `STRIPE_SECRET_KEY` |
 
 > **Never put a secret behind `VITE_`.** `pnpm check:client-bundle` scans the build output
@@ -41,9 +41,6 @@ page can read them**.
 |---|---|---|
 | `VITE_BASE_URL` | `http://localhost:3000` | Site base URL for canonical, OG, sitemap |
 | `VITE_PAYMENT_PROVIDER` | — | Payment provider (only `stripe`) |
-| `VITE_STRIPE_LOOKUP_PRO_MONTHLY` | — | `lookup_key` of the monthly Price |
-| `VITE_STRIPE_LOOKUP_PRO_YEARLY` | — | `lookup_key` of the yearly Price |
-| `VITE_STRIPE_LOOKUP_LIFETIME` | — | `lookup_key` of the one-time Price |
 | `VITE_GA_ID` | — | Google Analytics |
 | `VITE_PLAUSIBLE_DOMAIN` | — | Plausible |
 | `VITE_UMAMI_WEBSITE_ID` | — | Umami |

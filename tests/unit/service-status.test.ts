@@ -317,7 +317,6 @@ describe('getServiceStatuses — payment', () => {
     const statuses = getServiceStatuses({
       config: makeConfig((c) => {
         c.payment.enabled = true
-        c.payment.lookupKeyMap = { pro_monthly: { month: 'pro_monthly' } }
       }),
       publicEnv: parsePublicEnv({}),
       serverEnv: parseServerEnv({ STRIPE_SECRET_KEY: 'synthetic-secret' }),
@@ -327,24 +326,23 @@ describe('getServiceStatuses — payment', () => {
     expect(JSON.stringify(statuses)).not.toContain('synthetic-secret')
   })
 
-  it('lookup key 为空或全为空白时 incomplete', () => {
+  it('价格锚点在产品配置里，网站配置补不了这一项', () => {
+    // lookup_key 写在 `src/config/products.ts`，不在 website 配置里。
+    // 配齐了产品配置就不该再报 `payment.products`。
     const statuses = getServiceStatuses({
       config: makeConfig((c) => {
         c.payment.enabled = true
-        c.payment.lookupKeyMap = { pro_monthly: { month: '   ' } }
       }),
       publicEnv: parsePublicEnv({}),
       serverEnv: parseServerEnv({ STRIPE_SECRET_KEY: 'key', STRIPE_WEBHOOK_SECRET: 'whsec' }),
     })
-    expect(statuses.payment.state).toBe('incomplete')
-    expect(statuses.payment.issues.map((i) => i.key)).toContain('payment.lookupKeyMap')
+    expect(statuses.payment.issues.map((i) => i.key)).not.toContain('payment.products')
   })
 
-  it('两个 secret 与非空 price id 齐全时 configured', () => {
+  it('两个 secret 齐全且产品配置有效时 configured', () => {
     const statuses = getServiceStatuses({
       config: makeConfig((c) => {
         c.payment.enabled = true
-        c.payment.lookupKeyMap = { pro_monthly: { month: 'pro_monthly' } }
       }),
       publicEnv: parsePublicEnv({}),
       serverEnv: parseServerEnv({ STRIPE_SECRET_KEY: 'key', STRIPE_WEBHOOK_SECRET: 'whsec' }),
@@ -667,7 +665,6 @@ describe('getServiceStatuses — 完整配置判断（数据驱动）', () => {
       name: 'payment（Stripe）',
       mutate: (c) => {
         c.payment.enabled = true
-        c.payment.lookupKeyMap = { pro_monthly: { month: 'pro_monthly' } }
       },
       completeEnv: { STRIPE_SECRET_KEY: 'key', STRIPE_WEBHOOK_SECRET: 'whsec' },
       completePublic: {},
@@ -788,7 +785,6 @@ describe('formatServiceDiagnostics', () => {
       statusesOf({
         config: makeAllDisabledConfig((c) => {
           c.payment.enabled = true
-          c.payment.lookupKeyMap = { pro_monthly: { month: 'pro_monthly' } }
           // 同上：只验证齐全时 configured 且不泄漏 secret，故关掉邮箱验证。
           c.auth.requireEmailVerification = false
         }),
