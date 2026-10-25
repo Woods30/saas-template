@@ -20,7 +20,12 @@ export type CheckoutOutcome =
   | { kind: 'redirect'; url: string }
   | { kind: 'unauthenticated' }
   | { kind: 'not-configured' }
+  /** 同一个产品已经有方案了（换周期走「管理订阅」）。 */
   | { kind: 'already-subscribed' }
+  /** 已经持有更高等级的方案，不必再买低级的。 */
+  | { kind: 'already-higher-tier' }
+  /** 与已购方案显式互斥，不能同时持有。 */
+  | { kind: 'exclusive-product' }
   | { kind: 'error'; message: string }
 
 export interface StartCheckoutParams {
@@ -67,8 +72,21 @@ export async function startCheckout(params: StartCheckoutParams): Promise<Checko
   }
 
   if (response.status === 401) return { kind: 'unauthenticated' }
-  // 409 是服务端的重复订阅守卫，单独成 outcome 以便调用方给出明确提示。
-  if (response.status === 409) return { kind: 'already-subscribed' }
+  // 409 是服务端的归属守卫。三种原因要分开：同一个产品已有方案（去「管理订阅」
+  // 换周期）、已有更高等级（不用再买）、显式互斥（不能并存）——提示不同。
+  if (response.status === 409) {
+    const body = (await response.json().catch(() => null)) as { error?: string } | null
+    switch (body?.error) {
+      case 'ALREADY_OWNED_HIGHER_TIER':
+        return { kind: 'already-higher-tier' }
+      case 'ALREADY_OWNED_EXCLUSIVE_PRODUCT':
+        return { kind: 'exclusive-product' }
+      // `ALREADY_SUBSCRIBED` 与「查不出已有方案属于哪个产品」都归到这一条：
+      // 用户看到的是同一件事——你已经有订阅了，去「管理订阅」处理。
+      default:
+        return { kind: 'already-subscribed' }
+    }
+  }
   if (!response.ok) {
     // 不回显服务端错误体：它可能包含内部路径。
     return { kind: 'error', message: `http_${response.status}` }

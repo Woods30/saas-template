@@ -1,20 +1,24 @@
 /**
  * 订阅与一次性购买的归属判定（纯逻辑，无副作用）。
  *
- * 两类「付费物」的语义不同，不能用同一套唯一性规则：
+ * 三个概念必须分开，混用就会出现「付了两次钱却不知道哪次生效」：
  *
- * - **订阅**：持续扣费，同一产品下只能有一份（结账守卫已挡）。
- * - **一次性购买**：可以有多笔。实物商品买三件就是三笔订单，彼此独立、各自生效；
- *   不能因为「已经买过」就拦下第二单。
+ * - **等级（tier）**：权限高低，`lifetime > pro > free`。等级高的持有物顶替等级低的，
+ *   用户因此**只有一个当前方案**。
+ * - **付费方式**：月付 / 年付 / 买断，只是怎么付钱，不是权限高低。月付与年付是
+ *   同一个产品的两种周期，等级相同。
+ * - **唯一性**：只约束**订阅**。一次性购买可以有多笔——实物商品买三件就是三单，
+ *   彼此独立、各自生效。
  *
- * 所以「互斥」只在两种情况下成立：
+ * 于是判定分三问：
  *
- * 1. **同一个产品内**，一次性买断取代订阅——买断是那个东西的更高档位，留着订阅就是
- *    让用户为同一份权益付两次钱。
- * 2. **跨产品**，且配置显式声明了 `exclusiveWith`。
+ * 1. **谁取代谁**（`doesSupersede`）：同产品，或等级更高。买断与订阅都适用。
+ * 2. **这次购买能不能做**（`purchaseBlockedBy`）：已有同产品方案、或已有更高等级时
+ *    拒绝——降级没有意义，用户也不该为同一份东西付两次钱。
+ * 3. **谁是当前方案**（`resolveCurrentPlan`）：持有物里等级最高的那个。
  *
- * 判据以**产品配置**为准（`ProductDefinition.exclusiveWith`），没声明时退回
- * **Stripe Product** 判定：同一个 Stripe Product 下的价格是同一个东西的不同价位。
+ * 判据以**产品配置**为准（等级 + 互斥声明），都判不出来时退回 **Stripe Product**
+ * 判定：同一个 Stripe Product 下的价格是同一个东西的不同价位。
  */
 
 /** 仍占用订阅名额的订阅状态，与结账守卫的判定保持一致。 */
@@ -28,10 +32,23 @@ export const ACTIVE_SUBSCRIPTION_STATUSES = [
 
 /** 归属判定需要的最小字段。 */
 export interface PlanOwnership {
-  /** 本站产品 id；互斥判定的**权威**依据。 */
+  /** 本站产品 id；等级与互斥判定的**权威**依据。 */
   productId?: string | null
-  /** Stripe Product id；配置没声明互斥关系时的兜底判据。 */
+  /** Stripe Product id；配置判不出来时的兜底判据。 */
   stripeProductId?: string | null
+}
+
+/**
+ * 判定上下文：配置里的等级与互斥关系。
+ *
+ * 从 `src/config/products.ts` 读（`productTierMap()` / `productExclusivityMap()`），
+ * 判定函数本身不读配置，方便单测直接构造上下文。
+ */
+export interface OwnershipContext {
+  /** 产品 id → 等级（数字越大权限越高）。 */
+  tiersByProductId?: Record<string, number>
+  /** 互斥声明：产品 id → 与它互斥的产品 id 列表。 */
+  exclusivityByProductId?: Record<string, string[]>
 }
 
 /** 用户当前持有的一份「付费物」。 */
@@ -70,56 +87,187 @@ export function isActiveSubscriptionStatus(status: string | null | undefined): b
 }
 
 /**
- * 买断是否取代某条订阅（互斥判定）。
+ * 持有物的等级；查不到返回 `undefined`。
+ *
+ * `undefined` 表示「不参与等级比较」，不是「等级 0」——实物商品买三件就是三单。
+ */
+export function planTier(plan: PlanOwnership, context: OwnershipContext = {}): number | undefined {
+  const id = plan.productId
+  if (!id) return undefined
+  const tier = context.tiersByProductId?.[id]
+  return typeof tier === 'number' ? tier : undefined
+}
+
+/**
+ * 比较两个持有物的等级。
+ *
+ * `1`（a 更高）/ `-1`（a 更低）/ `0`（同级）；**不可比**返回 `null`——有一方没配
+ * 等级时不能说谁更高。
+ */
+export function comparePlanTiers(
+  a: PlanOwnership,
+  b: PlanOwnership,
+  context: OwnershipContext = {},
+): number | null {
+  const tierA = planTier(a, context)
+  const tierB = planTier(b, context)
+  if (tierA === undefined || tierB === undefined) return null
+  return tierA === tierB ? 0 : tierA > tierB ? 1 : -1
+}
+
+/**
+ * 新持有物是否取代旧持有物。
  *
  * 判据优先级：
  *
- * 1. **配置声明优先**（`exclusiveWith`，含同产品内隐式成立的那条）：
- *    - 同一个产品内，买断与订阅互斥；
- *    - 跨产品时看买断产品的 `exclusiveWith` 是否列出订阅产品；
- *    - 显式写了 `exclusiveWith: []` 的跨产品买断不取代任何订阅（实物商品可与订阅
- *      并存，也可以买多件）。
- * 2. **没声明时按 Stripe Product 兜底**：同一个 Product 下的价格是同一个东西的
- *    不同价位（月付 / 年付 / 终身），买断即升级。
+ * 1. **同一个产品**：买了两份同一个东西，只留最新的（买断永远赢——它是终态权益，
+ *    退不回来）。
+ * 2. **等级更高**：高级别替换低级别（`lifetime > pro > free`）。
+ * 3. **同一个 Stripe Product**：兜底——同一个 Product 下的价格是同一个东西的不同
+ *    价位。
  *
- * 配置声明了关系、但订阅的产品 id 查不到时退回 Stripe Product 判定：宁可按「同一个
- * 东西」处理，也不要因为一次取价失败就让用户同时付终身费和月付。
+ * 等级**更低**时明确返回 `false`：低级别不能顶替高级别，否则「买了终身版再订个
+ * 专业版月付」会把终身版顶掉。
+ *
+ * 注意这里**不看**互斥声明：互斥表达的是「不能同时持有」，所以它挡住的是**购买**
+ * （见 `purchaseBlockedBy`），不是「谁取代谁」。
  */
-export function isSupersededByPurchase(input: {
-  purchase: PlanOwnership
-  subscription: PlanOwnership
-  /** 配置声明的互斥关系：产品 id → 与它互斥的产品 id 列表。 */
-  exclusivityByProductId?: Record<string, string[]>
-}): boolean {
-  const { purchase, subscription, exclusivityByProductId } = input
+export function doesSupersede(
+  newer: PlanOwnership,
+  older: PlanOwnership,
+  context: OwnershipContext = {},
+): boolean {
+  if (newer.productId && newer.productId === older.productId) return true
 
-  // 同一个产品：买断取代订阅。这条不需要配置——它就是「同一份权益」的定义。
-  if (purchase.productId && purchase.productId === subscription.productId) return true
-
-  const declared = purchase.productId ? exclusivityByProductId?.[purchase.productId] : undefined
-  if (declared !== undefined && subscription.productId) {
-    return declared.includes(subscription.productId)
+  const cmp = comparePlanTiers(newer, older, context)
+  if (cmp !== null) {
+    // 同级且不同产品 → 靠 Stripe Product 兜底；低于 → 明确不取代。
+    if (cmp > 0) return true
+    if (cmp < 0) return false
   }
 
-  // 兜底：同一个 Stripe Product 即同一个东西。
-  return isSameProduct(purchase.stripeProductId, subscription.stripeProductId)
+  return isSameProduct(newer.stripeProductId, older.stripeProductId)
+}
+
+/**
+ * 购买被挡下的原因。
+ *
+ * - `same_product`：已经有这个产品的方案了（换周期走 Stripe 的订阅更新）。
+ * - `higher_tier`：已经有更高等级的方案了，再买低级别没有意义。
+ * - `exclusive_product`：配置显式声明与已有方案互斥（等级表达不了的那种）。
+ * - `unknown_product`：已有方案查不出属于哪个产品——判不出是否重复，保守挡住。
+ */
+export type PurchaseBlockReason =
+  | 'same_product'
+  | 'higher_tier'
+  | 'exclusive_product'
+  | 'unknown_product'
+
+/**
+ * 已有持有物是否挡住这次购买。
+ *
+ * 与 `doesSupersede` 的方向相反：这里问的是「新的**不能**买」，判据是已有的一方
+ * 更高（或同一个）。等级可比时只看等级——显式互斥声明只用于等级**不可比**的情形
+ * （实物商品这类没有等级的东西），否则两套规则会打架。
+ *
+ * 已有持有物**查不出产品**时保守挡住：挡住只是让用户这次买不成，取消订阅才是不可逆
+ * 的动作，这里宁严勿松。
+ */
+export function purchaseBlockedBy(
+  existing: PlanOwnership,
+  target: PlanOwnership,
+  context: OwnershipContext = {},
+): PurchaseBlockReason | null {
+  // 查不出属于哪个产品就没法判断是否重复：挡住。
+  if (!existing.productId) return 'unknown_product'
+
+  if (existing.productId === target.productId) return 'same_product'
+
+  const cmp = comparePlanTiers(existing, target, context)
+  if (cmp !== null) {
+    // 目标更高 → 这是升级，允许买（旧的会被顶替）。
+    return cmp > 0 ? 'higher_tier' : null
+  }
+
+  const exclusivity = context.exclusivityByProductId
+  if (
+    target.productId &&
+    (exclusivity?.[existing.productId]?.includes(target.productId) ||
+      exclusivity?.[target.productId]?.includes(existing.productId))
+  ) {
+    return 'exclusive_product'
+  }
+
+  return null
+}
+
+/** 时间戳 → 毫秒数；无法解析时返回 `null`。 */
+function timeOf(value: Date | string | null | undefined): number | null {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(value)
+  const time = date.getTime()
+  return Number.isNaN(time) ? null : time
+}
+
+/**
+ * `a` 是否严格早于 `b`。
+ *
+ * 时间相同或任一方缺时间戳时返回 `false`：**判不出先后就不动**。取消订阅是不可逆
+ * 动作，宁可漏一次（下次 webhook 再判），也不能取消错的那一条。
+ */
+export function isStrictlyEarlier(
+  a: Date | string | null | undefined,
+  b: Date | string | null | undefined,
+): boolean {
+  const timeA = timeOf(a)
+  const timeB = timeOf(b)
+  if (timeA === null || timeB === null) return false
+  return timeA < timeB
+}
+
+/**
+ * 某条订阅是否已被别的持有物取代（取代 = 不再生效，应当停掉并退款）。
+ *
+ * 取代者可以是买断，也可以是另一条订阅：
+ * - **买断**取代订阅：买断是终态权益，与时间无关——买了终身版，之前订的月付就得停。
+ * - **订阅**取代订阅：等级更高时无条件取代（等级说了算）；同产品或同级时只有
+ *   **更新**的那条取代旧的（同一份东西买了两份，留最新的）。
+ */
+export function isSubscriptionSuperseded(
+  subscription: OwnedPlan,
+  others: OwnedPlan[],
+  context: OwnershipContext = {},
+): boolean {
+  return others.some((other) => {
+    if (other.id === subscription.id) return false
+    if (!doesSupersede(other, subscription, context)) return false
+
+    if (other.kind === 'one_time') return true
+
+    const cmp = comparePlanTiers(other, subscription, context)
+    // 等级更高：等级说了算，与先后无关。
+    if (cmp !== null && cmp > 0) return true
+
+    // 同产品或同级：只有更新的那条取代旧的。
+    return isStrictlyEarlier(subscription.createdAt, other.createdAt)
+  })
 }
 
 /**
  * 买断会接管哪些订阅。
  *
- * 接管条件：与买断**互斥**（见 `isSupersededByPurchase`）且订阅仍在生效。
+ * 接管条件：新持有物取代它（见 `doesSupersede`）且订阅仍在生效。
  */
 export function findSupersededSubscriptions(
   purchase: PlanOwnership,
   subscriptions: OwnedPlan[],
-  exclusivityByProductId?: Record<string, string[]>,
+  context: OwnershipContext = {},
 ): OwnedPlan[] {
   return subscriptions.filter(
     (sub) =>
       sub.kind === 'subscription' &&
       isActiveSubscriptionStatus(sub.status) &&
-      isSupersededByPurchase({ purchase, subscription: sub, exclusivityByProductId }),
+      doesSupersede(purchase, sub, context),
   )
 }
 
@@ -135,7 +283,7 @@ export interface ProductHolding {
   purchases: OwnedPlan[]
   /** 该产品下当前生效的那一份（订阅或买断）；多笔并列买断时取最新一笔。 */
   current: OwnedPlan | null
-  /** 已被买断接管的订阅 id。 */
+  /** 已被取代的订阅 id。 */
   supersededSubscriptionIds: string[]
 }
 
@@ -150,13 +298,19 @@ function holdingKey(plan: OwnedPlan): string {
  * 传入的数组需按「最新在前」排序（服务端按创建时间倒序取数）：多笔并列买断时
  * 取第一笔作为该产品的当前项。
  *
- * 跨产品的买断**不会**影响别的产品：不同产品是不同的东西，各自计费、各自生效。
+ * 「当前生效」是**每个产品各一个**：
+ * - 买断优先于订阅——买断是终态权益，订阅留着就是重复收费；
+ * - 买断之间取最新一笔，订阅之间取最新一条。
+ *
+ * 取代判定是**全局**的：跨产品的等级关系（`lifetime` 顶替 `pro`）下，买断与订阅
+ * 不在同一组，只按组内比较会漏掉接管。
  */
 export function resolveProductHoldings(input: {
   subscriptions: OwnedPlan[]
   purchases: OwnedPlan[]
-  exclusivityByProductId?: Record<string, string[]>
+  context?: OwnershipContext
 }): ProductHolding[] {
+  const context = input.context ?? {}
   const groups = new Map<string, ProductHolding>()
 
   const groupOf = (plan: OwnedPlan): ProductHolding => {
@@ -184,22 +338,11 @@ export function resolveProductHoldings(input: {
   )
   const allPaidPurchases = input.purchases.filter((purchase) => purchase.status === 'paid')
 
-  // 买断接管订阅：同一产品内买断是更高档位，留着订阅就是重复收费。
-  // 判定是**全局**的——跨产品的互斥关系（配置声明的 `exclusiveWith`）下，
-  // 买断与订阅不在同一组，只按组内比较会漏掉接管。
+  // 被取代的订阅：任何别的持有物（买断或更新的订阅）取代它，都算。
+  const holdings = [...allPaidPurchases, ...allActiveSubscriptions]
   const superseded = new Set<string>()
-  for (const purchase of allPaidPurchases) {
-    for (const sub of allActiveSubscriptions) {
-      if (
-        isSupersededByPurchase({
-          purchase,
-          subscription: sub,
-          exclusivityByProductId: input.exclusivityByProductId,
-        })
-      ) {
-        superseded.add(sub.id)
-      }
-    }
+  for (const sub of allActiveSubscriptions) {
+    if (isSubscriptionSuperseded(sub, holdings, context)) superseded.add(sub.id)
   }
 
   for (const group of groups.values()) {
@@ -211,10 +354,11 @@ export function resolveProductHoldings(input: {
       .filter((sub) => superseded.has(sub.id))
       .map((sub) => sub.id)
 
-    if (effectiveSubscriptions.length > 0) {
-      group.current = effectiveSubscriptions[0] ?? null
-    } else if (paidPurchases.length > 0) {
+    if (paidPurchases.length > 0) {
+      // 买断优先：它是终态权益，留着订阅就是重复收费。
       group.current = paidPurchases[0] ?? null
+    } else if (effectiveSubscriptions.length > 0) {
+      group.current = effectiveSubscriptions[0] ?? null
     }
   }
 
@@ -224,16 +368,33 @@ export function resolveProductHoldings(input: {
 /**
  * 当前生效的方案。
  *
- * - 只有一个产品持有付费物 → 该产品的当前项；
- * - 多个产品并存 → `null`：不同的东西并列生效，没有唯一「当前方案」，页面把每个
- *   都列出来，而不是硬挑一个。
+ * 规则是**等级说了算**：用户持有的东西里，等级最高的那个就是当前方案——
+ * `lifetime > pro > free`，所以买了终身版之后，专业版不再是「当前」。
+ *
+ * 同级并列（两个不同产品等级相同）时返回 `null`：没有唯一的当前方案，页面把每个
+ * 产品各自的当前项都列出来，而不是硬挑一个。
+ *
+ * 没有等级的东西（实物商品）不参与竞争：它是另一种东西，不是权限档位。
  */
 export function resolveCurrentPlan(input: {
   subscriptions: OwnedPlan[]
   purchases: OwnedPlan[]
-  exclusivityByProductId?: Record<string, string[]>
+  context?: OwnershipContext
 }): OwnedPlan | null {
-  const holdings = resolveProductHoldings(input).filter((group) => group.current !== null)
-  if (holdings.length !== 1) return null
-  return holdings[0]?.current ?? null
+  const context = input.context ?? {}
+  const currents = resolveProductHoldings(input)
+    .filter((group) => group.current !== null)
+    .map((group) => group.current as OwnedPlan)
+
+  if (currents.length === 0) return null
+  if (currents.length === 1) return currents[0] ?? null
+
+  const tiered = currents.filter((plan) => planTier(plan, context) !== undefined)
+  if (tiered.length === 0) return null
+
+  const maxTier = Math.max(...tiered.map((plan) => planTier(plan, context) as number))
+  const atMax = tiered.filter((plan) => planTier(plan, context) === maxTier)
+  // 同级并列：没有唯一的当前方案。
+  if (atMax.length > 1) return null
+  return atMax[0] ?? null
 }

@@ -133,12 +133,19 @@ const mockSchema = {
     customerId: makeCol('subscriptions.customerId'),
     subscriptionId: makeCol('subscriptions.subscriptionId'),
     status: makeCol('subscriptions.status'),
+    priceId: makeCol('subscriptions.price_id'),
+    productId: makeCol('subscriptions.product_id'),
+    stripeProductId: makeCol('subscriptions.stripe_product_id'),
   },
   payments: {
     id: makeCol('payments.id'),
     chargeId: makeCol('payments.charge_id'),
     invoiceId: makeCol('payments.invoice_id'),
     userId: makeCol('payments.user_id'),
+    type: makeCol('payments.type'),
+    status: makeCol('payments.status'),
+    productId: makeCol('payments.product_id'),
+    stripeProductId: makeCol('payments.stripe_product_id'),
   },
   webhookEvents: { id: makeCol('webhook_events.id') },
 }
@@ -429,8 +436,13 @@ describe('POST /api/payment 重复订阅守卫', () => {
     vi.resetModules()
   })
 
-  /** 已登录用户 + 限流放行，两个返回同时控制（命中 / 未命中已有订阅）。 */
-  async function importPostRoute(subscriptionRows: unknown[]) {
+  /**
+   * 已登录用户 + 限流放行。
+   *
+   * `subscriptionRows` 是生效中的订阅，`paymentRows` 是已付的买断订单——两者都是
+   * 「用户已经持有的东西」，守卫按等级判它们挡不挡这次购买。
+   */
+  async function importPostRoute(subscriptionRows: unknown[], paymentRows: unknown[] = []) {
     // 单测 env 没有 `STRIPE_SECRET_KEY`，不注入的话 payment 被判 incomplete 而返回 503。
     vi.doMock('@/lib/server-context', () => ({
       getServerContext: () => ({
@@ -472,7 +484,13 @@ describe('POST /api/payment 重复订阅守卫', () => {
     mockDb.select = vi.fn().mockImplementation((fields: Record<string, unknown>) => {
       const first = fields ? Object.values(fields)[0] : undefined
       const name = (first as { name?: string } | undefined)?.name
-      return makeSelectChain(name === 'subscriptions.id' ? subscriptionRows : []).selectMock()
+      const rows =
+        name === 'subscriptions.id'
+          ? subscriptionRows
+          : name === 'payments.product_id'
+            ? paymentRows
+            : []
+      return makeSelectChain(rows).selectMock()
     })
 
     return import('@/routes/api/payment/$')
@@ -487,7 +505,7 @@ describe('POST /api/payment 重复订阅守卫', () => {
   }
 
   it('已有 active 订阅时返回 409，且不创建 Checkout Session', async () => {
-    const { Route } = await importPostRoute([{ id: 'sub_existing' }])
+    const { Route } = await importPostRoute([{ id: 'sub_existing', productId: 'pro' }])
     const handlers = (
       Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
     ).options.server.handlers
@@ -521,6 +539,67 @@ describe('POST /api/payment 重复订阅守卫', () => {
 
     expect(response.status).toBe(200)
     expect(mockCheckoutProvider.createCheckoutSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('老数据没有 product_id 时按 Price id 反查，仍认得出是同一个产品', async () => {
+    const { Route } = await importPostRoute([{ id: 'sub_existing', priceId: 'price_month' }])
+    const handlers = (
+      Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+    ).options.server.handlers
+    const handler = handlers.POST as (ctx: { request: Request }) => Promise<Response>
+
+    const request = new Request('https://jerbix.dev/api/payment', {
+      method: 'POST',
+      body: JSON.stringify(subscribeBody),
+    })
+
+    const response = await handler({ request })
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'ALREADY_SUBSCRIBED' })
+  })
+
+  it('连 Price id 都查不出时保守挡住，不给用户开出第二份订阅', async () => {
+    // 判不出属于哪个产品就没法判断是否重复：挡住总比让用户付两次钱好。
+    const { Route } = await importPostRoute([{ id: 'sub_existing' }])
+    const handlers = (
+      Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+    ).options.server.handlers
+    const handler = handlers.POST as (ctx: { request: Request }) => Promise<Response>
+
+    const request = new Request('https://jerbix.dev/api/payment', {
+      method: 'POST',
+      body: JSON.stringify(subscribeBody),
+    })
+
+    const response = await handler({ request })
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'ALREADY_OWNED_UNKNOWN_PRODUCT' })
+    expect(mockCheckoutProvider.createCheckoutSession).not.toHaveBeenCalled()
+  })
+
+  it('已持有更高等级的买断时，买低级别的订阅返回 409 ALREADY_OWNED_HIGHER_TIER', async () => {
+    // 终身版（等级 2）已在手，再订专业版（等级 1）就是降级，白白多付一份钱。
+    const { Route } = await importPostRoute(
+      [],
+      [{ productId: 'lifetime', stripeProductId: 'prod_lifetime' }],
+    )
+    const handlers = (
+      Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+    ).options.server.handlers
+    const handler = handlers.POST as (ctx: { request: Request }) => Promise<Response>
+
+    const request = new Request('https://jerbix.dev/api/payment', {
+      method: 'POST',
+      body: JSON.stringify(subscribeBody),
+    })
+
+    const response = await handler({ request })
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'ALREADY_OWNED_HIGHER_TIER' })
+    expect(mockCheckoutProvider.createCheckoutSession).not.toHaveBeenCalled()
   })
 
   it('一次性支付不受已有订阅影响（买断没有「已有即重复」）', async () => {

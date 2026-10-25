@@ -53,14 +53,21 @@ const PRODUCT_OPTIONS: Record<string, ProductOption[]> = {
   lifetime: [{ kind: 'one_time', interval: 'one_time', lookupKey: 'lifetime' }],
 }
 
-const PRODUCT_EXCLUSIVITY: Record<string, string[]> = {
-  lifetime: ['pro'],
+// Tier: permission level. The higher the number, the higher the tier.
+const PRODUCT_TIERS: Record<string, number> = {
+  free: 0,
+  pro: 1,
+  lifetime: 2,
 }
+
+// Explicit exclusion: only for products **without** a tier (physical goods).
+const PRODUCT_EXCLUSIVITY: Record<string, string[]> = {}
 ```
 
 The config has two layers:
 
-- The **structural layer** (`PRODUCT_OPTIONS` / `PRODUCT_EXCLUSIVITY`) is language-free,
+- The **structural layer** (`PRODUCT_OPTIONS` / `PRODUCT_TIERS` / `PRODUCT_EXCLUSIVITY`) is
+  language-free,
   so diagnostics scripts, server jobs, and unit tests can read it directly.
 - The **copy layer** (`getProducts()`) is evaluated at render time and follows the
   request's locale. A module-level constant would freeze the first request's language
@@ -156,43 +163,58 @@ The billing mode (subscription / one-time) is decided by the **Stripe Price itse
 `recurring` present means subscription, absent means one-time payment. The config only
 says *which period to sell*; it cannot say what the Price on Stripe actually is.
 
-## Exclusion: buyout vs. subscription
+## Tier: lifetime > pro > free
 
-"Exclusion" holds in exactly two cases:
-
-1. **Within one product**: a one-time buyout supersedes the subscription — the buyout is
-   the higher tier of the same thing, and keeping the subscription means charging twice
-   for the same thing.
-2. **Across products**, when the config explicitly declares `exclusiveWith`.
-
-The config is the authority; the **Stripe Product** is the fallback: Prices under the
-same Stripe Product are the same thing at different price points (monthly / yearly /
-lifetime).
+A **tier** is a permission level, not a payment mode. Monthly and yearly are both `pro`
+(same tier, two periods); `lifetime` is a tier above.
 
 ```ts
-const PRODUCT_EXCLUSIVITY: Record<string, string[]> = {
-  lifetime: ['pro'], // bought the lifetime tier — no point also paying monthly
-  merch: [], // physical goods: explicitly not exclusive; may coexist with a subscription
+const PRODUCT_TIERS: Record<string, number> = {
+  free: 0,
+  pro: 1,
+  lifetime: 2,
 }
 ```
 
-The relation lives in the config because Stripe's Product structure cannot express it:
-Stripe only knows "which Prices hang under which Product", not "does a buyout supersede
-a subscription". **Not declaring it means coexistence** — two subscriptions on different
-products running side by side is normal business, not a bug.
+One rule — the tier — settles three things:
 
-Exclusion is **bidirectional**: A declaring itself exclusive with B means A and B are
-exclusive. Declaring only one side makes "who supersedes whom" depend on the direction
-of the check — the easiest way to get this wrong.
+1. **The current plan is unique** — of everything the user holds, the one with the highest
+   tier is "the plan in force". After buying the lifetime tier, the pro subscription is
+   no longer current; the billing page shows exactly **one** "Active now" badge.
+2. **A higher tier replaces a lower one** — buying a higher tier invalidates the lower
+   one: the old subscription is stopped and prorated, so the user never pays twice for
+   the same thing.
+3. **Downgrades are blocked** — once a higher tier is held, buying a lower one is
+   refused, with a reason the page can explain.
+
+The **product config** (the tier) is the authority; when it can't decide, the **Stripe
+Product** is the fallback: Prices under the same Stripe Product are the same thing at
+different price points (monthly / yearly / lifetime).
+
+**Different tiers → exclusive. Same tier → coexist.** So `lifetime` and `pro` are
+automatically exclusive and need no explicit declaration — writing the relation twice
+means two statements of one fact, and adding a product means one of them gets missed.
+
+The explicit `PRODUCT_EXCLUSIVITY` is only for products **without** a tier: physical
+goods and the like don't take part in tier comparison, and can only express "must not
+coexist with that subscription" by declaration.
+
+```ts
+const PRODUCT_EXCLUSIVITY: Record<string, string[]> = {
+  merch: ['pro'], // physical goods: explicitly exclusive with subscriptions
+}
+```
 
 The rules live in `src/payment/plan-state.ts` (pure functions, no side effects):
 
 | Function | What it answers |
 |---|---|
-| `isSupersededByPurchase` | Does this buyout supersede that subscription? |
-| `findSupersededSubscriptions` | Which subscriptions does this buyout take over? |
-| `resolveProductHoldings` | Group holdings per product and find the one in force |
-| `resolveCurrentPlan` | The single plan in force; `null` when several products coexist |
+| `comparePlanTiers` | Compare the tiers of two holdings; **not comparable** when one side has no tier |
+| `doesSupersede` | Does this holding supersede that one (same product / higher tier)? |
+| `purchaseBlockedBy` | Is this purchase blocked by an existing holding, and **why**? |
+| `isSubscriptionSuperseded` | Is this subscription already superseded (i.e. should be stopped and refunded)? |
+| `resolveProductHoldings` | Group holdings per product and find the one in force for each |
+| `resolveCurrentPlan` | The global current plan: the highest tier; `null` when two products tie |
 
 ### One-time purchases may be many
 
@@ -202,45 +224,50 @@ purchase because "you already bought one" would be wrong. So the checkout guard 
 applies to `mode: 'subscription'`; one-time payments are never blocked for "already
 owned".
 
-### An existing subscription blocks a re-purchase
+### The checkout guard
 
-This template assumes one subscription per user: buying twice yields two live
-subscriptions, both charging, while the billing page can only show one. Two layers
-enforce that.
+A `mode: 'subscription'` checkout queries the database for the **signed-in user** before
+creating a session and checks what he already holds. It looks at two things:
 
-**Layer 1 — Stripe dashboard** (recommended). In the Stripe Dashboard, go to
-`Settings` → `Checkout and Payment Links` → `Subscriptions` and turn on
-`Limit customers to 1 subscription`. Set `Direct customers to manage their
-subscription on` to `Your website` and point it at the billing page (e.g.
-`https://YOUR-DOMAIN.com/dashboard/billing`).
+- **Subscriptions still in force** — only the statuses `active` / `trialing` /
+  `past_due` / `unpaid` / `paused` occupy the slot (`canceled` and
+  `incomplete_expired` don't: those are over, and the user may subscribe again);
+- **Paid one-time buyouts**.
 
-Stripe matches on the **Customer object** (when the session carries one) or the
-**email**, so it also catches Checkout links used outside your app. It treats
-`active`, `past_due`, `unpaid` and `paused` as existing subscriptions. This setting
-depends on the customer portal login link being enabled (`Billing` →
-`Customer portal`) — disabling the login link disables the limit too.
+When it blocks, it gives a **specific reason**, so the page can say what to do:
 
-**Layer 2 — application guard** (this repo). `mode: 'subscription'` checkouts query
-the database for the **signed-in user** before creating a session and return
-`409 ALREADY_SUBSCRIBED` for any of:
+| Situation | Error code | What the page says |
+|---|---|---|
+| The same product already has a plan | `ALREADY_SUBSCRIBED` | Manage the subscription to change period or cancel |
+| A higher tier is already held | `ALREADY_OWNED_HIGHER_TIER` | No need to buy the lower tier |
+| Explicitly exclusive with an existing plan | `ALREADY_OWNED_EXCLUSIVE_PRODUCT` | The two cannot be held at once |
+| The existing plan **cannot be attributed to a product** | `ALREADY_OWNED_UNKNOWN_PRODUCT` | Blocked conservatively; manage the subscription |
 
-| Status | Why it blocks |
-|---|---|
-| `active` | Currently in force |
-| `trialing` | A trial still occupies the slot |
-| `past_due` | Payment failed but the subscription is still live — the worst moment to sell a second one |
-| `unpaid` | Retries exhausted, subscription not yet over |
-| `paused` | Paused; billing resumes later |
+The last one is a fallback for old data: when it can't tell whether this would be a
+duplicate, blocking is safer than letting the user open a second subscription. The app
+resolves the product by reverse lookup on the Price id first, and only lands here when
+that fails too.
 
-`canceled` and `incomplete_expired` do **not** block — those are over, and the user
-should be able to subscribe again.
+**Allowed** cases:
 
-The same guard also blocks a **buyout that is exclusive** with the product being
-ordered: `409 ALREADY_OWNED_EXCLUSIVE_PRODUCT`.
+- The target tier is **higher** — that's an upgrade. The webhook takes the old
+  subscription over (cancel + prorated refund), so the user is never charged twice;
+- Same tier but **different products** — two different things, each billed and each in
+  force;
+- One-time payments — none of the above applies.
 
-Both layers matter: Stripe's matches on email / Customer, which changes if the user
-edits their email; the app guard matches on the local `userId` and lets the pricing
-page explain the 409 instead of failing inside Stripe.
+The same guard also **blocks downgrades**: buying a monthly pro plan (tier 1) while
+holding the lifetime tier (tier 2) is meaningless, so it's refused outright.
+
+Stripe's `Limit customers to 1 subscription` (`Settings` → `Checkout and Payment Links` →
+`Subscriptions`) catches purchases that bypass this app and use a Checkout link
+directly, but it is a **global** limit: one customer, one subscription — which also
+blocks "upgrade to a higher tier". The app-side guard in this template decides per
+product and per tier, so **think before turning it on**: if you need cross-product
+upgrades, leave it off; if you only want to prevent double charges and need no upgrade
+path, it's a good extra layer. Note that the setting depends on the customer portal
+login link being enabled (`Billing` → `Customer portal`): disabling the login link
+disables the limit too.
 
 Switching plans goes through Stripe Billing Portal ("Manage subscription" on the
 account page), which prorates the old subscription into the new one instead of adding
@@ -257,11 +284,12 @@ with a `replace` navigation right after showing the toast, so a reload never rep
 
 ## A buyout supersedes the old subscription
 
-After buying an exclusive product, the old subscription is **cancelled immediately with
-a prorated refund**:
+After buying a **higher tier**, the old subscription is **cancelled immediately with a
+prorated refund**:
 
 1. `checkout.session.completed` writes the buyout row (`payments.type = 'one_time'`)
-2. Find the subscriptions that are exclusive with it and still in force
+2. Find the subscriptions it supersedes — same product, or a lower tier — that are
+   still in force
 3. Cancel them on Stripe (`prorate: true, invoice_now: true`) — the prorated amount
    lands in the customer's credit balance, i.e. the unused time is refunded
 4. Mark the local row `canceled`
@@ -272,20 +300,29 @@ by then the buyout row already exists (idempotent insert), so nothing is double-
 
 **Both directions are checked**: when `checkout.session.completed` arrives first it
 cancels the old subscription; when `customer.subscription.created` arrives first (Stripe
-does not guarantee event order) it finds the existing exclusive buyout and stops the new
-subscription right away. Otherwise you get "buyout first, subscription later, both left
-standing" — the user paying twice for the same thing.
+does not guarantee event order) it finds the existing higher-tier buyout and stops the
+new subscription right away. Otherwise you get "buyout first, subscription later, both
+left standing" — the user paying twice for the same thing.
+
+Subscriptions work the same way: when a new subscription lands it takes over the old
+subscription for the same product and any lower-tier old subscription. The rule is
+exactly the one the billing page uses to show "superseded" (`isSubscriptionSuperseded`),
+so the page can never claim "superseded" while Stripe keeps charging.
 
 ## Billing page
 
 `/dashboard/billing` is split in two sections:
 
-- **My plans** — one card per buyout and per subscription. The one actually in force
-  carries an "Active now" badge; a subscription superseded by a buyout is still listed
-  but marked as such, so the user doesn't think they are still being charged.
+- **My plans** — one card per buyout and per subscription, sorted from the highest tier
+  down. **Only one** carries the "Active now" badge — the highest tier
+  (`lifetime > pro > free`); a subscription superseded by a higher tier is still listed
+  but marked as such, so the user doesn't think they are still being charged. Under the
+  section heading there's a line "Current tier: <product>", answering "what am I on"
+  directly.
 - **Transactions** — a table that keeps its header. The first column labels what the
   money was for (subscription charge / one-time purchase), then the date, then a status
-  badge with the amount.
+  badge with the amount. Transactions are **unlimited**: buy three times, three rows —
+  it's a ledger, not a state.
 
 Two separate status vocabularies, never swapped: "My plans" uses subscription states
 (active / past due / trialing / cancelled), while "Transactions" uses payment states
@@ -315,7 +352,7 @@ This repo does **not** wire it up, because the question here is not permission b
 **attribution**:
 
 - "What did the user buy" — owned by the product config and `plan-state`;
-- "Which of them supersedes which" — owned by the exclusion rules;
+- "Which of them supersedes which" — owned by the tier and exclusion rules;
 - "Does the user have feature X" — **your own** gating logic.
 
 Entitlements only covers the third one, which is the one a template should least impose:
@@ -338,9 +375,10 @@ config — these are not "missing fields" but "the config is wrong":
 |---|---|
 | One `lookup_key` attached to several products | The Price → product reverse lookup is ambiguous; attribution drifts |
 | `exclusiveWith` points at a product that doesn't exist | The exclusion **silently fails** — the user pays twice with no hint |
+| A tier points at a product that doesn't exist | That product never takes part in tier comparison, so "a higher tier replaces a lower one" **silently fails** |
 
-Neither misconfiguration is caught by the type system, so the self-check has to surface
-them.
+None of these misconfigurations is caught by the type system, so the self-check has to
+surface them.
 
 ## Where the free-tier button goes
 
@@ -373,7 +411,7 @@ Handled events:
 |---|---|
 | `checkout.session.completed` | `subscriptions` for subscriptions; `payments` for one-time |
 | `invoice.paid` | `payments` (with `invoiceId` / `chargeId`) |
-| `customer.subscription.created` / `updated` | status, price, and period; stops the subscription when an exclusive buyout exists |
+| `customer.subscription.created` / `updated` | status, price, and period; stops the subscription when it is superseded by a higher tier |
 | `customer.subscription.deleted` | marks `canceled` |
 | `charge.refunded` | marks refunded by `chargeId` |
 
@@ -480,8 +518,8 @@ Product attribution uses two columns:
 
 | Column | Meaning |
 |---|---|
-| `product_id` | This repo's product id (`pro` / `lifetime`) — the authority for exclusion |
-| `stripe_product_id` | The Stripe Product id — the fallback when no exclusion is declared |
+| `product_id` | This repo's product id (`pro` / `lifetime`) — the authority for tier and exclusion decisions |
+| `stripe_product_id` | The Stripe Product id — the fallback when the config can't decide |
 
 Both tables carry these two columns. Feature gating reads `product_id` directly — there
 is no separate entitlements table.

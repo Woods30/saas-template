@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import {
   collectLookupKeys,
+  compareProductTier,
+  exclusiveProductIds,
   findDuplicateLookupKeys,
   findProductIdByLookupKey,
   findUnknownExclusiveRefs,
+  findUnknownTierRefs,
   isExclusiveProduct,
   isProductPurchasable,
   productExclusivityMap,
   productIntervals,
   productOptions,
+  productTier,
+  productTierMap,
   resolveLookupKey,
 } from '@/config/products'
 import {
@@ -110,9 +115,39 @@ describe('findProductIdByLookupKey', () => {
   })
 })
 
+describe('产品等级', () => {
+  it('等级按权限高低排：lifetime > pro > free', () => {
+    expect(productTier('lifetime')).toBe(2)
+    expect(productTier('pro')).toBe(1)
+    expect(productTier('free')).toBe(0)
+  })
+
+  it('比较两个产品的等级', () => {
+    expect(compareProductTier('lifetime', 'pro')).toBe(1)
+    expect(compareProductTier('pro', 'lifetime')).toBe(-1)
+    expect(compareProductTier('pro', 'pro')).toBe(0)
+  })
+
+  it('没配等级的产品不可比 —— 不参与等级比较', () => {
+    expect(productTier('enterprise')).toBeUndefined()
+    expect(compareProductTier('enterprise', 'pro')).toBeNull()
+  })
+
+  it('等级表里不能有不存在的产品', () => {
+    // 写错产品 id 会让那个产品永远不参与等级比较，「高级别替换低级别」静默失效。
+    expect(findUnknownTierRefs()).toEqual([])
+  })
+
+  it('等级表可以直接作为判定上下文', () => {
+    expect(productTierMap()).toMatchObject({ free: 0, pro: 1, lifetime: 2 })
+  })
+})
+
 describe('互斥关系', () => {
-  it('买断与订阅产品的互斥关系写在配置里', () => {
+  it('等级不同的两个可购买产品自动互斥', () => {
+    // 不必显式写：lifetime 等级高于 pro，买断后专业版就该停掉。
     expect(productExclusivityMap().lifetime).toEqual(['pro'])
+    expect(productExclusivityMap().pro).toEqual(['lifetime'])
   })
 
   it('互斥是双向的：A 与 B 互斥，等于 B 与 A 互斥', () => {
@@ -120,8 +155,9 @@ describe('互斥关系', () => {
     expect(isExclusiveProduct('pro', 'lifetime')).toBe(true)
   })
 
-  it('没声明互斥的两个产品可以并存', () => {
+  it('免费档不参与互斥：它是默认状态，不可购买', () => {
     expect(isExclusiveProduct('pro', 'free')).toBe(false)
+    expect(exclusiveProductIds('free')).toEqual([])
   })
 
   it('产品 id 缺失时不判定互斥', () => {

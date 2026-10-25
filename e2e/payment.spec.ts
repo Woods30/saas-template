@@ -94,7 +94,10 @@ test.describe('Payment', () => {
 
     const section = page.locator('section', { hasText: '我的方案' }).first()
     // 产品名来自产品 id 反查，显示成 `price_1US...` 说明映射没生效。
-    await expect(section.getByText('专业版')).toBeVisible({ timeout: 15000 })
+    // 必须 exact：区块标题下还有一行「当前等级：专业版」，非精确匹配会命中两处。
+    await expect(section.getByText('专业版', { exact: true })).toBeVisible({ timeout: 15000 })
+    // 「当前等级」直接回答「我现在是什么档位」——等级最高的那一份。
+    await expect(section.getByText('当前等级：专业版')).toBeVisible()
     // 生效中的订阅带「当前生效」徽章：买断接管后徽章会移走，这是页面上唯一的
     // 「到底哪份在扣费」信号。
     await expect(section.getByText('当前生效')).toBeVisible()

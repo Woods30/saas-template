@@ -135,6 +135,24 @@ function PricingPage() {
             timeout: 8000,
           })
           return
+        case 'already-higher-tier':
+          // 已经持有更高等级：再买低级的只会重复扣钱。
+          toast.add({
+            type: 'info',
+            title: m.payment_already_higher_tier(),
+            description: m.payment_already_higher_tier_hint(),
+            timeout: 8000,
+          })
+          return
+        case 'exclusive-product':
+          // 与已购方案显式互斥：两者不能同时持有。
+          toast.add({
+            type: 'info',
+            title: m.payment_exclusive_product(),
+            description: m.payment_exclusive_product_hint(),
+            timeout: 8000,
+          })
+          return
         default:
           // 配置缺失或服务端错误：退回注册引导，比停在按钮加载态更好。
           router.navigate({

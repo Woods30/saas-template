@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { productTier } from '@/config/products'
 import { useCheckoutNotice } from '@/hooks/use-checkout-notice'
 import { trackPurchase } from '@/lib/analytics/events'
 import { getRequestLocale } from '@/lib/locale'
@@ -28,6 +29,7 @@ import { assertPageEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 import {
+  type CurrentPlan,
   fetchBillingOverview,
   type PaymentRecord,
   type SubscriptionRecord,
@@ -68,6 +70,7 @@ function BillingPage() {
   const { checkout } = Route.useSearch()
   const [subscriptions, setSubscriptions] = useState<SubscriptionRecord[] | null>(null)
   const [payments, setPayments] = useState<PaymentRecord[] | null>(null)
+  const [currentPlan, setCurrentPlan] = useState<CurrentPlan | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [managing, setManaging] = useState(false)
 
@@ -76,6 +79,7 @@ function BillingPage() {
       const result = await fetchBillingOverview({ data: {} })
       setSubscriptions(result.subscriptions)
       setPayments(result.payments)
+      setCurrentPlan(result.currentPlan)
     } catch {
       // 不回显服务端错误体：401 / 500 对用户是同一件事。
       setError(m.settings_error_generic())
@@ -150,6 +154,17 @@ function BillingPage() {
   const purchases = payments?.filter((payment) => payment.type === 'one_time') ?? []
   const hasAnyPlan = (subscriptions?.length ?? 0) + purchases.length > 0
 
+  // 按等级从高到低排：当前生效的那份排在最上面，用户一眼能看到自己处在哪一档。
+  // 没有等级的东西（实物商品）排在最后。
+  const byTierDesc = <T extends { productId?: string | null }>(a: T, b: T): number => {
+    const tierA = productTier(a.productId) ?? -1
+    const tierB = productTier(b.productId) ?? -1
+    return tierB - tierA
+  }
+  const sortedPurchases = [...purchases].sort(byTierDesc)
+  const sortedSubscriptions = [...(subscriptions ?? [])].sort(byTierDesc)
+  const currentProductName = productNameForProductId(currentPlan?.productId)
+
   return (
     <div className="space-y-8">
       <header>
@@ -176,6 +191,11 @@ function BillingPage() {
         <h2 className="text-sm font-medium text-muted-foreground">
           {m.settings_billing_my_plans()}
         </h2>
+        {currentProductName && (
+          <p className="text-sm text-muted-foreground">
+            {m.settings_billing_current_level({ name: currentProductName })}
+          </p>
+        )}
         {subscriptions === null || payments === null ? (
           <Spinner className="size-5" />
         ) : !hasAnyPlan ? (
@@ -202,10 +222,10 @@ function BillingPage() {
           </Empty>
         ) : (
           <div className="space-y-4">
-            {purchases.map((purchase) => (
+            {sortedPurchases.map((purchase) => (
               <PurchaseCard key={purchase.id} purchase={purchase} />
             ))}
-            {subscriptions.map((sub) => (
+            {sortedSubscriptions.map((sub) => (
               <SubscriptionCard
                 key={sub.id}
                 sub={sub}

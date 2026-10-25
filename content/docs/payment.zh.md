@@ -47,15 +47,21 @@ const PRODUCT_OPTIONS: Record<string, ProductOption[]> = {
   lifetime: [{ kind: 'one_time', interval: 'one_time', lookupKey: 'lifetime' }],
 }
 
-const PRODUCT_EXCLUSIVITY: Record<string, string[]> = {
-  lifetime: ['pro'],
+// 等级：权限高低，数字越大越高。lifetime > pro > free。
+const PRODUCT_TIERS: Record<string, number> = {
+  free: 0,
+  pro: 1,
+  lifetime: 2,
 }
+
+// 显式互斥：只留给**没有等级**的产品（实物商品之类）。
+const PRODUCT_EXCLUSIVITY: Record<string, string[]> = {}
 ```
 
 配置分两层：
 
-- **结构层**（`PRODUCT_OPTIONS` / `PRODUCT_EXCLUSIVITY`）不依赖语言，诊断脚本、服务端
-  任务与单测都能直接读；
+- **结构层**（`PRODUCT_OPTIONS` / `PRODUCT_TIERS` / `PRODUCT_EXCLUSIVITY`）不依赖语言，
+  诊断脚本、服务端任务与单测都能直接读；
 - **文案层**（`getProducts()`）在渲染时求值，随请求语言变化。写成模块级常量会把首次
   请求的语言固化给后续请求（SSR 下表现为整页语言不对 + hydration mismatch）。
 
@@ -137,39 +143,52 @@ Stripe**——Stripe 结账结束后就是把用户送到这个地址。不校�
 没有是一次性支付。配置只管「卖哪个周期」，管不了「Stripe 上那个 Price 到底是不是
 周期价」。
 
-## 互斥：买断与订阅
+## 等级：lifetime > pro > free
 
-「互斥」只在两种情况下成立：
-
-1. **同一个产品内**：一次性买断取代订阅——买断是那个东西的更高档位，留着订阅就是让
-   用户为同一份权益付两次钱。
-2. **跨产品**，且配置显式声明了 `exclusiveWith`。
-
-判据以**产品配置**为准，没声明时退回 **Stripe Product** 判定：同一个 Stripe Product
-下的价格是同一个东西的不同价位（月付 / 年付 / 终身）。
+**等级是权限高低**，不是付费方式。月付与年付都是 `pro`（同一档位、两种周期）；
+`lifetime` 是更高的一档。
 
 ```ts
-const PRODUCT_EXCLUSIVITY: Record<string, string[]> = {
-  lifetime: ['pro'], // 买了终身版就不要再订专业版
-  merch: [], // 实物商品：显式不与任何东西互斥，可与订阅并存，也可买多件
+const PRODUCT_TIERS: Record<string, number> = {
+  free: 0,
+  pro: 1,
+  lifetime: 2,
 }
 ```
 
-互斥关系写在这里，是因为 Stripe 的 Product 结构表达不了它：Stripe 只知道「哪些 Price
-挂在同一个 Product 下」，管不了「买断是否顶替订阅」。**不写就是并存**——跨产品的两个
-订阅同时存在是正常业务，不是 bug。
+等级一条规则解决三件事：
 
-互斥关系是**双向**的：A 声明与 B 互斥，等于 A 与 B 互斥。只写一边会让「谁取代谁」
-取决于判定方向，是最容易出错的地方。
+1. **当前方案唯一**——用户持有的东西里，等级最高的那个就是「当前生效的方案」。
+   买了终身版之后，专业版不再是当前；账单页只有**一个**「当前生效」标记。
+2. **高级别替换低级别**——买更高级的会让低级的失效：旧订阅被停掉并按比例退款，
+   用户不会为同一份东西付两次钱。
+3. **降级被挡**——已经持有更高等级时再买低级别的直接拒绝，并说清楚原因。
+
+判据以**产品配置**为准（等级），判不出来时退回 **Stripe Product** 判定：同一个
+Stripe Product 下的价格是同一个东西的不同价位（月付 / 年付 / 终身）。
+
+**等级不同 → 互斥；等级相同 → 并存。** 所以 `lifetime` 与 `pro` 自动互斥，不必显式
+声明——写两遍就是两处说法，加一个新产品时必然漏改一处。
+
+显式的 `PRODUCT_EXCLUSIVITY` 只留给**没有等级**的产品：实物商品这类「不参与等级
+比较」的东西，要表达「不能与某个订阅同时持有」只能靠声明。
+
+```ts
+const PRODUCT_EXCLUSIVITY: Record<string, string[]> = {
+  merch: ['pro'], // 实物商品：显式声明与订阅互斥（也可以写 []，即不与任何东西互斥）
+}
+```
 
 判定逻辑在 `src/payment/plan-state.ts`（纯函数，无副作用）：
 
 | 函数 | 作用 |
 |---|---|
-| `isSupersededByPurchase` | 买断是否取代某条订阅（互斥判定） |
-| `findSupersededSubscriptions` | 买断会接管哪些订阅（仍生效 + 互斥） |
+| `comparePlanTiers` | 比较两个持有物的等级；有一方没配等级时**不可比** |
+| `doesSupersede` | 新持有物是否取代旧持有物（同产品 / 等级更高） |
+| `purchaseBlockedBy` | 这次购买是否被已有持有物挡住，以及**为什么** |
+| `isSubscriptionSuperseded` | 某条订阅是否已被取代（取代 = 应当停掉并退款） |
 | `resolveProductHoldings` | 按产品归集持有物，算出每个产品「当前生效的那一份」 |
-| `resolveCurrentPlan` | 唯一当前方案；多个产品并存时返回 `null` |
+| `resolveCurrentPlan` | 全局当前方案：等级最高的那个；同级并列时返回 `null` |
 
 ### 一次性购买可以有多笔
 
@@ -177,40 +196,44 @@ const PRODUCT_EXCLUSIVITY: Record<string, string[]> = {
 生效，不能因为「已经买过」就拦下第二单。所以结账守卫只在 `mode: 'subscription'` 时
 生效；一次性支付完全不受「已有即重复」的限制。
 
-### 已有订阅不能再买
+### 已有订阅时的守卫
 
-本模板的定价模型是「一个用户一份订阅」：重复购买会得到两条并存的订阅、两边同时
-扣款，而账单页只能显示一份。这条约束由**两层**共同保证：
+`mode: 'subscription'` 的结账在创建 session 之前按**当前登录用户**查一次库，看他
+已经持有什么，再决定放不放行。查的是两样：
 
-**第一层：Stripe 后台**（推荐开启）。在 Stripe 控制台的 `Settings` →
-`Checkout and Payment Links` → `Subscriptions` 打开
-`Limit customers to 1 subscription`，并把 `Direct customers to manage their
-subscription on` 设为 `Your website`、地址填站点的账单页（如
-`https://YOUR-DOMAIN.com/dashboard/billing`）。
+- **仍在生效的订阅**：状态命中 `active` / `trialing` / `past_due` / `unpaid` /
+  `paused` 才算占用名额（`canceled` 与 `incomplete_expired` 不算，用户可以重新订）；
+- **已支付的买断订单**。
 
-Stripe 按 **Customer 对象（Session 里带了的那个）或邮箱**匹配已有订阅，因此它挡得住
-绕过本站、直接用 Checkout 链接的情况。它判定为「已有订阅」的状态是 `active` /
-`past_due` / `unpaid` / `paused`。注意这条设置依赖客户门户的登录链接处于启用状态
-（`Billing` → `Customer portal`）：关掉登录链接，限制也会一起失效。
+挡住时给出**具体原因**，页面才能说清该干什么：
 
-**第二层：应用侧守卫**（本仓实现）。`mode: 'subscription'` 的结账在创建 session
-之前按**当前登录用户**查一次库，命中下列任一状态即返回 `409 ALREADY_SUBSCRIBED`：
+| 情况 | 错误码 | 页面提示 |
+|---|---|---|
+| 同一个产品已有方案 | `ALREADY_SUBSCRIBED` | 去「管理订阅」换周期或取消续费 |
+| 已有更高等级的方案 | `ALREADY_OWNED_HIGHER_TIER` | 不必再买低等级的 |
+| 显式声明与已有方案互斥 | `ALREADY_OWNED_EXCLUSIVE_PRODUCT` | 两者不能同时持有 |
+| 已有方案**查不出属于哪个产品** | `ALREADY_OWNED_UNKNOWN_PRODUCT` | 保守挡住，去「管理订阅」处理 |
 
-| 状态 | 为什么挡住 |
-|---|---|
-| `active` | 正常生效中 |
-| `trialing` | 试用期也在占用名额 |
-| `past_due` | 扣款失败但订阅仍在——最不该再买一份的时刻 |
-| `unpaid` | 重试耗尽仍未付款，订阅未结束 |
-| `paused` | 暂停中，恢复后继续扣款 |
+最后一条是给老数据兜底的：判不出是否重复时，宁可挡住，也不要让用户开出第二份
+订阅。应用侧会按 Price id 反查一次产品归属，反查不出才落到这条。
 
-`canceled` 与 `incomplete_expired` **不**挡：它们已经结束，用户可以正常重新订阅。
+**允许**的情况：
 
-同一层守卫还挡**互斥买断**：已经买断与它互斥的产品，就不能再订它，返回
-`409 ALREADY_OWNED_EXCLUSIVE_PRODUCT`。
+- 目标等级**更高**——这是升级。旧订阅由 webhook 接管（取消 + 按比例退款），用户
+  不会同时被扣两份钱；
+- 同等级但**不同产品**——两个不同的东西，各自计费、各自生效；
+- 一次性支付——不受上述限制。
 
-两层都要：Stripe 那层按邮箱 / Customer 匹配，改邮箱就绕过了；应用这层按本站
-`userId` 判定，且能给出明确的 409 文案让页面停在定价页解释原因。
+同一层守卫的另一个作用是**挡住降级**：已经持有终身版（等级 2）再订专业版月付
+（等级 1）没有意义，直接拒绝。
+
+Stripe 后台的 `Limit customers to 1 subscription`（`Settings` → `Checkout and
+Payment Links` → `Subscriptions`）能挡住绕过本站、直接用 Checkout 链接的情况，但它
+是**全局**限制：一个客户只能有一份订阅，连「升级到更高等级」也会一起挡掉。本模板
+的应用侧守卫按产品 + 等级判定，所以**开启它之前先想清楚**：要支持跨产品升级就别
+开；只想防重复扣款、且不需要升级路径，那它是一道不错的额外防线。注意这条设置依赖
+客户门户的登录链接处于启用状态（`Billing` → `Customer portal`）：关掉登录链接，
+限制也会一起失效。
 
 换方案走 Stripe Billing Portal（账户页的「管理订阅」），它会把旧订阅折算迁移，不会
 多出一份。
@@ -225,10 +248,10 @@ Stripe 按 **Customer 对象（Session 里带了的那个）或邮箱**匹配已
 
 ## 买断接管旧订阅
 
-买了互斥产品的买断后，原订阅**立即取消并按比例退款**：
+买了更高等级产品的买断后，原订阅**立即取消并按比例退款**：
 
 1. `checkout.session.completed` 写入买断行（`payments.type = 'one_time'`）
-2. 查出与它互斥、且仍在生效的订阅
+2. 查出被它取代的、且仍在生效的订阅（同产品，或等级低于它的）
 3. 在 Stripe 上取消该订阅（`prorate: true, invoice_now: true`）——折算额进入客户
    余额，即「没用掉的时间退给客户」
 4. 改本地状态为 `canceled`
@@ -238,18 +261,25 @@ Stripe 按 **Customer 对象（Session 里带了的那个）或邮箱**匹配已
 不会重复记账。
 
 **两个方向都判**：`checkout.session.completed` 先到时由它取消旧订阅；
-`customer.subscription.created` 后到时（Stripe 不保证事件顺序）由它发现「已有互斥
-买断」并立刻停掉新订阅。否则会出现「买断在先、订阅后到、两边都留着」的漏网情况——
-用户同时付着两份钱。
+`customer.subscription.created` 后到时（Stripe 不保证事件顺序）由它发现「已有更高
+等级的买断」并立刻停掉新订阅。否则会出现「买断在先、订阅后到、两边都留着」的漏网
+情况——用户同时付着两份钱。
+
+订阅之间同理：新订阅落地时会接管同产品的旧订阅与低等级的旧订阅，判定规则与账单页
+显示的「已被取代」完全一致（`isSubscriptionSuperseded`），不会出现「页面说已取代、
+Stripe 上还在扣款」。
 
 ## 账单页
 
-`/dashboard/billing` 分三个区块：
+`/dashboard/billing` 分两个区块：
 
-- **我的方案**——买断卡与订阅卡各自成卡。真正生效的那一份带「当前生效」徽章；被
-  买断接管的订阅仍会列出，但标出「已被买断接管」，用户不会以为自己还被扣着钱。
+- **我的方案**——买断卡与订阅卡各自成卡，按等级从高到低排。**只有一份**带「当前
+  生效」徽章——那就是等级最高的那个（`lifetime > pro > free`）；被取代的订阅仍会
+  列出，但标出「已被更高等级的方案取代」，用户不会以为自己还被扣着钱。区块标题下
+  有一行「当前等级：<产品名>」，直接回答「我现在是什么档位」。
 - **交易记录**——表格（保留表头）。第一列标示这笔钱的性质（订阅扣款 / 一次性
-  购买），第二列日期，第三列状态徽章加金额。
+  购买），第二列日期，第三列状态徽章加金额。交易记录**不限量**：买过几次就是几行，
+  它是流水，不是状态。
 
 状态词表两套，不能互用：「我的方案」走订阅状态（生效中 / 逾期 / 试用中 / 已取消），
 「交易记录」走付款状态（已支付 / 已退款）。两者的取值域不同——`payments.status` 只有
@@ -273,7 +303,7 @@ Stripe 有官方的 Entitlements 模型：产品挂上 feature，客户购买或
 本仓**不接**它。原因是本仓要回答的问题不是权限，而是**归属**：
 
 - 「用户买的是什么」——产品配置 + `plan-state` 负责；
-- 「买的东西之间谁接管谁」——互斥判定负责；
+- 「买的东西之间谁接管谁」——等级判定负责；
 - 「用户有没有某个功能」——**自己写**门禁逻辑即可。
 
 Entitlements 解决的是第三件事，而第三件事在模板里恰恰是最不该预设的：功能门禁是每个
@@ -292,9 +322,10 @@ Entitlements 解决的是第三件事，而第三件事在模板里恰恰是最�
 | 问题 | 后果 |
 |---|---|
 | 同一个 `lookup_key` 挂到多个产品上 | Price → 产品的反查有歧义，归属会漂 |
-| `exclusiveWith` 指向不存在的产品 | 互斥**静默失效**——用户同时付两份钱却看不到提示 |
+| 互斥声明指向不存在的产品 | 互斥**静默失效**——用户同时付两份钱却看不到提示 |
+| 等级指向不存在的产品 | 该产品永远不参与等级比较，「高级别替换低级别」静默失效 |
 
-两种错配类型系统都守不住，必须在自检里挑出来。
+三种错配类型系统都守不住，必须在自检里挑出来。
 
 ## 免费档按钮的去向
 
@@ -325,7 +356,7 @@ Entitlements 解决的是第三件事，而第三件事在模板里恰恰是最�
 |---|---|
 | `checkout.session.completed` | 订阅写 `subscriptions`；一次性支付写 `payments` |
 | `invoice.paid` | 写 `payments`（含 `invoiceId` / `chargeId`） |
-| `customer.subscription.created` / `updated` | 更新状态、价格与周期；发现互斥买断则停掉订阅 |
+| `customer.subscription.created` / `updated` | 更新状态、价格与周期；发现被更高等级的方案取代则停掉订阅 |
 | `customer.subscription.deleted` | 标记 `canceled` |
 | `charge.refunded` | 按 `chargeId` 标记退款 |
 
@@ -423,8 +454,8 @@ delivery of events in the order that they're generated"）。`customer.subscript
 
 | 列 | 含义 |
 |---|---|
-| `product_id` | 本站产品 id（`pro` / `lifetime`）。互斥判定的权威依据 |
-| `stripe_product_id` | Stripe Product id。配置没声明互斥关系时的兜底判据 |
+| `product_id` | 本站产品 id（`pro` / `lifetime`）。等级与互斥判定的权威依据 |
+| `stripe_product_id` | Stripe Product id。配置判不出来时的兜底判据 |
 
 `subscriptions` 与 `payments` 都有这两列；功能门禁直接按 `product_id` 判定，不需要
 额外的权益表。

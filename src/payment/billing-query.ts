@@ -63,9 +63,11 @@ export interface PaymentRecord {
 /**
  * 当前生效的方案。
  *
- * 买断与订阅**同一个 Stripe Product** 时，买断接管订阅，买断是当前生效方案；
- * 不同 Product 并存时没有唯一当前方案（`currentPlan` 为 `null`），页面把每个
- * 方案都列出来，而不是硬挑一个。
+ * 按**等级**判定：用户持有的东西里等级最高的那个（`lifetime > pro > free`）。
+ * 买断与订阅属于同一产品时买断接管订阅；跨产品时高级别顶替低级别。
+ *
+ * 同级并列（两个不同产品等级相同）时为 `null`：没有唯一的当前方案，页面把每个
+ * 产品各自的当前项都列出来，而不是硬挑一个。
  */
 export interface CurrentPlan {
   kind: 'subscription' | 'one_time'
@@ -73,6 +75,8 @@ export interface CurrentPlan {
   id: string
   productId?: string | null
   stripeProductId?: string | null
+  /** 等级（数字越大越高）；产品没配等级时为 `null`。 */
+  tier?: number | null
 }
 
 /**

@@ -8,8 +8,8 @@ import { notify } from '@/notification'
 import { getPaymentProvider } from '@/payment'
 import {
   ACTIVE_SUBSCRIPTION_STATUSES,
-  findSupersededSubscriptions,
-  isSupersededByPurchase,
+  isSubscriptionSuperseded,
+  type OwnershipContext,
 } from '@/payment/plan-state'
 import type { SubscriptionStatus } from '@/payment/types'
 
@@ -160,18 +160,21 @@ async function productNameForPrice(priceId: string | undefined): Promise<string 
 }
 
 /**
- * 配置里的互斥关系（产品 id → 与它互斥的产品 id 列表）。
+ * 配置里的等级与互斥关系。
  *
- * 取不到配置时返回空表：运行时退回「按 Stripe Product 判定」，不会因为一次配置
- * 读取失败就让用户同时付终身费和月付。
+ * 取不到配置时返回空上下文：运行时退回「按 Stripe Product 判定」，不会因为一次
+ * 配置读取失败就让用户同时付终身费和月付。
  */
-async function loadExclusivityMap(): Promise<Record<string, string[]>> {
+async function loadOwnershipContext(): Promise<OwnershipContext> {
   try {
-    const { productExclusivityMap } = await import('@/config/products')
-    return productExclusivityMap()
+    const { productExclusivityMap, productTierMap } = await import('@/config/products')
+    return {
+      tiersByProductId: productTierMap(),
+      exclusivityByProductId: productExclusivityMap(),
+    }
   } catch (err) {
     console.warn(
-      '[stripe-webhook] 读取互斥关系失败，退回按 Stripe Product 判定：',
+      '[stripe-webhook] 读取产品配置失败，退回按 Stripe Product 判定：',
       err instanceof Error ? err.message.split('\n')[0] : 'unknown',
     )
     return {}
@@ -218,43 +221,74 @@ async function cancelSubscription(
 }
 
 /**
- * 买断成交后，接管与它**互斥**的、仍在生效的订阅。
+ * 新持有物落地后，接管**被它取代**的、仍在生效的订阅。
  *
- * 互斥关系以产品配置为准（`exclusiveWith`，同产品内的买断 ↔ 订阅天然成立），
- * 没声明时按 Stripe Product 兜底：同一个 Product 下的月付与终身是同一个东西的
- * 不同价位，用户买了终身，旧订阅就必须停掉，否则他既拿到终身权益、又被继续月付。
+ * 「取代」由**等级**决定（`lifetime > pro > free`），判定规则与账单页显示的
+ * 「已被取代」完全一致（`isSubscriptionSuperseded`）：
+ * - 买断（一次性）取代订阅：买断是终态权益，与时间无关；
+ * - 更高等级的订阅取代低等级的：等级说了算；
+ * - 同产品或同级的订阅之间：只有**更新**的那条取代旧的。
  *
  * 一次性购买本身不受唯一性限制：实物商品可以买多件（多笔订单各自独立），它们
  * 之间不互斥。
+ *
+ * 顺序不能反：先在 Stripe 上取消（带按比例退款），成功后再改本地状态。本地先标
+ * 「已取消」而 Stripe 上还在扣款，页面就会骗用户。
  */
 async function takeOverSupersededSubscriptions(
   db: ReturnType<typeof createDb>,
   params: {
     userId: string
-    productId: string | null
-    stripeProductId: string | null
+    /** 新持有物：订阅或买断。 */
+    holding: {
+      kind: 'subscription' | 'one_time'
+      id: string
+      productId: string | null
+      stripeProductId: string | null
+      createdAt?: Date | string | null
+    }
   },
 ): Promise<void> {
-  if (!params.productId && !params.stripeProductId) return
-  const rows = await db
-    .select({
-      id: schema.subscriptions.id,
-      subscriptionId: schema.subscriptions.subscriptionId,
-      status: schema.subscriptions.status,
-      productId: schema.subscriptions.productId,
-      stripeProductId: schema.subscriptions.stripeProductId,
-      priceId: schema.subscriptions.priceId,
-    })
-    .from(schema.subscriptions)
-    .where(
-      and(
-        eq(schema.subscriptions.userId, params.userId),
-        inArray(schema.subscriptions.status, [...ACTIVE_SUBSCRIPTION_STATUSES]),
-      ),
-    )
-  if (rows.length === 0) return
+  const { holding } = params
+  if (!holding.productId && !holding.stripeProductId) return
 
-  const exclusivityByProductId = await loadExclusivityMap()
+  const [rows, purchases] = await Promise.all([
+    db
+      .select({
+        id: schema.subscriptions.id,
+        subscriptionId: schema.subscriptions.subscriptionId,
+        status: schema.subscriptions.status,
+        productId: schema.subscriptions.productId,
+        stripeProductId: schema.subscriptions.stripeProductId,
+        priceId: schema.subscriptions.priceId,
+        createdAt: schema.subscriptions.createdAt,
+      })
+      .from(schema.subscriptions)
+      .where(
+        and(
+          eq(schema.subscriptions.userId, params.userId),
+          inArray(schema.subscriptions.status, [...ACTIVE_SUBSCRIPTION_STATUSES]),
+        ),
+      ),
+    db
+      .select({
+        id: schema.payments.id,
+        productId: schema.payments.productId,
+        stripeProductId: schema.payments.stripeProductId,
+        createdAt: schema.payments.createdAt,
+      })
+      .from(schema.payments)
+      .where(
+        and(
+          eq(schema.payments.userId, params.userId),
+          eq(schema.payments.type, 'one_time'),
+          eq(schema.payments.status, 'paid'),
+        ),
+      ),
+  ])
+
+  const context = await loadOwnershipContext()
+
   // 老数据没有产品 id：按 Price id 反查一次，避免判定退回「不同产品」而漏掉接管。
   const subscriptions = await Promise.all(
     rows.map(async (row) => ({
@@ -264,71 +298,34 @@ async function takeOverSupersededSubscriptions(
       status: row.status,
       productId: row.productId ?? (await productIdForPriceId(row.priceId)) ?? null,
       stripeProductId: row.stripeProductId,
+      createdAt: row.createdAt,
     })),
   )
 
-  const superseded = findSupersededSubscriptions(
+  const holdings = [
     {
-      productId: params.productId,
-      stripeProductId: params.stripeProductId,
+      kind: holding.kind,
+      id: holding.id,
+      status: 'active',
+      productId: holding.productId,
+      stripeProductId: holding.stripeProductId,
+      createdAt: holding.createdAt ?? null,
     },
-    subscriptions,
-    exclusivityByProductId,
-  )
+    ...purchases.map((purchase) => ({
+      kind: 'one_time' as const,
+      id: purchase.id,
+      status: 'paid',
+      productId: purchase.productId,
+      stripeProductId: purchase.stripeProductId,
+      createdAt: purchase.createdAt,
+    })),
+    ...subscriptions,
+  ]
 
-  for (const sub of superseded) {
+  for (const sub of subscriptions) {
+    if (!isSubscriptionSuperseded(sub, holdings, context)) continue
     await cancelSubscription(db, { id: sub.id, subscriptionId: sub.subscriptionId ?? null })
   }
-}
-
-/**
- * 订阅事件到达时，反查用户是否已买断**与它互斥**的产品；有就立刻停掉这条订阅。
- *
- * 这是买断接管的另一半：webhook 不保证顺序，`customer.subscription.created` 完全
- * 可能晚于 `checkout.session.completed` 到达。两个方向都判一次，才不会出现
- * 「买断在先、订阅后到、两边都留着」的漏网情况。
- */
-async function cancelSubscriptionSupersededByPurchase(
-  db: ReturnType<typeof createDb>,
-  params: {
-    userId: string
-    productId: string | null
-    stripeProductId: string | null
-    subscriptionId: string
-    rowId: string
-  },
-): Promise<void> {
-  const purchases = await db
-    .select({
-      productId: schema.payments.productId,
-      stripeProductId: schema.payments.stripeProductId,
-    })
-    .from(schema.payments)
-    .where(
-      and(
-        eq(schema.payments.userId, params.userId),
-        eq(schema.payments.type, 'one_time'),
-        eq(schema.payments.status, 'paid'),
-      ),
-    )
-  if (purchases.length === 0) return
-
-  const exclusivityByProductId = await loadExclusivityMap()
-  const superseded = purchases.some((purchase) =>
-    isSupersededByPurchase({
-      purchase: {
-        productId: purchase.productId,
-        stripeProductId: purchase.stripeProductId,
-      },
-      subscription: {
-        productId: params.productId,
-        stripeProductId: params.stripeProductId,
-      },
-      exclusivityByProductId,
-    }),
-  )
-  if (!superseded) return
-  await cancelSubscription(db, { id: params.rowId, subscriptionId: params.subscriptionId })
 }
 
 /**
@@ -367,22 +364,38 @@ export async function handleCheckoutCompleted(
   }
 
   if (s.subscription) {
+    const subscriptionId = String(s.subscription)
+    const productId = s.metadata?.productId ?? null
+    const stripeProductId = s.metadata?.stripeProductId ?? null
     await db
       .insert(schema.subscriptions)
       .values({
-        id: String(s.subscription),
+        id: subscriptionId,
         userId: rawUserId,
         customerId: s.customer ?? '',
-        subscriptionId: String(s.subscription),
+        subscriptionId,
         status: 'active',
         // 价格与周期由 subscription.created 补齐；这里留空而不是猜一个。
         priceId: '',
         // 产品归属现在就写：session 的 metadata 里已经有，等到 subscription.created
-        // 才补会让「买断接管订阅」的判定晚一步。
-        productId: s.metadata?.productId ?? null,
-        stripeProductId: s.metadata?.stripeProductId ?? null,
+        // 才补会让「高级别顶替低级别」的判定晚一步。
+        productId,
+        stripeProductId,
       })
       .onConflictDoNothing({ target: schema.subscriptions.id })
+
+    // 新订阅落地 → 接管被它取代的旧订阅（同一个产品的旧周期、低等级的旧方案）。
+    // 买断在先、订阅后到的情形也在这里兜住：买断是持有物之一，判定时一并参与。
+    await takeOverSupersededSubscriptions(db, {
+      userId: rawUserId,
+      holding: {
+        kind: 'subscription',
+        id: subscriptionId,
+        productId,
+        stripeProductId,
+        createdAt: new Date(),
+      },
+    })
     return
   }
 
@@ -407,11 +420,16 @@ export async function handleCheckoutCompleted(
     })
     .onConflictDoNothing({ target: schema.payments.id })
 
-  // 买断成交 → 接管与它互斥的旧订阅，避免既买断又被月付扣款。
+  // 买断成交 → 接管被它取代的旧订阅，避免既买断又被月付扣款。
   await takeOverSupersededSubscriptions(db, {
     userId: rawUserId,
-    productId: s.metadata?.productId ?? null,
-    stripeProductId: s.metadata?.stripeProductId ?? null,
+    holding: {
+      kind: 'one_time',
+      id: `checkout_${s.id}`,
+      productId: s.metadata?.productId ?? null,
+      stripeProductId: s.metadata?.stripeProductId ?? null,
+      createdAt: new Date(),
+    },
   })
 }
 
@@ -553,17 +571,26 @@ export async function handleSubscriptionUpsert(
     .update(schema.subscriptions)
     .set(values)
     .where(eq(schema.subscriptions.subscriptionId, sub.id))
-    .returning({ id: schema.subscriptions.id, userId: schema.subscriptions.userId })
+    .returning({
+      id: schema.subscriptions.id,
+      userId: schema.subscriptions.userId,
+      createdAt: schema.subscriptions.createdAt,
+    })
 
   if (updated.length > 0) {
     const row = updated[0]
     if (row) {
-      await cancelSubscriptionSupersededByPurchase(db, {
+      // 订阅事件到达 → 接管被它取代的旧订阅：买断在先、订阅后到的情形也在这里
+      // 兜住（买断是持有物之一，判定时一并参与）。
+      await takeOverSupersededSubscriptions(db, {
         userId: row.userId,
-        productId,
-        stripeProductId,
-        subscriptionId: sub.id,
-        rowId: row.id,
+        holding: {
+          kind: 'subscription',
+          id: row.id,
+          productId,
+          stripeProductId,
+          createdAt: row.createdAt,
+        },
       })
     }
     return
@@ -592,13 +619,16 @@ export async function handleSubscriptionUpsert(
     })
     .onConflictDoNothing({ target: schema.subscriptions.id })
 
-  // 买断在先、订阅后到的情形：订阅建好即发现已有互斥买断，立刻停掉。
-  await cancelSubscriptionSupersededByPurchase(db, {
+  // 买断在先、订阅后到的情形：订阅建好即发现已有更高等级的买断，立刻停掉。
+  await takeOverSupersededSubscriptions(db, {
     userId,
-    productId,
-    stripeProductId,
-    subscriptionId: sub.id,
-    rowId: sub.id,
+    holding: {
+      kind: 'subscription',
+      id: sub.id,
+      productId,
+      stripeProductId,
+      createdAt: new Date(),
+    },
   })
 }
 

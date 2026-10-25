@@ -46,10 +46,19 @@ export interface ProductDefinition {
   cta: { label: string; href: string }
   highlighted?: boolean
   badge?: string
+  /**
+   * 等级：权限高低，数字越大越高（`lifetime > pro > free`）。
+   *
+   * 等级决定「当前方案是哪一个」「高级别是否顶替低级别」「降级是否被挡」。没配等级
+   * 的产品（实物商品）不参与等级比较。
+   */
+  tier?: number
   /** 可购买方式。同一产品内：一次性买断与订阅互斥（买断替代订阅）。 */
   options: ProductOption[]
   /**
    * 与这些产品**互斥**（跨产品默认并存）。
+   *
+   * 由**等级**推导（等级不同的两个可购买产品）+ 配置里的显式声明合并而成。
    *
    * 例：买了「终身会员」就不要再买「专业版月付」——两者给的是同一份权益，付两次
    * 就是重复收费。互斥关系写在这里，是因为 Stripe 的 Product 结构表达不了它：

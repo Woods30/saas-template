@@ -16,7 +16,7 @@ export type { CurrentPlan, PaymentRecord, SubscriptionRecord } from './billing-q
 export interface BillingOverview {
   subscriptions: SubscriptionRecord[]
   payments: PaymentRecord[]
-  /** 当前生效的方案；多个产品并存时为 `null`（没有唯一当前方案）。 */
+  /** 当前生效的方案（等级最高的那个持有物）；同级并列时为 `null`。 */
   currentPlan: CurrentPlan | null
 }
 
@@ -108,11 +108,16 @@ export const fetchBillingOverview = createServerFn({ method: 'GET' })
       productId: sub.productId ?? (sub.priceId ? (productIdByPriceId[sub.priceId] ?? null) : null),
     }))
 
-    // 当前生效方案按**产品**判定：买断与订阅属于同一产品时买断接管；不同产品并存
-    // 则各自生效，没有唯一当前方案。
-    const [{ resolveCurrentPlan, resolveProductHoldings }, { productExclusivityMap }] =
-      await Promise.all([import('./plan-state'), import('@/config/products')])
-    const exclusivityByProductId = productExclusivityMap()
+    // 当前生效方案按**等级**判定：持有物里等级最高的那个（`lifetime > pro > free`）。
+    // 同一产品内买断接管订阅、跨产品高级别顶替低级别，都落在这条规则上。
+    const [
+      { resolveCurrentPlan, resolveProductHoldings },
+      { productExclusivityMap, productTierMap },
+    ] = await Promise.all([import('./plan-state'), import('@/config/products')])
+    const context = {
+      tiersByProductId: productTierMap(),
+      exclusivityByProductId: productExclusivityMap(),
+    }
 
     const ownedSubscriptions = subscriptionRecords.map((sub) => ({
       kind: 'subscription' as const,
@@ -121,6 +126,7 @@ export const fetchBillingOverview = createServerFn({ method: 'GET' })
       status: sub.status,
       productId: sub.productId ?? null,
       stripeProductId: sub.stripeProductId ?? null,
+      createdAt: sub.createdAt,
     }))
     const ownedPurchases = payments
       .filter((payment) => payment.type === 'one_time')
@@ -130,24 +136,23 @@ export const fetchBillingOverview = createServerFn({ method: 'GET' })
         status: payment.status,
         productId: payment.productId ?? null,
         stripeProductId: payment.stripeProductId ?? null,
+        createdAt: payment.createdAt,
       }))
 
     const current = resolveCurrentPlan({
       subscriptions: ownedSubscriptions,
       purchases: ownedPurchases,
-      exclusivityByProductId,
+      context,
     })
     const holdings = resolveProductHoldings({
       subscriptions: ownedSubscriptions,
       purchases: ownedPurchases,
-      exclusivityByProductId,
+      context,
     })
 
-    // 每条记录标注「是否当前生效」，页面据此打「当前生效」标记：
-    // 一个产品内买断接管订阅后，订阅还在列表里，但已经不再生效。
-    const currentIds = new Set(
-      holdings.flatMap((group) => (group.current ? [group.current.id] : [])),
-    )
+    // 「当前生效」只有一个：等级最高的那个持有物。别的都标成已被取代——
+    // 订阅还在列表里（历史），但不再生效，也不再扣费。
+    const currentIds = new Set(current ? [current.id] : [])
     const supersededIds = new Set(holdings.flatMap((group) => group.supersededSubscriptionIds))
 
     return {
@@ -166,6 +171,7 @@ export const fetchBillingOverview = createServerFn({ method: 'GET' })
             id: current.id,
             productId: current.productId ?? null,
             stripeProductId: current.stripeProductId ?? null,
+            tier: context.tiersByProductId?.[current.productId ?? ''] ?? null,
           }
         : null,
     }

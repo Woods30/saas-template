@@ -3,7 +3,12 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { getAuth } from '@/auth/auth'
 import { type Locale, localeSchema } from '@/config/locale'
-import { productExclusivityMap, productIntervals, resolveLookupKey } from '@/config/products'
+import {
+  productExclusivityMap,
+  productIntervals,
+  productTierMap,
+  resolveLookupKey,
+} from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import { createDb, schema } from '@/db'
 import { getModuleUnavailableResponse } from '@/lib/module-access.server'
@@ -11,7 +16,12 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import { getServerContext } from '@/lib/server-context'
 import { safeSameOriginUrl } from '@/lib/urls'
 import { getPaymentProvider } from '@/payment'
-import { ACTIVE_SUBSCRIPTION_STATUSES, isSupersededByPurchase } from '@/payment/plan-state'
+import {
+  ACTIVE_SUBSCRIPTION_STATUSES,
+  type PurchaseBlockReason,
+  purchaseBlockedBy,
+} from '@/payment/plan-state'
+import { buildProductIdByPriceId } from '@/payment/price-catalog'
 import { getPriceCatalog } from '@/payment/price-catalog.server'
 
 const checkoutBodySchema = z.object({
@@ -39,6 +49,33 @@ const portalBodySchema = z.object({
  * 不止 `active`：`past_due` / `unpaid` 是扣款失败但订阅仍在，此时再买一份会叠加账单。
  */
 const BLOCKING_SUBSCRIPTION_STATUSES = [...ACTIVE_SUBSCRIPTION_STATUSES]
+
+/**
+ * 归属判定上下文：产品等级 + 互斥关系。
+ *
+ * 等级决定「买这个会不会和已有的重复」「高等级是否顶替低等级」，互斥关系兜住等级
+ * 表达不了的情形（实物商品之类没有等级的东西）。
+ */
+const ownershipContext = {
+  tiersByProductId: productTierMap(),
+  exclusivityByProductId: productExclusivityMap(),
+}
+
+/**
+ * 阻止购买的原因 → API 错误码。
+ *
+ * 错误码是稳定的对外契约，页面据此给不同提示；判定原因在内部，换实现不影响前端。
+ */
+const BLOCK_ERROR_CODES: Record<PurchaseBlockReason, string> = {
+  // 同一个产品已经有方案了：换周期走 Stripe 的订阅更新，不该再开一份。
+  same_product: 'ALREADY_SUBSCRIBED',
+  // 已有方案查不出属于哪个产品：判不出是否重复，先挡住。
+  unknown_product: 'ALREADY_OWNED_UNKNOWN_PRODUCT',
+  // 已经有更高等级的方案了：买低级别的没有意义。
+  higher_tier: 'ALREADY_OWNED_HIGHER_TIER',
+  // 配置显式声明与已有方案互斥。
+  exclusive_product: 'ALREADY_OWNED_EXCLUSIVE_PRODUCT',
+}
 
 function getClientIp(request: Request): string {
   return request.headers.get('cf-connecting-ip') ?? 'unknown'
@@ -115,6 +152,9 @@ export const Route = createFileRoute('/api/payment/$')({
         // 计费模式以 **Stripe 上的 Price** 为准，而不是配置里的猜测：
         // 一次性 Price 没有 `recurring`，订阅 Price 有。
         let price: { priceId: string; recurring: boolean; stripeProductId: string | null }
+        // Price id → 产品 id。老数据没有 product_id 时靠它反查，否则归属判定会退回
+        // 「查不出产品」，守卫只能保守地一律挡住。
+        let productIdByPriceId: Record<string, string> = {}
         try {
           const catalog = await getPriceCatalog()
           const found = catalog[lookupKey]
@@ -126,6 +166,7 @@ export const Route = createFileRoute('/api/payment/$')({
             recurring: found.recurring,
             stripeProductId: found.stripeProductId,
           }
+          productIdByPriceId = buildProductIdByPriceId(catalog)
         } catch (err) {
           console.error(
             '[payment-checkout] 取价失败：',
@@ -135,62 +176,62 @@ export const Route = createFileRoute('/api/payment/$')({
         }
         const mode = price.recurring ? 'subscription' : 'payment'
 
-        // 拒绝重复订阅：一个用户只能有一份订阅，换方案走 Billing Portal 折算迁移。
+        // 拒绝重复订阅与降级：一个用户**同一个产品**只能有一份订阅，换周期走
+        // Billing Portal 折算迁移；已经持有更高等级时也不能再买低级别的。
         // 一次性支付不在此列。这是应用侧守卫，与 Stripe 后台的「限一个客户一个订阅」
         // 互为两层——后者挡得住绕过本站的 Checkout 链接。
         if (mode === 'subscription') {
           const db = createDb(env.DB)
-          const existing = await db
-            .select({ id: schema.subscriptions.id })
-            .from(schema.subscriptions)
-            .where(
-              and(
-                eq(schema.subscriptions.userId, userId),
-                inArray(schema.subscriptions.status, BLOCKING_SUBSCRIPTION_STATUSES),
+          const [existingSubscriptions, purchases] = await Promise.all([
+            db
+              .select({
+                id: schema.subscriptions.id,
+                priceId: schema.subscriptions.priceId,
+                productId: schema.subscriptions.productId,
+                stripeProductId: schema.subscriptions.stripeProductId,
+              })
+              .from(schema.subscriptions)
+              .where(
+                and(
+                  eq(schema.subscriptions.userId, userId),
+                  inArray(schema.subscriptions.status, BLOCKING_SUBSCRIPTION_STATUSES),
+                ),
               ),
-            )
-            .limit(1)
-          if (existing.length > 0) {
-            return Response.json({ error: 'ALREADY_SUBSCRIBED' }, { status: 409 })
+            db
+              .select({
+                productId: schema.payments.productId,
+                stripeProductId: schema.payments.stripeProductId,
+              })
+              .from(schema.payments)
+              .where(
+                and(
+                  eq(schema.payments.userId, userId),
+                  eq(schema.payments.type, 'one_time'),
+                  eq(schema.payments.status, 'paid'),
+                ),
+              ),
+          ])
+
+          const target = {
+            productId: body.productId,
+            stripeProductId: price.stripeProductId,
           }
 
-          // 已经买断**与它互斥**的产品就不能再订它：买断是那个东西的更高档位，
-          // 再订一份等于让用户为同一份权益付两次钱。
-          //
-          // 互斥关系按产品配置声明（`exclusiveWith`，同一产品内天然互斥），没声明时
-          // 按 Stripe Product 兜底。这条守卫只管订阅——一次性购买不受唯一性限制：
-          // 实物商品可以买多件，多笔订单各自独立。
-          const purchases = await db
-            .select({
-              productId: schema.payments.productId,
-              stripeProductId: schema.payments.stripeProductId,
-            })
-            .from(schema.payments)
-            .where(
-              and(
-                eq(schema.payments.userId, userId),
-                eq(schema.payments.type, 'one_time'),
-                eq(schema.payments.status, 'paid'),
-              ),
-            )
-          if (purchases.length > 0) {
-            const exclusivityByProductId = productExclusivityMap()
-            const exclusive = purchases.some((purchase) =>
-              isSupersededByPurchase({
-                purchase: {
-                  productId: purchase.productId,
-                  stripeProductId: purchase.stripeProductId,
-                },
-                subscription: {
-                  productId: body.productId,
-                  stripeProductId: price.stripeProductId,
-                },
-                exclusivityByProductId,
-              }),
-            )
-            if (exclusive) {
-              return Response.json({ error: 'ALREADY_OWNED_EXCLUSIVE_PRODUCT' }, { status: 409 })
-            }
+          // 已有持有物挡住这次购买时给出**具体原因**，页面才能说清该干什么：
+          // 同产品 → 去「管理订阅」换周期；更高等级 → 不用再买；显式互斥 → 不能并存。
+          const held = [
+            ...existingSubscriptions.map((row) => ({
+              // 老数据没有 product_id：按 Price id 反查一次，避免判不出归属就乱挡。
+              productId:
+                row.productId ?? (row.priceId ? productIdByPriceId[row.priceId] : null) ?? null,
+              stripeProductId: row.stripeProductId,
+            })),
+            ...purchases,
+          ]
+          for (const existing of held) {
+            const reason = purchaseBlockedBy(existing, target, ownershipContext)
+            if (!reason) continue
+            return Response.json({ error: BLOCK_ERROR_CODES[reason] }, { status: 409 })
           }
         }
 

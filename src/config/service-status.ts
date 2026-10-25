@@ -1,7 +1,12 @@
 import { z } from 'zod'
 import type { PublicEnv } from '@/env/public'
 import type { ServerEnv } from '@/env/server'
-import { collectLookupKeys, findDuplicateLookupKeys, findUnknownExclusiveRefs } from './products'
+import {
+  collectLookupKeys,
+  findDuplicateLookupKeys,
+  findUnknownExclusiveRefs,
+  findUnknownTierRefs,
+} from './products'
 import type { ServiceModule, WebsiteConfig } from './website'
 
 /**
@@ -265,6 +270,15 @@ export function validateProductConfig(): ConfigIssue[] {
       key: `payment.products.exclusiveWith.${ref}`,
       location,
       reason: '互斥关系指向的产品不存在，该互斥不会生效',
+    })
+  }
+
+  // 等级指向不存在的产品：该产品永远不参与等级比较，「高级别替换低级别」静默失效。
+  for (const ref of findUnknownTierRefs()) {
+    issues.push({
+      key: `payment.products.tier.${ref}`,
+      location,
+      reason: '等级指向的产品不存在，该产品不会参与等级比较',
     })
   }
 
