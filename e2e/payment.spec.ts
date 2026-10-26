@@ -34,12 +34,16 @@ async function register(page: import('@playwright/test').Page): Promise<string> 
  * 写本地 D1，失败重试。wrangler 与 dev server 共用同一个 SQLite 文件，并发写入会
  * 抢不到 session commit token（环境竞争，不是产品缺陷）；真写不进去就让用例失败。
  */
-function seedSubscriptionWithRetry(email: string, withPending = false) {
+function seedSubscriptionWithRetry(
+  email: string,
+  options: { pending?: boolean; history?: boolean } = {},
+) {
   // 注册刚写过 users 表，先让 dev server 的请求落一落，降低 commit token 竞争。
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200)
 
   const args = ['exec', 'tsx', 'scripts/e2e-seed-subscription.ts', email]
-  if (withPending) args.push('--pending')
+  if (options.pending) args.push('--pending')
+  if (options.history) args.push('--history')
 
   let lastError: unknown
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -155,7 +159,7 @@ test.describe('Payment', () => {
 
     const email = await register(page)
     await new Promise((r) => setTimeout(r, 200))
-    seedSubscriptionWithRetry(email, true)
+    seedSubscriptionWithRetry(email, { pending: true })
 
     await page.goto('/zh/dashboard/billing')
     await page.waitForURL(/\/zh\/dashboard\/billing/)
@@ -163,6 +167,35 @@ test.describe('Payment', () => {
     // 降级期间用户仍在按旧价扣款，页面必须说清「已安排变更」与生效时刻。
     await expect(page.getByText(/已安排变更为/).first()).toBeVisible({ timeout: 15000 })
     await expect(page.getByRole('button', { name: '取消变更' }).first()).toBeVisible()
+  })
+
+  test('「我的方案」只显示当前生效的方案，过往订阅收进「历史订阅」', async ({ page, request }) => {
+    test.skip(!(await paymentConfigured(request)), '支付模块未配置（缺 Stripe 凭据或 Price）')
+
+    const email = await register(page)
+    await new Promise((r) => setTimeout(r, 200))
+    // 一份生效中的订阅 + 一份已取消的旧订阅。
+    seedSubscriptionWithRetry(email, { history: true })
+
+    await page.goto('/zh/dashboard/billing')
+    // 尾斜杠可有可无：服务端重定向与客户端跳转有时给的是两种形式。
+    await page.waitForURL(/\/zh\/dashboard\/billing\/?/)
+
+    // 「我的方案」里只有当前生效的那一份。
+    const plans = page.locator('section', { hasText: '我的方案' }).first()
+    await expect(plans.getByText('当前生效')).toHaveCount(1)
+    // 旧订阅不在「我的方案」里出现。
+    await expect(plans.getByText('已取消')).toHaveCount(0)
+
+    // 历史订阅默认收起：默认视图只讲当前方案。
+    const history = page.locator('section', { hasText: '历史订阅' }).first()
+    const trigger = history.getByRole('button', { name: /历史订阅/ })
+    await expect(trigger).toBeVisible({ timeout: 15000 })
+    await expect(history.getByText('已取消')).toHaveCount(0)
+
+    // 展开后能看到那份已取消的旧订阅。
+    await trigger.click()
+    await expect(history.getByText('已取消')).toBeVisible()
   })
 
   test('已登录用户点免费档按钮进入工作台，不再被送回注册页', async ({ page }) => {

@@ -100,4 +100,15 @@ describe('buildSeedSql', () => {
     const sql = buildSeedSql(base)
     expect(sql).not.toContain('pending_price_id')
   })
+
+  it('给了创建时间就写 created_at：历史行必须比当前行旧', () => {
+    // 不写 created_at 时历史行与当前行同刻，「最近一份」的判定会挑错。
+    const sql = buildSeedSql({ ...base, createdAt: 1767225600 })
+    expect(sql).toContain('created_at')
+    expect(sql).toContain('1767225600')
+  })
+
+  it('没给创建时间就不写 created_at 列', () => {
+    expect(buildSeedSql(base)).not.toContain('created_at')
+  })
 })

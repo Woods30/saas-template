@@ -1,9 +1,10 @@
-import { IconAlertTriangle, IconClock, IconCreditCard } from '@tabler/icons-react'
+import { IconAlertTriangle, IconChevronRight, IconClock, IconCreditCard } from '@tabler/icons-react'
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   Empty,
   EmptyContent,
@@ -22,7 +23,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
-import { productTier } from '@/config/products'
 import { useCheckoutNotice } from '@/hooks/use-checkout-notice'
 import { trackPurchase } from '@/lib/analytics/events'
 import { getRequestLocale } from '@/lib/locale'
@@ -39,6 +39,7 @@ import {
 import {
   paymentStatusMessageKey,
   productNameForProductId,
+  splitBillingDisplay,
   subscriptionIntervalMessageKey,
   subscriptionStatusMessageKey,
 } from '@/payment/billing-query'
@@ -212,15 +213,13 @@ function BillingPage() {
   const purchases = payments?.filter((payment) => payment.type === 'one_time') ?? []
   const hasAnyPlan = (subscriptions?.length ?? 0) + purchases.length > 0
 
-  // 按等级从高到低排：当前生效的那份排在最上面，用户一眼能看到自己处在哪一档。
-  // 没有等级的东西（实物商品）排在最后。
-  const byTierDesc = <T extends { productId?: string | null }>(a: T, b: T): number => {
-    const tierA = productTier(a.productId) ?? -1
-    const tierB = productTier(b.productId) ?? -1
-    return tierB - tierA
-  }
-  const sortedPurchases = [...purchases].sort(byTierDesc)
-  const sortedSubscriptions = [...(subscriptions ?? [])].sort(byTierDesc)
+  // 「我的方案」只展示当前生效的那一份，其余收进历史。
+  // 判定依据是服务端下发的 `isCurrent`（等级说了算的归属判定），客户端不重复判一遍。
+  const display = splitBillingDisplay({
+    subscriptions: subscriptions ?? [],
+    payments: payments ?? [],
+  })
+  const historyCount = display.historySubscriptions.length + display.historyPurchases.length
   const currentProductName = productNameForProductId(currentPlan?.productId)
 
   return (
@@ -244,7 +243,8 @@ function BillingPage() {
         </p>
       )}
 
-      {/* 我的方案：买断与订阅各自成卡，「当前生效」标在真正生效的那一份上。 */}
+      {/* 我的方案：只放当前生效的那一份。买断接管订阅时展示买断那张卡，
+          「当前生效」徽章标在真正生效的那一份上。 */}
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-muted-foreground">
           {m.settings_billing_my_plans()}
@@ -280,22 +280,51 @@ function BillingPage() {
           </Empty>
         ) : (
           <div className="space-y-4">
-            {sortedPurchases.map((purchase) => (
-              <PurchaseCard key={purchase.id} purchase={purchase} />
-            ))}
-            {sortedSubscriptions.map((sub) => (
+            {display.currentSubscription && (
               <SubscriptionCard
-                key={sub.id}
-                sub={sub}
+                sub={display.currentSubscription}
                 managing={managing}
                 switching={switching !== null}
-                onManage={() => onManageSubscription(sub.customerId)}
+                onManage={() => onManageSubscription(display.currentSubscription?.customerId)}
                 onSwitch={onSwitch}
               />
-            ))}
+            )}
+            {display.currentPurchase && <PurchaseCard purchase={display.currentPurchase} />}
           </div>
         )}
       </section>
+
+      {/* 历史订阅：过往的方案，默认收起。它们不再扣费，但用户偶尔会回来看。 */}
+      {historyCount > 0 && (
+        <section className="space-y-3">
+          <Collapsible>
+            <h2>
+              <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-lg text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
+                <span>{m.settings_billing_history_title()}</span>
+                <Badge variant="secondary">{historyCount}</Badge>
+                {/* `data-panel-open` 由 Base UI trigger 在展开时挂上。 */}
+                <IconChevronRight
+                  aria-hidden
+                  className="ml-auto size-4 shrink-0 transition-transform group-data-[panel-open]:rotate-90"
+                />
+              </CollapsibleTrigger>
+            </h2>
+            <CollapsibleContent>
+              <p className="pt-2 text-sm text-muted-foreground">
+                {m.settings_billing_history_desc()}
+              </p>
+              <ul className="mt-2 divide-y">
+                {display.historySubscriptions.map((sub) => (
+                  <SubscriptionHistoryRow key={sub.id} sub={sub} />
+                ))}
+                {display.historyPurchases.map((purchase) => (
+                  <PurchaseHistoryRow key={purchase.id} purchase={purchase} />
+                ))}
+              </ul>
+            </CollapsibleContent>
+          </Collapsible>
+        </section>
+      )}
 
       {/* 切换方案：账号级唯一订阅——换档位只能改现有那份。 */}
       {switchTargets && switchTargets.length > 0 && (
@@ -435,7 +464,12 @@ function SubscriptionCard({
       <CardContent className="space-y-3">
         {sub.currentPeriodEnd && (
           <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-sm">
-            <span className="text-muted-foreground">{m.settings_billing_renews_on_short()}</span>
+            <span className="text-muted-foreground">
+              {/* 已结束的订阅显示「结束于」：说「下次续费」会让用户以为还会扣款。 */}
+              {sub.status === 'canceled' || sub.status === 'incomplete_expired'
+                ? m.settings_billing_ended_on()
+                : m.settings_billing_renews_on_short()}
+            </span>
             <span className="font-medium tabular-nums">{formatDateTime(sub.currentPeriodEnd)}</span>
           </div>
         )}
@@ -503,7 +537,10 @@ function SwitchCard({
   onSwitch: () => void
 }) {
   const productName = productNameForProductId(target.productId)
-  const intervalLabel = subscriptionIntervalMessageKey(target.interval)
+  const intervalKey = subscriptionIntervalMessageKey(target.interval)
+  // 取的是消息**键**，要用 m[...]() 换成文案；直接渲染键会把 `settings_billing_interval_month`
+  // 这种内部标识漏到页面上。
+  const intervalLabel = intervalKey ? m[intervalKey]() : null
   const amount = formatAmount(target.amount, target.currency)
   const directionKey =
     target.direction === 'upgrade'
@@ -580,6 +617,64 @@ function PurchaseCard({ purchase }: { purchase: PaymentRecord }) {
         </div>
       </CardHeader>
     </Card>
+  )
+}
+
+/**
+ * 历史订阅行。
+ *
+ * 用紧凑行而不是卡片：历史是次要信息，卡片会把「当前方案」淹没——而那正是这个区块
+ * 要解决的问题。
+ */
+function SubscriptionHistoryRow({ sub }: { sub: SubscriptionRecord }) {
+  const productName = productNameForProductId(sub.productId)
+  const statusKey = subscriptionStatusMessageKey(sub.status)
+  // 被更高等级的方案取代的订阅，状态字段还停在「生效中」：徽章要说人话。
+  const badgeText = sub.superseded
+    ? m.settings_billing_history_superseded()
+    : sub.cancelAtPeriodEnd && sub.status === 'active'
+      ? m.settings_billing_status_cancel_soon()
+      : m[statusKey]()
+  const intervalKey = subscriptionIntervalMessageKey(sub.interval)
+  const amount = formatAmount(sub.amount, sub.currency)
+
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2 text-sm">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="truncate font-medium">{productName ?? productFallback(sub)}</span>
+        <Badge variant="outline">{badgeText}</Badge>
+      </div>
+      <div className="flex items-center gap-4 text-muted-foreground">
+        <span className="tabular-nums">
+          {amount}
+          {intervalKey ? ` / ${m[intervalKey]()}` : ''}
+        </span>
+        {sub.currentPeriodEnd && (
+          <span>
+            {m.settings_billing_ended_on()} {formatDate(sub.currentPeriodEnd)}
+          </span>
+        )}
+      </div>
+    </li>
+  )
+}
+
+/** 历史买断行：过往的一次性购买。 */
+function PurchaseHistoryRow({ purchase }: { purchase: PaymentRecord }) {
+  const productName = productNameForProductId(purchase.productId)
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2 text-sm">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="truncate font-medium">{productName ?? purchase.productId ?? '—'}</span>
+        <Badge variant="outline">{m.settings_billing_history_type_one_time()}</Badge>
+      </div>
+      <div className="flex items-center gap-4 text-muted-foreground">
+        <span className="tabular-nums">{formatAmount(purchase.amount, purchase.currency)}</span>
+        <span>
+          {m.settings_billing_purchased_on()} {formatDate(purchase.paidAt ?? purchase.createdAt)}
+        </span>
+      </div>
+    </li>
   )
 }
 

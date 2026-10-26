@@ -21,7 +21,8 @@ interface SeedSubscription {
   userId: string
   customerId: string
   subscriptionId: string
-  status: 'active'
+  /** 订阅状态。历史行写 `canceled`：账单页把它收进「历史订阅」。 */
+  status: 'active' | 'canceled'
   priceId: string
   /** 本站产品 id。 */
   productId: string
@@ -32,6 +33,13 @@ interface SeedSubscription {
   interval: string
   /** Unix 秒；写未来时间，让用例能断言「续费日期」确实渲染了具体时刻。 */
   currentPeriodEnd: number
+  /**
+   * 创建时间（Unix 秒）。
+   *
+   * 给出时写入 `created_at`：历史行必须比当前行旧，否则「最近一份」的判定会把它
+   * 当成当前方案。
+   */
+  createdAt?: number
   /**
    * 已安排、周期末生效的变更（降级）。
    *
@@ -136,6 +144,10 @@ export function buildSeedSql(sub: SeedSubscription): string {
     sub.interval,
     sub.currentPeriodEnd,
   ]
+  if (sub.createdAt !== undefined) {
+    columns.push('created_at')
+    values.push(sub.createdAt)
+  }
   if (sub.pending) {
     columns.push(
       'pending_price_id',
@@ -166,11 +178,15 @@ export function buildSeedSql(sub: SeedSubscription): string {
 async function main(): Promise<void> {
   const email = process.argv[2]
   if (!email) {
-    console.error('用法：pnpm exec tsx scripts/e2e-seed-subscription.ts <email> [--pending]')
+    console.error(
+      '用法：pnpm exec tsx scripts/e2e-seed-subscription.ts <email> [--pending] [--history]',
+    )
     process.exit(1)
   }
   // `--pending`：额外写一份「已安排、周期末生效」的降级，用来测账单页的待生效提示。
   const withPending = process.argv.includes('--pending')
+  // `--history`：额外写一份已取消的旧订阅，用来测「历史订阅」区块。
+  const withHistory = process.argv.includes('--history')
 
   // lookup_key 写在产品配置里（`src/config/products.ts`），不再从 env 读。
   const lookupKey = resolveLookupKey('pro', 'month')
@@ -203,35 +219,41 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
+  // 年付价：待生效的降级与历史订阅都用它，金额同样取自 Stripe，不能写死。
+  let yearlyPrice: (StripePrice & { unit_amount: number }) | null = null
+  if (withPending || withHistory) {
+    const yearlyLookupKey = resolveLookupKey('pro', 'year')
+    if (!yearlyLookupKey) {
+      console.error('❌ 产品配置里没有 pro 产品的年付 lookup_key，无法构造年付订阅行')
+      process.exit(1)
+    }
+    let fetched: StripePrice
+    try {
+      fetched = await fetchPriceByLookupKey(yearlyLookupKey, secretKey)
+    } catch (err) {
+      console.error(`❌ 取年付价格失败：${err instanceof Error ? err.message : 'unknown'}`)
+      process.exit(1)
+    }
+    if (fetched.unit_amount === null) {
+      console.error('❌ 年付的 Price 是阶梯计价，没有单一金额，无法构造年付订阅行')
+      process.exit(1)
+    }
+    yearlyPrice = { ...fetched, unit_amount: fetched.unit_amount }
+  }
+
   // 待生效的降级：目标价同样取自 Stripe，不能写死金额。
   let pending: SeedSubscription['pending']
-  if (withPending) {
-    const pendingLookupKey = resolveLookupKey('pro', 'year')
-    if (!pendingLookupKey) {
-      console.error('❌ 产品配置里没有 pro 产品的年付 lookup_key，无法构造待生效变更')
-      process.exit(1)
-    }
-    let pendingPrice: StripePrice
-    try {
-      pendingPrice = await fetchPriceByLookupKey(pendingLookupKey, secretKey)
-    } catch (err) {
-      console.error(`❌ 取待生效价格失败：${err instanceof Error ? err.message : 'unknown'}`)
-      process.exit(1)
-    }
-    if (pendingPrice.unit_amount === null) {
-      console.error('❌ 待生效的 Price 是阶梯计价，没有单一金额，无法构造待生效变更')
-      process.exit(1)
-    }
+  if (withPending && yearlyPrice) {
     pending = {
-      priceId: pendingPrice.id,
+      priceId: yearlyPrice.id,
       productId: 'pro',
       stripeProductId:
-        typeof pendingPrice.product === 'string'
-          ? pendingPrice.product
-          : (pendingPrice.product?.id ?? null),
-      interval: pendingPrice.recurring?.interval ?? 'year',
-      amount: pendingPrice.unit_amount,
-      currency: pendingPrice.currency,
+        typeof yearlyPrice.product === 'string'
+          ? yearlyPrice.product
+          : (yearlyPrice.product?.id ?? null),
+      interval: yearlyPrice.recurring?.interval ?? 'year',
+      amount: yearlyPrice.unit_amount,
+      currency: yearlyPrice.currency,
       // 生效时刻 = 当前周期的结束时刻，与当前价的续费时刻一致。
       effectiveAt: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
     }
@@ -259,6 +281,37 @@ async function main(): Promise<void> {
   execFileSync('wrangler', ['d1', 'execute', 'DB', '--local', '--json', '--command', sql], {
     stdio: 'inherit',
   })
+
+  // 历史订阅：一份已取消的旧订阅（年付），用来测「历史订阅」区块。
+  // `created_at` 必须比当前行旧——否则「最近一份」的判定会把它当成当前方案。
+  if (withHistory && yearlyPrice) {
+    const historySql = buildSeedSql({
+      id: `sub_e2e_hist_${unique}`,
+      userId,
+      customerId: `cus_e2e_${unique}`,
+      subscriptionId: `sub_e2e_stripe_hist_${unique}`,
+      status: 'canceled',
+      priceId: yearlyPrice.id,
+      productId: 'pro',
+      stripeProductId:
+        typeof yearlyPrice.product === 'string'
+          ? yearlyPrice.product
+          : (yearlyPrice.product?.id ?? null),
+      amount: yearlyPrice.unit_amount,
+      currency: yearlyPrice.currency,
+      interval: yearlyPrice.recurring?.interval ?? 'year',
+      currentPeriodEnd: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 30,
+      createdAt: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 60,
+    })
+    execFileSync(
+      'wrangler',
+      ['d1', 'execute', 'DB', '--local', '--json', '--command', historySql],
+      {
+        stdio: 'inherit',
+      },
+    )
+  }
+
   console.log(`✅ 已为 ${email} 写入 active 订阅`)
 }
 

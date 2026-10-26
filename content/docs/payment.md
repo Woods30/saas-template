@@ -429,14 +429,22 @@ so the page can never claim "superseded" while Stripe keeps charging.
 
 ## Billing page
 
-`/dashboard/billing` is split in two sections:
+`/dashboard/billing` shows the current plan by default and files everything else under
+history:
 
-- **My plans** — one card per buyout and per subscription, sorted from the highest tier
-  down. **Only one** carries the "Active now" badge — the highest tier
-  (`lifetime > pro > free`); a subscription superseded by a higher tier is still listed
-  but marked as such, so the user doesn't think they are still being charged. Under the
-  section heading there's a line "Current tier: <product>", answering "what am I on"
-  directly.
+- **My plans** — **only the plan in force** (a buyout card or a subscription card, never
+  both). Which one is current comes from the server-side ownership rules (the highest
+  tier: `lifetime > pro > free`; within one product a buyout takes the subscription
+  over), and it carries the "Active now" badge. Under the section heading there's a line
+  "Current tier: <product>", answering "what am I on" directly. When nothing is in
+  force (subscription cancelled, buyout refunded) the most recent subscription is shown
+  instead — the page has to tell the user what they used to have rather than nothing.
+- **Past subscriptions** — every other plan (cancelled subscriptions, subscriptions
+  superseded by a higher tier, past one-time purchases) lives here, **collapsed by
+  default**, with the item count on the heading. Past plans are no longer charged, but
+  users do come back to look. Each row carries the plan name, a status badge (cancelled
+  / superseded), the amount and the cycle; subscriptions also show when they ended,
+  purchases when they were bought.
 - **Switch plan** — only when the account has a subscription in force. One card per
   "tier × cycle": the current one has a disabled button and an "Current plan" badge;
   the others carry the direction the server computed (upgrade / downgrade / cycle

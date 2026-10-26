@@ -187,6 +187,70 @@ export function paymentStatusMessageKey(
   }
 }
 
+/**
+ * 账单页的展示分组：当前生效的那一份 vs 历史。
+ */
+export interface BillingDisplay {
+  /** 当前生效的订阅；没有则为空。 */
+  currentSubscription: SubscriptionRecord | null
+  /** 当前生效的一次性买断；没有则为空。 */
+  currentPurchase: PaymentRecord | null
+  /** 历史订阅：不再生效的那些。 */
+  historySubscriptions: SubscriptionRecord[]
+  /** 历史买断：过往的一次性购买。 */
+  historyPurchases: PaymentRecord[]
+}
+
+/** 时间 → 毫秒数；无法解析时返回 `0`（视作最旧）。 */
+function timeOf(value: Date | string | null | undefined): number {
+  if (!value) return 0
+  const date = value instanceof Date ? value : new Date(value)
+  const time = date.getTime()
+  return Number.isNaN(time) ? 0 : time
+}
+
+/**
+ * 把持有物分成「当前生效的那一份」与「历史」。
+ *
+ * 「当前生效」完全依据服务端下发的 `isCurrent`——那是归属判定（等级说了算）的
+ * 结果，客户端不重复判一遍：两处各判一次迟早漂移。
+ *
+ * 没有当前生效项时（订阅已取消、买断已退款）**退回最近的一条订阅**：页面至少要
+ * 告诉用户「你曾经有什么」，而不是一片空白。它不是当前方案，所以不会带「当前生效」
+ * 徽章。
+ */
+export function splitBillingDisplay(input: {
+  subscriptions: SubscriptionRecord[]
+  payments: PaymentRecord[]
+}): BillingDisplay {
+  const purchases = input.payments.filter((payment) => payment.type === 'one_time')
+  const latest = <T extends { createdAt: Date | string }>(items: T[]): T | null =>
+    items.reduce<T | null>(
+      (newest, item) =>
+        newest === null || timeOf(item.createdAt) > timeOf(newest.createdAt) ? item : newest,
+      null,
+    )
+
+  const currentSubscription = input.subscriptions.find((sub) => sub.isCurrent) ?? null
+  const currentPurchase = purchases.find((payment) => payment.isCurrent) ?? null
+
+  let shownSubscription = currentSubscription
+  const shownPurchase = currentPurchase
+  if (!shownSubscription && !shownPurchase) {
+    // 没有当前生效项：退回最近的一条订阅，让页面至少显示「你曾经有什么」。
+    // 买断不参与这个兜底——付过钱的一次性购买本来就会被判为当前生效，
+    // 走到这里的买断（已退款 / 未支付）不该被当成「当前方案」。
+    shownSubscription = latest(input.subscriptions)
+  }
+
+  return {
+    currentSubscription: shownSubscription,
+    currentPurchase: shownPurchase,
+    historySubscriptions: input.subscriptions.filter((sub) => sub.id !== shownSubscription?.id),
+    historyPurchases: purchases.filter((payment) => payment.id !== shownPurchase?.id),
+  }
+}
+
 /** 计费周期的展示文案键。 */
 export type BillingIntervalMessageKey =
   | 'settings_billing_interval_month'

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { getProducts } from '@/config/products'
 import {
+  type PaymentRecord,
   paymentStatusMessageKey,
   productNameForProductId,
+  type SubscriptionRecord,
+  splitBillingDisplay,
   subscriptionIntervalMessageKey,
   subscriptionStatusMessageKey,
 } from '@/payment/billing-query'
@@ -80,5 +83,92 @@ describe('billing-query 展示映射', () => {
     it('未知状态落到原始值，不冒充已支付', () => {
       expect(paymentStatusMessageKey('pending')).toBe('settings_billing_payment_status')
     })
+  })
+})
+
+/**
+ * 「我的方案」只展示当前生效的那一份，其余进历史。
+ *
+ * 判定完全依据服务端下发的 `isCurrent`（那是「等级说了算」的归属判定结果），
+ * 客户端不重复判定一遍——两处各判一次迟早漂移。
+ */
+describe('splitBillingDisplay', () => {
+  function sub(overrides: Partial<SubscriptionRecord> & { id: string }): SubscriptionRecord {
+    return {
+      status: 'active',
+      createdAt: '2026-01-01T00:00:00Z',
+      ...overrides,
+    }
+  }
+
+  function purchase(overrides: Partial<PaymentRecord> & { id: string }): PaymentRecord {
+    return {
+      type: 'one_time',
+      status: 'paid',
+      amount: 9900,
+      currency: 'usd',
+      createdAt: '2026-01-01T00:00:00Z',
+      ...overrides,
+    }
+  }
+
+  it('当前生效的订阅进「我的方案」，其余进历史', () => {
+    const display = splitBillingDisplay({
+      subscriptions: [
+        sub({ id: 'sub_current', isCurrent: true }),
+        sub({ id: 'sub_old', status: 'canceled', createdAt: '2025-06-01T00:00:00Z' }),
+      ],
+      payments: [],
+    })
+
+    expect(display.currentSubscription?.id).toBe('sub_current')
+    expect(display.currentPurchase).toBeNull()
+    expect(display.historySubscriptions.map((s) => s.id)).toEqual(['sub_old'])
+  })
+
+  it('当前生效的是买断时，订阅全部进历史', () => {
+    // 买断接管订阅：当前方案是买断那条订阅付款记录，原订阅只是历史。
+    const display = splitBillingDisplay({
+      subscriptions: [sub({ id: 'sub_1', status: 'active' })],
+      payments: [purchase({ id: 'pay_1', isCurrent: true })],
+    })
+
+    expect(display.currentPurchase?.id).toBe('pay_1')
+    expect(display.currentSubscription).toBeNull()
+    expect(display.historySubscriptions.map((s) => s.id)).toEqual(['sub_1'])
+    // 当前生效的那笔买断不在历史里。
+    expect(display.historyPurchases).toHaveLength(0)
+  })
+
+  it('没有当前生效项时退回最近的一条订阅，不留空白', () => {
+    // 订阅已取消：页面仍要告诉用户「你有过什么」，只是它不再是当前方案。
+    const display = splitBillingDisplay({
+      subscriptions: [
+        sub({ id: 'sub_old', status: 'canceled', createdAt: '2025-01-01T00:00:00Z' }),
+        sub({ id: 'sub_new', status: 'canceled', createdAt: '2026-01-01T00:00:00Z' }),
+      ],
+      payments: [],
+    })
+
+    expect(display.currentSubscription?.id).toBe('sub_new')
+    expect(display.historySubscriptions.map((s) => s.id)).toEqual(['sub_old'])
+  })
+
+  it('订阅付款不算「历史买断」，历史里只放一次性购买', () => {
+    const display = splitBillingDisplay({
+      subscriptions: [],
+      payments: [purchase({ id: 'pay_sub', type: 'subscription' }), purchase({ id: 'pay_once' })],
+    })
+
+    expect(display.historyPurchases.map((p) => p.id)).toEqual(['pay_once'])
+  })
+
+  it('既没有订阅也没有买断时，页面没有任何方案', () => {
+    const display = splitBillingDisplay({ subscriptions: [], payments: [] })
+
+    expect(display.currentSubscription).toBeNull()
+    expect(display.currentPurchase).toBeNull()
+    expect(display.historySubscriptions).toHaveLength(0)
+    expect(display.historyPurchases).toHaveLength(0)
   })
 })
