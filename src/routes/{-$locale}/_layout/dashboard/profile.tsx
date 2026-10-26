@@ -22,7 +22,6 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/profile')({
       locale: getRequestLocale(),
       noindex: true,
     })
-    // 个人页不应被搜索引擎索引，在通用 meta 之后追加 robots 指令。
     return base
   },
   component: ProfilePage,

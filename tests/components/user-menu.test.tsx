@@ -4,14 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
 /**
- * 导航栏的用户菜单。
- *
- * 关键行为：
- * - `isPending` 与「未登录」都渲染 `guestFallback`：SSR 阶段会话尚未就绪，服务端输出
- *   的就是待定态，此时渲染骨架会让服务端 HTML 完全没有登录入口（访客要等客户端拿到
- *   会话才看到它，链接会闪一下才出现）；
- * - 已登录时显示邮箱，并提供登出入口（登出经 `signOutAndRedirect`（与个人中心用户卡片共用））；
- * - 未登录且未传 `guestFallback` 时不渲染任何内容。
+ * 导航栏用户菜单：`isPending` 与未登录都渲染 `guestFallback`（SSR 输出的是待定态，
+ * 渲染骨架会让服务端 HTML 没有登录入口）；已登录显示邮箱与登出入口。
  */
 const mocks = vi.hoisted(() => ({
   useSession: vi.fn(),
@@ -50,7 +44,6 @@ describe('UserMenu', () => {
     mocks.useSession.mockReturnValue({ data: null, isPending: true })
     render(<UserMenu guestFallback={<a href="/auth/login">登录</a>} />)
     expect(screen.getByRole('link', { name: '登录' })).toBeInTheDocument()
-    // 待定阶段不应泄漏任何账号信息。
     expect(screen.queryByText(/@/)).toBeNull()
   })
 
@@ -115,13 +108,13 @@ describe('UserMenu', () => {
     await waitFor(() => expect(screen.getByText('退出登录')).toBeInTheDocument())
     screen.getByText('退出登录').click()
     await waitFor(() => expect(mocks.signOutAndRedirect).toHaveBeenCalled())
-    // 跳转与否是公共函数的职责，组件不应自己动 location。
+    // 跳转由公共函数负责，组件不应自己动 location。
     expect(assign).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
   })
 })
 
-/** 从弹层向上找到 Base UI 的 Positioner 定位容器（`Menu.Popup` 的父元素）。 */
+/** 向上找到 Base UI 的 Positioner 定位容器。 */
 function positionerOf(menu: HTMLElement): HTMLElement | null {
   let node: HTMLElement | null = menu
   while (node && !node.className.includes('z-')) node = node.parentElement

@@ -51,8 +51,7 @@ export function getPublicLinkOptions(target: PublicTarget, locale: Locale, hash?
 
 export type MenuVisibility = {
   module?: SiteModule
-  // 功能开关（`features.*`）与服务模块（`mail`/`docs`/...）是两套：后者有 `.enabled`
-  // 字段，前者本身就是布尔值。菜单项按功能开关过滤时必须走 `features[flag]`。
+  // 功能开关与服务模块是两套：后者有 `.enabled`，前者本身就是布尔值。
   feature?: keyof WebsiteConfig['features']
   authenticated?: boolean
   roles?: readonly string[]
@@ -65,9 +64,8 @@ export type MenuLinkItem = Common &
     destination:
       | {
           kind: 'internal'
-          // 不写死为 `getPublicLinkOptions` 的返回类型：那是公共导航目标的封闭联合，
-          // 工作台等区域导航（如 `/dashboard/*`）同样是站内链接，却不在该联合里。
-          // `LinkOptions` 是 `Link` 的 props 类型，`linkOptions()` 的返回值可赋给它。
+          // 不用 `getPublicLinkOptions` 的返回类型：那是公共导航的封闭联合，
+          // `/dashboard/*` 等站内链接不在其中。
           options: LinkOptions
         }
       | { kind: 'external'; href: string; newTab: boolean }

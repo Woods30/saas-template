@@ -127,7 +127,7 @@ describe('导航配置工厂', () => {
       'template',
       'changelog',
     ])
-    // contact 默认关闭（`contact.enabled: false`），菜单项随模块门禁一并消失。
+    // contact 默认关闭，菜单项随模块门禁一并消失。
     expect(resources?.kind === 'group' && resources.items.map((item) => item.id)).toEqual([
       'docs',
       'blog',
@@ -176,8 +176,7 @@ describe('导航配置工厂', () => {
   })
 
   it('开启 contact 模块后 Footer 才出现联系入口', () => {
-    // contact 页由 `assertPageEnabled('contact')` 门禁，默认关闭。菜单项必须跟着
-    // 开关走，否则默认配置下会给出一个点开即 404 的链接。
+    // 菜单项必须跟着开关走，否则默认配置下会给出点开即 404 的链接。
     const config = createConfig()
     config.contact.enabled = true
     const resources = getFooterLinks('en', { config, authenticated: false }).find(
@@ -315,8 +314,7 @@ describe('菜单过滤', () => {
     ).toEqual(ids)
   })
 
-  // 功能开关（features.*）与服务模块（mail/docs/...）是两套开关：前者没有 `.enabled`
-  // 字段，必须走 `ctx.config.features[flag]`，不能复用 `rule.module` 的写法。
+  // 功能开关没有 `.enabled` 字段，必须走 `ctx.config.features[flag]`。
   it('features 开关关闭时隐藏菜单项，开启时保留', () => {
     const items = [homeLink('keys', { feature: 'enableApiKeys' })]
     const off = createConfig()
@@ -327,7 +325,7 @@ describe('菜单过滤', () => {
     expect(filterMenuItems(items, { config: on, authenticated: true })).toEqual(items)
   })
 
-  // 管理入口同时受 role 与 feature 约束：两者**都**满足才显示。
+  // 管理入口需 role 与 feature 同时满足。
   it('role 与 feature 联合约束：任一不满足即隐藏', () => {
     const items = [homeLink('admin', { roles: ['admin'], feature: 'enableAdmin' })]
     const on = createConfig()
@@ -338,9 +336,9 @@ describe('菜单过滤', () => {
     expect(filterMenuItems(items, { config: on, authenticated: true, role: 'admin' })).toEqual(
       items,
     )
-    // 角色不符
+    // 角色不符。
     expect(filterMenuItems(items, { config: on, authenticated: true, role: 'user' })).toEqual([])
-    // flag 关闭
+    // flag 关闭。
     expect(filterMenuItems(items, { config: off, authenticated: true, role: 'admin' })).toEqual([])
   })
 })

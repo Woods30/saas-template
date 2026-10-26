@@ -1,4 +1,3 @@
-// Env is a global interface declared in src/types/cloudflare.d.ts — no import needed
 import { createCacheKey } from '@/cache'
 import { getServerContext } from '@/lib/server-context'
 
@@ -6,13 +5,12 @@ import { getServerContext } from '@/lib/server-context'
  * Check if the given IP/action pair exceeds rate limit.
  * Returns true if allowed, false if rate-limited.
  *
- * Uses a list-of-timestamps approach: stores an array of request timestamps
- * within the TTL window. This avoids read-modify-write races on a counter.
+ * Uses a list-of-timestamps approach (no read-modify-write counter race).
  *
  * Security notes:
- * - cf-connecting-ip is trusted; x-forwarded-for is not used (spoofable).
- * - When cache is unavailable, fails closed (denies the request).
- * - Unknown IPs get a stricter limit (1/min) to mitigate spoofing attempts.
+ * - cf-connecting-ip is trusted; x-forwarded-for is spoofable and unused.
+ * - When cache is unavailable, fails closed.
+ * - Unknown IPs get a stricter limit (1/min).
  */
 export async function checkRateLimit(opts: {
   ip: string
@@ -23,7 +21,6 @@ export async function checkRateLimit(opts: {
 }): Promise<boolean> {
   const { cacheProvider } = getServerContext()
 
-  // Fail closed — deny when cache is unavailable
   if (!cacheProvider) {
     return false
   }
@@ -37,7 +34,6 @@ export async function checkRateLimit(opts: {
   const windowMs = windowSeconds * 1000
 
   const raw = await cacheProvider.get<number[]>(key)
-  // Timestamps strictly within the window
   const timestamps: number[] = raw !== null ? raw.filter((t) => now - t < windowMs) : []
 
   if (timestamps.length >= maxRequests) {

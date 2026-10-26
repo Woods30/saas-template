@@ -3,9 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseServerEnv } from '@/env/server'
 import { buildPaymentProviderRegistry } from '@/payment'
 
-// ------------------------------------------------------------------------------------------------
-// Stripe mock — hoisted so it is ready before vi.mock('@/payment') runs
-// ------------------------------------------------------------------------------------------------
+// Stripe mock —— 必须 hoist，早于 vi.mock('@/payment') 求值。
 
 const mockStripeInstance = vi.hoisted(() => ({
   createFetchHttpClient: vi.fn().mockReturnValue({}),
@@ -22,6 +20,7 @@ const mockStripeInstance = vi.hoisted(() => ({
     type: 'checkout.session.completed',
     data: { object: {} },
   }),
+  pricesList: vi.fn().mockResolvedValue({ data: [] }),
 }))
 
 vi.mock('stripe', () => ({
@@ -29,14 +28,42 @@ vi.mock('stripe', () => ({
     static createFetchHttpClient = mockStripeInstance.createFetchHttpClient
     static createSubtleCryptoProvider = mockStripeInstance.createSubtleCryptoProvider
     checkout = { sessions: { create: mockStripeInstance.sessionsCreate } }
+    prices = { list: mockStripeInstance.pricesList }
     billingPortal = { sessions: { create: mockStripeInstance.portalCreate } }
     webhooks = { constructEventAsync: mockStripeInstance.constructEventAsync }
   },
 }))
 
-// ------------------------------------------------------------------------------------------------
-// @/payment mock — preserves real exports, overrides getPaymentProvider
-// ------------------------------------------------------------------------------------------------
+/**
+ * 价格目录替身：服务端按 lookup key 解析出的 Price。
+ *
+ * `recurring` 决定计费模式：周期价格走订阅守卫，一次性价格不受「已有订阅」限制。
+ */
+const mockPriceCatalog = {
+  pro_monthly: {
+    priceId: 'price_month',
+    amount: 990,
+    currency: 'usd',
+    recurring: true,
+    stripeProductId: 'prod_pro',
+  },
+  pro_yearly: {
+    priceId: 'price_year',
+    amount: 9900,
+    currency: 'usd',
+    recurring: true,
+    stripeProductId: 'prod_pro',
+  },
+  lifetime: {
+    priceId: 'price_life',
+    amount: 9900,
+    currency: 'usd',
+    recurring: false,
+    stripeProductId: 'prod_lifetime',
+  },
+}
+
+// @/payment mock —— 保留真实导出，只覆盖 getPaymentProvider。
 
 const mockCheckoutProvider = vi.hoisted(() => ({
   createCheckoutSession: vi
@@ -53,11 +80,9 @@ vi.mock('@/payment', async (importOriginal) => {
   }
 })
 
-// ------------------------------------------------------------------------------------------------
-// @/db mock factories — used by webhook handler tests
-// ------------------------------------------------------------------------------------------------
+// @/db mock —— 供 webhook handler 用例使用。
 
-// Mutable object to capture insert call arguments for assertion
+// 捕获 insert 入参供断言。
 const captured = {
   checkoutValues: null as Record<string, unknown> | null,
   invoiceValues: null as Record<string, unknown> | null,
@@ -92,7 +117,6 @@ const _mockSelectFns = vi.hoisted(() => ({
   subFound: vi.fn(),
 }))
 
-// Drizzle schema objects have nested properties used for query building
 const makeCol = (name: string) =>
   ({
     get name() {
@@ -100,8 +124,7 @@ const makeCol = (name: string) =>
     },
   }) as unknown as { name: string }
 
-// Schema — real drizzle schema objects are class instances with property chains.
-// We use plain objects that mimic the property access pattern.
+// 真实 drizzle schema 是带属性链的类实例，这里用普通对象模拟同样的访问方式。
 const mockSchema = {
   users: { id: makeCol('users.id') },
   subscriptions: {
@@ -110,27 +133,37 @@ const mockSchema = {
     customerId: makeCol('subscriptions.customerId'),
     subscriptionId: makeCol('subscriptions.subscriptionId'),
     status: makeCol('subscriptions.status'),
+    priceId: makeCol('subscriptions.price_id'),
+    productId: makeCol('subscriptions.product_id'),
+    stripeProductId: makeCol('subscriptions.stripe_product_id'),
   },
   payments: {
     id: makeCol('payments.id'),
     chargeId: makeCol('payments.charge_id'),
     invoiceId: makeCol('payments.invoice_id'),
     userId: makeCol('payments.user_id'),
+    type: makeCol('payments.type'),
+    status: makeCol('payments.status'),
+    productId: makeCol('payments.product_id'),
+    stripeProductId: makeCol('payments.stripe_product_id'),
   },
   webhookEvents: { id: makeCol('webhook_events.id') },
 }
 
-// Pre-built chainable mock — select().from().where().limit() returns a promise
+// select().from().where().limit() 的可链式替身。
 const makeSelectChain = (resolvedRows: unknown[]) => {
-  const whereMock = vi.fn().mockReturnValue({
+  // `where` 的结果既要能被 `await`（不带 limit 的查询），也要支持 `.limit()`。
+  // 少一条就会在 `purchases.some(...)` 这类直接 await 的地方炸掉。
+  const whereResult = Object.assign(Promise.resolve(resolvedRows), {
     limit: vi.fn().mockResolvedValue(resolvedRows),
   })
+  const whereMock = vi.fn().mockReturnValue(whereResult)
   const fromMock = vi.fn().mockReturnValue({ where: whereMock })
   const selectMock = vi.fn().mockReturnValue({ from: fromMock })
   return { selectMock, whereMock, fromMock }
 }
 
-// A stable mockDb instance — tests configure specific chains and pass it to the handler
+// 稳定的 mockDb 实例，用例自行配置链式返回值。
 const mockDb = {
   select: vi.fn(),
   insert: vi.fn(),
@@ -144,10 +177,6 @@ vi.mock('@/db', () => ({
   createDb: vi.fn().mockReturnValue(mockDb),
   schema: mockSchema,
 }))
-
-// ------------------------------------------------------------------------------------------------
-// Tests
-// ------------------------------------------------------------------------------------------------
 
 describe('StripePaymentProvider', () => {
   it('createCheckoutSession calls stripe.checkout.sessions.create with correct params', async () => {
@@ -167,6 +196,32 @@ describe('StripePaymentProvider', () => {
     expect(result.sessionId).toBe('cs_test_session')
   })
 
+  it('订阅模式把 userId 写进 subscription_data.metadata', async () => {
+    const { StripePaymentProvider } = await import('@/payment')
+    const provider = new StripePaymentProvider('sk_test', 'whsec_test')
+    await provider.createCheckoutSession({
+      priceId: 'price_123',
+      userId: 'user_456',
+      customerEmail: 'test@example.com',
+      successUrl: 'https://app.example.com/success',
+      cancelUrl: 'https://app.example.com/cancel',
+      locale: 'en',
+      mode: 'subscription',
+    })
+
+    // Checkout Session 自己的 metadata **不会**被 Stripe 复制到 Subscription
+    // （实测订阅上的 metadata 是空的）。归属只能靠 subscription_data.metadata，
+    // 否则 `customer.subscription.created` 早于 `checkout.session.completed` 到达时
+    // 无从知道这条订阅属于谁。
+    expect(mockStripeInstance.sessionsCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: 'subscription',
+        metadata: { userId: 'user_456' },
+        subscription_data: { metadata: { userId: 'user_456' } },
+      }),
+    )
+  })
+
   it('createCheckoutSession returns url and sessionId', async () => {
     const { StripePaymentProvider } = await import('@/payment')
     const provider = new StripePaymentProvider('sk_test', 'whsec_test')
@@ -181,6 +236,64 @@ describe('StripePaymentProvider', () => {
 
     expect(result).toHaveProperty('url')
     expect(result).toHaveProperty('sessionId')
+  })
+
+  it('listPricesByLookupKey 按 key 批量取价，返回金额与是否周期计费', async () => {
+    mockStripeInstance.pricesList = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'price_123',
+          lookup_key: 'pro_monthly',
+          unit_amount: 990,
+          currency: 'usd',
+          recurring: { interval: 'month' },
+          product: 'prod_pro',
+        },
+        {
+          id: 'price_456',
+          lookup_key: 'lifetime',
+          unit_amount: 9900,
+          currency: 'usd',
+          recurring: null,
+          product: { id: 'prod_lifetime' },
+        },
+      ],
+    })
+    const { StripePaymentProvider } = await import('@/payment')
+    const provider = new StripePaymentProvider('sk_test', 'whsec_test')
+    const prices = await provider.listPricesByLookupKey(['pro_monthly', 'lifetime'])
+
+    expect(mockStripeInstance.pricesList).toHaveBeenCalledWith({
+      lookup_keys: ['pro_monthly', 'lifetime'],
+    })
+    expect(prices).toEqual([
+      {
+        id: 'price_123',
+        lookupKey: 'pro_monthly',
+        amount: 990,
+        currency: 'usd',
+        recurring: true,
+        // Stripe Product id：配置没声明互斥关系时的兜底判据。
+        stripeProductId: 'prod_pro',
+      },
+      {
+        id: 'price_456',
+        lookupKey: 'lifetime',
+        amount: 9900,
+        currency: 'usd',
+        recurring: false,
+        stripeProductId: 'prod_lifetime',
+      },
+    ])
+    // 复原，避免影响后续用例。
+    mockStripeInstance.pricesList = vi.fn().mockResolvedValue({ data: [] })
+  })
+
+  it('listPricesByLookupKey 空 key 列表不打 API', async () => {
+    const { StripePaymentProvider } = await import('@/payment')
+    const provider = new StripePaymentProvider('sk_test', 'whsec_test')
+    expect(await provider.listPricesByLookupKey([])).toEqual([])
+    expect(mockStripeInstance.pricesList).not.toHaveBeenCalled()
   })
 
   it('createCustomerPortalLink calls stripe.billingPortal.sessions.create with correct params', async () => {
@@ -209,7 +322,7 @@ describe('StripePaymentProvider', () => {
     const provider = new StripePaymentProvider('sk_test', 'whsec_test')
     const valid = await provider.verifyWebhook('{}', 'sig_invalid')
     expect(valid).toBe(false)
-    // Restore for other tests
+    // 复原，避免影响后续用例。
     mockStripeInstance.constructEventAsync = vi.fn().mockResolvedValue({
       id: 'evt_test',
       type: 'checkout.session.completed',
@@ -233,6 +346,12 @@ describe('buildPaymentProviderRegistry', () => {
     )
     expect(typeof registry.stripe).toBe('function')
   })
+
+  it('只有 secret key 时也能注册 —— 取价不需要 webhook secret', () => {
+    // 定价页要能取到价格，即便还没接 webhook。
+    const registry = buildPaymentProviderRegistry(parseServerEnv({ STRIPE_SECRET_KEY: 'sk_test' }))
+    expect(typeof registry.stripe).toBe('function')
+  })
 })
 
 describe('getPaymentProvider', () => {
@@ -242,15 +361,10 @@ describe('getPaymentProvider', () => {
   })
 })
 
-// ------------------------------------------------------------------------------------------------
-// POST /api/payment 配置门禁
-//
-// `website.ts` 的 `payment.enabled` 现在默认为 true（本仓用于本地联调），因此门禁用例
-// **显式**关掉开关，而不是依赖出厂默认值。依赖默认值的断言会在开关调整时静默失效。
-// ------------------------------------------------------------------------------------------------
+// POST /api/payment 配置门禁。用例显式关掉开关，不依赖默认值——否则开关调整时断言会静默失效。
 describe('POST /api/payment 门禁', () => {
   beforeEach(() => {
-    // `vi.doMock` 注册的模块级替身会跨用例残留；每个用例从真实配置重新开始。
+    // `vi.doMock` 的替身会跨用例残留，每个用例从真实配置重新开始。
     vi.doUnmock('@/config/website')
     vi.resetModules()
   })
@@ -311,27 +425,25 @@ describe('POST /api/payment 门禁', () => {
   })
 })
 
-// ------------------------------------------------------------------------------------------------
-// 重复订阅守卫：已生效中的订阅不得创建第二份
-//
-// 用户重复购买会得到两条并存订阅、两边同时扣款，而账单页只能显示一份。因此
-// `mode: 'subscription'` 的结账在创建 session 之前查一次库，命中即 409。
-// ------------------------------------------------------------------------------------------------
+// 重复订阅守卫：重复购买会产生两条并存订阅、两边同时扣款，故创建 session 前查库，命中即 409。
 describe('POST /api/payment 重复订阅守卫', () => {
   beforeEach(() => {
-    // 三个替身都要清：`@/config/website` 残留着门禁用例里 `payment.enabled: false`
-    // 的那份，不清理的话这里全都会返回 404 而不是预期的 200 / 409。
+    // 三个替身都要清：`@/config/website` 残留着门禁用例的 `payment.enabled: false`，
+    // 不清理的话这里会返回 404 而不是 200 / 409。
     vi.doUnmock('@/config/website')
     vi.doUnmock('@/auth/auth')
     vi.doUnmock('@/lib/rate-limit')
     vi.resetModules()
   })
 
-  /** 已登录用户 + 限流放行，两个返回同时控制（命中 / 未命中已有订阅）。 */
-  async function importPostRoute(subscriptionRows: unknown[]) {
-    // 服务端 env 与上下文：门禁与服务状态判断都要从这里读 Stripe 凭据。
-    // 单测 env 里没有 `STRIPE_SECRET_KEY`，不注入的话 payment 会被判为
-    // `incomplete` 而返回 503，根本走不到重复订阅判断。
+  /**
+   * 已登录用户 + 限流放行。
+   *
+   * `subscriptionRows` 是生效中的订阅，`paymentRows` 是已付的买断订单——两者都是
+   * 「用户已经持有的东西」，守卫按等级判它们挡不挡这次购买。
+   */
+  async function importPostRoute(subscriptionRows: unknown[], paymentRows: unknown[] = []) {
+    // 单测 env 没有 `STRIPE_SECRET_KEY`，不注入的话 payment 被判 incomplete 而返回 503。
     vi.doMock('@/lib/server-context', () => ({
       getServerContext: () => ({
         env: { STRIPE_SECRET_KEY: 'sk_test', STRIPE_WEBHOOK_SECRET: 'whsec_test' },
@@ -347,9 +459,6 @@ describe('POST /api/payment 重复订阅守卫', () => {
     vi.doMock('@/auth/auth', () => ({
       getAuth: () => ({ api: { getSession: async () => ({ user: { id: 'user_1' } }) } }),
     }))
-    // 用一份配齐 Price 的配置覆盖模块默认值：`allowedPriceIds` 为空时
-    // `/api/payment` 会放行任意 priceId，白名单分支就测不到；而测试 env 没有
-    // `VITE_STRIPE_PRICE_*`，直接请求一个假 priceId 会先撞上白名单的 400。
     vi.doMock('@/config/website', async () => {
       const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
       const { parsePublicEnv } =
@@ -357,36 +466,46 @@ describe('POST /api/payment 重复订阅守卫', () => {
       const base = actual.createWebsiteConfig(
         parsePublicEnv({
           VITE_BASE_URL: 'https://jerbix.dev',
-          VITE_STRIPE_PRICE_PRO_MONTHLY: 'price_month',
-          VITE_STRIPE_PRICE_PRO_YEARLY: 'price_year',
-          VITE_STRIPE_PRICE_LIFETIME: 'price_life',
         }),
       )
       return { ...actual, websiteConfig: base }
     })
+    // 价格目录：服务端按 lookup key 解析出 Price id 与计费模式。
+    vi.doMock('@/payment/price-catalog.server', () => ({
+      getPriceCatalog: async () => mockPriceCatalog,
+    }))
+    // 同源校验以 `publicEnv.VITE_BASE_URL` 为准，必须与上面的站点一致。
+    vi.doMock('@/env/public', async () => {
+      const actual = await vi.importActual<typeof import('@/env/public')>('@/env/public')
+      return { ...actual, publicEnv: { ...actual.publicEnv, VITE_BASE_URL: 'https://jerbix.dev' } }
+    })
     vi.doMock('@/lib/rate-limit', () => ({ checkRateLimit: async () => true }))
-    // 只劫持 subscriptions 查询；users / payments / webhookEvents 走默认链。
-    // 返回值必须是完整的 `select().from().where().limit()` 链，路由不只是调用
-    // `selectMock` 本身。
+    // 只劫持 subscriptions 查询；返回值必须是完整的链，路由不只用 `selectMock` 本身。
     mockDb.select = vi.fn().mockImplementation((fields: Record<string, unknown>) => {
       const first = fields ? Object.values(fields)[0] : undefined
       const name = (first as { name?: string } | undefined)?.name
-      return makeSelectChain(name === 'subscriptions.id' ? subscriptionRows : []).selectMock()
+      const rows =
+        name === 'subscriptions.id'
+          ? subscriptionRows
+          : name === 'payments.product_id'
+            ? paymentRows
+            : []
+      return makeSelectChain(rows).selectMock()
     })
 
     return import('@/routes/api/payment/$')
   }
 
   const subscribeBody = {
-    // 与上面 mock 的配置一致：必须落在 `allowedPriceIds` 白名单里。
-    priceId: 'price_month',
+    // 客户端只给产品 + 周期；Price id 与计费模式由服务端按 lookup key 解析。
+    productId: 'pro',
+    interval: 'month' as const,
     successUrl: 'https://jerbix.dev/dashboard/billing?checkout=success',
     cancelUrl: 'https://jerbix.dev/pricing?checkout=cancelled',
-    mode: 'subscription' as const,
   }
 
   it('已有 active 订阅时返回 409，且不创建 Checkout Session', async () => {
-    const { Route } = await importPostRoute([{ id: 'sub_existing' }])
+    const { Route } = await importPostRoute([{ id: 'sub_existing', productId: 'pro' }])
     const handlers = (
       Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
     ).options.server.handlers
@@ -400,7 +519,11 @@ describe('POST /api/payment 重复订阅守卫', () => {
     const response = await handler({ request })
 
     expect(response.status).toBe(409)
-    expect(await response.json()).toEqual({ error: 'ALREADY_SUBSCRIBED' })
+    // 载荷带上切换方向：页面据此提示「去切换方案」，而不是再开一份订阅。
+    expect(await response.json()).toEqual({
+      error: 'ALREADY_SUBSCRIBED',
+      switch: { direction: 'change', targetProductId: 'pro', targetInterval: 'month' },
+    })
     expect(mockCheckoutProvider.createCheckoutSession).not.toHaveBeenCalled()
   })
 
@@ -422,6 +545,70 @@ describe('POST /api/payment 重复订阅守卫', () => {
     expect(mockCheckoutProvider.createCheckoutSession).toHaveBeenCalledTimes(1)
   })
 
+  it('老数据没有 product_id 时按 Price id 反查，仍认得出是同一个产品', async () => {
+    const { Route } = await importPostRoute([{ id: 'sub_existing', priceId: 'price_month' }])
+    const handlers = (
+      Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+    ).options.server.handlers
+    const handler = handlers.POST as (ctx: { request: Request }) => Promise<Response>
+
+    const request = new Request('https://jerbix.dev/api/payment', {
+      method: 'POST',
+      body: JSON.stringify(subscribeBody),
+    })
+
+    const response = await handler({ request })
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({
+      error: 'ALREADY_SUBSCRIBED',
+      switch: { direction: 'change', targetProductId: 'pro', targetInterval: 'month' },
+    })
+  })
+
+  it('连 Price id 都查不出时保守挡住，不给用户开出第二份订阅', async () => {
+    // 判不出属于哪个产品就没法判断是否重复：挡住总比让用户付两次钱好。
+    const { Route } = await importPostRoute([{ id: 'sub_existing' }])
+    const handlers = (
+      Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+    ).options.server.handlers
+    const handler = handlers.POST as (ctx: { request: Request }) => Promise<Response>
+
+    const request = new Request('https://jerbix.dev/api/payment', {
+      method: 'POST',
+      body: JSON.stringify(subscribeBody),
+    })
+
+    const response = await handler({ request })
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'ALREADY_OWNED_UNKNOWN_PRODUCT' })
+    expect(mockCheckoutProvider.createCheckoutSession).not.toHaveBeenCalled()
+  })
+
+  it('已持有更高等级的买断时，买低级别的订阅返回 409 ALREADY_OWNED_HIGHER_TIER', async () => {
+    // 终身版（等级 2）已在手，再订专业版（等级 1）就是降级，白白多付一份钱。
+    const { Route } = await importPostRoute(
+      [],
+      [{ productId: 'lifetime', stripeProductId: 'prod_lifetime' }],
+    )
+    const handlers = (
+      Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+    ).options.server.handlers
+    const handler = handlers.POST as (ctx: { request: Request }) => Promise<Response>
+
+    const request = new Request('https://jerbix.dev/api/payment', {
+      method: 'POST',
+      body: JSON.stringify(subscribeBody),
+    })
+
+    const response = await handler({ request })
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'ALREADY_OWNED_HIGHER_TIER' })
+    expect(mockCheckoutProvider.createCheckoutSession).not.toHaveBeenCalled()
+  })
+
   it('一次性支付不受已有订阅影响（买断没有「已有即重复」）', async () => {
     const { Route } = await importPostRoute([{ id: 'sub_existing' }])
     const handlers = (
@@ -431,7 +618,13 @@ describe('POST /api/payment 重复订阅守卫', () => {
 
     const request = new Request('https://jerbix.dev/api/payment', {
       method: 'POST',
-      body: JSON.stringify({ ...subscribeBody, mode: 'payment' }),
+      // 买断：目录里 lifetime 是非周期价格，服务端据此判定为一次性支付。
+      body: JSON.stringify({
+        productId: 'lifetime',
+        interval: 'one_time',
+        successUrl: subscribeBody.successUrl,
+        cancelUrl: subscribeBody.cancelUrl,
+      }),
     })
 
     const response = await handler({ request })
@@ -440,8 +633,8 @@ describe('POST /api/payment 重复订阅守卫', () => {
     expect(mockCheckoutProvider.createCheckoutSession).toHaveBeenCalledTimes(1)
   })
 
-  // 挡住哪些状态是**可观测行为**：只挡 `active` 会让「扣款失败但订阅仍在」的用户
-  // 再买一份。这里把 where 条件交给真实的 SQLite dialect 渲染，状态集合改了就红。
+  // 只挡 `active` 会让「扣款失败但订阅仍在」的用户再买一份。where 条件交给真实
+  // SQLite dialect 渲染，状态集合改了就红。
   describe('挡住的状态集合', () => {
     it('同时挡住扣款失败与暂停中的订阅，不挡已结束的', async () => {
       const { Route } = await importPostRoute([])
@@ -457,17 +650,23 @@ describe('POST /api/payment 重复订阅守卫', () => {
         }),
       })
 
-      // 守卫那次查询的调用链：select() → from() → where(cond) → limit()。
-      // 条件是 `and(eq(userId), inArray(status, [...]))`，先取到 `where` 的入参。
-      const selectResult = mockDb.select.mock.results.at(-1)?.value as {
+      // 取守卫查询的 where 入参：`and(eq(userId), inArray(status, [...]))`。
+      // 路由会发两次 select（订阅守卫 + 买断互斥检查），要取**订阅**那一次。
+      const selectCalls = mockDb.select.mock.calls
+      const subIndex = selectCalls.findIndex((args) => {
+        const fields = args[0] as Record<string, unknown> | undefined
+        const first = fields ? Object.values(fields)[0] : undefined
+        return (first as { name?: string } | undefined)?.name === 'subscriptions.id'
+      })
+      expect(subIndex, '应查询过 subscriptions').toBeGreaterThanOrEqual(0)
+      const selectResult = mockDb.select.mock.results[subIndex]?.value as {
         from: { mock: { results: Array<{ value: { where: { mock: { calls: unknown[][] } } } }> } }
       }
       const whereMock = selectResult.from.mock.results.at(-1)?.value.where
       const cond = whereMock?.mock.calls.at(-1)?.[0]
       expect(cond, '守卫应带 where 条件').toBeDefined()
 
-      // 用真实 SQLite dialect 渲染：状态集合改了、少写一个、或者写成 `eq(status,'active')`
-      // 都会在这里变红。
+      // 真实 dialect 渲染：状态集合改了或写成 `eq(status,'active')` 都会变红。
       const dialect = new SQLiteSyncDialect()
       const rendered = dialect.sqlToQuery(cond as never)
       // 参数顺序：`[userId 列, userId 值, status 列, ...状态值]`。
@@ -479,16 +678,12 @@ describe('POST /api/payment 重复订阅守卫', () => {
       expect(userIdValue).toBe('user_1')
       expect(statusCol).toMatchObject({ name: 'subscriptions.status' })
       expect(statusArgs).toEqual(['active', 'trialing', 'past_due', 'unpaid', 'paused'])
-      // 已结束的状态必须不在集合里：否则取消过的用户再也订不回来。
+      // 已结束的状态必须在集合外，否则取消过的用户再也订不回来。
       expect(statusArgs).not.toContain('canceled')
       expect(statusArgs).not.toContain('incomplete_expired')
     })
   })
 })
-
-// ------------------------------------------------------------------------------------------------
-// Security fix tests
-// ------------------------------------------------------------------------------------------------
 
 describe('createCheckoutSession — Fix 1 (userId from session)', () => {
   it('accepts userId and customerEmail as derived session inputs', async () => {
@@ -581,13 +776,11 @@ describe('handleCheckoutCompleted — Fix 3 (userId validation) + Fix 5 (missing
           amount_total: 29900,
           currency: 'usd',
           metadata: { userId: 'user_lifetime' },
-          // 一次性支付没有 subscription 字段
         },
       },
     })
 
-    // 旧实现在没有 subscription 时直接 return，导致 payments.userId 恒为 null、
-    // 无法判断谁买了终身版。
+    // 旧实现没有 subscription 时直接 return，payments.userId 恒为 null，无法判断谁买了终身版。
     expect(mockDb.insert).toHaveBeenCalled()
     expect(captured.checkoutValues).toMatchObject({
       id: 'checkout_cs_lifetime',
@@ -662,8 +855,8 @@ describe('handleInvoicePaid — Fix 4 (charge ID + userId lookup)', () => {
         object: {
           id: 'in_123',
           customer: 'cus_abc',
-          // API 2025-09-30.clover：订阅挂在 parent.subscription_details，
-          // 支付记录在 payments.data[].payment，顶层已无 charge / subscription。
+          // API 2025-09-30.clover：订阅在 parent.subscription_details，支付记录在
+          // payments.data[].payment，顶层已无 charge / subscription。
           parent: { subscription_details: { subscription: 'sub_ghi' } },
           payments: { data: [{ payment: { charge: 'ch_def' } }] },
           amount_paid: 999,
@@ -770,7 +963,6 @@ describe('handleInvoicePaid — Fix 4 (charge ID + userId lookup)', () => {
           payments: null,
           amount_paid: 100,
           currency: 'usd',
-          // created 缺失
         },
       },
     })
@@ -780,10 +972,7 @@ describe('handleInvoicePaid — Fix 4 (charge ID + userId lookup)', () => {
   })
 })
 
-// ------------------------------------------------------------------------------------------------
-// customer.subscription.created / updated — 周期字段在 items.data[] 上（API 2025-09-30）
-// ------------------------------------------------------------------------------------------------
-
+// customer.subscription.created / updated —— 周期字段在 items.data[] 上（API 2025-09-30）。
 describe('handleSubscriptionUpsert — 周期字段读取自订阅项', () => {
   const capturedSet: { value: Record<string, unknown> | null } = { value: null }
 
@@ -792,7 +981,13 @@ describe('handleSubscriptionUpsert — 周期字段读取自订阅项', () => {
     mockDb.update.mockReturnValue({
       set: vi.fn().mockImplementation((v: Record<string, unknown>) => {
         capturedSet.value = v
-        return { where: vi.fn().mockResolvedValue([]) }
+        // `returning` 判定订阅行是否已存在。这里一律让行存在，把用例聚焦到
+        // 「列映射是否正确」；行缺失时的补建 / 抛错另见下面的归属用例。
+        return {
+          where: vi
+            .fn()
+            .mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'sub_x' }]) }),
+        }
       }),
     })
   })
@@ -819,7 +1014,7 @@ describe('handleSubscriptionUpsert — 周期字段读取自订阅项', () => {
       priceId: 'price_pro_monthly',
       cancelAtPeriodEnd: false,
     })
-    // 周期必须是有效 Date，不是 `new Date(undefined * 1000)` 产生的 Invalid Date。
+    // 必须是有效 Date，不能是 `new Date(undefined * 1000)` 产生的 Invalid Date。
     const start = capturedSet.value?.currentPeriodStart as Date
     expect(start).toBeInstanceOf(Date)
     expect(Number.isNaN(start.getTime())).toBe(false)
@@ -852,7 +1047,7 @@ describe('handleSubscriptionUpsert — 周期字段读取自订阅项', () => {
     expect(capturedSet.value?.cancelAtPeriodEnd).toBe(false)
   })
 
-  // 金额与周期落库：账单页的金额列显示 `—` 正是因为这三个列此前从不被写入。
+  // 这三列此前从不被写入，账单页金额列因此显示 `—`。
   it('把 price 的金额、币种与周期写入订阅行', async () => {
     const { handleSubscriptionUpsert } = await import('@/routes/api/webhooks/stripe')
     await handleSubscriptionUpsert(mockDb as never, {
@@ -922,7 +1117,7 @@ describe('handleSubscriptionUpsert — 周期字段读取自订阅项', () => {
     })
 
     expect(capturedSet.value).toMatchObject({ amount: 1400, currency: 'usd' })
-    // 没有 recurring 就整列不写：写 `null` 与「不知道」同义，会把已正确的值擦掉。
+    // 没有 recurring 就整列不写：写 `null` 会把已正确的值擦掉。
     expect(capturedSet.value).not.toHaveProperty('interval')
   })
 
@@ -946,5 +1141,336 @@ describe('handleSubscriptionUpsert — 周期字段读取自订阅项', () => {
     expect(capturedSet.value).not.toHaveProperty('amount')
     expect(capturedSet.value).not.toHaveProperty('currency')
     expect(capturedSet.value).not.toHaveProperty('interval')
+  })
+})
+
+/**
+ * 事件顺序无关性。
+ *
+ * Stripe 不保证 `checkout.session.completed` / `customer.subscription.created` /
+ * `invoice.paid` 三个事件的投递顺序。原实现只认「订阅行已存在」，事件抢跑就会
+ * 静默丢数据：付款记录写出一行 `user_id` 为 NULL 的孤儿行（用户永远查不到），
+ * 订阅的 Price / 周期则永远补不上。
+ */
+describe('webhook 事件顺序无关', () => {
+  it('invoice.paid 找不到归属时不写孤儿行，抛错让 Stripe 重投', async () => {
+    // 两次反查都落空：订阅行还没写。
+    mockDb.select.mockReturnValue(makeSelectChain([]).selectMock())
+    // insert 链必须完整：否则代码会在 `.values()` 处因 mock 缺陷而抛错，
+    // 测试就成了「因为 mock 坏了才通过」的假阳性。
+    const valuesMock = vi.fn().mockReturnValue({
+      onConflictDoNothing: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+    })
+    const insertSpy = vi.fn()
+    mockDb.insert.mockImplementation(() => {
+      insertSpy()
+      return { values: valuesMock }
+    })
+
+    const { handleInvoicePaid } = await import('@/routes/api/webhooks/stripe')
+
+    await expect(
+      handleInvoicePaid(mockDb as never, {
+        id: 'evt_orphan',
+        data: {
+          object: {
+            id: 'in_orphan',
+            customer: 'cus_orphan',
+            parent: { subscription_details: { subscription: 'sub_orphan' } },
+            payments: { data: [{ payment: { charge: 'ch_orphan' } }] },
+            amount_paid: 599,
+            currency: 'usd',
+            created: 1700000000,
+          },
+        },
+      }),
+    ).rejects.toThrow(/no matching subscription row/)
+
+    // 写出一行 user_id 为 NULL 的记录等于静默丢钱：用户在自己的账单页看不到它。
+    expect(insertSpy).not.toHaveBeenCalled()
+  })
+
+  it('customer.subscription.created 在订阅行缺失时用 metadata 补建', async () => {
+    // 反查订阅行落空。
+    mockDb.select.mockReturnValue(makeSelectChain([]).selectMock())
+    const insertSpy = vi.fn()
+    mockDb.insert.mockImplementation(() => {
+      insertSpy()
+      return {
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi
+            .fn()
+            .mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+        }),
+      }
+    })
+    mockDb.update.mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+      }),
+    })
+
+    const { handleSubscriptionUpsert } = await import('@/routes/api/webhooks/stripe')
+    await handleSubscriptionUpsert(mockDb as never, {
+      id: 'sub_race',
+      status: 'active',
+      cancel_at_period_end: false,
+      // 归属来自 `subscription_data.metadata`（创建 session 时显式写入）。
+      metadata: { userId: 'user_race' },
+      customer: 'cus_race',
+      items: {
+        data: [
+          {
+            price: {
+              id: 'price_race',
+              currency: 'usd',
+              recurring: { interval: 'month' },
+              unit_amount: 599,
+            },
+            current_period_start: 1700000000,
+            current_period_end: 1702598400,
+          },
+        ],
+      },
+    })
+
+    expect(insertSpy).toHaveBeenCalled()
+  })
+
+  it('订阅行缺失且 metadata 无归属时抛错，让 Stripe 重投', async () => {
+    // UPDATE 影响 0 行：订阅行还没写。
+    mockDb.update.mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+      }),
+    })
+    const insertSpy = vi.fn()
+    mockDb.insert.mockImplementation(() => {
+      insertSpy()
+      return {
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi
+            .fn()
+            .mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+        }),
+      }
+    })
+
+    const { handleSubscriptionUpsert } = await import('@/routes/api/webhooks/stripe')
+
+    // 静默 return 会被当成「处理成功」记进 processed_at，Stripe 永不重投，
+    // 订阅的价格与周期就永远补不上——必须抛错。
+    await expect(
+      handleSubscriptionUpsert(mockDb as never, {
+        id: 'sub_orphan',
+        status: 'active',
+        cancel_at_period_end: false,
+        metadata: {},
+        customer: 'cus_orphan',
+        items: {
+          data: [
+            {
+              price: {
+                id: 'price_orphan',
+                currency: 'usd',
+                recurring: { interval: 'month' },
+                unit_amount: 599,
+              },
+              current_period_start: 1700000000,
+              current_period_end: 1702598400,
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow(/no metadata.userId/)
+
+    expect(insertSpy).not.toHaveBeenCalled()
+  })
+
+  it('订阅行已存在时只更新，不重复插入', async () => {
+    mockDb.select.mockReturnValue(makeSelectChain([{ userId: 'user_exists' }]).selectMock())
+    const insertSpy = vi.fn()
+    mockDb.insert.mockImplementation(() => {
+      insertSpy()
+      return {
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi
+            .fn()
+            .mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
+        }),
+      }
+    })
+    mockDb.update.mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi
+          .fn()
+          .mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'sub_exists' }]) }),
+      }),
+    })
+
+    const { handleSubscriptionUpsert } = await import('@/routes/api/webhooks/stripe')
+    await handleSubscriptionUpsert(mockDb as never, {
+      id: 'sub_exists',
+      status: 'active',
+      cancel_at_period_end: false,
+      metadata: { userId: 'user_exists' },
+      customer: 'cus_exists',
+      items: {
+        data: [
+          {
+            price: {
+              id: 'price_x',
+              currency: 'usd',
+              recurring: { interval: 'month' },
+              unit_amount: 599,
+            },
+            current_period_start: 1700000000,
+            current_period_end: 1702598400,
+          },
+        ],
+      },
+    })
+
+    expect(insertSpy).not.toHaveBeenCalled()
+    expect(mockDb.update).toHaveBeenCalled()
+  })
+})
+
+/**
+ * 回跳地址必须同源。
+ *
+ * 客户端传的 `successUrl` / `cancelUrl` / `returnUrl` 会被原样交给 Stripe：
+ * 不校验等于把「付款后跳到哪里」的决定权交给客户端，是开放重定向——攻击者可以让
+ * 受害者付完款后落在仿冒页上继续骗取信息。
+ */
+describe('回跳地址必须同源', () => {
+  beforeEach(() => {
+    vi.doUnmock('@/config/website')
+    vi.doUnmock('@/auth/auth')
+    vi.doUnmock('@/lib/rate-limit')
+    vi.resetModules()
+  })
+
+  /** 导入支付路由；`customerRows` 命中 `subscriptions.customerId` 查询（门户入口）。 */
+  async function importRoute(customerRows: unknown[] = []) {
+    vi.doMock('@/lib/server-context', () => ({
+      getServerContext: () => ({
+        env: { STRIPE_SECRET_KEY: 'sk_test', STRIPE_WEBHOOK_SECRET: 'whsec_test' },
+      }),
+      als: {
+        getStore: () => ({
+          paymentProviderRegistry: {},
+          mailProviderRegistry: {},
+          notificationProviderRegistry: {},
+        }),
+      },
+    }))
+    vi.doMock('@/auth/auth', () => ({
+      getAuth: () => ({
+        api: { getSession: async () => ({ user: { id: 'user_1', email: 'a@b.c' } }) },
+      }),
+    }))
+    vi.doMock('@/config/website', async () => {
+      const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
+      const { parsePublicEnv } =
+        await vi.importActual<typeof import('@/env/public')>('@/env/public')
+      const base = actual.createWebsiteConfig(
+        parsePublicEnv({
+          VITE_BASE_URL: 'https://jerbix.dev',
+        }),
+      )
+      return { ...actual, websiteConfig: base }
+    })
+    // 价格目录：服务端按 lookup key 解析出 Price id 与计费模式。
+    vi.doMock('@/payment/price-catalog.server', () => ({
+      getPriceCatalog: async () => mockPriceCatalog,
+    }))
+    // 同源校验以 `publicEnv.VITE_BASE_URL` 为准，必须与上面的站点一致。
+    vi.doMock('@/env/public', async () => {
+      const actual = await vi.importActual<typeof import('@/env/public')>('@/env/public')
+      return { ...actual, publicEnv: { ...actual.publicEnv, VITE_BASE_URL: 'https://jerbix.dev' } }
+    })
+    vi.doMock('@/lib/rate-limit', () => ({ checkRateLimit: async () => true }))
+    mockDb.select = vi.fn().mockImplementation((fields: Record<string, unknown>) => {
+      const first = fields ? Object.values(fields)[0] : undefined
+      const name = (first as { name?: string } | undefined)?.name
+      return makeSelectChain(name === 'subscriptions.customerId' ? customerRows : []).selectMock()
+    })
+    return import('@/routes/api/payment/$')
+  }
+
+  const checkoutBody = {
+    productId: 'pro',
+    interval: 'month' as const,
+    successUrl: 'https://jerbix.dev/zh/dashboard/billing?checkout=success',
+    cancelUrl: 'https://jerbix.dev/zh/pricing?checkout=cancelled',
+  }
+
+  async function post(body: unknown) {
+    const { Route } = await importRoute()
+    const handlers = (
+      Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+    ).options.server.handlers
+    const handler = handlers.POST as (ctx: { request: Request }) => Promise<Response>
+    return handler({
+      request: new Request('https://jerbix.dev/api/payment', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    })
+  }
+
+  it('同源回跳地址照常创建 Checkout Session', async () => {
+    const response = await post(checkoutBody)
+    expect(response.status).toBe(200)
+    expect(mockCheckoutProvider.createCheckoutSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('外域 successUrl 返回 400，不创建 Checkout Session', async () => {
+    const response = await post({ ...checkoutBody, successUrl: 'https://evil.com/phish' })
+    expect(response.status).toBe(400)
+    expect(mockCheckoutProvider.createCheckoutSession).not.toHaveBeenCalled()
+  })
+
+  it('外域 cancelUrl 返回 400，不创建 Checkout Session', async () => {
+    const response = await post({ ...checkoutBody, cancelUrl: 'https://evil.com/phish' })
+    expect(response.status).toBe(400)
+    expect(mockCheckoutProvider.createCheckoutSession).not.toHaveBeenCalled()
+  })
+
+  it('外域门户 returnUrl 返回 400，不创建门户链接', async () => {
+    const { Route } = await importRoute([{ customerId: 'cus_1' }])
+    const handlers = (
+      Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+    ).options.server.handlers
+    const handler = handlers.DELETE as (ctx: { request: Request }) => Promise<Response>
+
+    const response = await handler({
+      request: new Request('https://jerbix.dev/api/payment', {
+        method: 'DELETE',
+        body: JSON.stringify({ returnUrl: 'https://evil.com/phish' }),
+      }),
+    })
+
+    expect(response.status).toBe(400)
+    expect(mockCheckoutProvider.createCustomerPortalLink).not.toHaveBeenCalled()
+  })
+
+  it('同源门户 returnUrl 照常创建门户链接', async () => {
+    const { Route } = await importRoute([{ customerId: 'cus_1' }])
+    const handlers = (
+      Route as unknown as { options: { server: { handlers: Record<string, unknown> } } }
+    ).options.server.handlers
+    const handler = handlers.DELETE as (ctx: { request: Request }) => Promise<Response>
+
+    const response = await handler({
+      request: new Request('https://jerbix.dev/api/payment', {
+        method: 'DELETE',
+        body: JSON.stringify({ returnUrl: 'https://jerbix.dev/zh/dashboard/billing' }),
+      }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(mockCheckoutProvider.createCustomerPortalLink).toHaveBeenCalledTimes(1)
   })
 })

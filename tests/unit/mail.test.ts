@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// ---------------------------------------------------------------------------
-// Mock server-context ALS
-// ---------------------------------------------------------------------------
+// Mock server-context ALS。
 const mockMailProviderRegistry: Record<string, (() => object) | undefined> = {}
 
 vi.mock('@/lib/server-context', () => ({
@@ -16,22 +14,16 @@ vi.mock('@/lib/server-context', () => ({
   },
 }))
 
-// ---------------------------------------------------------------------------
-// Mock @react-email/render (used in renderTemplate)
-// ---------------------------------------------------------------------------
+// Mock @react-email/render（renderTemplate 用）。
 vi.mock('@react-email/render', () => ({
   render: vi.fn().mockResolvedValue('<html><body>test</body></html>'),
 }))
 
-// ---------------------------------------------------------------------------
-// Module under test — import after mocks
-// ---------------------------------------------------------------------------
+// 被测模块，必须在 mock 之后导入。
 import { getMailProvider, sendMail } from '@/mail'
 import { CloudflareEmailProvider } from '@/mail/provider/cloudflare'
 
-// ---------------------------------------------------------------------------
-// Subject localization
-// ---------------------------------------------------------------------------
+// Subject 文案本地化。
 describe('Subject localization', () => {
   it('verifyEmail has zh/en subjects', async () => {
     const { renderTemplate } = await import('@/mail/render')
@@ -101,9 +93,7 @@ describe('Subject localization', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// renderTemplate produces HTML
-// ---------------------------------------------------------------------------
+// renderTemplate 产出 HTML。
 describe('renderTemplate', () => {
   it('returns html string', async () => {
     const { renderTemplate } = await import('@/mail/render')
@@ -118,9 +108,7 @@ describe('renderTemplate', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// sendMail with mock provider
-// ---------------------------------------------------------------------------
+// sendMail（mock provider）。
 describe('sendMail', () => {
   beforeEach(() => {
     for (const key of Object.keys(mockMailProviderRegistry)) {
@@ -200,9 +188,7 @@ describe('sendMail', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// CloudflareEmailProvider — EmailMessage construction
-// ---------------------------------------------------------------------------
+// CloudflareEmailProvider 的 EmailMessage 构造。
 describe('CloudflareEmailProvider', () => {
   it('calls binding.send with EmailMessageBuilder(from, to, subject, html)', async () => {
     let capturedMsg: { from: string; to: string; subject: string; html: string } | undefined

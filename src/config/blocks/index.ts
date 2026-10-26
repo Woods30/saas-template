@@ -1,7 +1,0 @@
-export { aboutBlocks } from './about'
-export { contactBlocks } from './contact'
-export { featuresBlocks } from './features'
-export { homeBlocks } from './home'
-export { getPricingPlans, pricingBlocks } from './pricing'
-export { roadmapBlocks } from './roadmap'
-export { waitlistBlocks } from './waitlist'

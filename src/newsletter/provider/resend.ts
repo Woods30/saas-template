@@ -7,10 +7,7 @@ import type {
   UnsubscribeNewsletterParams,
 } from '../types'
 
-/**
- * Resend Audiences provider — wraps `resend.contacts.*` API.
- * 实际 Resend SDK 版本是 6.32.1，contacts 接口签名以 `node_modules/resend/dist/index.d.mts` 为准。
- */
+/** Resend Audiences provider — wraps `resend.contacts.*` API. */
 export class ResendNewsletterProvider implements NewsletterProvider {
   private readonly client: Resend
 
@@ -27,7 +24,7 @@ export class ResendNewsletterProvider implements NewsletterProvider {
 
   async subscribe({ email }: SubscribeNewsletterParams): Promise<boolean> {
     try {
-      // Use LegacyCreateContactOptions which includes audienceId (the only overload that accepts it)
+      // LegacyCreateContactOptions is the only overload that accepts audienceId.
       const payload: LegacyCreateContactOptions = {
         email,
         audienceId: this.audienceId,

@@ -3,11 +3,8 @@ import { destructiveFocusRing } from '@/lib/a11y'
 import { cn } from '@/lib/utils'
 
 /**
- * destructive 按钮的焦点环可访问性。
- *
- * base-nova 的 destructive variant 自带低透明度焦点环（ring-destructive/20），
- * 深色下对页面背景仅 1.70:1，低于 WCAG 3:1 下限。ui 原件不本地修改，改在调用处
- * 用 className 覆盖回高对比的 --ring。`cn` 基于 twMerge，同名工具类后者胜出。
+ * destructive 按钮的焦点环可访问性：原件的 `ring-destructive/20` 深色下对比度仅 1.70:1，
+ * 低于 WCAG 3:1。ui 原件不本地修改，改在调用处用 className 覆盖。
  */
 describe('destructiveFocusRing', () => {
   const upstreamDestructive =

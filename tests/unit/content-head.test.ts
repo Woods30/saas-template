@@ -5,24 +5,10 @@ import { Route as DocSlugRoute } from '@/routes/{-$locale}/_layout/docs/$slug'
 import { Route as LegalSlugRoute } from '@/routes/{-$locale}/_layout/marketing/legal/$slug'
 
 /**
- * legal / docs 详情页 `head()` 与 JSON-LD 的 canonical / hreflang 回归测试。
+ * legal / docs `head()` 与 JSON-LD 的 canonical / hreflang 回归。
  *
- * 缺陷背景：这些路由的 `head()` 曾用**内容标题**（可含空格 / 中文）当路径段，
- * 且 legal 还缺 `marketing` 前缀：
- *
- * - legal 真实路由是 `/{locale}/marketing/legal/$slug`（见 `src/routeTree.gen.ts`：
- *   父路由 `path: '/{-$locale}/marketing'` + 子路由 `path: '/legal/$slug'`），
- *   但 `head()` 写成 `/legal/${title}` —— 前缀缺 `marketing`，且 slug 用了标题；
- * - docs 前缀 `/docs` 正确，但同样用标题当路径段，真实 slug 是与语言无关的
- *   `params.slug`（见 `src/lib/docs.ts` 与 `src/lib/content-locale.ts` 的
- *   `contentSlug`）。
- *
- * `seo()` 把同一 path 同时用于 canonical 与 hreflang alternate 的 href，因此两者都
- * 指向不存在的路由。这里用合成 slug（`terms` / `getting-started`）验证修复后
- * canonical / alternates 都基于真实 slug，且不泄漏中文标题。
- *
- * SSR 中 Paraglide 通过 AsyncLocalStorage 按请求写入语言；这里用假的 ALS store 复现
- * 「每请求调用 `head()`」的语义（与 `tests/unit/blog-head.test.ts` 同一模式）。
+ * 曾用内容标题当路径段（legal 还缺 `marketing` 前缀），导致 canonical 与 alternate
+ * 都指向不存在的路由。这里验证路径基于真实 slug 且不泄漏中文标题。
  */
 
 interface HeadLink {
@@ -48,12 +34,7 @@ function canonicalHref(head: HeadResult): string | undefined {
   return head.links.find((link) => link.rel === 'canonical')?.href
 }
 
-/**
- * 只取**真实翻译**的 alternate。
- *
- * `x-default` 是「找不到匹配语言时的兜底」，指向默认语言，不属于「另一个语言版本」，
- * 因此这里排除它——否则断言「每条 alternate 都指向 /en/」会被兜底项打破。
- */
+/** 只取真实翻译的 alternate：`x-default` 是兜底项，不属于「另一个语言版本」。 */
 function alternateHrefs(head: HeadResult): string[] {
   return head.links
     .filter((link) => link.rel === 'alternate' && link.hrefLang !== 'x-default')

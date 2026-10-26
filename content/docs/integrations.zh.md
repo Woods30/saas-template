@@ -2,7 +2,7 @@
 title: 功能集成概览
 description: 各服务模块的门禁语义、端点与接线方式
 locale: zh
-order: 5
+order: 9
 group: features
 updated: 2026-10-14
 ---

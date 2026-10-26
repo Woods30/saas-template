@@ -22,22 +22,12 @@ interface UserMenuProps {
 }
 
 /**
- * 导航栏的账号区。
- *
- * 渲染规则（顺序即优先级）：
- *
- * - **会话待定**（`isPending`）：渲染 `guestFallback`。这里**不能**渲染骨架：SSR 阶段
- *   会话请求尚未完成，服务端输出的就是待定态；若待定态渲染骨架，服务端 HTML 里就
- *   完全没有「登录」入口，访客要等客户端拿到会话后才看到它，登录链接会闪一下才出现。
- *   渲染 `guestFallback` 则让 SSR 与客户端首帧一致（都是登录入口），hydration 后
- *   再按真实会话切换。
- * - **未登录**：`guestFallback`。
- * - **已登录**：用户菜单，展示账号邮箱并提供登出（登出经 `signOutAndRedirect`，与个人中心用户卡片共用）。
+ * 导航栏的账号区。待定时也渲染 `guestFallback` 而非骨架：SSR 阶段会话未定，
+ * 骨架会让服务端 HTML 里没有登录入口，登录链接会闪一下才出现。
  */
 export function UserMenu({ guestFallback }: UserMenuProps) {
   const { data: session, isPending } = useSession()
 
-  // 待定与未登录都渲染访客入口：前者保证 SSR 与首帧一致，后者是真实状态。
   if (isPending || !session) return <>{guestFallback}</>
 
   const label = session.user.name ?? session.user.email

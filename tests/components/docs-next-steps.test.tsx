@@ -6,7 +6,7 @@ import { DocsSidebar } from '@/components/docs/DocsSidebar'
 import type { DocEntry } from '@/lib/docs'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
-/** 与下方卡片测试用的同一篇文档，用于比对两处图标是否一致。 */
+/** 与下方卡片测试同一篇文档，用于比对两处图标。 */
 const SIDEBAR_DOC: DocEntry = {
   slug: 'configuration',
   title: 'Website Config',
@@ -17,15 +17,8 @@ const SIDEBAR_DOC: DocEntry = {
   updated: '',
 }
 
-/**
- * 正文末尾的「下一步」卡片。
- *
- * 原本是一组普通列表项，与其他内容视觉上没有区别；改为带图标的块状卡片后，
- * 「读完之后去哪」在页面底部一眼可见。站内相对链接走文档路由，站外链接按普通
- * 外链渲染。
- */
-// 只替换路由边界；mock 需还原真实 `Link` 对 `params` / `hash` 的拼接方式，
-// 否则「锚点是否保留」这条断言测的是 mock 而不是组件。
+/** 正文末尾的「下一步」卡片：站内相对链接走文档路由，站外链接按普通外链渲染。 */
+// 只替换路由边界；mock 需还原 `params` / `hash` 拼接，否则「锚点是否保留」测的是 mock。
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
     children,
@@ -75,15 +68,14 @@ describe('DocNextSteps', () => {
   })
 
   it('每条卡片带一枚与侧边栏一致的主题图标', () => {
-    // 卡片用「目标文档」的图标（`./configuration` → 配置图标），而不是统一箭头：
-    // 与侧边栏同一份映射，用户能在两处认出同一项。
+    // 卡片用目标文档的图标，与侧边栏同一份映射。
     const { container } = render(
       <DocNextSteps
         steps={[{ title: 'Website Config', href: './configuration', description: '' }]}
         locale="en"
       />,
     )
-    // 卡片内：主题图标 + 末尾的箭头，共两枚；两者都是装饰性的。
+    // 主题图标 + 末尾箭头，共两枚，均为装饰性。
     const svgs = container.querySelectorAll('li svg')
     expect(svgs).toHaveLength(2)
     for (const svg of svgs) {
@@ -92,7 +84,7 @@ describe('DocNextSteps', () => {
   })
 
   it('卡片图标与侧边栏中同一文档的图标一致', () => {
-    /** 取图标的 tabler 名称，避免把两处的 className 差异也算进比较。 */
+    /** 取 tabler 图标名，忽略 className 差异。 */
     const iconName = (root: HTMLElement | null, selector: string) =>
       root
         ?.querySelector(selector)
@@ -100,7 +92,6 @@ describe('DocNextSteps', () => {
         ?.match(/tabler-icon-([a-z-]+)/)?.[1]
 
     const sidebar = render(<DocsSidebar docs={[SIDEBAR_DOC]} />)
-    // 取文档条目内的图标，而不是组标题那枚。
     const sidebarIcon = iconName(sidebar.container, 'li svg')
     sidebar.unmount()
     expect(sidebarIcon).toBe('settings')

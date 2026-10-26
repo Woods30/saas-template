@@ -39,7 +39,7 @@
 
 ### Task A：产品叙事与首页 blocks
 
-修改 `messages/zh.json`、`messages/en.json`、`src/config/blocks/home.ts`、`src/components/marketing/LandingPage.tsx`、既有 Hero / Features / Faq / Cta 的组件与 types、`tests/components/landing.test.tsx`。不创建文件或新增依赖。
+修改 `messages/zh.json`、`messages/en.json`、`src/config/pages/home.ts`、`src/components/marketing/LandingPage.tsx`、既有 Hero / Features / Faq / Cta 的组件与 types、`tests/components/landing.test.tsx`。不创建文件或新增依赖。
 
 接口：保留 `homeBlocks` 导出，使用 getter 使消息在读取时求值；Hero 增加可选 ReactNode visual / eyebrow，Features 支持图标与 bento variant，保留旧调用默认行为。LandingPage 内分离技术条、流程与模板说明函数，各函数只读取所需文案。保留 features / pricing / faq 锚点。
 
@@ -1049,16 +1049,16 @@ git commit -m "feat(i18n): 服务端按 URL 前缀优先解析 locale"
 
 **Files:**
 - Create: `src/components/marketing/LandingPage.tsx`
-- Modify: `src/components/blocks/marketing/hero/Hero.tsx`、`src/components/blocks/marketing/hero/types.ts`、`src/config/blocks/home.ts`、`src/routes/{-$locale}/index.tsx`、`src/routes/{-$locale}/_layout/marketing/index.tsx`、`src/components/marketing/Navbar.tsx`、`tests/unit/home-head.test.ts`、`e2e/marketing.spec.ts`、`e2e/hydration.spec.ts`
+- Modify: `src/components/sections/hero/Hero.tsx`、`src/components/sections/hero/types.ts`、`src/config/pages/home.ts`、`src/routes/{-$locale}/index.tsx`、`src/routes/{-$locale}/_layout/marketing/index.tsx`、`src/components/marketing/Navbar.tsx`、`tests/unit/home-head.test.ts`、`e2e/marketing.spec.ts`、`e2e/hydration.spec.ts`
 - Test: `tests/components/landing.test.tsx`
 
 **Interfaces:**
-- Consumes: `homeBlocks`、`featuresBlocks`、`pricingPlans`（`@/config/blocks`）；`Hero`/`Stats`/`Features`/`Faq`/`Testimonials`/`Cta`（`@/components/blocks/marketing`）；`Pricing`（`@/components/blocks/marketing/pricing`）；`MarketingLayout`；`seo`；`m`；`getLocale`
+- Consumes: `homeBlocks`、`featuresBlocks`、`pricingPlans`（`@/config/pages`）；`Hero`/`Stats`/`Features`/`Faq`/`Testimonials`/`Cta`（`@/components/sections`）；`Pricing`（`@/components/sections/Pricing`）；`MarketingLayout`；`seo`；`m`；`getLocale`
 - Produces: `LandingPage()` 组件；路由 `/{-$locale}/` 直接渲染 landing；`/{-$locale}/marketing` 重定向到 `/{-$locale}`；`HeroProps` 增加可选 `imageClassName?: string`。
 
 - [ ] **Step 1: 给 `HeroProps` 增加 `imageClassName`**
 
-在 `src/components/blocks/marketing/hero/types.ts` 的 `HeroProps` 中，`image` 之后增加：
+在 `src/components/sections/hero/types.ts` 的 `HeroProps` 中，`image` 之后增加：
 
 ```ts
   /** 覆盖图片默认样式（默认 `mt-10 rounded-lg border shadow-sm`）；用于品牌吉祥物等无边框场景。 */
@@ -1081,7 +1081,7 @@ git commit -m "feat(i18n): 服务端按 URL 前缀优先解析 locale"
       )}
 ```
 
-- [ ] **Step 3: 在 `src/config/blocks/home.ts` 的 Hero 增加吉祥物**
+- [ ] **Step 3: 在 `src/config/pages/home.ts` 的 Hero 增加吉祥物**
 
 在 `homeBlocks.Hero` 对象中、`align: 'center' as const,` 之前增加：
 
@@ -1135,9 +1135,9 @@ import {
   Hero,
   Stats,
   Testimonials,
-} from '@/components/blocks/marketing'
-import { Pricing } from '@/components/blocks/marketing/pricing'
-import { featuresBlocks, homeBlocks, pricingPlans } from '@/config/blocks'
+} from '@/components/sections'
+import { Pricing } from '@/components/sections/Pricing'
+import { featuresBlocks, homeBlocks, pricingPlans } from '@/config/pages'
 
 /**
  * Landing 单页：把营销区块顺序排布在同一页面内，特性 / 价格 / FAQ 作为锚点区段，
@@ -1357,7 +1357,7 @@ Expected: 测试 PASS，`tsc` 无错误
 - [ ] **Step 16: 提交**
 
 ```bash
-git add src/components/marketing/LandingPage.tsx src/components/blocks/marketing/hero src/config/blocks/home.ts "src/routes/{-$locale}/index.tsx" "src/routes/{-$locale}/_layout/marketing/index.tsx" src/components/marketing/Navbar.tsx tests/components/landing.test.tsx tests/unit/home-head.test.ts e2e/marketing.spec.ts e2e/hydration.spec.ts
+git add src/components/marketing/LandingPage.tsx src/components/sections/hero src/config/pages/home.ts "src/routes/{-$locale}/index.tsx" "src/routes/{-$locale}/_layout/marketing/index.tsx" src/components/marketing/Navbar.tsx tests/components/landing.test.tsx tests/unit/home-head.test.ts e2e/marketing.spec.ts e2e/hydration.spec.ts
 git commit -m "feat(landing): / 渲染单页 landing 并加入锚点导航"
 ```
 

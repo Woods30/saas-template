@@ -39,14 +39,14 @@ describe('ThemeToggle', () => {
   it('直接点选某个主题即应用，不经过中间态', () => {
     document.documentElement.dataset.theme = 'system'
     render(<ThemeToggle />)
-    // 从 system 直接跳到 dark，而非按 light → dark 逐级循环。
+    // 从 system 直接跳到 dark。
     fireEvent.click(within(openMenu()).getByRole('menuitemradio', { name: 'Dark' }))
     expect(document.documentElement.dataset.theme).toBe('dark')
     expect(document.cookie).toContain('THEME=dark')
   })
 
   it('当前主题在菜单中标记为选中', () => {
-    // getTheme() 客户端读 THEME cookie，因此这里要设 cookie 而非 DOM 属性。
+    // getTheme() 读 THEME cookie，故设 cookie 而非 DOM 属性。
     // biome-ignore lint/suspicious/noDocumentCookie: 测试内同步设置，模拟已选主题。
     document.cookie = 'THEME=dark; Path=/'
     render(<ThemeToggle />)

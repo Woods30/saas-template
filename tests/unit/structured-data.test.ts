@@ -1,16 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * `seo(..., { pageType })` 产出的 JSON-LD `@graph` 回归。
- *
- * 这里守两件事：
- *
- * 1. **三个节点在同一个 `@graph` 里**。页面节点靠 `isPartOf` / `publisher` 指向站点与
- *    组织；拆成独立 script 时搜索引擎只能看到三个互不相干的孤立节点。
- * 2. **`<` 被转义**。`description` 里一旦出现 `</script>`，未转义会提前闭合脚本标签，
- *    后续内容变成可执行的 HTML——这是模板层面的注入面，不是理论风险。
- *
- * 同 `seo.test.ts`，通过 `vi.stubEnv` + `resetModules` 让自定义 `VITE_BASE_URL` 真正生效。
+ * `seo(..., { pageType })` 的 JSON-LD `@graph` 回归：三个节点必须在同一 `@graph` 内
+ * 互相引用；`<` 必须转义，否则 `description` 里的 `</script>` 会提前闭合脚本标签。
  */
 
 const CUSTOM_BASE_URL = 'https://acme.example.com'
@@ -39,7 +31,7 @@ async function loadSeo(): Promise<SeoModule> {
   return import('@/lib/seo')
 }
 
-/** 取出 `seo()` 返回的脚本并解析回对象，顺带断言形状。 */
+/** 取出 `seo()` 返回的脚本并解析回对象。 */
 function parseGraph(seoModule: SeoModule, options: Parameters<SeoModule['seo']>[1]) {
   const head = seoModule.seo('/marketing/about', options)
   const scripts = (head as { scripts?: JsonLdScript[] }).scripts
@@ -83,7 +75,7 @@ describe('seo() 结构化数据', () => {
     expect(organization?.['@id']).toBe(orgId)
     expect(organization?.url).toBe(CUSTOM_BASE_URL)
 
-    // 站点节点归属组织，页面节点归属站点——断链会让三个节点退化成孤立数据。
+    // 断链会让三个节点退化成孤立数据。
     expect(website?.publisher).toEqual({ '@id': orgId })
     expect(page?.isPartOf).toEqual({ '@id': siteId })
     expect(page?.['@id']).toBe(`${CUSTOM_BASE_URL}/marketing/about#page`)
@@ -125,10 +117,9 @@ describe('seo() 结构化数据', () => {
     })
     const children = (head as { scripts?: JsonLdScript[] }).scripts?.[0]?.children ?? ''
 
-    // 原始 `</script>` 一次都不能出现，否则浏览器会在此处结束脚本块。
+    // 原始 `</script>` 一次都不能出现。
     expect(children).not.toContain('</script>')
     expect(children).toContain('\\u003c/script')
-    // 转义后仍是合法 JSON，且原文可从解析结果里还原。
     const parsed = JSON.parse(children) as { '@graph': JsonLdNode[] }
     expect(parsed['@graph'].at(-1)?.description).toBe('</script><script>alert(1)</script>')
   })

@@ -9,7 +9,6 @@ import { getLocale } from '@/locale/paraglide/runtime.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/marketing/blog/$slug')({
   beforeLoad: ({ params }) => {
-    // 门禁最前处：关闭时无需再做内容查找。
     assertPageEnabled('blog')
     const locale = getLocale()
     const post = allBlogs.find(

@@ -8,7 +8,7 @@ export interface AlternateLink {
 
 /**
  * 生成给定路径的 hreflang alternate 链接列表。
- * - x-default 指向无语言前缀的路径（默认语言由 cookie/Accept-Language 决定）
+ * - x-default 指向无语言前缀的路径
  * - 其他语言路径以 `/{locale}` 为前缀
  */
 export function getAlternateLinks(pathname: string): AlternateLink[] {

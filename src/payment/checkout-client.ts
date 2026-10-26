@@ -1,36 +1,43 @@
 import type { Locale } from '@/config/locale'
-import { resolveMode, resolvePriceId } from '@/config/payment'
+import { resolveLookupKey } from '@/config/products'
 import { websiteConfig } from '@/config/website'
+import type { PricingInterval } from '@/types/pricing'
+import type { SwitchDirection } from './billing-query'
 
 /**
- * 浏览器端发起结账。
+ * 浏览器端发起结账：POST `/api/payment` → 整页跳转到 Stripe Checkout。
  *
- * 定价页与工作台的「升级」按钮共用这一条路径：把 plan id 解析成 Price ID，向
- * `/api/payment` POST，拿到 Stripe Checkout 的 URL 后整页跳转。
+ * 只传 **产品 id + 计费周期**，不传 Price id：价格由服务端按 `lookup_key` 解析。
+ * 好处有两层——改价不必改前端；客户端也指定不了别的价格。
  *
- * 为什么整页跳转而不是 `window.open`：Stripe Checkout 完成后需要回到本站的
- * success_url，新标签页会让用户落在原标签的旧页面上；整页跳转的返回路径最直观。
+ * 用整页跳转而非 `window.open`：Checkout 完成后要回到本站 success_url，新标签页会让
+ * 用户落在原标签的旧页面上。
  *
- * 失败语义：
- * - 未登录 → 返回 `{ kind: 'unauthenticated' }`，由调用方跳注册页（并带上 plan，
- *   注册完成后可以继续结账）；
- * - 该 plan 没有配置 Price → `{ kind: 'not-configured' }`，调用方应禁用按钮而不是
- *   让用户点出一个 502；
- * - 已有生效中的订阅 → `{ kind: 'already-subscribed' }`（服务端 409）。调用方应
- *   提示去「管理订阅」里换方案，而不是让用户再走一遍结账；
- * - 其他 → `{ kind: 'error', message }`。
+ * 各 outcome 对应不同后续动作：未登录跳注册页、未配置 Price 应禁用按钮、
+ * 已有互斥订阅（409）应提示去「管理订阅」换方案。
  */
 
 export type CheckoutOutcome =
   | { kind: 'redirect'; url: string }
   | { kind: 'unauthenticated' }
   | { kind: 'not-configured' }
-  | { kind: 'already-subscribed' }
+  /**
+   * 已经有订阅了：一个账号最多一份订阅，只能**切换**不能再开一份。
+   *
+   * `direction` 是服务端算出来的切换方向（升级 / 降级 / 换周期），没有时为 `undefined`
+   * ——方向只是提示，判定权始终在服务端。
+   */
+  | { kind: 'already-subscribed'; direction?: SwitchDirection }
+  /** 已经持有更高等级的方案，不必再买低级的。 */
+  | { kind: 'already-higher-tier' }
+  /** 与已购方案显式互斥，不能同时持有。 */
+  | { kind: 'exclusive-product' }
   | { kind: 'error'; message: string }
 
 export interface StartCheckoutParams {
-  planId: string
-  /** 计费周期；一次性方案传 `one_time`。 */
+  /** 本站产品 id（如 `pro`）。 */
+  productId: string
+  /** 计费周期；买断传 `one_time`。 */
   interval?: 'month' | 'year' | 'one_time'
   locale: Locale
 }
@@ -46,8 +53,10 @@ function returnUrls(locale: Locale): { successUrl: string; cancelUrl: string } {
 }
 
 export async function startCheckout(params: StartCheckoutParams): Promise<CheckoutOutcome> {
-  const priceId = resolvePriceId(websiteConfig.payment.priceMap, params.planId, params.interval)
-  if (!priceId) return { kind: 'not-configured' }
+  // 未配置 lookup key 就别发请求：直接给「先注册」更贴近真实可做的事。
+  if (!resolveLookupKey(params.productId, params.interval)) {
+    return { kind: 'not-configured' }
+  }
 
   const { successUrl, cancelUrl } = returnUrls(params.locale)
 
@@ -57,10 +66,10 @@ export async function startCheckout(params: StartCheckoutParams): Promise<Checko
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        priceId,
+        productId: params.productId,
+        interval: params.interval,
         successUrl,
         cancelUrl,
-        mode: resolveMode(params.planId, websiteConfig.payment.priceMap),
         locale: params.locale,
       }),
     })
@@ -69,11 +78,27 @@ export async function startCheckout(params: StartCheckoutParams): Promise<Checko
   }
 
   if (response.status === 401) return { kind: 'unauthenticated' }
-  // 409 是服务端的重复订阅守卫。单独识别成一个 outcome：调用方要给出「已有订阅」
-  // 的明确提示，而不是一条通用错误——两者的下一步动作完全不同。
-  if (response.status === 409) return { kind: 'already-subscribed' }
+  // 409 是服务端的归属守卫。三种原因要分开：同一个产品已有方案（去「管理订阅」
+  // 换周期）、已有更高等级（不用再买）、显式互斥（不能并存）——提示不同。
+  if (response.status === 409) {
+    const body = (await response.json().catch(() => null)) as {
+      error?: string
+      switch?: { direction?: SwitchDirection }
+    } | null
+    switch (body?.error) {
+      case 'ALREADY_OWNED_HIGHER_TIER':
+        return { kind: 'already-higher-tier' }
+      case 'ALREADY_OWNED_EXCLUSIVE_PRODUCT':
+        return { kind: 'exclusive-product' }
+      // `ALREADY_SUBSCRIBED` 与「查不出已有方案属于哪个产品」都归到这一条：
+      // 用户看到的是同一件事——已经有订阅了，去「切换方案」处理。
+      // 载荷里的 `switch` 带着服务端算好的方向，页面可以据此给更准的提示。
+      default:
+        return { kind: 'already-subscribed', direction: body?.switch?.direction }
+    }
+  }
   if (!response.ok) {
-    // 不回显服务端错误体：它可能包含内部路径；调用方用本地文案兜底。
+    // 不回显服务端错误体：它可能包含内部路径。
     return { kind: 'error', message: `http_${response.status}` }
   }
 
@@ -83,7 +108,7 @@ export async function startCheckout(params: StartCheckoutParams): Promise<Checko
   return { kind: 'redirect', url: body.url }
 }
 
-/** 该 plan 是否已配置可购买的 Price（用于禁用按钮）。 */
-export function isCheckoutConfigured(planId: string, interval?: string): boolean {
-  return Boolean(resolvePriceId(websiteConfig.payment.priceMap, planId, interval))
+/** 该产品的这个付费方式是否已配置可购买的价格（用于禁用按钮）。 */
+export function isCheckoutConfigured(productId: string, interval?: PricingInterval): boolean {
+  return Boolean(resolveLookupKey(productId, interval))
 }

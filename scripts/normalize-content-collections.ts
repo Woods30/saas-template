@@ -1,9 +1,6 @@
 /**
- * 规范化 content-collections 生成物首行注释。
- *
- * `@content-collections/core` 在 index.js 首行写入 `new Date()`，使该文件每次
- * 构建都变（噪音 diff）。这里把时间戳剥掉，只留固定标识。仅 index.js 带此头，
- * 其余 all*.js 不受影响。
+ * 剥掉 content-collections 生成物首行的 `new Date()` 时间戳，避免每次构建产生噪音 diff。
+ * 仅 index.js 带此头。
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 
@@ -19,11 +16,8 @@ export function normalizeHeader(content: string): string {
 }
 
 /**
- * 读取生成物、规范化首行，仅在内容变化时写回。
- *
- * 文件不存在时静默返回 false（首次内容构建前调用不应抛错）。
- * `after !== before` 的写回守卫同时是 dev 轮询避免「写 → 触发变更 → 再写」
- * 死循环的关键：`normalizeHeader` 幂等，已规范化的内容不会再次落盘。
+ * 读取生成物、规范化首行，仅在内容变化时写回。写回守卫是 dev 轮询避免
+ * 「写 → 触发变更 → 再写」死循环的关键。文件不存在时静默返回 false。
  *
  * @returns 是否发生了写回
  */
@@ -40,8 +34,7 @@ export function normalizeGeneratedFile(path: string = GENERATED_INDEX_PATH): boo
   return true
 }
 
-// CLI 入口：仅 `tsx scripts/normalize-content-collections.ts` 触发；被 vite.config.ts
-// 或测试 import 时 `process.argv[1]` 不以该文件名结尾，故不会执行（无副作用）。
+// 仅直接执行时跑 CLI；被 import 时 `process.argv[1]` 不以该文件名结尾。
 if (process.argv[1]?.endsWith('normalize-content-collections.ts')) {
   normalizeGeneratedFile()
 }

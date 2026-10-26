@@ -1,7 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Cta, Hero } from '@/components/blocks/marketing'
 import { ContactForm } from '@/components/contact/ContactForm'
-import { contactBlocks } from '@/config/blocks'
+import { Cta, Hero } from '@/components/sections'
 import { getRequestLocale } from '@/lib/locale'
 import { assertPageEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
@@ -22,9 +21,13 @@ export const Route = createFileRoute('/{-$locale}/_layout/marketing/contact')({
 function ContactPage() {
   return (
     <>
-      <Hero {...contactBlocks.Hero} />
+      <Hero title={m.contact_hero_title()} subtitle={m.contact_hero_subtitle()} align="center" />
       <ContactForm />
-      <Cta {...contactBlocks.Cta} />
+      <Cta
+        title={m.contact_cta_title()}
+        variant="quiet"
+        primaryCta={{ label: m.contact_cta_primary(), href: '/docs' }}
+      />
     </>
   )
 }

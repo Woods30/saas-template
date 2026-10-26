@@ -1,8 +1,7 @@
 import { defineConfig } from 'drizzle-kit'
 
-// Remote/production config: uses D1 via Cloudflare Workers HTTP API.
-// dialect + driver + dbCredentials match drizzle-kit@0.31.11 Config type:
-//   { dialect: 'sqlite', driver: 'd1-http', dbCredentials: { accountId, databaseId, token } }
+// 生产：经 Cloudflare HTTP API 连 D1。注意 drizzle-kit 只读 `process.env`，
+// 不走 `src/env` 的两层校验。
 export default defineConfig({
   schema: './src/db/schema.ts',
   out: './src/db/migrations',

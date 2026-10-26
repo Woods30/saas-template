@@ -2,7 +2,7 @@
 title: Authentication
 description: Email/password and Google sign-in, email flows, session guards, and form conventions
 locale: en
-order: 11
+order: 10
 group: features
 updated: 2026-10-15
 ---
@@ -12,6 +12,8 @@ Email/password plus Google OAuth, built on Better Auth v1.7.7 with the Drizzle a
 center at `/{locale}/dashboard/*`.
 
 ## Enabling
+
+![Sign-in page](/docs/screenshots/auth-login.png "Sign-in: email and password; third-party buttons appear once Google credentials are configured")
 
 Two fields in `websiteConfig.auth`, plus three environment variables:
 

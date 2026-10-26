@@ -4,16 +4,7 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/componen
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-/**
- * 守卫：这三个文件必须是 shadcn base-nova 上游原件，而非手写替代。
- *
- * base-nova 的契约特征（区别于旧版 new-york 手写版）：
- * - Card 根带 `data-slot="card"` 与 `--card-spacing` 变量、`rounded-xl`；
- * - Card 支持 `size` prop 并渲染 `data-size`；
- * - CardAction 存在且带 `data-slot="card-action"`；
- * - Input 渲染 `data-slot="input"`；
- * - Label 渲染 `data-slot="label"`。
- */
+/** 守卫 Card / Input / Label 是 shadcn base-nova 上游原件，而非手写替代（按 `data-slot` 契约）。 */
 describe('ui 原件为 base-nova 风格', () => {
   it('Card 渲染 data-slot 与圆角，且支持 size prop', () => {
     render(

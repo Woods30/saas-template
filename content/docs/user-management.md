@@ -2,7 +2,7 @@
 title: User Management
 description: Admin roles, CLI promotion, and the admin dashboard
 locale: en
-order: 19
+order: 18
 group: features
 updated: 2026-10-16
 ---

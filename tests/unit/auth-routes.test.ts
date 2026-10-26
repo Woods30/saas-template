@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { authClient, signIn, signUp, useSession } from '@/auth/client'
 
-// Smoke test: auth client exports the expected API surface
+// Smoke：auth client 导出预期 API。
 describe('auth client API', () => {
   it('exports authClient with requestPasswordReset and resetPassword', () => {
     expect(typeof authClient.requestPasswordReset).toBe('function')
@@ -21,9 +21,9 @@ describe('auth client API', () => {
   })
 })
 
-// Smoke test: message keys exist in compiled Paraglide messages
+// Smoke：message 键存在于编译后的 Paraglide 消息中。
 describe('auth message keys', () => {
-  // These are imported at runtime via Paraglide; we check the zh/en JSON directly
+  // 运行时经 Paraglide 导入，这里直接检查 zh/en JSON。
   it('zh.json contains all required auth keys', async () => {
     const messages = await import('@/locale/paraglide/messages.js')
     const m = messages.m as Record<string, unknown>

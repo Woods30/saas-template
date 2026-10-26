@@ -10,13 +10,13 @@ describe('websiteConfig 品牌信息', () => {
   })
 
   it('site_name 消息在两种语言下都解析为 Jerbix', () => {
-    // 品牌名不随语言变化；<title> 取自 site_name，须与 Navbar / footer / manifest 一致。
+    // `<title>` 取自 site_name，须与 Navbar / footer / manifest 一致。
     expect(m.site_name({}, { locale: 'zh' })).toBe('Jerbix')
     expect(m.site_name({}, { locale: 'en' })).toBe('Jerbix')
   })
 
   it('messages 中不残留模板占位品牌名 "SaaS Template"', () => {
-    // 回归守卫：品牌文案统一为 Jerbix，防止占位名在后续新增消息中回潮。
+    // 防止占位名在后续新增消息中回潮。
     for (const locale of ['zh', 'en'] as const) {
       const raw = readFileSync(new URL(`../../messages/${locale}.json`, import.meta.url), 'utf-8')
       expect(raw).not.toContain('SaaS Template')
@@ -45,17 +45,11 @@ describe('websiteConfig 品牌信息', () => {
     expect(config.mail).toEqual({ enabled: false, provider: 'resend', supportEmail: '' })
     expect(config.contact.enabled).toBe(false)
     expect(config.newsletter).toEqual({ enabled: false, provider: 'resend' })
-    // `priceMap` 由 `VITE_STRIPE_PRICE_*` 派生：未配置时为空，`allowedPriceIds`
-    // 随之也为空（两者同源）。
-    //
-    // 三个服务模块的开关是**部署场景**的决定，不是 env 派生的：本仓本地联调期
-    // 打开 payment / notification / analytics，模板发布时应改回 false。断言跟着
-    // 当前默认值走，避免开关调整后这条用例变成无意义的红灯。
+    // 服务模块开关是部署场景的决定，断言跟着当前默认值走。
+    // 价格锚点（lookup_key）在 `src/config/products.ts` 里，不在 website 配置里。
     expect(config.payment).toEqual({
       enabled: true,
       provider: 'stripe',
-      allowedPriceIds: [],
-      priceMap: {},
     })
     expect(config.notification).toEqual({ enabled: true, provider: 'discord' })
     expect(config.analytics).toEqual({ enabled: true, providers: ['ga'] })
@@ -77,11 +71,11 @@ describe('websiteConfig 品牌信息', () => {
   it('每次工厂调用使用传入 env 并返回独立配置', () => {
     expect(createWebsiteConfig).toBeTypeOf('function')
     const first = createWebsiteConfig(parsePublicEnv({ VITE_BASE_URL: 'https://first.example' }))
-    first.payment.allowedPriceIds.push('price_test')
+    first.payment.enabled = false
     first.docs.enabled = false
     const second = createWebsiteConfig(parsePublicEnv({ VITE_BASE_URL: 'https://second.example' }))
     expect(second.baseUrl).toBe('https://second.example')
-    expect(second.payment.allowedPriceIds).toEqual([])
+    expect(second.payment.enabled).toBe(true)
     expect(second.docs.enabled).toBe(true)
   })
 })

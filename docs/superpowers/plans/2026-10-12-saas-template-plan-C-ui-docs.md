@@ -4,7 +4,7 @@
 
 **Goal:** 落地 8 个 marketing blocks（Hero / Features / Stats / Pricing / FAQ / Testimonials / NewsletterCta / CTA）、marketing 页面、根级 Content Collections（docs/blog/changelog/legal），并完成 SEO、PWA manifest、Analytics、locale 路由。
 
-**Architecture:** 营销页面（首页/特性/价格/关于）由 marketing layout 包裹，blocks 来自 `src/components/blocks/marketing/`，每个 block 独立可组合。Docs/Blog/Changelog/Legal 通过 Content Collections 在仓库根目录 `content/` 下管理，使用文件名后缀约定（`*.zh.md` / `*.en.md`）。`Paraglide JS`（已有）处理语言，locale 路由以 `{-$locale}/` 软前缀形式存在（URL 中可省略），实际 locale 由 cookie + `Accept-Language` 决定（见 `src/lib/locale.ts` + `src/locale/middleware.ts`）。
+**Architecture:** 营销页面（首页/特性/价格/关于）由 marketing layout 包裹，blocks 来自 `src/components/sections/`，每个 block 独立可组合。Docs/Blog/Changelog/Legal 通过 Content Collections 在仓库根目录 `content/` 下管理，使用文件名后缀约定（`*.zh.md` / `*.en.md`）。`Paraglide JS`（已有）处理语言，locale 路由以 `{-$locale}/` 软前缀形式存在（URL 中可省略），实际 locale 由 cookie + `Accept-Language` 决定（见 `src/lib/locale.ts` + `src/locale/middleware.ts`）。
 
 **Tech Stack:** @content-collections/core, @content-collections/vite, vite-plugin-svgr, @tabler/icons-react.
 
@@ -29,7 +29,7 @@
 ## Global Constraints
 
 - 营销页面与 blocks 全部 TypeScript + 函数组件；不引入 class 组件。
-- 业务与 UI 分层：UI 在 `src/components/blocks/marketing/`，业务在 `src/<feature>/`。
+- 业务与 UI 分层：UI 在 `src/components/sections/`，业务在 `src/<feature>/`。
 - 全部文案来自 `messages/{zh,en}.json`（Paraglide 产物，调用 `m.*()` 而非硬编码）。
 - 不实现具体 docs 教程内容（仅骨架 + 一篇示例文档）。
 - 不实现多 analytics provider 全部集成；只写 GA4 + Plausible + Umami + Clarity 接入点（env 驱动、按需启用）。
@@ -580,11 +580,11 @@ git commit -m "feat(marketing): 营销 layout（Navbar + Footer + 文案）"
 ### Task 5: Block - Hero
 
 **Files:**
-- Create: `src/components/blocks/marketing/hero/Hero.tsx`
-- Create: `src/components/blocks/marketing/hero/types.ts`
-- Create: `src/components/blocks/marketing/hero/index.ts`
+- Create: `src/components/sections/hero/Hero.tsx`
+- Create: `src/components/sections/hero/types.ts`
+- Create: `src/components/sections/hero/index.ts`
 
-**Step 5.1: `src/components/blocks/marketing/hero/types.ts`**
+**Step 5.1: `src/components/sections/hero/types.ts`**
 
 ```ts
 export interface HeroProps {
@@ -598,7 +598,7 @@ export interface HeroProps {
 }
 ```
 
-**Step 5.2: `src/components/blocks/marketing/hero/Hero.tsx`**
+**Step 5.2: `src/components/sections/hero/Hero.tsx`**
 
 ```tsx
 import { Button } from '@/components/ui/button'
@@ -640,7 +640,7 @@ export function Hero(props: HeroProps) {
 }
 ```
 
-**Step 5.3: `src/components/blocks/marketing/hero/index.ts`**
+**Step 5.3: `src/components/sections/hero/index.ts`**
 
 ```ts
 export { Hero } from './Hero'
@@ -650,7 +650,7 @@ export type { HeroProps } from './types'
 **Step 5.4: Commit**
 
 ```bash
-git add src/components/blocks/marketing/hero
+git add src/components/sections/hero
 git commit -m "feat(blocks): Hero block"
 ```
 
@@ -659,9 +659,9 @@ git commit -m "feat(blocks): Hero block"
 ### Task 6: Block - Features
 
 **Files:**
-- Create: `src/components/blocks/marketing/features/Features.tsx`
-- Create: `src/components/blocks/marketing/features/types.ts`
-- Create: `src/components/blocks/marketing/features/index.ts`
+- Create: `src/components/sections/features/Features.tsx`
+- Create: `src/components/sections/features/types.ts`
+- Create: `src/components/sections/features/index.ts`
 
 **Step 6.1: `types.ts`**
 
@@ -715,7 +715,7 @@ export type { FeaturesProps, FeatureItem } from './types'
 **Step 6.4: Commit**
 
 ```bash
-git add src/components/blocks/marketing/features
+git add src/components/sections/features
 git commit -m "feat(blocks): Features block"
 ```
 
@@ -724,9 +724,9 @@ git commit -m "feat(blocks): Features block"
 ### Task 7: Block - Stats
 
 **Files:**
-- Create: `src/components/blocks/marketing/stats/Stats.tsx`
-- Create: `src/components/blocks/marketing/stats/types.ts`
-- Create: `src/components/blocks/marketing/stats/index.ts`
+- Create: `src/components/sections/stats/Stats.tsx`
+- Create: `src/components/sections/stats/types.ts`
+- Create: `src/components/sections/stats/index.ts`
 
 **Step 7.1: `types.ts`**
 
@@ -771,7 +771,7 @@ export type { StatsProps, StatItem } from './types'
 **Step 7.4: Commit**
 
 ```bash
-git add src/components/blocks/marketing/stats
+git add src/components/sections/stats
 git commit -m "feat(blocks): Stats block"
 ```
 
@@ -780,9 +780,9 @@ git commit -m "feat(blocks): Stats block"
 ### Task 8: Block - Pricing
 
 **Files:**
-- Create: `src/components/blocks/marketing/pricing/Pricing.tsx`
-- Create: `src/components/blocks/marketing/pricing/types.ts`
-- Create: `src/components/blocks/marketing/pricing/index.ts`
+- Create: `src/components/sections/pricing/Pricing.tsx`
+- Create: `src/components/sections/pricing/types.ts`
+- Create: `src/components/sections/pricing/index.ts`
 
 **Step 8.1: `types.ts`**
 
@@ -897,7 +897,7 @@ export type { PricingProps, PricingPlan } from './types'
 **Step 8.4: Commit**
 
 ```bash
-git add src/components/blocks/marketing/pricing
+git add src/components/sections/pricing
 git commit -m "feat(blocks): Pricing block"
 ```
 
@@ -906,9 +906,9 @@ git commit -m "feat(blocks): Pricing block"
 ### Task 9: Block - FAQ
 
 **Files:**
-- Create: `src/components/blocks/marketing/faq/Faq.tsx`
-- Create: `src/components/blocks/marketing/faq/types.ts`
-- Create: `src/components/blocks/marketing/faq/index.ts`
+- Create: `src/components/sections/faq/Faq.tsx`
+- Create: `src/components/sections/faq/types.ts`
+- Create: `src/components/sections/faq/index.ts`
 
 **Step 9.1: `types.ts`**
 
@@ -958,7 +958,7 @@ export type { FaqProps, FaqItem } from './types'
 **Step 9.4: Commit**
 
 ```bash
-git add src/components/blocks/marketing/faq
+git add src/components/sections/faq
 git commit -m "feat(blocks): Faq block"
 ```
 
@@ -967,9 +967,9 @@ git commit -m "feat(blocks): Faq block"
 ### Task 10: Block - Testimonials
 
 **Files:**
-- Create: `src/components/blocks/marketing/testimonials/Testimonials.tsx`
-- Create: `src/components/blocks/marketing/testimonials/types.ts`
-- Create: `src/components/blocks/marketing/testimonials/index.ts`
+- Create: `src/components/sections/testimonials/Testimonials.tsx`
+- Create: `src/components/sections/testimonials/types.ts`
+- Create: `src/components/sections/testimonials/index.ts`
 
 **Step 10.1: `types.ts`**
 
@@ -1023,7 +1023,7 @@ export type { TestimonialsProps, Testimonial } from './types'
 **Step 10.4: Commit**
 
 ```bash
-git add src/components/blocks/marketing/testimonials
+git add src/components/sections/testimonials
 git commit -m "feat(blocks): Testimonials block"
 ```
 
@@ -1032,9 +1032,9 @@ git commit -m "feat(blocks): Testimonials block"
 ### Task 11: Block - NewsletterCTA
 
 **Files:**
-- Create: `src/components/blocks/marketing/newsletter-cta/NewsletterCta.tsx`
-- Create: `src/components/blocks/marketing/newsletter-cta/types.ts`
-- Create: `src/components/blocks/marketing/newsletter-cta/index.ts`
+- Create: `src/components/sections/newsletter-cta/NewsletterCta.tsx`
+- Create: `src/components/sections/newsletter-cta/types.ts`
+- Create: `src/components/sections/newsletter-cta/index.ts`
 
 **Step 11.1: `types.ts`**
 
@@ -1139,7 +1139,7 @@ export type { NewsletterCtaProps } from './types'
 **Step 11.5: Commit**
 
 ```bash
-git add src/components/blocks/marketing/newsletter-cta messages
+git add src/components/sections/newsletter-cta messages
 git commit -m "feat(blocks): NewsletterCTA（复用 /api/newsletter 现有端点）"
 ```
 
@@ -1148,9 +1148,9 @@ git commit -m "feat(blocks): NewsletterCTA（复用 /api/newsletter 现有端点
 ### Task 12: Block - CTA
 
 **Files:**
-- Create: `src/components/blocks/marketing/cta/Cta.tsx`
-- Create: `src/components/blocks/marketing/cta/types.ts`
-- Create: `src/components/blocks/marketing/cta/index.ts`
+- Create: `src/components/sections/cta/Cta.tsx`
+- Create: `src/components/sections/cta/types.ts`
+- Create: `src/components/sections/cta/index.ts`
 
 **Step 12.1: `types.ts`**
 
@@ -1206,7 +1206,7 @@ export type { CtaProps } from './types'
 **Step 12.4: Commit**
 
 ```bash
-git add src/components/blocks/marketing/cta
+git add src/components/sections/cta
 git commit -m "feat(blocks): CTA block"
 ```
 
@@ -1215,9 +1215,9 @@ git commit -m "feat(blocks): CTA block"
 ### Task 13: Block 注册表 + Blocks 共享类型
 
 **Files:**
-- Create: `src/components/blocks/marketing/index.ts`
+- Create: `src/components/sections/index.ts`
 
-**Step 13.1: 写入 `src/components/blocks/marketing/index.ts`**
+**Step 13.1: 写入 `src/components/sections/index.ts`**
 
 ```ts
 import { Cta } from './cta'
@@ -1259,7 +1259,7 @@ Create: `tests/unit/blocks.test.ts`
 
 ```ts
 import { describe, expect, it } from 'vitest'
-import { blocks } from '@/components/blocks/marketing'
+import { blocks } from '@/components/sections'
 
 describe('blocks registry', () => {
   it('导出全部 7 个通用 blocks（不含 Pricing）', () => {
@@ -1279,7 +1279,7 @@ pnpm run test
 **Step 13.4: Commit**
 
 ```bash
-git add src/components/blocks/marketing/index.ts tests/unit/blocks.test.ts
+git add src/components/sections/index.ts tests/unit/blocks.test.ts
 git commit -m "feat(blocks): 营销 blocks 注册表 + 索引"
 ```
 
@@ -1292,18 +1292,18 @@ git commit -m "feat(blocks): 营销 blocks 注册表 + 索引"
 - Create: `src/routes/{-$locale}/_layout/marketing/features.tsx`
 - Create: `src/routes/{-$locale}/_layout/marketing/about.tsx`
 - Create: `src/routes/{-$locale}/pricing.tsx`（**新增**：原 Plan B Task 14 推迟至此）
-- Create: `src/config/blocks/home.ts`
-- Create: `src/config/blocks/features.ts`
-- Create: `src/config/blocks/about.ts`
-- Create: `src/config/blocks/pricing.ts`
-- Create: `src/config/blocks/index.ts`
+- Create: `src/config/pages/home.ts`
+- Create: `src/config/pages/features.ts`
+- Create: `src/config/pages/about.ts`
+- Create: `src/config/pages/pricing.ts`
+- Create: `src/config/pages/index.ts`
 
-**Step 14.1: 写入 `src/config/blocks/home.ts`**
+**Step 14.1: 写入 `src/config/pages/home.ts`**
 
 > 文案通过 `m.*()` 而非硬编码。
 
 ```ts
-import type { CtaProps, FeaturesProps, HeroProps, StatsProps, TestimonialsProps } from '@/components/blocks/marketing'
+import type { CtaProps, FeaturesProps, HeroProps, StatsProps, TestimonialsProps } from '@/components/sections'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const homeBlocks = {
@@ -1351,10 +1351,10 @@ export const homeBlocks = {
 }
 ```
 
-**Step 14.2: 写入 `src/config/blocks/features.ts`**
+**Step 14.2: 写入 `src/config/pages/features.ts`**
 
 ```ts
-import type { CtaProps, FaqProps, FeaturesProps, HeroProps } from '@/components/blocks/marketing'
+import type { CtaProps, FaqProps, FeaturesProps, HeroProps } from '@/components/sections'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const featuresBlocks = {
@@ -1387,10 +1387,10 @@ export const featuresBlocks = {
 }
 ```
 
-**Step 14.3: 写入 `src/config/blocks/about.ts`**
+**Step 14.3: 写入 `src/config/pages/about.ts`**
 
 ```ts
-import type { CtaProps, HeroProps, StatsProps } from '@/components/blocks/marketing'
+import type { CtaProps, HeroProps, StatsProps } from '@/components/sections'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const aboutBlocks = {
@@ -1412,10 +1412,10 @@ export const aboutBlocks = {
 }
 ```
 
-**Step 14.4: 写入 `src/config/blocks/pricing.ts`**
+**Step 14.4: 写入 `src/config/pages/pricing.ts`**
 
 ```ts
-import type { CtaProps, HeroProps, PricingPlan } from '@/components/blocks/marketing/pricing'
+import type { CtaProps, HeroProps, PricingPlan } from '@/components/sections/Pricing'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const pricingPlans: PricingPlan[] = [
@@ -1461,7 +1461,7 @@ export const pricingBlocks = {
 }
 ```
 
-**Step 14.5: 写入 `src/config/blocks/index.ts`**
+**Step 14.5: 写入 `src/config/pages/index.ts`**
 
 ```ts
 export { homeBlocks } from './home'
@@ -1474,8 +1474,8 @@ export { pricingBlocks, pricingPlans } from './pricing'
 
 ```tsx
 import { createFileRoute } from '@tanstack/react-router'
-import { Cta, Features, Hero, Stats, Testimonials } from '@/components/blocks/marketing'
-import { homeBlocks } from '@/config/blocks'
+import { Cta, Features, Hero, Stats, Testimonials } from '@/components/sections'
+import { homeBlocks } from '@/config/pages'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
@@ -1503,8 +1503,8 @@ function HomePage() {
 
 ```tsx
 import { createFileRoute } from '@tanstack/react-router'
-import { Cta, Faq, Features, Hero } from '@/components/blocks/marketing'
-import { featuresBlocks } from '@/config/blocks'
+import { Cta, Faq, Features, Hero } from '@/components/sections'
+import { featuresBlocks } from '@/config/pages'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
@@ -1529,8 +1529,8 @@ function FeaturesPage() {
 
 ```tsx
 import { createFileRoute } from '@tanstack/react-router'
-import { Cta, Hero, Stats } from '@/components/blocks/marketing'
-import { aboutBlocks } from '@/config/blocks'
+import { Cta, Hero, Stats } from '@/components/sections'
+import { aboutBlocks } from '@/config/pages'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
@@ -1556,9 +1556,9 @@ function AboutPage() {
 
 ```tsx
 import { createFileRoute } from '@tanstack/react-router'
-import { Cta, Hero, Pricing } from '@/components/blocks/marketing'
-import { Pricing as PricingBlock } from '@/components/blocks/marketing/pricing'
-import { pricingBlocks, pricingPlans } from '@/config/blocks'
+import { Cta, Hero, Pricing } from '@/components/sections'
+import { Pricing as PricingBlock } from '@/components/sections/Pricing'
+import { pricingBlocks, pricingPlans } from '@/config/pages'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
@@ -1595,7 +1595,7 @@ git rm src/routes/index.tsx
 **Step 14.12: Commit**
 
 ```bash
-git add src/routes/{-\$locale} src/config/blocks messages
+git add src/routes/{-\$locale} src/config/pages messages
 git commit -m "feat(marketing): 首页/特性/关于/价格页面（blocks 拼装）"
 ```
 

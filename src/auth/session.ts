@@ -24,13 +24,8 @@ export interface SessionInfo {
 /**
  * 读取当前请求的会话。
  *
- * 为什么必须是 server function：个人中心是**受保护路由**，`beforeLoad` 在 SSR 与客户端
- * 导航两条路径上都会执行。客户端导航时浏览器里既没有 ALS 也没有 env，`getAuth(env)`
- * 无从取得数据库 binding；而会话 cookie 是 httpOnly 的，客户端也读不到。server function
- * 在 SSR 阶段就地执行（无网络往返），客户端导航时自动降级为一次 RPC，两种路径都拿到
- * 真实会话——`src/auth/providers.ts` 出于同样的理由采用了同一写法。
- *
- * 动态 import 让本模块顶层保持「纯函数 + 类型」，不把服务端模块带进任何静态依赖图。
+ * 必须是 server function：客户端导航时没有 ALS / env，会话 cookie 又是 httpOnly 的，
+ * 客户端读不到。动态 import 让本模块顶层不引入服务端依赖。
  */
 export const fetchSession = createServerFn({ method: 'GET' }).handler(
   async (): Promise<SessionInfo | null> => {

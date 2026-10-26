@@ -22,12 +22,12 @@ export function Navbar() {
   const menuTrigger = useRef<HTMLButtonElement>(null)
   const headerRef = useRef<HTMLElement>(null)
 
-  // 站点导航项按「访客」上下文过滤：登录后哪些项该出现，由 `UserMenu` 单独呈现，
-  // 导航本身不按会话切换结构，避免同一 URL 的 DOM 随会话抖动。
+  // 导航按访客上下文过滤，登录态入口由 `UserMenu` 单独呈现，
+  // 避免同一 URL 的 DOM 随会话抖动。
   const links = getNavbarLinks(locale, { config: websiteConfig, authenticated: false })
   const actions = getNavbarActions(locale, websiteConfig)
 
-  /** 关闭移动面板与已展开的 details；供导航与 Escape 复用。 */
+  /** 关闭移动面板与已展开的 details；导航与 Escape 共用。 */
   const closeMenus = useCallback(() => {
     setMenuOpen(false)
     for (const details of headerRef.current?.querySelectorAll('details[open]') ?? []) {
@@ -38,7 +38,7 @@ export function Navbar() {
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key !== 'Escape') return
-      // Escape 统一关闭已展开的 details；若移动面板处于打开状态，一并收起并归还焦点。
+      // 移动面板打开时一并收起并归还焦点。
       closeMenus()
       if (menuOpen) menuTrigger.current?.focus()
     }
@@ -72,7 +72,6 @@ export function Navbar() {
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <ThemeToggle />
           <LocaleSwitcher value={locale} />
-          {/* 会话感知账号区：未登录时是「登录」入口，已登录时换成账号 + 登出。 */}
           <UserMenu
             guestFallback={
               <MenuLink
@@ -115,7 +114,6 @@ export function Navbar() {
             linkClassName={navigationLinkClass}
             onNavigate={closeMenus}
           />
-          {/* 移动面板里的账号区：与桌面同源，避免两处各写一份会话判断。 */}
           <UserMenu
             guestFallback={
               <MenuLink item={actions.login} className={navigationLinkClass} onClick={closeMenus} />

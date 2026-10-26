@@ -5,28 +5,21 @@ import { describe, expect, it } from 'vitest'
 import { createLoginSchema } from '@/auth/validation'
 import { AuthFormField } from '@/components/auth/AuthFormField'
 
-/**
- * TanStack Form 与 shadcn `Field` 之间的薄适配层。
- *
- * 它只负责把 `field.state` 接到 `Field` / `FieldLabel` / `Input` / `FieldError` 上，
- * 不自建输入控件——输入框、标签、错误展示都来自 `@/components/ui`。
- */
+/** TanStack Form 与 shadcn `Field` 的薄适配层：只接线 `field.state`，不自建输入控件。 */
 const msg = {
   required: '此项为必填。',
   emailInvalid: '邮箱格式不正确。',
   passwordTooShort: '密码太短。',
 }
 
-/** 用真实 `useForm` + zod schema 驱动，确保断言的是实际接线的形状。 */
+/** 用真实 `useForm` + zod schema 驱动，断言实际接线的形状。 */
 function Harness() {
   const form = useForm({
     defaultValues: { email: '', password: '' },
     validators: { onSubmit: createLoginSchema(msg) },
   })
   return (
-    // `noValidate` 必填：`<Input type="email">` 会触发浏览器原生约束校验，
-    // 值非法时原生校验会直接拦下 `submit` 事件，`onSubmit` 永远不执行、
-    // TanStack Form 的校验与错误文案也就永远不会出现。校验权交给 schema。
+    // `noValidate` 必填：原生约束校验会拦下 submit，`onSubmit` 永不执行。
     <form
       noValidate
       onSubmit={(e: React.SubmitEvent<HTMLFormElement>) => {
@@ -56,7 +49,7 @@ describe('AuthFormField', () => {
     fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'not-an-email' } })
     fireEvent.click(screen.getByRole('button', { name: '提交' }))
 
-    // 先等错误出现（校验是异步的），再断言输入框状态——顺序反了会在校验落地前读到旧值。
+    // 先等错误出现（校验是异步的），再断言输入框状态。
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('邮箱格式不正确。')
 

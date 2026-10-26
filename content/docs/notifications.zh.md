@@ -2,7 +2,7 @@
 title: 通知
 description: Discord / 飞书 Webhook 的接线与触发点
 locale: zh
-order: 9
+order: 15
 group: features
 updated: 2026-10-19
 ---

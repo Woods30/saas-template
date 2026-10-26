@@ -4,21 +4,17 @@ import { GAAnalyticsProvider } from '@/lib/analytics/ga'
 import { PlausibleAnalyticsProvider } from '@/lib/analytics/plausible'
 import { UmamiAnalyticsProvider } from '@/lib/analytics/umami'
 
-// ---------------------------------------------------------------------------
-// Analytics providers — 需要 jsdom 环境（window.gtag / window.plausible）
-// ---------------------------------------------------------------------------
+// Analytics providers，需要 jsdom（window.gtag / window.plausible）。
 describe('Analytics providers', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
-    // jsdom 环境允许直接删除 window 上的全局注入属性
+    // jsdom 允许直接删除 window 上的全局注入属性。
     for (const key of ['gtag', 'plausible', 'umami', 'clarity']) {
       Reflect.deleteProperty(window, key)
     }
   })
 
-  // ---------------------------------------------------------------------------
-  // GAAnalyticsProvider
-  // ---------------------------------------------------------------------------
+  // GAAnalyticsProvider。
   it('GA 在 gtag 缺失时静默', () => {
     const provider = new GAAnalyticsProvider('G-XXX')
     expect(() => provider.track({ name: 'click' })).not.toThrow()
@@ -38,9 +34,7 @@ describe('Analytics providers', () => {
     expect(gtag).toHaveBeenCalledWith('event', 'page_view', { page_path: '/test-path' })
   })
 
-  // ---------------------------------------------------------------------------
-  // PlausibleAnalyticsProvider
-  // ---------------------------------------------------------------------------
+  // PlausibleAnalyticsProvider。
   it('Plausible 在 plausible 缺失时静默', () => {
     const provider = new PlausibleAnalyticsProvider('example.com')
     expect(() => provider.track({ name: 'click' })).not.toThrow()
@@ -60,9 +54,7 @@ describe('Analytics providers', () => {
     expect(plausible).toHaveBeenCalledWith('signup', { props: { plan: 'pro' } })
   })
 
-  // ---------------------------------------------------------------------------
-  // UmamiAnalyticsProvider
-  // ---------------------------------------------------------------------------
+  // UmamiAnalyticsProvider。
   it('Umami 在 umami 缺失时不抛错', () => {
     expect(() => new UmamiAnalyticsProvider('id').track({ name: 'x' })).not.toThrow()
   })
@@ -74,9 +66,7 @@ describe('Analytics providers', () => {
     expect(umami).toHaveBeenCalledWith('signup', { plan: 'pro' })
   })
 
-  // ---------------------------------------------------------------------------
-  // ClarityAnalyticsProvider
-  // ---------------------------------------------------------------------------
+  // ClarityAnalyticsProvider。
   it('Clarity 在 clarity 缺失时不抛错', () => {
     expect(() => new ClarityAnalyticsProvider('id').track({ name: 'x' })).not.toThrow()
   })
@@ -89,16 +79,14 @@ describe('Analytics providers', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// initAnalytics —— 启用过滤、publicEnv 来源与 Umami 脚本 URL
-// ---------------------------------------------------------------------------
+// initAnalytics：启用过滤、publicEnv 来源与 Umami 脚本 URL。
 describe('initAnalytics', () => {
   const injected: HTMLScriptElement[] = []
 
   beforeEach(() => {
     vi.resetModules()
     injected.length = 0
-    // 记录注入脚本，避免真实网络请求（jsdom 默认不加载 script.src）。
+    // 记录注入脚本，避免真实网络请求。
     vi.spyOn(document.head, 'appendChild').mockImplementation((node: Node) => {
       injected.push(node as HTMLScriptElement)
       return node
@@ -171,12 +159,10 @@ describe('initAnalytics', () => {
     const { initAnalytics } = await import('@/lib/analytics')
     initAnalytics()
     expect(injected.map((s) => s.src)).toContain('https://stats.jerbix.dev/script.js')
-    // 不再使用示例主机作为就绪依据。
     expect(injected.map((s) => s.src)).not.toContain('https://umami.example.com/script.js')
   })
 
   it('开发环境不注入任何脚本（避免污染真实账号数据）', async () => {
-    // 默认 beforeEach 已把 PROD 置为 false。
     vi.stubEnv('PROD', false)
     mockConfig({ enabled: true, providers: ['ga', 'plausible', 'umami', 'clarity'] })
     mockPublicEnv({
@@ -193,15 +179,13 @@ describe('initAnalytics', () => {
 
   it('GA 初始化会调用 gtag("config", id)，否则事件无法归属媒体资源', async () => {
     vi.stubEnv('PROD', true)
-    // dataLayer 是 window 上的全局队列，模块级 resetModules 不会清它；
-    // 不清空的话前面用例推入的条目会让断言看到 4 条而非 2 条。
+    // dataLayer 是 window 全局队列，resetModules 不会清它，必须先清空。
     ;(window as unknown as { dataLayer: unknown[] }).dataLayer = []
     mockConfig({ enabled: true, providers: ['ga'] })
     mockPublicEnv({ VITE_GA_ID: 'G-CONFIG' })
     const { initAnalytics } = await import('@/lib/analytics')
     initAnalytics()
-    // `initAnalytics` 会安装自己的 gtag 队列（把调用推进 dataLayer），因此断言
-    // 落到 dataLayer 的条目——这才是与 gtag.js 的真实契约。
+    // 断言落在 dataLayer 条目上，这才是与 gtag.js 的真实契约。
     const dataLayer = (window as unknown as { dataLayer: unknown[] }).dataLayer
     expect(dataLayer).toEqual([
       ['js', expect.any(Date)],
@@ -214,13 +198,13 @@ describe('initAnalytics', () => {
     mockConfig({ enabled: true, providers: ['plausible'] })
     mockPublicEnv({ VITE_PLAUSIBLE_DOMAIN: 'jerbix.dev' })
     const { initAnalytics } = await import('@/lib/analytics')
-    // 第一次调用发生在没有 window 的环境（模拟 SSR 流式渲染）。
+    // 第一次调用在没有 window 的环境（模拟 SSR）。
     const originalWindow = globalThis.window
-    // @ts-expect-error — 故意删除 window 以模拟服务端
+    // @ts-expect-error — 故意删除 window 以模拟服务端。
     delete globalThis.window
     initAnalytics()
     globalThis.window = originalWindow
-    // 恢复 browser 环境后再调用一次：这次必须真的初始化。
+    // 恢复 browser 环境后再调用，这次必须真的初始化。
     initAnalytics()
     expect(injected.map((s) => s.src)).toContain('https://plausible.io/js/script.js')
   })
@@ -232,12 +216,11 @@ describe('initAnalytics', () => {
     const { initAnalytics } = await import('@/lib/analytics')
     initAnalytics()
     expect(injected).toHaveLength(0)
-    // 配置随后生效（例如异步加载的配置），再次调用必须成功。
+    // 配置随后生效，再次调用必须成功。
     mockConfig({ enabled: true, providers: ['plausible'] })
     vi.resetModules()
     const reimported = await import('@/lib/analytics')
-    // resetModules 会重置模块状态；这里只验证关闭路径没有把标记写死——
-    // 直接断言「同一模块实例下关闭后不播种 true」由 resetAnalyticsForTesting 覆盖。
+    // 这里只验证关闭路径没有把标记写死。
     expect(typeof reimported.initAnalytics).toBe('function')
   })
 })

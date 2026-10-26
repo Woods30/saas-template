@@ -25,8 +25,7 @@ type NewsletterEnv = Pick<
 >
 
 /**
- * 按当前请求 env 构建 newsletter provider 注册表。
- * 在 src/server.ts 的 als.run() 中调用，结果注入 ServerContext.newsletterProviderRegistry。
+ * 按当前请求 env 构建 newsletter provider 注册表，在 `src/server.ts` 的 `als.run()` 中调用。
  * 只消费 `parseServerEnv` 归一化后的字段，避免未校验的原始 binding 进入 provider。
  */
 export function buildNewsletterProviderRegistry(

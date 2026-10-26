@@ -1,13 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * `features.enableApiKeys` 门禁。
- *
- * API key 管理是**功能开关**（`features.*`），不是服务模块（`mail`/`contact`/...）。
- * 它与 auth 模块门禁正交：auth 开着、但 enableApiKeys 关着时，`/api/auth/api-key/*`
- * 必须返回 404，且不得进入 better-auth handler——否则用户能绕过 UI 直接建 key。
- *
- * 门禁落在 `src/routes/api/auth/$.ts` 的 GET/POST handler 里、`getAuth()` 之前。
+ * `features.enableApiKeys` 门禁：auth 开着但该开关关闭时，`/api/auth/api-key/*`
+ * 必须 404 且不进 better-auth handler，否则用户能绕过 UI 直接建 key。
  */
 
 const mocks = vi.hoisted(() => ({
@@ -37,7 +32,7 @@ function getHandler(route: unknown, method: 'GET' | 'POST'): Handler {
   return handler as Handler
 }
 
-/** 用覆盖后的 websiteConfig 重新导入 auth 路由，只覆盖 features 开关。 */
+/** 用覆盖后的 websiteConfig 重新导入 auth 路由。 */
 async function importAuthRouteWithFeatures(features: {
   enableApiKeys: boolean
 }): Promise<{ Route: unknown }> {

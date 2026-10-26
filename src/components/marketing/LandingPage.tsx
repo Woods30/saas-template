@@ -3,11 +3,13 @@ import {
   IconBraces,
   IconBulb,
   IconCheck,
+  IconCloud,
   IconCloudUpload,
   IconCode,
   IconCreditCard,
   IconDatabase,
   IconFile,
+  IconLanguage,
   IconMail,
   IconPlayerPause,
   IconPlayerPlay,
@@ -16,15 +18,20 @@ import {
   IconShieldLock,
 } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
-import { type PointerEvent, useEffect, useId, useRef, useState } from 'react'
-import { Cta, Faq, Features, Hero } from '@/components/blocks/marketing'
-import { homeBlocks } from '@/config/blocks/home'
-import { getPricingPlans } from '@/config/blocks/pricing'
+import { createElement, type PointerEvent, useEffect, useId, useRef, useState } from 'react'
+import { Cta, Faq, Features, Hero } from '@/components/sections'
+import { getProducts } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
+import { mergePricingProducts, type PriceCatalog } from '@/payment/price-catalog'
 
 const MAX_TILT_DEGREES = 4
+
+/** docs 开关启用时指向当前语言的文档入口，关闭时回退首页锚点。 */
+function docsCtaHref(): string {
+  return websiteConfig.docs.enabled ? `/${getLocale()}/docs` : '#features'
+}
 
 function LeapJourney({ paused }: { paused: boolean }) {
   const [selected, setSelected] = useState(0)
@@ -97,10 +104,8 @@ function LeapJourney({ paused }: { paused: boolean }) {
           <circle cx="369" cy="112" r="5" />
         </svg>
         <span className="leap-horizon" aria-hidden="true" />
-        {/* 深色主题单独一份 mascot：浅色版是在白底上抠的，边缘残留一圈近白
-            抗锯齿像素（实测 79% 的边缘像素接近纯白），深色下看起来像描了一圈
-            发光的边。深色版边缘是干净的，只有 0.2% 近白。
-            两份同画幅（1032×714）同构图，切换时不跳变。 */}
+        {/* 深色主题单独一份 mascot：浅色版在白底上抠图，深色下边缘会残留一圈近白
+            抗锯齿像素。两份同画幅同构图，切换时不跳变。 */}
         <img
           src="/mascot.png"
           alt={m.home_mascot_alt()}
@@ -386,18 +391,16 @@ function Workflow() {
 }
 
 /**
- * 首页定价模块。
+ * 首页定价概览，仅在 `payment.enabled` 时渲染。周期切换与结账在独立定价页，
+ * CTA 只做导流，不在这里承担付款。
  *
- * 只在 `payment.enabled` 时渲染：模块关闭时首页不该出现付不了钱的方案卡片。
- * 完整能力（周期切换、结账）在独立定价页，这里只做概览与导流——链接也指向
- * `/pricing`，那条路由自带同一道门禁，关闭时为 404 而不是死链。
- *
- * CTA 直接是「查看完整方案」而不是「立即购买」：首页不承担结账，进入定价页再选
- * 周期与付款，路径少一层歧义。
+ * 金额来自 Stripe 的实时价格目录（`catalog`），与定价页同源。
  */
-function HomePricing() {
+function HomePricing({ catalog }: { catalog: PriceCatalog }) {
   if (!websiteConfig.payment.enabled) return null
-  const plans = getPricingPlans().filter((plan) => plan.id !== 'free')
+  const products = mergePricingProducts(getProducts(), catalog).filter(
+    (product) => product.id !== 'free',
+  )
   return (
     <section id="plans" className="lab-reveal mx-auto max-w-6xl scroll-mt-16 px-6 py-16 md:py-24">
       <p className="text-xs font-semibold tracking-widest text-primary">
@@ -410,35 +413,42 @@ function HomePricing() {
         {m.home_pricing_description()}
       </p>
       <ul className="mt-8 grid gap-4 md:grid-cols-3">
-        {plans.map((plan) => {
-          const price = plan.prices[0]
-          return (
-            <li
-              key={plan.id}
-              className="lab-feature-card flex min-w-0 flex-col rounded-2xl border border-border bg-card p-6"
-            >
-              <h3 className="text-lg font-semibold">{plan.name}</h3>
-              {plan.description && (
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {plan.description}
-                </p>
-              )}
-              <p className="mt-5 text-2xl font-bold">
-                {price
-                  ? (price.amount / 100).toLocaleString('en-US', {
-                      style: 'currency',
-                      currency: price.currency.toUpperCase(),
-                    })
-                  : '—'}
-                {price?.label && (
-                  <span className="ml-1 text-sm font-normal text-muted-foreground">
-                    {price.label}
-                  </span>
-                )}
+        {products.map((product) => (
+          <li
+            key={product.id}
+            className="lab-feature-card flex min-w-0 flex-col rounded-2xl border border-border bg-card p-6"
+          >
+            <h3 className="text-lg font-semibold">{product.name}</h3>
+            {product.description && (
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                {product.description}
               </p>
-            </li>
-          )
-        })}
+            )}
+            {/* 多个付费方式时逐行列出：首页只做概览，切换与结账在定价页。 */}
+            {product.options.length > 0 ? (
+              <ul className="mt-5 space-y-1">
+                {product.options.map((option) => (
+                  <li
+                    key={`${option.kind}-${option.interval ?? 'once'}`}
+                    className="text-2xl font-bold"
+                  >
+                    {(option.amount / 100).toLocaleString('en-US', {
+                      style: 'currency',
+                      currency: option.currency.toUpperCase(),
+                    })}
+                    {option.label && (
+                      <span className="ml-1 text-sm font-normal text-muted-foreground">
+                        {option.label}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-5 text-2xl font-bold">—</p>
+            )}
+          </li>
+        ))}
       </ul>
       <Link
         to="/{-$locale}/pricing"
@@ -609,11 +619,53 @@ function CapabilityIllustration({ index }: { index: number }) {
 }
 
 function CapabilityFeatures() {
-  const features = homeBlocks.Features
+  const items = [
+    {
+      icon: createElement(IconShieldLock, { size: 22 }),
+      title: m.home_features_auth_title(),
+      description: m.home_features_auth_description(),
+      detail: m.home_features_auth_detail(),
+      wide: true,
+    },
+    {
+      icon: createElement(IconCreditCard, { size: 22 }),
+      title: m.home_features_payment_title(),
+      description: m.home_features_payment_description(),
+      detail: m.home_features_payment_detail(),
+      wide: true,
+    },
+    {
+      icon: createElement(IconCloud, { size: 22 }),
+      title: m.home_features_edge_title(),
+      description: m.home_features_edge_description(),
+      detail: m.home_features_edge_detail(),
+    },
+    {
+      icon: createElement(IconDatabase, { size: 22 }),
+      title: m.home_features_storage_title(),
+      description: m.home_features_storage_description(),
+      detail: m.home_features_storage_detail(),
+    },
+    {
+      icon: createElement(IconMail, { size: 22 }),
+      title: m.home_features_email_title(),
+      description: m.home_features_email_description(),
+      detail: m.home_features_email_detail(),
+    },
+    {
+      icon: createElement(IconLanguage, { size: 22 }),
+      title: m.home_features_i18n_title(),
+      description: m.home_features_i18n_description(),
+      detail: m.home_features_i18n_detail(),
+    },
+  ]
   return (
     <Features
-      {...features}
-      items={features.items.map((item, index) => ({
+      eyebrow={m.home_features_eyebrow()}
+      title={m.home_features_title()}
+      subtitle={m.home_features_subtitle()}
+      variant="bento"
+      items={items.map((item, index) => ({
         ...item,
         visual: <CapabilityIllustration index={index} />,
       }))}
@@ -621,8 +673,12 @@ function CapabilityFeatures() {
   )
 }
 
-/** 首页锚点兼容旧导航，消息始终在 render 时读取。 */
-export function LandingPage() {
+export interface LandingPageProps {
+  /** Stripe 实时价格目录；由首页路由的 loader 取。 */
+  catalog?: PriceCatalog
+}
+
+export function LandingPage({ catalog = {} }: LandingPageProps) {
   const [paused, setPaused] = useState(false)
   const [pageVisible, setPageVisible] = useState(true)
   const root = useRef<HTMLDivElement>(null)
@@ -677,7 +733,18 @@ export function LandingPage() {
             {paused ? m.home_motion_resume() : m.home_motion_pause()}
           </button>
         </div>
-        <Hero {...homeBlocks.Hero} visual={<LeapJourney paused={paused || !pageVisible} />} />
+        <Hero
+          title={m.home_hero_title()}
+          titleLang="en"
+          titleEmphasis={m.home_hero_title_emphasis()}
+          eyebrow={m.home_hero_eyebrow()}
+          description={m.home_hero_description()}
+          note={m.home_hero_note()}
+          primaryCta={{ label: m.home_hero_primary_cta(), href: docsCtaHref() }}
+          secondaryCta={{ label: m.home_hero_secondary_cta(), href: '#features' }}
+          variant="split"
+          visual={<LeapJourney paused={paused || !pageVisible} />}
+        />
       </div>
       <TechnologyStrip />
       <StackAndToolkit />
@@ -687,16 +754,32 @@ export function LandingPage() {
       <div className="lab-reveal">
         <Workflow />
       </div>
-      <HomePricing />
+      <HomePricing catalog={catalog} />
       <div className="lab-reveal">
         <SourceOverview />
       </div>
       <BrandStory />
       <section id="faq" className="lab-reveal scroll-mt-16">
-        <Faq {...homeBlocks.Faq} />
+        <Faq
+          eyebrow={m.home_faq_eyebrow()}
+          title={m.home_faq_title()}
+          variant="split"
+          items={[
+            { question: m.home_faq_q1(), answer: m.home_faq_a1() },
+            { question: m.home_faq_q2(), answer: m.home_faq_a2() },
+            { question: m.home_faq_q3(), answer: m.home_faq_a3() },
+            { question: m.home_faq_q4(), answer: m.home_faq_a4() },
+            { question: m.home_faq_q5(), answer: m.home_faq_a5() },
+          ]}
+        />
       </section>
       <div className="lab-reveal">
-        <Cta {...homeBlocks.Cta} />
+        <Cta
+          title={m.home_cta_title()}
+          description={m.home_cta_description()}
+          primaryCta={{ label: m.home_cta_primary(), href: docsCtaHref() }}
+          variant="quiet"
+        />
       </div>
     </div>
   )

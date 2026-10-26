@@ -1,11 +1,6 @@
 /**
- * 校验 `messages/*.json` 的**文件集合**与 `LOCALES` 一一对应，且各语言的键集合与
- * base locale 双向相等（忽略 `$schema`）。
- *
- * 三类问题都以非零退出码失败：
- * - 缺少某个受支持语言的消息文件（新增语言后忘记补 `messages/xx.json`）；
- * - 存在不受支持语言的消息文件（`LOCALES` 删了某语言但文件残留）；
- * - 某语言缺失或多出键（漏译 / 多译）。
+ * 校验 `messages/*.json` 的文件集合与 `LOCALES` 一一对应，且各语言键集合与 base locale
+ * 双向相等（忽略 `$schema`）。缺文件、多余文件、漏译 / 多译都以非零退出码失败。
  */
 
 import { readdirSync, readFileSync } from 'node:fs'
@@ -46,7 +41,6 @@ function main(): void {
     throw new Error(`未找到 base locale 文件 ${MESSAGES_DIR}/${baseFile}`)
   }
 
-  // 文件集合必须与受支持语言一一对应：多出 / 缺失都在这里拦下。
   let failed = false
   const expected = new Set(LOCALES.map((locale) => `${locale}.json`))
   const actual = new Set(files)

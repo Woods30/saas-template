@@ -5,24 +5,13 @@ import type { SessionInfo } from '@/auth/session'
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
-/**
- * 个人中心外壳。
- *
- * 关键行为：
- * - 顶栏是「折叠按钮 + 三级面包屑」：不放 `<h1>`（面包屑末级
- *   带 `aria-current="page"`，就是页面标题），也不放「返回站点」（侧栏头 logo 已是出口）；
- * - 面包屑前两级是链接、末级是当前页；末级文案由 pathname 派生；
- * - `Breadcrumb` 等三组 shadcn 件在此第一次被消费，测试同时确认用的是现成件
- *   （`role="navigation"` + `aria-label="breadcrumb"`）而非手写等价物。
- */
+/** 个人中心外壳：面包屑导航、收起态侧栏、侧栏底部用户卡片、内容区宽度。 */
 const routerMocks = vi.hoisted(() => ({
   pathname: '/en/dashboard/profile',
 }))
 
-// 只替换路由边界（`Link` / `useRouterState`）；`linkOptions` 等其他导出走真实实现
-// ——`linkOptions` 是纯对象包装，不依赖 Router 上下文，而 `getSettingsSections`
-// 在调用时就会用到它。mock 的 `Link` 必须还原真实 `Link` 的 `params` → `href`
-// 拼接，否则断言写死的 `/zh`、`/zh/dashboard/profile` 测的是 mock 而不是组件。
+// 只替换路由边界；mock 的 `Link` 必须还原 `params` → `href` 拼接，
+// 否则断言里的 `/zh/dashboard/profile` 测的是 mock 而不是组件。
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
@@ -64,7 +53,7 @@ function clearCookies() {
   }
 }
 
-/** 渲染外壳；session 由路由 beforeLoad 的守卫取到后透传进来。 */
+/** 渲染外壳；session 由路由 beforeLoad 取到后透传进来。 */
 function renderLayout() {
   return render(
     <DashboardLayout locale="zh" session={sessionWith()}>
@@ -73,7 +62,7 @@ function renderLayout() {
   )
 }
 
-/** 夹具：与 `dashboard-user-card.test.tsx` 同形的会话（守卫已确认登录，此处只喂给用户卡片）。 */
+/** 与用户卡片测试同形的会话。 */
 function sessionWith(): SessionInfo {
   return {
     user: {
@@ -89,7 +78,7 @@ function sessionWith(): SessionInfo {
 }
 
 describe('SettingsLayout 顶栏', () => {
-  /** 面包屑 `<nav>`：侧栏菜单里也有同名文案，断言末级时必须把范围收到面包屑内。 */
+  /** 侧栏菜单里也有同名文案，断言末级时必须收窄到面包屑内。 */
   function breadcrumb() {
     return screen.getByRole('navigation', { name: 'breadcrumb' })
   }
@@ -109,7 +98,6 @@ describe('SettingsLayout 顶栏', () => {
       'href',
       '/zh/dashboard/profile',
     )
-    // 末级是当前页，不是链接。
     const page = within(breadcrumb()).getByText('资料')
     expect(page.tagName).toBe('SPAN')
     expect(page).toHaveAttribute('aria-current', 'page')
@@ -128,7 +116,6 @@ describe('SettingsLayout 顶栏', () => {
     renderLayout()
     expect(screen.getByRole('link', { name: '首页' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '个人中心' })).toBeInTheDocument()
-    // 除两级链接与「内容区」外， breadcrumb 里不应再有任何条目。
     const nav = breadcrumb()
     expect(nav.querySelectorAll('[data-slot="breadcrumb-item"]')).toHaveLength(2)
   })
@@ -148,18 +135,15 @@ describe('SettingsLayout 顶栏', () => {
     const header = document.querySelector('main > header')
     expect(header).not.toBeNull()
     const themeButton = within(header as HTMLElement).getByRole('button', { name: /主题/ })
-    // 侧栏常驻时入口在用户菜单里，顶栏这个按钮只在窄屏（抽屉模式）出现。
+    // 侧栏常驻时入口在用户菜单里，这个按钮只在窄屏出现。
     expect(themeButton.closest('.md\\:hidden')).not.toBeNull()
   })
 })
 
 /**
- * 侧栏的收起态（icon rail）。
- *
- * 两条都会在「看起来还行」的情况下静默回退：
- * - 横版 logo（1400×380）直接缩到 3rem 宽只剩 18×5px，必须换成方形图标；
- * - shadcn 原件的收起态图标是 16px，在窄条里偏小，调用处放大到 20px。
- * 断言类名而不是渲染尺寸：jsdom 不做布局，计算宽度恒为 0。
+ * 侧栏收起态（icon rail）。两条都会静默回退：横版 logo 缩到 3rem 宽只剩 18×5px，
+ * 需换方形图标；原件 16px 图标在窄条里偏小，调用处放大到 20px。
+ * jsdom 不做布局，故断言类名而非渲染尺寸。
  */
 describe('SettingsLayout 收起态侧栏', () => {
   it('侧栏头同时提供横版 logo 与方形图标，按折叠状态切换', () => {
@@ -167,13 +151,10 @@ describe('SettingsLayout 收起态侧栏', () => {
     const header = document.querySelector('[data-slot="sidebar-header"]')
     expect(header).not.toBeNull()
     const images = [...(header as HTMLElement).querySelectorAll('img')]
-    // v4 的横版 logo 是内联 SVG（由 `--jbx-*` 变量上色，不分浅深两份资产），
-    // 因此这里只有一个 `<img>`：收起状态的方形图标。
+    // 横版 logo 是内联 SVG，因此这里唯一的 `<img>` 是收起态方形图标。
     expect(images.map((img) => img.getAttribute('src'))).toEqual(['/icon-jerboa.svg'])
-    // 横版 logo 是内联 SVG，断言它带「收起态隐藏」的类名而不是 img 的 src。
     expect(header?.querySelector('svg')).not.toBeNull()
     expect(header?.querySelector('svg')?.getAttribute('width')).toBe('100%')
-    // 方形图标只在收起态出现。
     expect(images[0]?.className).toContain('group-data-[collapsible=icon]:block')
     expect(images[0]?.className).toContain('hidden')
   })
@@ -183,10 +164,10 @@ describe('SettingsLayout 收起态侧栏', () => {
     const buttons = [...document.querySelectorAll('[data-slot="sidebar-menu-button"]')]
     expect(buttons.length).toBeGreaterThan(0)
     for (const button of buttons) {
-      // 展开态：shadcn 原件的 32px 行高 / 16px 图标在 240px 侧栏里偏挤。
+      // 原件 32px 行高 / 16px 图标在 240px 侧栏里偏挤。
       expect(button.className).toContain('h-10')
       expect(button.className).toContain('[&_svg]:size-[1.125rem]')
-      // 收起态：原件 `size-8!` 带 important，覆盖必须同样带 `!`。
+      // 原件 `size-8!` 带 important，覆盖必须同样带 `!`。
       expect(button.className).toContain('group-data-[collapsible=icon]:size-9!')
       expect(button.className).toContain('group-data-[collapsible=icon]:[&_svg]:size-5')
     }
@@ -196,20 +177,16 @@ describe('SettingsLayout 收起态侧栏', () => {
     renderLayout()
     const footer = document.querySelector('[data-slot="sidebar-footer"]')
     expect(footer).not.toBeNull()
-    // footer 里只有一个按钮：用户卡片。主题是它的菜单项，不是并列的按钮。
     expect(within(footer as HTMLElement).queryByRole('button', { name: /主题/ })).toBeNull()
   })
 })
 
 /**
- * 侧栏底部的用户卡片。个人中心是 `_layout` 路由、不渲染营销导航栏，导航栏
- * `UserMenu` 里的登出入口在这里不可见——这张卡片就是本路由内唯一的登出口，
- * 因此「外壳是否真的把它装进了侧栏底部」必须有自己的断言守着：
- * 只在卡片组件内测渲染，外壳漏装 `SidebarFooter` 也不会有人发现。
+ * 侧栏底部的用户卡片：`_layout` 路由不渲染营销导航栏，这张卡片是本路由内唯一的登出口。
+ * 只在卡片组件内测渲染发现不了「外壳漏装」，故此处单独断言。
  */
 describe('SettingsLayout 侧栏底部的用户卡片', () => {
-  /** 侧栏 footer：shadcn `SidebarFooter` 的原生契约（`src/components/ui/sidebar.tsx`
-   *  渲染 `data-slot="sidebar-footer"`），不是本仓库自造的标记。 */
+  /** shadcn `SidebarFooter` 渲染的 `data-slot="sidebar-footer"`。 */
   function sidebarFooter() {
     const footer = document.querySelector<HTMLElement>('[data-slot="sidebar-footer"]')
     if (!footer) throw new Error('侧栏未渲染 sidebar-footer')
@@ -224,20 +201,14 @@ describe('SettingsLayout 侧栏底部的用户卡片', () => {
   it('footer 内确实是用户卡片：头像、名字与邮箱都在其内', () => {
     renderLayout()
     const footer = sidebarFooter()
-    // 卡片内容必须落在 footer 里：只证明 footer 存在不等于卡片装对了地方。
     expect(within(footer).getByText('woods@example.com')).toBeInTheDocument()
     expect(within(footer).getByRole('button', { name: 'woods' })).toBeInTheDocument()
   })
 })
 
 /**
- * 内容区的宽度契约。
- *
- * 这些类名看起来像「样式细节」，实际守的是两条会静默回退的布局不变量：
- * - `max-w-3xl` 是设置页式的窄栏，表格（登录设备 / API 密钥 / 用户管理）会被挤到
- *   列间无空隙；宽度回退不会让任何测试变红，只会让宽屏下看起来「很窄」。
- * - `SidebarInset` 缺 `min-w-0` 时，宽表格的 min-content 会把它撑出视口，
- *   整页横向滚动（768px 下实测过）。
+ * 内容区宽度契约，守两条会静默回退的布局不变量：收窄到 `max-w-3xl` 会让表格列间无空隙；
+ * `SidebarInset` 缺 `min-w-0` 时宽表格会撑出视口（768px 下实测过）。
  */
 describe('SettingsLayout 内容区宽度', () => {
   it('内容区用宽容器而非表单窄栏', () => {
@@ -246,7 +217,6 @@ describe('SettingsLayout 内容区宽度', () => {
     expect(inner).not.toBeNull()
     expect(inner?.className).toContain('max-w-6xl')
     expect(inner?.className).not.toContain('max-w-3xl')
-    // 允许 flex 收缩，否则宽表格会把面板撑破视口。
     expect(inner?.className).toContain('min-w-0')
   })
 

@@ -2,8 +2,8 @@
 title: 表单约定
 description: TanStack Form + Zod + shadcn Field 的统一写法，含最小可复制示例
 locale: zh
-order: 13
-group: config
+order: 21
+group: develop
 updated: 2026-10-14
 ---
 

@@ -5,17 +5,9 @@ import { DocsSearch } from '@/components/docs/DocsSearch'
 import type { DocEntry } from '@/lib/docs'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
-/**
- * 文档搜索：侧栏顶部一个触发器，点击后弹出屏幕居中的搜索弹窗。
- *
- * 侧栏只有 240px 宽，结果直接铺在侧栏里会被挤成一两行、看不清上下文；改成居中
- * 弹窗后结果有足够宽度展示标题与描述，也更符合「搜索」这个动作的预期。
- *
- * 纯前端过滤：文档在构建期已全部载入，无需请求后端。
- */
-// 只替换路由边界（与 `landing.test.tsx` 同一手法），检索逻辑用真实实现。
-// mock 需还原真实 `Link` 对 `params` / `hash` 的拼接方式，否则「锚点指向哪一节」
-// 这类断言测的是 mock 而不是组件。
+/** 文档搜索：触发器弹出居中弹窗，纯前端过滤（文档在构建期已全部载入）。 */
+// 只替换路由边界；mock 的 `Link` 需还原 `params` / `hash` 拼接，
+// 否则「锚点指向哪一节」测的是 mock 而不是组件。
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
     children,
@@ -35,9 +27,8 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 beforeEach(() => setLocale('zh', { reload: false }))
-// 不手动清空 `document.body`：弹窗通过 Portal 挂到 body 上，直接清空会让 Base UI
-// 在卸载时找不到自己插入的节点（`NotFoundError`）。testing-library 的自动 cleanup
-// 会走正常的卸载路径。
+// 不手动清空 `document.body`：Portal 节点会让 Base UI 卸载时报 `NotFoundError`，
+// 交给 testing-library 的自动 cleanup。
 
 function entry(
   slug: string,
@@ -51,13 +42,13 @@ function entry(
 }
 
 const DOCS: DocEntry[] = [
-  // 描述里刻意不放 `Email`：高亮测试要断言标题命中只产生一个 `<mark>`。
+  // 描述里刻意不放 `Email`：高亮测试断言标题命中只产生一个 `<mark>`。
   entry('email', 'Email', 'Resend provider', 6, 'features'),
   entry('payment', 'Payment', 'Stripe checkout', 8, 'features'),
   entry('configuration', 'Website Config', 'All fields', 2, 'config'),
 ]
 
-/** 带正文与小节的文档，用于验证「正文命中 + 目录树」。 */
+/** 带正文与小节的文档，验证「正文命中 + 目录树」。 */
 const DOCS_WITH_CONTENT: DocEntry[] = [
   entry(
     'payment',
@@ -83,12 +74,7 @@ function open() {
   return screen.getByRole('dialog')
 }
 
-/**
- * 在弹窗的输入框里输入。
- *
- * `CommandInput`（cmdk）渲染的是 `role="combobox"` 的输入框，而非原生 `searchbox`；
- * 这是命令面板的标准可访问性结构（配合 listbox / option 一起用）。
- */
+/** 在弹窗输入框里输入；cmdk 渲染的是 `role="combobox"` 而非原生 searchbox。 */
 function type(value: string) {
   const dialog = screen.getByRole('dialog')
   fireEvent.change(within(dialog).getByRole('combobox'), { target: { value } })
@@ -110,7 +96,7 @@ describe('DocsSearch', () => {
   it('打开后自动聚焦输入框', async () => {
     render(<DocsSearch docs={DOCS} locale="zh" />)
     const dialog = open()
-    // Base UI 在弹窗挂载后异步移动焦点，需等一拍。
+    // Base UI 挂载后异步移动焦点，需等一拍。
     await waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole('combobox')))
   })
 
@@ -159,7 +145,7 @@ describe('DocsSearch', () => {
     open()
     type('Email')
     const dialog = screen.getByRole('dialog')
-    // 高亮用 <mark>：默认带浏览器底色，无需额外样式也不会被当成普通文本。
+    // 高亮用 <mark>，默认带底色。
     expect(within(dialog).getAllByText('Email', { selector: 'mark' })).toHaveLength(1)
   })
 
@@ -184,10 +170,9 @@ describe('DocsSearch', () => {
     open()
     type('Signature')
     const dialog = screen.getByRole('dialog')
-    // 小节标题是链接，指向该小节的锚点；可访问名同时包含摘要。
     const sectionLink = within(dialog).getByRole('link', { name: /Webhook/ })
     expect(sectionLink).toHaveAttribute('href', '/docs/payment#webhook')
-    // 摘要里的关键词被 `<mark>` 拆开，断言整段文本而非单个文本节点。
+    // 摘要被 `<mark>` 拆开，断言整段文本。
     expect(sectionLink).toHaveTextContent(/Signature failures/)
   })
 
@@ -196,11 +181,10 @@ describe('DocsSearch', () => {
     open()
     type('Signature')
     const dialog = screen.getByRole('dialog')
-    // 父级 h2 只作为层级出现，也是链接（可跳到该节），但没有摘要。
+    // 父级 h2 也是链接，但没有摘要。
     const parent = within(dialog).getByRole('link', { name: 'Enable payment' })
     expect(parent).toHaveAttribute('href', '/docs/payment#enable-payment')
     expect(parent).toHaveAttribute('data-level', '2')
-    // 命中的 h3 缩进更深，用 data-level 标出。
     expect(within(dialog).getByRole('link', { name: /Webhook/ })).toHaveAttribute('data-level', '3')
   })
 

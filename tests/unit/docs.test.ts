@@ -15,11 +15,8 @@ import {
 } from '@/lib/docs'
 
 /**
- * 文档侧边栏的分组逻辑与右侧目录（TOC）提取。
- *
- * 侧边栏需要二级结构（分组 → 文档），才能在一份文档变多后仍能按主题定位。
- * 分组由 frontmatter 的 `group` 字段声明；组的先后顺序由组内最小的 `order`
- * 决定，避免再引入一个需要与 `order` 手动保持一致的字段。
+ * 文档侧边栏分组与右侧 TOC 提取。分组由 frontmatter 的 `group` 声明，
+ * 组的先后由组内最小 `order` 决定。
  */
 
 function entry(slug: string, title: string, order: number, group?: string): DocEntry {
@@ -132,8 +129,7 @@ describe('searchDocs', () => {
   })
 
   it('记录原始关键词，供渲染层做高亮', () => {
-    // 关键词大小写按用户输入保留，摘要里的大小写却可能不同（`Resend` / `resend`），
-    // 高亮必须大小写不敏感地匹配，因此需要原始词。
+    // 摘要里的大小写可能与输入不同，高亮须大小写不敏感。
     const results = searchDocs(DOCS, '  RESEND  ')
     expect(results[0]?.keyword).toBe('RESEND')
   })
@@ -160,7 +156,6 @@ describe('searchDocs', () => {
       [2, '启用支付'],
       [3, 'Webhook'],
     ])
-    // 父级 h2 自身不含关键词，不显示摘要；命中的 h3 显示摘要。
     expect(results[0]?.sections[0]?.snippet).toBe('')
     expect(results[0]?.sections[1]?.snippet).toBe('签名校验失败返回 400。')
   })
@@ -216,7 +211,7 @@ describe('searchDocs', () => {
 
 describe('parseSidebarCollapsed', () => {
   it('只认 `1` 为收起，其余（含缺失）一律展开', () => {
-    // 默认必须是**展开**：首次访问的人要看得到导航，而不是先猜怎么打开。
+    // 默认必须展开，首次访问的人要直接看到导航。
     expect(parseSidebarCollapsed('1')).toBe(true)
     expect(parseSidebarCollapsed('0')).toBe(false)
     expect(parseSidebarCollapsed('')).toBe(false)
@@ -227,8 +222,7 @@ describe('parseSidebarCollapsed', () => {
 
 describe('getSidebarCollapsed / setServerSidebarGetter', () => {
   it('服务端路径返回注入的 getter 值', () => {
-    // node 环境无 `document`，走注入的读取器；`src/server.ts` 在请求入口用同一
-    // 手法注入 ALS 读取，使 SSR 与客户端对同一 cookie 得到同一结果。
+    // node 环境无 `document`，走注入的读取器；SSR 入口用同一手法注入 ALS。
     setServerSidebarGetter(() => true)
     expect(getSidebarCollapsed()).toBe(true)
     setServerSidebarGetter(() => false) // 复位，避免影响其他用例
@@ -292,7 +286,7 @@ describe('formatUpdatedDate', () => {
   })
 
   it('不受本地时区影响（同一日期在任何时区都输出同一天）', () => {
-    // 若实现走 `new Date(iso)`，UTC 午夜在西半球会退到前一天。
+    // 用 `new Date(iso)` 时 UTC 午夜在西半球会退到前一天。
     expect(formatUpdatedDate('2026-10-01', 'en')).toBe('October 1, 2026')
   })
 })
@@ -340,8 +334,7 @@ describe('splitNextSteps', () => {
   })
 
   it('链接后带说明文字时仍能解析，说明文字作为描述保留', () => {
-    // 真实内容写成 `- [网站配置](./configuration)——websiteConfig 全字段`，
-    // 行尾不是 `)`，早期实现要求整行匹配链接，导致整节被丢弃。
+    // 真实内容行尾不是 `)`，早期整行匹配链接的实现会把整节丢弃。
     const md = [
       '正文。',
       '',

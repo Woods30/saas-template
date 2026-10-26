@@ -91,7 +91,7 @@
   PR 跳过。用 `paths` 过滤 + 一个轻量的「改动是否触及核心区」判定步骤实现。
 - 顺带消除 CI 重复：`pnpm install` / `content:build` 用缓存或 job 间 artifact 复用。
 
-**验证**：改一个非核心文件（如 `src/components/blocks/marketing/hero/Hero.tsx`）的 PR
+**验证**：改一个非核心文件（如 `src/components/sections/hero/Hero.tsx`）的 PR
 不触发 e2e；改 `src/auth/**` 的 PR 触发。
 
 ### 3.4 核心区清单（全量回归 + e2e 的判定依据）

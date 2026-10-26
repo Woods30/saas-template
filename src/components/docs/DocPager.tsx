@@ -5,12 +5,8 @@ import type { Locale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
 
 /**
- * 文档底部的上一篇 / 下一篇导航。
- *
- * 阅读顺序沿 `order` 全局推进（跨分组连续，见 `docNeighbors`），因此「下一篇」会
- * 一路走完整个文档集，不在组边界停住。首篇只有下一篇、末篇只有上一篇。
- *
- * 用 `grid` 固定两列：只有一侧时该侧仍占位，卡片不会因为「上一篇」消失而跳位。
+ * 文档底部的上一篇 / 下一篇。顺序沿 `order` 全局推进、不在组边界停住。
+ * `grid` 固定两列，只有一侧时另一侧留占位，卡片不会跳位。
  */
 export function DocPager({
   locale,
@@ -25,12 +21,7 @@ export function DocPager({
 
   return (
     <nav className="mt-8 grid gap-3 border-t border-border pt-6 sm:grid-cols-2">
-      {prev ? (
-        <PagerLink dir="prev" doc={prev} locale={locale} />
-      ) : (
-        // 占位元素：只有一侧时保持两列布局，避免卡片跳位。
-        <div />
-      )}
+      {prev ? <PagerLink dir="prev" doc={prev} locale={locale} /> : <div />}
       {next ? <PagerLink dir="next" doc={next} locale={locale} /> : <div />}
     </nav>
   )

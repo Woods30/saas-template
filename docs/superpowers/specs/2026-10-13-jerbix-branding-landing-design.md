@@ -359,7 +359,7 @@ LocaleSwitcher → swapLocale(pathname) → router.navigate() + cookie NEXT_LOCA
 - `src/server.ts`、`src/lib/server-context.ts`（theme 进 ALS）
 - `src/routes/__root.tsx`（data-theme、theme-color）
 - `src/config/website.ts`（品牌名与图片路径）
-- `src/config/blocks/home.ts`（Hero 加 mascot 图）
+- `src/config/pages/home.ts`（Hero 加 mascot 图）
 - `public/manifest.json`、`public/icon.svg`
 - `messages/{zh,en}.json`（主题 / locale 相关文案）
 - `src/lib/locale.ts` 或新增 `src/lib/locale-url.ts`（`swapLocale`）

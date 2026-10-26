@@ -55,14 +55,12 @@ describe('buildCspHeader', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// script-src 允许分析脚本（生产环境必须，否则浏览器全部拦截）
-// ---------------------------------------------------------------------------
+// script-src 放行分析脚本 origin（生产环境必须，否则浏览器全部拦截）。
 
 describe('buildCspHeader — script-src 允许分析脚本', () => {
   it('未启用分析时 script-src 仍是 self + nonce + 固定分析源，绝不放 unsafe-inline', () => {
     const header = buildCspHeader('n')
-    // 取 script-src 指令本身，避免误匹配 connect-src 里的同名 origin。
+    // 取 script-src 本身，避免误匹配 connect-src 里的同名 origin。
     const scriptSrc = header
       .split('; ')
       .find((d) => d.startsWith('script-src'))
@@ -76,12 +74,11 @@ describe('buildCspHeader — script-src 允许分析脚本', () => {
     const header = buildCspHeader('n', ['https://plausible.io'])
     const scriptSrc = header.split('; ').find((d) => d.startsWith('script-src'))
     expect(scriptSrc).toContain('https://plausible.io')
-    // 不会因为加了一个 origin 就放宽成 unsafe-inline。
+    // 加 origin 不应放宽成 unsafe-inline。
     expect(scriptSrc).not.toContain("'unsafe-inline'")
   })
 
   it('默认包含三家固定域名的分析脚本', () => {
-    // GA / Plausible / Clarity 的脚本 origin 是写死的，启用时直接放行。
     const header = buildCspHeader('n')
     const scriptSrc = header.split('; ').find((d) => d.startsWith('script-src'))
     expect(scriptSrc).toContain('https://www.googletagmanager.com')
@@ -97,9 +94,7 @@ describe('buildCspHeader — script-src 允许分析脚本', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// getAnalyticsScriptOrigins — 只放行真的会注入脚本的 provider
-// ---------------------------------------------------------------------------
+// getAnalyticsScriptOrigins：只放行真的会注入脚本的 provider。
 
 describe('getAnalyticsScriptOrigins', () => {
   const base = {
@@ -237,16 +232,12 @@ describe('generateNonce', () => {
 
   it('返回值是 URL 安全 base64', () => {
     const nonce = generateNonce()
-    // URL-safe base64 uses - and _ instead of + and /
+    // URL-safe base64 用 - 和 _ 代替 + 和 /。
     expect(nonce).toMatch(/^[A-Za-z0-9_-]+$/)
   })
 })
 
-/**
- * `addNonceToInlineScripts` rewrites the response stream so every inline
- * `<script>` tag carries the CSP nonce. These tests exercise the underlying
- * tag-detection logic through a small in-process roundtrip.
- */
+/** 经进程内往返验证 `addNonceToInlineScripts` 的标签识别逻辑。 */
 async function streamRewritten(response: Response, nonce: string): Promise<string> {
   const out = addNonceToInlineScripts(response, nonce)
   return await out.text()
@@ -302,10 +293,7 @@ describe('addNonceToInlineScripts', () => {
   })
 
   it('JSON-LD <script type="application/ld+json"> 不补 nonce（CSP 不需要）', async () => {
-    // JSON-LD is structured data, not executable JavaScript. CSP `script-src`
-    // does not block it, and adding a nonce would create a server/client
-    // hydration mismatch with the `JsonLd` component (which renders the tag
-    // without a nonce attribute).
+    // JSON-LD 不是可执行 JS，CSP 不拦；加 nonce 会与 `JsonLd` 组件产生水合不一致。
     const html = `<script type="application/ld+json">{"@context":"x"}</script>`
     const out = await streamRewritten(
       new Response(html, { headers: { 'Content-Type': 'text/html' } }),
@@ -327,13 +315,9 @@ describe('addNonceToInlineScripts', () => {
       new Response(html, { headers: { 'Content-Type': 'text/html' } }),
       nonce,
     )
-    // inline 加 nonce
     expect(out).toContain(`<script nonce="${nonce}">inline1</script>`)
-    // src 不变
     expect(out).toContain('<script src="/a.js"></script>')
-    // 已有 nonce 不变
     expect(out).toContain('<script nonce="x">already</script>')
-    // 属性后追加
     expect(out).toContain(`<script data-x nonce="${nonce}">y</script>`)
   })
 

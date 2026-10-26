@@ -5,23 +5,12 @@ export function getBaseUrl(): string {
   return publicEnv.VITE_BASE_URL.replace(/\/+$/, '')
 }
 
-/**
- * 规范化前导斜杠：缺少时补上（`pricing` → `/pricing`，`og.png` → `/og.png`），
- * 已有则原样保留，空串归一为站点根路径 `/`。
- *
- * canonical path 与 SEO 图片相对路径共用同一规范化，避免两处各写一份。
- */
+/** 规范化前导斜杠：`pricing` → `/pricing`，已有则原样保留。 */
 export function normalizeLeadingSlash(path: string): string {
   return path.startsWith('/') ? path : `/${path}`
 }
 
-/**
- * 把站内 path 拼成绝对 canonical URL。
- *
- * - 缺少前导斜杠时补上（`pricing` → `/pricing`）；
- * - 空 path 规范化为站点根（`/`）；
- * - 基址与 path 之间不会出现双斜杠。
- */
+/** 把站内 path 拼成绝对 canonical URL（基址已去尾斜杠，不会出现双斜杠）。 */
 export function getCanonicalUrl(path: string): string {
   return `${getBaseUrl()}${normalizeLeadingSlash(path)}`
 }
@@ -33,8 +22,7 @@ export type SafeInternalPath = string & { readonly __internalPath: unique symbol
  * 控制字符与反斜杠——浏览器解析 URL 前会**删除**前者、把后者当作 `/`，
  * 所以含这些字符的路径无法用字符串前缀判断是否越站。
  *
- * 用 charCode 逐位比较而非 `\x00-\x1f`：正则里的控制字符字面量在源码里不可见，
- * 后续一次误编辑就会悄悄改变语义，而这里出错等于重定向防护失效。
+ * 用 charCode 逐位比较而非正则字面量：后者在源码里不可见，误编辑会让防护静默失效。
  */
 function containsUnsafePathChar(value: string): boolean {
   for (let i = 0; i < value.length; i += 1) {
@@ -48,18 +36,10 @@ function containsUnsafePathChar(value: string): boolean {
 /**
  * 校验一个 URL 是否为**站内相对路径**，是则原样返回，否则返回 `undefined`。
  *
- * 用于登录后回跳等「不可信输入决定跳转目标」的场景。开放重定向是个真实风险：
- * 攻击者把受害者送到 `?redirect=https://evil.com`，登录后就落在一个与本站
- * 一模一样的外站点上，密码与验证码都能被套走。
+ * 用于登录后回跳等「不可信输入决定跳转目标」的场景：开放重定向可被用来钓鱼。
  *
- * 只查字符串前缀是不够的，浏览器解析 URL 时会先做两件事：
- *
- * - **剥离控制字符**：`/⇥/evil.com` 里的 tab 被删除后变成 `//evil.com`，
- *   前缀检查看不出问题；
- * - **把 `\` 当作 `/`**：`/\evil.com` 同样是协议相对 URL。
- *
- * 因此先挡掉控制字符与反斜杠，再用「以固定 base 解析后 origin 是否变化」
- * 收口——这一步同时覆盖 `//host`、`https://host` 与各种编码变体。
+ * 只查字符串前缀不够——浏览器会剥离控制字符（`/\t/evil.com` → `//evil.com`）、
+ * 把 `\` 当作 `/`。故先挡掉这些字符，再用「以固定 base 解析后 origin 是否变化」收口。
  */
 export function safeInternalPath(value: unknown): SafeInternalPath | undefined {
   if (typeof value !== 'string') return undefined
@@ -76,12 +56,43 @@ export function safeInternalPath(value: unknown): SafeInternalPath | undefined {
 /** 站点根：唯一「无需校验也确定安全」的重定向目标。 */
 const SITE_ROOT = '/' as SafeInternalPath
 
-/**
- * 取回跳目标，非站内路径一律回落到站点根。
- *
- * 与 `safeInternalPath` 分开：调用处拿到的是**已收敛**的目标，不需要再判一次。
- * 纵深防御仍然值得——一处漏判就变成一次钓鱼入口，而代价只是多一个函数调用。
- */
+/** 取回跳目标，非站内路径一律回落到站点根（调用处无需再判）。 */
 export function resolveRedirectTarget(value: unknown): SafeInternalPath {
   return safeInternalPath(value) ?? SITE_ROOT
+}
+
+/**
+ * 校验一个 URL 是否为**本站的绝对地址**，是则原样返回，否则返回 `undefined`。
+ *
+ * 支付回跳的 `successUrl` / `cancelUrl` / `returnUrl` 由客户端传入并原样交给
+ * Stripe：不校验等于把「付款后跳到哪里」的决定权交给客户端，是开放重定向与
+ * 钓鱼的入口——攻击者可以让受害者付完款后落在仿冒页上继续骗取信息。
+ *
+ * 与 `safeInternalPath` 的区别：这里只收**绝对地址**。Stripe 会把相对路径
+ * 解析到它自己账号配置的域名下，本站无法控制解析结果，交给它反而不可预期。
+ *
+ * 放行的 origin **只取自 `VITE_BASE_URL`**（配置即契约）。刻意不把请求自身的
+ * origin 算进来：`request.url` 的 host 来自 Host 头，客户端可自造，攻击者带上
+ * `Host: evil.com` 就能让外域 URL 通过校验。要放行别的域名，得显式写进配置。
+ */
+export function safeSameOriginUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length === 0) return undefined
+  if (containsUnsafePathChar(value)) return undefined
+
+  let target: URL
+  try {
+    target = new URL(value)
+  } catch {
+    return undefined
+  }
+  if (target.protocol !== 'https:' && target.protocol !== 'http:') return undefined
+
+  let allowedOrigin: string
+  try {
+    allowedOrigin = new URL(getBaseUrl()).origin
+  } catch {
+    return undefined
+  }
+
+  return target.origin === allowedOrigin ? target.toString() : undefined
 }

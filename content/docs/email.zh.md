@@ -2,7 +2,7 @@
 title: 邮件
 description: Resend / Cloudflare Email 与联系表单的接线
 locale: zh
-order: 6
+order: 12
 group: features
 updated: 2026-10-15
 ---

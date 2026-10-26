@@ -2,15 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { assertAdminRole } from '@/lib/module-access'
 
 /**
- * Admin 门禁的两层。
- *
- * 1. **功能开关**（`features.enableAdmin`）：关闭时 `/api/auth/admin/*` 整体 404，
- *    与 API key 的 flag 门禁同构。
- * 2. **角色**：`assertAdminRole` 在非 admin 时抛 `notFound()`，页面以 404 呈现——
- *    不泄漏「这个页面存在但你没权限」，与 `assertFeatureEnabled` 语义一致。
- *
- * 角色判定只认 `'admin'`，不做前缀 / 大小写模糊匹配；`undefined`（未登录或字段缺失）
- * 一律拒绝。
+ * Admin 门禁的两层：功能开关关闭时整体 404；非 admin 抛 `notFound()`，不泄漏
+ * 「页面存在但你没权限」。角色只认 `'admin'`，`undefined` 一律拒绝。
  */
 
 const mocks = vi.hoisted(() => ({

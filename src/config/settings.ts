@@ -26,10 +26,8 @@ export type SettingsSection =
 /**
  * 个人中心侧边栏的导航项工厂。
  *
- * 与 `src/config/navbar-config.ts` 同风格：文案在**调用时**用 `m.*()` 求值，因此随请求
- * 语言变化；门禁交给 `filterMenuItems`。返回**分组**结构：普通用户只看到「个人」组，
- * 管理员额外看到「管理」组——分组与 role 一起驱动，空的组会被 `filterMenuItems` 摘掉，
- * 因此非管理员不会看到一个空标题。
+ * 文案在**调用时**用 `m.*()` 求值以跟随请求语言；门禁交给 `filterMenuItems`，
+ * 空分组会被摘掉，因此非管理员不会看到一个空标题。
  */
 export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[] {
   const items: readonly MenuItem[] = [
@@ -84,7 +82,7 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
           id: 'billing',
           title: m.settings_billing_nav(),
           icon: IconCreditCard,
-          // 支付模块关闭时入口消失（页面与 API 另有门禁，page 走 `payment` 模块判断）。
+          // 页面与 API 另有门禁，这里只控制入口是否显示。
           visibility: { module: 'payment' },
           destination: {
             kind: 'internal',
@@ -96,7 +94,7 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
           id: 'api-keys',
           title: m.settings_nav_api_keys(),
           icon: IconKey,
-          // 功能开关，非服务模块：关闭时入口消失（页面与 API 另有门禁）。
+          // 功能开关，非服务模块；页面与 API 另有门禁。
           visibility: { feature: 'enableApiKeys' },
           destination: {
             kind: 'internal',

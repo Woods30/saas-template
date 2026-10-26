@@ -25,8 +25,7 @@ export async function submitContact(
   if (!allowed) {
     return { error: 'Too Many Requests', status: 429 }
   }
-  // 两条通道都失败时必须报告失败：旧实现无论投递结果一律回 200，访客会以为
-  // 消息已送达，实际已丢失。
+  // 两条通道都失败时必须报告失败，否则访客会以为消息已送达。
   const { delivered } = await deliverContactNotification(data)
   if (!delivered) {
     console.error('[contact] 邮件与通知通道均失败，消息未送达')
@@ -43,7 +42,7 @@ export const Route = createFileRoute('/api/contact/$')({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        // 门禁先于 body 解析、限流与通知投递。
+        // 门禁必须先于 body 解析、限流与通知投递。
         const unavailable = getModuleUnavailableResponse('contact')
         if (unavailable) return unavailable
 

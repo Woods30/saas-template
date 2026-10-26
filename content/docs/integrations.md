@@ -2,7 +2,7 @@
 title: Integrations Overview
 description: Gate semantics, endpoints, and wiring for the service modules
 locale: en
-order: 5
+order: 9
 group: features
 updated: 2026-10-14
 ---

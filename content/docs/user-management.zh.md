@@ -2,7 +2,7 @@
 title: 用户管理
 description: 管理员角色、CLI 提权与管理台
 locale: zh
-order: 19
+order: 18
 group: features
 updated: 2026-10-16
 ---

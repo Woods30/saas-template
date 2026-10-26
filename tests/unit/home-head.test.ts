@@ -3,14 +3,8 @@ import { overwriteServerAsyncLocalStorage } from '@/locale/paraglide/runtime.js'
 import { Route } from '@/routes/{-$locale}/index'
 
 /**
- * 首页 `head()` 的 i18n 回归测试。
- *
- * 缺陷背景：首页曾用 `websiteConfig.metadata.description`（模块加载期求值的中文字面量），
- * 使 `<html lang="en">` 的页面仍输出中文 `<meta name="description">`，覆盖根路由按语言
- * 输出的 description。修复后 `head()` 内调用 `m.*()`，随请求语言变化。
- *
- * SSR 中 Paraglide 通过 AsyncLocalStorage 按请求写入语言；这里用假的 ALS store 复现
- * 「每请求调用 `head()`」的语义，从而在单测层验证语言切换（无需真实 dev server）。
+ * 首页 `head()` 的 i18n 回归：曾用模块加载期求值的中文 description，
+ * 使英文页面也输出中文。用假 ALS store 复现每请求调用 `head()`。
  */
 
 interface HeadMeta {

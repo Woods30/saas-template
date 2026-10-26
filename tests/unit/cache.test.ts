@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// vi.mock must be called before the module under test is imported.
-// We build the mock ALS context once here.
+// 先 vi.mock 再导入被测模块；mock ALS 上下文只构建一次。
 const mockCacheProvider = {
   get: vi.fn<(key: string) => Promise<unknown>>(),
   set: vi.fn<(key: string, value: unknown, ttl: number) => Promise<void>>(),
@@ -9,7 +8,7 @@ const mockCacheProvider = {
   deleteByPrefix: vi.fn<(prefix: string) => Promise<void>>(),
 }
 
-// Mock the server-context module so getServerContext() returns our mock.
+// Mock server-context，让 `getServerContext()` 返回 mock。
 vi.mock('@/lib/server-context', () => ({
   getServerContext: () => ({
     env: {},
@@ -20,7 +19,7 @@ vi.mock('@/lib/server-context', () => ({
   },
 }))
 
-// Import after vi.mock — the mock is now active.
+// 在 vi.mock 之后导入。
 import { createCacheKey, deleteCache, deleteCacheByPrefix, getOrSetCache } from '@/cache'
 import { CACHE_TTL } from '@/cache/constants'
 

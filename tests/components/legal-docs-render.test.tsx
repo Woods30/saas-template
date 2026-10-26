@@ -6,22 +6,10 @@ import { setLocale } from '@/locale/paraglide/runtime.js'
 import { getRouter } from '@/router'
 
 /**
- * legal / docs 详情页的**真实渲染**回归测试（真实 Router + memory history）。
+ * legal / docs 详情页的真实渲染回归（真实 Router + memory history）。
  *
- * 缺陷背景（Important I2）：`legal/$slug.tsx` 的 `beforeLoad` 谓词写成
- * `path === `${slug}.md``，但 Content Collections 的 `_meta.path` **已剥离
- * `.md`**（实测值为 `terms` / `terms.zh` / `privacy` / `privacy.zh`，见
- * `.content-collections/generated/allLegals.js`），因此 `'terms' === 'terms.md'`
- * 永不成立 → 该路由恒 404。此前的 `tests/unit/content-head.test.ts` 只把合成
- * `loaderData` 传给 `head()`，绕过了 `beforeLoad`，所以掩盖了该缺陷（评审已指出）。
- *
- * 本测试渲染真实路由，让 `beforeLoad` 真正执行：命中时页面渲染出当前语言的
- * frontmatter `title`；未命中时渲染根路由的 404 组件。
- *
- * docs 用例覆盖评审指出的 M-B 缺口：`/docs/$slug` 同样应渲染对应语言标题。
- *
- * 与 `tests/components/blog-jsonld.test.tsx` 同一模式（真实 Router + memory
- * history），属组件测试，需用 `vitest.components.config.ts` 运行。
+ * 必须走真实 `beforeLoad`：`_meta.path` 已剥离 `.md`，此前用合成 loaderData 的测试
+ * 绕过了谓词，掩盖了该路由恒 404 的缺陷。
  */
 
 beforeEach(() => setLocale('en', { reload: false }))
@@ -41,7 +29,7 @@ async function renderRoute(path: string) {
   return render(<RouterProvider router={router} />)
 }
 
-/** 页面正文的一级标题文本（页面 `<h1>`）；404 页面的 `<h1>` 为 `404`。 */
+/** 页面一级标题；404 页面的 `<h1>` 为 `404`。 */
 function pageTitle(): string {
   return screen.getByRole('heading', { level: 1 }).textContent ?? ''
 }
@@ -73,16 +61,8 @@ describe('legal 详情页真实渲染', () => {
 })
 
 /**
- * 法律文档的**正文**回归。
- *
- * 上面四条只证明「路由命中且 frontmatter title 渲染出来了」——早期那版 404 bug 就是
- * 这样被漏掉的：标题取自 loaderData，命中失败时页面变成根组件的 404，`<h1>404</h1>`
- * 一样能查得到。正文断言补上另一半：章节标题真的渲染了，以及「部署前填写」的占位
- * 提示以 `role="alert"` 出现（`Mdx` 把 `> **注意事项**` / `> **Note**` 升级成 `Alert`，
- * 见 `src/components/mdx/Mdx.tsx` 的 `isNoteQuote`），占位因此不可能被静默丢掉。
- *
- * 这一半同样防回归：曾有一版 `content/legal/*.md` 只有一句话加一个省略号，标题正常、
- * 正文却是空壳。
+ * 正文回归：标题断言不足以发现「命中失败渲染成 404」（`<h1>404</h1>` 一样查得到），
+ * 因此再断言章节标题与 `role="alert"` 占位提示真的渲染了。
  */
 describe('legal 详情页正文渲染', () => {
   it('terms 中英文都渲染出章节标题与占位提示', async () => {

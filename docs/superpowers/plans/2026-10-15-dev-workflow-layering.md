@@ -532,7 +532,7 @@ describe('isCorePath', () => {
   })
 
   it('营销组件 / 样式 / 文案不属于核心区', () => {
-    expect(isCorePath('src/components/blocks/marketing/hero/Hero.tsx')).toBe(false)
+    expect(isCorePath('src/components/sections/hero/Hero.tsx')).toBe(false)
     expect(isCorePath('src/styles/globals.css')).toBe(false)
     expect(isCorePath('messages/zh.json')).toBe(false)
     expect(isCorePath('docs/architecture.md')).toBe(false)

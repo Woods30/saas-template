@@ -4,12 +4,8 @@ import { buildUserWhere, escapeLike } from '@/auth/admin-users-query'
 import { schema } from '@/db'
 
 /**
- * 用户列表筛选条件的 SQL 生成。
- *
- * 三处容易静默出错的细节：
- * - 搜索必须按**字面**匹配，`%` / `_` 不能被解释成通配符；
- * - `banned` 列可空，「正常」要把 NULL 也算进来，否则污数据从正常视图里消失；
- * - 三个条件是 AND 组合，任何组合都必须落在同一个 `where` 里。
+ * 用户列表筛选条件的 SQL 生成：`%` / `_` 须按字面匹配；`banned` 可空，「正常」要含
+ * NULL；三个条件以 AND 组合在同一个 `where` 里。
  */
 
 const dialect = new SQLiteSyncDialect()
@@ -48,7 +44,7 @@ describe('buildUserWhere', () => {
 
   it('含 % 与 _ 的搜索词按字面匹配', () => {
     const q = build(buildUserWhere(schema.users, { search: 'a_b%c' }))
-    // 未转义时 `_` 会命中任意单字符、`%` 会命中任意串。
+    // 未转义时 `_` 命中任意单字符、`%` 命中任意串。
     expect(q?.params).toEqual(['%a\\_b\\%c%'])
   })
 
@@ -61,14 +57,14 @@ describe('buildUserWhere', () => {
   it('已封禁用 banned = true', () => {
     const q = build(buildUserWhere(schema.users, { status: 'banned' }))
     expect(q?.sql).toContain('"users"."banned" = ?')
-    // SQLite 没有布尔类型，drizzle 把 true 序列化成 1。
+    // SQLite 无布尔类型，true 序列化为 1。
     expect(q?.params).toContain(1)
   })
 
   it('正常状态把 banned 为 NULL 的行也算进来', () => {
     const q = build(buildUserWhere(schema.users, { status: 'active' }))
     expect(q?.sql.toLowerCase()).toContain('"users"."banned" is null')
-    // SQLite 没有布尔类型，drizzle 把 false 序列化成 0。
+    // SQLite 无布尔类型，false 序列化为 0。
     expect(q?.params).toContain(0)
   })
 

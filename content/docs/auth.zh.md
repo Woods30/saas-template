@@ -2,7 +2,7 @@
 title: 身份认证
 description: 邮箱密码与 Google 登录、邮件流程、会话守卫与表单约定
 locale: zh
-order: 11
+order: 10
 group: features
 updated: 2026-10-15
 ---
@@ -11,6 +11,8 @@ updated: 2026-10-15
 页面在 `/{locale}/auth/*`，API 在 `/api/auth/*`，工作台在 `/{locale}/dashboard/*`。
 
 ## 启用
+
+![登录页](/docs/screenshots/auth-login.png "登录页：邮箱密码登录，配置 Google 凭据后自动出现第三方登录按钮")
 
 `websiteConfig.auth` 两个字段，加上三个环境变量：
 

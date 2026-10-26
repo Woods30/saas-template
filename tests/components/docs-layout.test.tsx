@@ -5,22 +5,14 @@ import { DocsLayout } from '@/components/docs/DocsLayout'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
 /**
- * 文档站的 shell 布局：侧边栏可收起，并随视口自适应。
+ * 文档站 shell 布局：宽屏侧栏常驻可收起，窄屏改用 `Sheet` 抽屉。
  *
- * 宽屏（≥ lg）下侧栏常驻，但可手动收起，把 240px 让给正文；窄屏下常驻侧栏放不
- * 下（会把正文挤成一条），因此默认隐藏，由顶部菜单按钮以 `Sheet` 抽屉覆盖打开。
- *
- * 抽屉走的是 shadcn `Sheet`（Base UI Dialog）而不是手写 `fixed` 面板，因此这里
- * 断言的是**弹层契约**——`role="dialog"`、可访问名、Escape 关闭、点条目后收起、
- * 关闭后焦点归还——而不是某个类名。手写版曾经缺焦点陷阱与关闭行为，类名断言
- * 一条都发现不了。
- *
- * jsdom 不做媒体查询，断点本身由 `e2e/docs.spec.ts` 在真实视口下覆盖。
+ * 抽屉断言的是弹层契约（role、可访问名、Escape、焦点归还）而非类名——手写面板曾缺
+ * 焦点陷阱，类名断言发现不了。断点由 `e2e/docs.spec.ts` 在真实视口下覆盖。
  */
 const routerMocks = vi.hoisted(() => ({ pathname: '/zh/docs' }))
 
-// mock 的 `Link` 必须把 `to` + `params` 还原成 `href`：没有 `href` 的 `<a>` 没有
-// link 角色，`getAllByRole('link')` 会一条都查不到，测的就不是组件了。
+// mock 的 `Link` 必须还原 `href`：没有 `href` 的 `<a>` 没有 link 角色。
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
     children,
@@ -48,9 +40,7 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 beforeEach(() => {
-  // 收起偏好写在 cookie 上，jsdom 的 cookie jar 在同一文件内跨用例共享——不清空会
-  // 让后一个用例带着上一个用例的状态启动。必须先清再 `setLocale`：后者自己也写
-  // cookie，顺序反了会把语言一起清掉，文案变成英文。
+  // cookie jar 跨用例共享，必须先清；顺序也要在 `setLocale` 之前，否则语言一起被清。
   clearCookies()
   setLocale('zh', { reload: false })
   routerMocks.pathname = '/zh/docs'
@@ -66,24 +56,19 @@ function clearCookies() {
   }
 }
 
-/** 宽屏常驻侧栏（`<aside>` → role=complementary）。窄屏抽屉是 dialog，不在此列。 */
+/** 宽屏常驻侧栏；窄屏抽屉是 dialog，不在此列。 */
 function aside() {
   return screen.getByRole('complementary')
 }
 
-/**
- * 窄屏顶栏。
- *
- * jsdom 不应用 Tailwind 的 `lg:hidden`，因此顶栏与侧栏里的按钮在测试里**同时可见**，
- * 按名字全局查询会命中多个。需要区分时用本函数把查询范围收窄到顶栏。
- */
+/** 窄屏顶栏。jsdom 不应用 `lg:hidden`，顶栏与侧栏按钮同时可见，需收窄查询范围。 */
 function header() {
   const element = document.querySelector('header')
   if (!element) throw new Error('未找到顶栏')
   return element as HTMLElement
 }
 
-/** 窄屏抽屉：`SheetContent` 渲染成 `role="dialog"`，可访问名来自隐藏的 `SheetTitle`。 */
+/** 窄屏抽屉；可访问名来自隐藏的 `SheetTitle`。 */
 function drawer() {
   return screen.getByRole('dialog', { name: '文档' })
 }
@@ -91,18 +76,16 @@ function drawer() {
 describe('DocsLayout 宽屏侧栏', () => {
   it('宽屏默认展开侧栏，窄屏隐藏', () => {
     render(<DocsLayout locale="zh">正文</DocsLayout>)
-    // 基础 `hidden` 让窄屏先隐藏；`lg:flex` 在宽屏常驻。
     expect(aside().className).toContain('lg:flex')
   })
 
   it('收起后侧栏整块隐藏，展开入口移到侧栏之外', () => {
     render(<DocsLayout locale="zh">正文</DocsLayout>)
-    // 展开态：收起按钮在侧栏内，浮动工具条不存在。
     expect(within(aside()).getByRole('button', { name: '收起文档导航' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '展开文档导航' })).toBeNull()
 
     fireEvent.click(within(aside()).getByRole('button', { name: '收起文档导航' }))
-    // 侧栏整体隐藏，展开按钮必须落在它外面才点得到。
+    // 侧栏整体隐藏，展开按钮必须在它外面才点得到。
     expect(aside().className).not.toContain('lg:flex')
     const expand = screen.getByRole('button', { name: '展开文档导航' })
     expect(aside().contains(expand)).toBe(false)
@@ -136,12 +119,10 @@ describe('DocsLayout 窄屏抽屉', () => {
     render(<DocsLayout locale="zh">正文</DocsLayout>)
     fireEvent.click(within(header()).getByRole('button', { name: '打开文档导航' }))
     const sheet = drawer()
-    // Base UI Dialog 用「把页面其余部分标 `aria-hidden`」实现模态，而不是 `aria-modal`：
-    // 手写面板两样都没有，读屏软件仍会把被遮住的正文当成可读内容。
+    // Base UI Dialog 用 `aria-hidden` 标记其余部分实现模态，而非 `aria-modal`。
     const appRoot = document.body.children[0] as HTMLElement | undefined
     expect(appRoot).toHaveAttribute('aria-hidden', 'true')
     expect(appRoot?.contains(sheet)).toBe(false)
-    // 抽屉内容与宽屏侧栏同构：搜索、导航、工具条都在。
     expect(within(sheet).getByRole('button', { name: '搜索文档' })).toBeTruthy()
     expect(within(sheet).getByRole('navigation', { name: '文档导航' })).toBeTruthy()
     expect(within(sheet).getByRole('button', { name: '切换语言' })).toBeTruthy()
@@ -150,8 +131,7 @@ describe('DocsLayout 窄屏抽屉', () => {
   it('抽屉内的关闭按钮收起抽屉，并把焦点归还给触发按钮', async () => {
     render(<DocsLayout locale="zh">正文</DocsLayout>)
     const trigger = within(header()).getByRole('button', { name: '打开文档导航' })
-    // Base UI 关闭时把焦点还给「打开前的活动元素」，因此必须真的先把焦点放到触发按钮上
-    // ——`fireEvent.click` 不会附带焦点，只点不 focus 的话归还目标是 `<body>`。
+    // 关闭时焦点归还给「打开前的活动元素」，`fireEvent.click` 不附带焦点，须先 focus。
     trigger.focus()
     fireEvent.click(trigger)
     fireEvent.click(within(drawer()).getByRole('button', { name: '关闭文档导航' }))
@@ -166,7 +146,6 @@ describe('DocsLayout 窄屏抽屉', () => {
     const firstDoc = within(nav).getAllByRole('link')[0]
     expect(firstDoc).toBeDefined()
     fireEvent.click(firstDoc as HTMLElement)
-    // 不关的话新正文被抽屉盖住，用户不知道跳转成功了。
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
@@ -178,13 +157,7 @@ describe('DocsLayout 窄屏抽屉', () => {
   })
 })
 
-/**
- * 分组折叠（交互参照 GitBook）。
- *
- * 两条容易静默回退的行为：
- * - 默认全展开——文档站分组是主题分区，一进来全收起会让人以为只有几个入口；
- * - 当前文档所在分组必须展开——否则从搜索跳过去，高亮条目藏在折叠区里。
- */
+/** 分组折叠：默认全展开；当前文档所在分组必须展开，否则搜索跳转后高亮条目藏在折叠区。 */
 describe('DocsLayout 侧栏分组折叠', () => {
   it('默认全部展开，分组标题是可点击的折叠按钮', () => {
     render(<DocsLayout locale="zh">正文</DocsLayout>)
@@ -203,12 +176,11 @@ describe('DocsLayout 侧栏分组折叠', () => {
     const linksBefore = within(nav).getAllByRole('link').length
     fireEvent.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    // 收起的是条目，不是整个侧栏：其它分组的条目仍在。
     expect(within(nav).getAllByRole('link').length).toBeLessThan(linksBefore)
   })
 
   it('当前文档所在分组即使被收起，也会因导航而展开', () => {
-    // 先渲染并收起全部分组，再让路由落到某个分组的文档上。
+    // 先收起全部分组，再让路由落到某个分组的文档上。
     const { rerender } = render(<DocsLayout locale="zh">正文</DocsLayout>)
     const nav = within(aside()).getByRole('navigation', { name: '文档导航' })
     for (const toggle of within(nav).getAllByRole('button')) fireEvent.click(toggle)
@@ -218,7 +190,7 @@ describe('DocsLayout 侧栏分组折叠', () => {
         .every((el) => el.getAttribute('aria-expanded') === 'false'),
     ).toBe(true)
 
-    // 文档 slug 换成配置组的某一篇（分组 key 是 `config`）。
+    // 切到配置组的某一篇（分组 key 是 `config`）。
     routerMocks.pathname = '/zh/docs/configuration'
     rerender(<DocsLayout locale="zh">正文</DocsLayout>)
 
@@ -233,7 +205,6 @@ describe('DocsLayout 搜索', () => {
   it('顶栏的搜索图标与侧栏触发器打开同一个弹窗', () => {
     render(<DocsLayout locale="zh">正文</DocsLayout>)
     expect(screen.queryByRole('dialog')).toBeNull()
-    // 侧栏在窄屏是隐藏的，顶栏的图标是那里唯一的搜索入口。
     fireEvent.click(within(header()).getByRole('button', { name: '搜索文档' }))
     expect(screen.getByRole('dialog')).toBeTruthy()
   })

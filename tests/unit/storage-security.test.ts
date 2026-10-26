@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { R2StorageProvider } from '@/storage/provider/r2'
 
-// 构造一个最小化的 mock R2Bucket（只记录 put/delete/get/head/list 调用）
-// 使用 `as any` 绕过 R2Bucket 重载方法的 vi.fn 类型不兼容问题
+// 最小化 mock R2Bucket，只记录 put/delete/get/head/list 调用；`as any` 绕过重载方法
+// 与 vi.fn 的类型不兼容。
 function createMockBucket() {
   const mock = {
     put: vi.fn().mockResolvedValue(undefined),
@@ -153,7 +153,7 @@ describe('R2StorageProvider — 安全加固', () => {
   describe('Finding 3: downloadFile private 文件授权校验', () => {
     it('visibility=private 且未传 authorized → 抛出错误', async () => {
       const bucket = createMockBucket()
-      // head 返回 private visibility
+      // head 返回 private visibility。
       bucket.head.mockResolvedValueOnce({
         size: 100,
         httpMetadata: { contentType: 'image/png' },

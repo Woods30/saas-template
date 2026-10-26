@@ -2,7 +2,7 @@
 title: Notifications
 description: Wiring Discord / Feishu webhooks and their trigger points
 locale: en
-order: 9
+order: 15
 group: features
 updated: 2026-10-19
 ---

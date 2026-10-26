@@ -3,15 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { websiteConfig } from '@/config/website'
 
 /**
- * 守卫：浏览器 UI 配色与 CSS 主题底色保持一致。
- *
- * `theme-color`（地址栏 / 状态栏）与 PWA manifest 的 `background_color` 由浏览器在
- * 页面之外渲染，读不到 CSS 变量，只能在配置与静态文件里各写一份。这份测试把两份
- * 抄写绑回 `globals.css` 的 `--background`：改主题底色却忘了同步时直接失败，而不是
- * 等到真机上看出一条色差。
+ * 守卫浏览器 UI 配色与 `--background` 一致：`theme-color` 与 manifest 的
+ * `background_color` 读不到 CSS 变量，只能各抄一份，改主题时容易漏改。
  */
 
-/** 把 `oklch(L C H)` 转成 `#RRGGBB`（sRGB）。与浏览器渲染同一套换算。 */
+/** `oklch(L C H)` → `#RRGGBB`，与浏览器同一套换算。 */
 function oklchToHex(l: number, c: number, h: number): string {
   const rad = (h * Math.PI) / 180
   const a = c * Math.cos(rad)
@@ -50,7 +46,7 @@ function backgroundFromCss(): { light: string; dark: string } {
     /--background:\s*light-dark\(\s*oklch\(([\d.]+)\s+([\d.]+)\s+([\d.]+)\)\s*,\s*oklch\(([\d.]+)\s+([\d.]+)\s+([\d.]+)\)\s*\)/,
   )
   if (!match) throw new Error('globals.css 中找不到 --background 的 light-dark() 声明')
-  // 正则的 6 个捕获组在 match 成功时必然都存在，这里的解构是安全的。
+  // match 成功时捕获组必然存在。
   const [lL, lC, lH, dL, dC, dH] = match.slice(1).map(Number) as [
     number,
     number,

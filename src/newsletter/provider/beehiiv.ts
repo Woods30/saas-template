@@ -7,7 +7,7 @@ import type {
 
 /**
  * Beehiiv v2 API provider — 直接 fetch（无 SDK）。
- * 端点以 Beehiiv 官方文档为准，验证后实现。
+ *
  * TODO(beehiiv): wire when API access available
  */
 export class BeehiivNewsletterProvider implements NewsletterProvider {

@@ -2,7 +2,7 @@
 title: Account center
 description: The session guard on protected routes, plus the profile, security, sessions, and notifications sections
 locale: en
-order: 12
+order: 11
 group: features
 updated: 2026-10-20
 ---
@@ -57,6 +57,8 @@ The return value carries **only the fields the pages need** (`id` / `name` / `em
 `Route.useRouteContext()`.
 
 ## The four sections
+
+![Account center · Sessions](/docs/screenshots/settings-sessions.png "Sessions: the current session plus past devices, revocable individually or all at once")
 
 | Section | better-auth calls | Components used |
 |---|---|---|

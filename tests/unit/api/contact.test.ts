@@ -59,12 +59,8 @@ describe('submitContact', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// 配置门禁：contact 关闭 → POST 返回 404，且不读取 body / 不调用 provider
-//
-// 门禁用例**显式**关掉开关：`website.ts` 的默认值随部署场景调整（本仓本地联调期
-// 会打开部分模块），依赖出厂默认值的断言会在开关变更时静默失效。
-// ---------------------------------------------------------------------------
+// 配置门禁：contact 关闭时 POST 返回 404，且不读 body、不调 provider。
+// 用例显式关开关，不依赖随部署场景调整的默认值。
 describe('POST /api/contact 门禁', () => {
   beforeEach(() => {
     vi.doUnmock('@/config/website')
@@ -147,9 +143,7 @@ describe('POST /api/contact 门禁', () => {
   })
 })
 
-// ------------------------------------------------------------------------------------------------
-// 投递失败必须报告失败（旧实现一律回 200，访客以为消息已送达）
-// ------------------------------------------------------------------------------------------------
+// 投递失败必须报告失败；旧实现一律回 200，访客以为消息已送达。
 
 describe('submitContact — 投递失败', () => {
   const validData = {
@@ -164,7 +158,7 @@ describe('submitContact — 投递失败', () => {
     mockCheckRateLimit.mockResolvedValue(true)
   })
 
-  /** 默认配置里 `notification.enabled` 为 false，需要单独打开才能走到 notify。 */
+  /** 需单独打开 `notification.enabled` 才能走到 notify。 */
   async function enableNotification() {
     vi.resetModules()
     vi.doMock('@/config/website', async () => {

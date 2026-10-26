@@ -41,11 +41,10 @@ export const Route = createFileRoute('/api/newsletter/$')({
   server: {
     handlers: {
       /**
-       * 查询订阅状态。个人中心的「通知偏好」用它回填开关初值。
+       * 查询订阅状态，供个人中心的「通知偏好」回填初值。
        *
-       * 状态查询是幂等的读，不加限流（写操作才需要），但仍受模块门禁约束。
-       * provider 查询失败时返回 `subscribed: false` 而不是错误——开关显示为「未订阅」
-       * 是安全的一侧，用户重试即会再次查询。
+       * 幂等读不限流；provider 查询失败时返回 `subscribed: false`——显示「未订阅」
+       * 是安全的一侧。
        */
       GET: async ({ request }) => {
         const unavailable = getModuleUnavailableResponse('newsletter')
@@ -65,7 +64,7 @@ export const Route = createFileRoute('/api/newsletter/$')({
       },
 
       POST: async ({ request }) => {
-        // 门禁先于 body 解析、限流与 provider 调用。
+        // 门禁必须先于 body 解析、限流与 provider 调用。
         const unavailable = getModuleUnavailableResponse('newsletter')
         if (unavailable) return unavailable
 
@@ -89,7 +88,7 @@ export const Route = createFileRoute('/api/newsletter/$')({
       },
 
       DELETE: async ({ request }) => {
-        // 门禁先于 body 解析、限流与 provider 调用。
+        // 门禁必须先于 body 解析、限流与 provider 调用。
         const unavailable = getModuleUnavailableResponse('newsletter')
         if (unavailable) return unavailable
 

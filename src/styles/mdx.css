@@ -28,22 +28,18 @@
   @apply mb-4;
 }
 
-/* 行内代码：单色 `bg-muted` 在浅色下几乎看不出边界，改用描边 + 主题色前景，
-   既与正文区分开，又不至于像一块补丁。 */
+/* 行内代码：单色 `bg-muted` 在浅色下几乎看不出边界，改用描边 + 主题色前景。 */
 .mdx code {
   @apply rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] text-foreground;
 }
-/* typography 会给行内 code 加伪元素引号（`content:"\`"`），MDX 已有自己的行内代码
-   样式，须关掉，否则每个行内代码都会渲染出字面反引号。块级 `pre code` 由 typography
-   自身重置为 `content: none`，无需在此处理。 */
+/* typography 会给行内 code 加伪元素引号，须关掉，否则会渲染出字面反引号。
+   块级 `pre code` 已由 typography 自身重置。 */
 .mdx code::before,
 .mdx code::after {
   content: none;
 }
-/* 代码块用主题令牌而非固定深色，明暗主题下都有层次。
-   外框、内边距与滚动由 `ui/code-block` 提供（它自带 `CodeBlockContent`），这里只补
-   底色——原件的 `CodeBlock` 只有边框，底色在 `dark` 下才给。块级 `code` 则要清掉
-   行内代码的边框与底色，否则每个代码块里会套一层「补丁」。 */
+/* 代码块用主题令牌而非固定深色。外框与滚动由 `ui/code-block` 提供，这里只补底色；
+   块级 `code` 要清掉行内代码的边框与底色，否则会套一层「补丁」。 */
 .mdx [data-slot="code-block"] {
   @apply bg-muted;
 }
@@ -70,7 +66,7 @@
 }
 
 /* 步骤时间线：左侧编号圆点 + 贯穿竖线，右侧标题与正文。
-   竖线画在 marker 上而不是整组上，因此每节的线只覆盖自己的高度，最后一节自动收尾。 */
+   竖线画在 marker 上，每节的线只覆盖自身高度。 */
 .mdx .mdx-steps {
   @apply my-6 flex flex-col;
 }
@@ -83,8 +79,7 @@
 .mdx .mdx-step-number {
   @apply flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-xs font-semibold text-muted-foreground;
 }
-/* 连接线：从圆点下方延伸到本节末尾，节与节之间因此连成一条竖线。
-   `-mb-*` 让线穿过节间距，避免出现断口。 */
+/* 连接线：从圆点下方延伸到本节末尾，节与节之间连成一条竖线。 */
 .mdx .mdx-step-marker::after {
   @apply mt-1 w-px flex-1 bg-border;
   content: "";
@@ -97,7 +92,7 @@
   @apply min-w-0 flex-1 pb-6;
 }
 
-/* 时间线内的小节标题不再需要额外上边距——圆点已经提供了视觉起点。 */
+/* 时间线内的小节标题不再需要上边距——圆点已提供视觉起点。 */
 .mdx .mdx-step-body > h3 {
   @apply mt-0 mb-3 text-base font-semibold;
 }

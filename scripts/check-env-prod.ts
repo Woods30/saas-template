@@ -1,14 +1,7 @@
 /**
- * 生产环境变量校验。
- *
- * 强制以 production 语义校验（忽略 `.env` 与进程中的 `NODE_ENV`），复用 `src/env` 的 schema：
- * - 已提供的字段须合法（URL / enum / secret 长度）；
- * - `BETTER_AUTH_SECRET` 必填且 ≥ 32 字符（见 `validateProdServerEnv`）；
- * - `VITE_BASE_URL` 必须为显式提供的真实 HTTPS 域名，不接受 schema 默认补值；
- * - 已启用服务的必要字段缺失即失败（`getServiceStatuses` 的 incomplete）。
- *
- * 仅校验本地配置，不代表 Cloudflare 云端已配置 secrets。诊断只输出字段名、原因与位置，
- * 绝不打印值、`.env` 内容或 secret。
+ * 生产环境变量校验：强制以 production 语义复用 `src/env` 的 schema。
+ * `VITE_BASE_URL` 必须是显式提供的真实 HTTPS 域名，已启用服务的必要字段缺失即失败。
+ * 只校验本地配置，不代表 Cloudflare 云端已配置 secrets；绝不打印值。
  */
 import { existsSync } from 'node:fs'
 import { ZodError } from 'zod'
@@ -19,14 +12,11 @@ import { validateProdServerEnv } from '../src/env/server'
 import { resolveRawEnv } from './lib/env-file'
 import { formatServiceDiagnostics, formatZodIssues } from './lib/report-issues'
 
-/** 生产环境变量文件；存在时优先于 `.env`（见 `main()` 的说明）。 */
+/** 生产环境变量文件；存在时优先于 `.env`。 */
 const PRODUCTION_ENV_PATH = '.env.production'
 
 /**
- * 判断 `VITE_BASE_URL` 是否为可用于生产的真实 HTTPS 站点根。
- *
- * 用标准 `URL` 解析，不做正则截取：要求 `https:`、无用户名 / 密码、主机名非本地 / 回环，
- * 且非保留示例域（`example.com/.net/.org` 及其子域、`*.example`、`*.test`）。
+ * `VITE_BASE_URL` 是否为可用于生产的真实 HTTPS 站点根：无凭据、非本地 / 回环、非保留示例域。
  */
 function isProductionBaseUrl(value: string | undefined): boolean {
   if (!value) return false
@@ -54,22 +44,14 @@ function isProductionBaseUrl(value: string | undefined): boolean {
 }
 
 function main(): void {
-  // `.env` 不存在时回退到进程 env（CI 场景）；此时不再提示复制模板。
-  // 生产校验优先读 `.env.production`（若存在），否则回退 `.env`。
-  //
-  // 为什么要有这个区分：`pnpm deploy` 校验的应当是**生产配置**，而 `.env` 装的是开发值
-  // （`VITE_BASE_URL=http://localhost:3000`）。Vite 在 `vite build` 时读的也是
-  // `.env.production`（且优先级高于 `.env`），因此两处读同一个文件才能保证
-  // 「校验通过的值」就是「打进 bundle 的值」，不会分叉。
-  //
-  // 有 `.env.production` 就以它为准，**不**回退——否则生产配置写错会被本地合法值掩盖。
-  // 回退只发生在该文件不存在时，用于本地 `pnpm check:env:prod` 与既有测试的隔离临时目录。
+  // 优先读 `.env.production`，与 `vite build` 读取的是同一文件，保证校验值即打进
+  // bundle 的值。文件存在时**不**回退——否则生产配置写错会被本地合法值掩盖。
   const raw = existsSync(PRODUCTION_ENV_PATH) ? resolveRawEnv(PRODUCTION_ENV_PATH) : resolveRawEnv()
 
-  // 强制 production：不信任 `.env` / 进程里的 NODE_ENV，避免本地 development 值绕过生产校验。
+  // 不信任 `.env` / 进程里的 NODE_ENV，避免本地 development 值绕过生产校验。
   const prodRaw: Record<string, string | undefined> = { ...raw, NODE_ENV: 'production' }
 
-  // 生产必须显式提供真实 HTTPS `VITE_BASE_URL`：空 / 缺省会落回 schema 默认 localhost，不能接受。
+  // 空 / 缺省会落回 schema 默认 localhost，不能接受。
   if (!isProductionBaseUrl(raw.VITE_BASE_URL)) {
     console.error(
       '❌ VITE_BASE_URL 必须为显式提供的真实 HTTPS 生产域名（不能为空、本地、回环或保留域名）',

@@ -5,16 +5,8 @@ import { toast } from '@/components/ui/toast'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
 /**
- * 联系表单的**反馈分级**回归。
- *
- * 分级规则来自 `content/docs/forms.zh.md`，与 `NewsletterCta` 同一套：
- * **成功走全局 toast，失败留在表单内** `role="alert"`。失败时用户要回头改输入，
- * 线索必须留在原地；toast 出现的位置离表单远且一闪而过。
- *
- * 同时守两条硬约束：
- * - `<form noValidate>`：`<Input type="email">` 的原生校验会拦下 `submit`，
- *   `onSubmit` 永远不执行（见 `content/docs/auth.zh.md`）；
- * - 提交按钮水合前禁用，避免点击退化为原生 GET 提交。
+ * 联系表单：成功走全局 toast，失败留在表单内 `role="alert"`；`<form noValidate>`，
+ * 否则原生 email 校验会拦下 submit；提交按钮水合前禁用，避免退化为原生 GET。
  */
 
 const addSpy = vi.spyOn(toast, 'add')
@@ -41,10 +33,8 @@ function setValue(element: HTMLElement, value: string) {
 }
 
 /**
- * 按可访问名称填三个 input 字段；留言是 textarea，单独填。
- *
- * 显式列出每条字段名而不是用 `getAllByRole('textbox')` 解构：后者依赖 DOM 顺序，
- * 而表单字段一旦调整顺序，解构出的值会静默错位到别的输入框里，测试仍然全绿。
+ * 按可访问名称填字段。显式列名而不用 `getAllByRole('textbox')` 解构：
+ * 后者依赖 DOM 顺序，字段调整顺序后会静默错位而测试仍全绿。
  */
 async function fillAndSubmit() {
   render(<ContactForm />)

@@ -1,16 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
-// ---------------------------------------------------------------------------
-// Mock server-context ALS
-// ---------------------------------------------------------------------------
+// Mock server-context ALS。
 const mockMailProviderRegistry: Record<string, (() => object) | undefined> = {}
 
 vi.mock('@/lib/server-context', () => ({
   getServerContext: () => ({
-    env: {
-      // Default env for these tests; overridden per-test as needed.
-    },
+    env: {},
   }),
   als: {
     getStore: () => ({
@@ -19,9 +15,7 @@ vi.mock('@/lib/server-context', () => ({
   },
 }))
 
-// ---------------------------------------------------------------------------
-// Mock @react-email/render
-// ---------------------------------------------------------------------------
+// Mock @react-email/render。
 vi.mock('@react-email/render', () => ({
   render: vi.fn().mockResolvedValue('<html><body>test</body></html>'),
 }))
@@ -35,17 +29,11 @@ vi.mock('resend', () => ({
   },
 }))
 
-// ---------------------------------------------------------------------------
-// Imports after mocks
-// ---------------------------------------------------------------------------
+// 必须在 mock 之后导入。
 import { ZodError } from 'zod'
 import { allowedHostSuffixes, renderTemplate } from '@/mail/render'
 
-// ---------------------------------------------------------------------------
-// Reusable schema matching the route's contactMessageContextSchema
-// (cannot import from $.ts due to TS verbatimModuleSyntax + Bundler resolution
-// incompatibility with the $ filename token)
-// ---------------------------------------------------------------------------
+// 与路由的 contactMessageContextSchema 同形；因 `$` 文件名与 Bundler 解析不兼容，无法直接导入。
 const contactMessageContextSchema = z
   .object({
     fromName: z.string().max(200),
@@ -55,9 +43,7 @@ const contactMessageContextSchema = z
   })
   .strict()
 
-// ---------------------------------------------------------------------------
-// Finding 3: Context validation — renderTemplate rejects invalid context
-// ---------------------------------------------------------------------------
+// renderTemplate 拒绝非法 context。
 describe('renderTemplate context validation', () => {
   describe('verifyEmail', () => {
     it('throws when context has extra field', async () => {
@@ -66,7 +52,7 @@ describe('renderTemplate context validation', () => {
           to: 'test@example.com',
           template: 'verifyEmail',
           locale: 'zh',
-          // intentionally inject extra field to test strict() rejection
+          // 故意多塞字段，验证 strict() 拒绝。
           context: { username: 'Alice', actionUrl: 'https://example.com/verify', extra: 'bad' },
         }),
       ).rejects.toThrow(ZodError)
@@ -125,7 +111,7 @@ describe('renderTemplate context validation', () => {
           to: 'test@example.com',
           template: 'forgotPassword',
           locale: 'zh',
-          // intentionally inject extra field to test strict() rejection
+          // 故意多塞字段，验证 strict() 拒绝。
           context: { username: 'Bob', actionUrl: 'https://example.com/reset', extra: 'bad' },
         }),
       ).rejects.toThrow(ZodError)
@@ -175,9 +161,7 @@ describe('renderTemplate context validation', () => {
     })
   })
 
-  // ---------------------------------------------------------------------------
-  // Finding 3 (URL host allowlist): actionUrl must end with allowed host
-  // ---------------------------------------------------------------------------
+  // actionUrl 必须落在白名单 host 上。
   describe('actionUrl host allowlist (defense-in-depth)', () => {
     it('accepts actionUrl on allowed host (example.com)', async () => {
       const result = await renderTemplate({
@@ -222,9 +206,7 @@ describe('renderTemplate context validation', () => {
     })
   })
 
-  // ---------------------------------------------------------------------------
-  // welcome：新增模板的 schema 严格性与主题
-  // ---------------------------------------------------------------------------
+  // welcome 模板的 schema 严格性与主题。
   describe('welcome', () => {
     it('renders with valid { username } context', async () => {
       const result = await renderTemplate({
@@ -267,9 +249,7 @@ describe('renderTemplate context validation', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// allowedHostSuffixes：白名单由站点 base URL 派生（取代已失效的 APP_DOMAIN）
-// ---------------------------------------------------------------------------
+// allowedHostSuffixes：白名单由站点 base URL 派生（APP_DOMAIN 已失效）。
 describe('allowedHostSuffixes', () => {
   it('derives the host from the given base URL', () => {
     expect(allowedHostSuffixes('https://example.com')).toEqual(['example.com'])
@@ -284,16 +264,14 @@ describe('allowedHostSuffixes', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// Finding 2: Sensitive data redaction in error messages
-// ---------------------------------------------------------------------------
+// 错误消息中的敏感数据脱敏。
 describe('Sensitive data redaction in provider errors', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
   it('Resend provider returns first line of error only', async () => {
-    // 禁止真实网络请求，并确认多行错误确实经过 provider 处理。
+    // 禁止真实网络请求；确认多行错误经过 provider 处理。
     const mockFetch = vi.fn().mockRejectedValue(new Error('测试禁止真实网络请求'))
     vi.stubGlobal('fetch', mockFetch)
     const { ResendMailProvider } = await import('@/mail/provider/resend')
@@ -322,21 +300,17 @@ describe('Sensitive data redaction in provider errors', () => {
       html: '<html><body>test</body></html>',
     })
     expect(result).toEqual({ ok: false, error: 'API key invalid' })
-    // Must NOT contain the payload or subject
+    // 不得包含 payload 或 subject。
     expect(result.error).not.toContain('user@example.com')
     expect(result.error).not.toContain('secret')
-    // Must be a single-line safe string
+    // 必须是单行安全字符串。
     expect(result.error?.split('\n')).toHaveLength(1)
   })
 })
 
-// ---------------------------------------------------------------------------
-// Finding 3 (template restriction): bodySchema only allows contactMessage
-// ---------------------------------------------------------------------------
+// bodySchema 只允许 contactMessage 模板。
 describe('Route bodySchema — template restriction', () => {
-  // contactMessageContextSchema is imported at the top of the file.
-  // Full route handler tests (auth/caller allowlist) require integration setup;
-  // these schema-level tests verify the key security invariant.
+  // 完整路由用例需要集成环境，这里只在 schema 层验证关键安全不变量。
   it('accepts contactMessage template with valid context', () => {
     const result = contactMessageContextSchema.safeParse({
       fromName: 'Alice',
@@ -350,7 +324,7 @@ describe('Route bodySchema — template restriction', () => {
   it('rejects missing required fields', () => {
     const result = contactMessageContextSchema.safeParse({
       fromName: 'Alice',
-      // missing fromEmail, subject, message
+      // 缺 fromEmail / subject / message。
     })
     expect(result.success).toBe(false)
   })
@@ -361,7 +335,7 @@ describe('Route bodySchema — template restriction', () => {
       fromEmail: 'alice@example.com',
       subject: 'Hello',
       message: 'Hi',
-      // Extra field — .strict() on the schema rejects this
+      // 多余字段会被 `.strict()` 拒绝。
       extraField: 'not allowed',
     })
     expect(result.success).toBe(false)

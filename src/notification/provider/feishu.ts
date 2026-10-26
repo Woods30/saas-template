@@ -4,13 +4,10 @@ import type { NotificationPayload, NotificationProvider } from '../types'
 const REQUEST_TIMEOUT_MS = 5_000
 
 /**
- * 飞书自定义机器人 webhook。
- *
- * URL 由 env 层校验（必须以 `https://open.feishu.cn/open-apis/bot/v2/hook/` 开头）。
+ * 飞书自定义机器人 webhook（URL 格式由 env 层校验）。
  *
  * **必须解析响应体里的 `code`**：飞书在签名 / 关键词 / IP 白名单校验失败时返回
- * **HTTP 200** + `{ code: 19021, msg: ... }`。只看 `res.ok` 会把失败当成功，
- * `notify()` 也就不会告警——运营以为通知正常，实际一条都没发出去。
+ * **HTTP 200** + `{ code: 19021 }`，只看 `res.ok` 会把失败当成功。
  */
 export class FeishuNotificationProvider implements NotificationProvider {
   constructor(private readonly webhookUrl: string) {}

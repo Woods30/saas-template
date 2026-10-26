@@ -4,12 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DocPager } from '@/components/docs/DocPager'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
-/**
- * 文档底部的上一篇 / 下一篇导航。
- *
- * 阅读顺序沿 `order` 全局推进（跨分组），因此「下一篇」会一路走完整个文档集，
- * 不在组边界停住。首篇只有下一篇、末篇只有上一篇。
- */
+/** 上一篇 / 下一篇沿 `order` 全局推进（跨分组）。首篇只有下一篇，末篇只有上一篇。 */
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
     children,

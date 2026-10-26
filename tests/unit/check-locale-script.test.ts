@@ -7,14 +7,8 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { LOCALES } from '@/config/locale'
 
 /**
- * `scripts/check-locale.ts` 的黑盒测试。
- *
- * 该脚本在**当前工作目录**读取 `messages/` 与 `project.inlang/settings.json`，因此测试
- * 在隔离的临时 cwd 中 `spawn` 它，并创建指向仓库 `scripts` 的符号链接让脚本内的相对
- * 导入解析回仓库源码（与 `check-env-scripts.test.ts` 同一套做法）。
- *
- * 重点覆盖「消息文件集合必须与 `LOCALES` 一一对应」：新增语言时忘记补 `messages/xx.json`
- * 会被拦下，而不是让 `messages/` 里多出的语种悄悄通过。
+ * `scripts/check-locale.ts` 黑盒测试：在隔离临时 cwd 中 spawn（脚本按 cwd 读取
+ * `messages/` 与 `project.inlang/settings.json`）。重点覆盖文件集合与 `LOCALES` 一一对应。
  */
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
@@ -47,7 +41,7 @@ function runCheckLocale(cwd: string): RunResult {
 
 const createdDirs: string[] = []
 
-/** 新建隔离 cwd：含指向仓库 `scripts` 的符号链接与空的 `messages/`。 */
+/** 新建隔离 cwd：含 `scripts` 符号链接与空的 `messages/`。 */
 function makeWorkspace(): string {
   const dir = mkdtempSync(join(tmpdir(), 'saas-locale-check-'))
   createdDirs.push(dir)
@@ -56,7 +50,7 @@ function makeWorkspace(): string {
   return dir
 }
 
-/** 写入 `project.inlang/settings.json`，只关心 `baseLocale`。 */
+/** 写入 `project.inlang/settings.json`（只关心 `baseLocale`）。 */
 function writeSettings(dir: string, baseLocale: string): void {
   mkdirSync(join(dir, 'project.inlang'), { recursive: true })
   writeFileSync(
@@ -102,7 +96,7 @@ describe('check-locale.ts', () => {
   it('缺失某个受支持语言的消息文件时失败', () => {
     const dir = makeWorkspace()
     writeSettings(dir, LOCALES[0] as string)
-    // 只写第一个语言，其余故意不建
+    // 其余语言故意不建。
     writeMessages(dir, LOCALES[0] as string, ['hello'])
     const result = runCheckLocale(dir)
     expect(result.code).toBe(1)

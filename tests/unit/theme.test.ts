@@ -48,7 +48,7 @@ describe('THEMES / defaultTheme', () => {
     vi.resetModules()
     const { websiteConfig: freshConfig } = await import('@/config/website')
     freshConfig.ui.defaultTheme = 'dark'
-    // 在同一份新模块图里重新求值 theme，确认它读取配置。
+    // 在同一份新模块图里重新求值，确认它读取配置。
     const { defaultTheme: freshDefaultTheme } = await import('@/lib/theme')
     expect(freshDefaultTheme).toBe('dark')
   })
@@ -57,7 +57,7 @@ describe('THEMES / defaultTheme', () => {
 describe('getTheme / setServerThemeGetter', () => {
   it('服务端路径返回注入的 getter 值', () => {
     setServerThemeGetter(() => 'dark')
-    // node 环境无 document，走 serverThemeGetter
+    // node 环境无 document，走 serverThemeGetter。
     expect(getTheme()).toBe('dark')
     setServerThemeGetter(() => defaultTheme) // 复位，避免影响其他用例
   })

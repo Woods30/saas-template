@@ -6,13 +6,8 @@ import type { ServerEnv } from '@/env/server'
 import type { SendTemplateParams } from '@/mail/types'
 
 /**
- * `src/auth/emails.ts` 的单测。
- *
- * 该模块是 better-auth 回调与 mail registry 之间的唯一桥梁，因此必须：
- * - 依赖注入（`sendMail` / `config` / `serverEnv` 由调用方传入），无需 ALS 即可测；
- * - 邮件关闭或发件人缺失时**不发送**并返回 `{ ok: false }`，绝不让调用方（注册 / 登录）
- *   因为邮件问题而失败；
- * - 把模板名、收件人、语言、发件人原样传给 mail registry。
+ * `src/auth/emails.ts`：better-auth 回调与 mail registry 之间的桥梁。依赖注入、无需 ALS；
+ * 邮件关闭或发件人缺失时不发送并返回 `{ ok: false }`，不让注册 / 登录因邮件失败。
  */
 
 const sendMailMock =
@@ -183,12 +178,7 @@ describe('sendAuthEmail', () => {
   })
 })
 
-/**
- * `sendAuthEmailForRequest`：better-auth 回调的入口形态。
- *
- * 回调拿不到 ALS，但能从 better-auth 传入的 `Request` 解析语言，因此这里验证
- * 「语言从请求推导」与「请求缺失时回退默认语言」两条路径。
- */
+/** `sendAuthEmailForRequest`：回调拿不到 ALS，语言从 `Request` 推导，缺失时回退默认语言。 */
 describe('sendAuthEmailForRequest', () => {
   afterEach(() => {
     sendMailMock.mockReset()

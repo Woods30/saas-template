@@ -1,18 +1,9 @@
 /**
- * Paraglide 编译的幂等包装。
+ * Paraglide 编译的幂等包装：输入未变时跳过编译。
  *
- * `paraglide-js compile` 实测数秒，且在 `check` / `typecheck` / `test` /
- * `check:locale` 里被重复调用。输入未变时可跳过编译。
- *
- * 判定依据是「编译完成戳」（stamp）而非产物目录 mtime：paraglide 仅在内容变化时
- * 重写产物（`src/locale/paraglide/runtime.js` 的 mtime 会长期停滞），却每次编译都
- * 刷新 `project.inlang/cache/paraglide-js/*.json`。该 cache 位于输入目录内，若拿
- * 产物 mtime 去比输入 mtime，产物永远追不上 cache，跳过判定会永久失效。故：
- * - stamp 记录「最近一次成功编译」，与全部真实输入比新旧；
- * - 输入扫描排除 `project.inlang` 下的 cache（`cache/**`）与锁（`.lix/**`）。
- *
- * 真实输入：`messages/*.json` 与 `project.inlang` 自身文件（settings.json、
- * .meta.json、paraglide.config.ts 等）。
+ * 判定用「编译完成戳」而非产物 mtime：paraglide 每次编译都会刷新
+ * `project.inlang/cache`，拿产物 mtime 比输入 mtime 会永久失效。
+ * 输入扫描排除 `project.inlang` 下的 cache 与 `.lix` 锁。
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
@@ -22,10 +13,10 @@ const MESSAGES_DIR = 'messages'
 const INLANG_DIR = 'project.inlang'
 const OUT_DIR = 'src/locale/paraglide'
 
-/** 编译完成戳：成功编译后写入，天然位于 git 忽略的 node_modules 下。 */
+/** 编译完成戳；位于 git 忽略的 node_modules 下。 */
 const STAMP_PATH = join('node_modules', '.cache', 'locale-compile', 'stamp')
 
-/** `project.inlang` 下属于缓存/锁、不算输入的目录名。 */
+/** `project.inlang` 下属于缓存/锁、不算输入的目录。 */
 const INLANG_IGNORED_DIRS = new Set(['cache', '.lix'])
 
 /** 递归取目录下所有文件的最新 mtime（毫秒）；目录不存在返回 0。 */
@@ -52,14 +43,10 @@ function newestInputMtime(root: string): number {
   )
 }
 
-/**
- * 产物是否已是最新。
- * `root` 便于单测注入临时目录；默认即仓库根（相对 cwd）。
- */
+/** 产物是否已是最新；`root` 便于单测注入临时目录。 */
 export function isCompileUpToDate({ root = '.' }: { root?: string } = {}): boolean {
-  // 产物缺失（如全新 clone）→ 必须编译。
+  // 产物或 stamp 缺失（如全新 clone）→ 必须编译。
   if (!existsSync(join(root, OUT_DIR, 'runtime.js'))) return false
-  // stamp 缺失 → 从未成功编译过，必须编译。
   const stampPath = join(root, STAMP_PATH)
   if (!existsSync(stampPath)) return false
   const stampTime = statSync(stampPath).mtimeMs
@@ -71,7 +58,6 @@ export function isCompileUpToDate({ root = '.' }: { root?: string } = {}): boole
 function touchStamp(root = '.'): void {
   const stampPath = join(root, STAMP_PATH)
   mkdirSync(dirname(stampPath), { recursive: true })
-  // writeFileSync 会把 mtime 置为当前时间，即「本次编译完成」的时刻。
   writeFileSync(stampPath, '')
 }
 

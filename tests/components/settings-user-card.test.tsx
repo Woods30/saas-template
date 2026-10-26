@@ -8,16 +8,8 @@ import { websiteConfig } from '@/config/website'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
 /**
- * 个人中心侧栏底部的用户卡片。
- *
- * 关键行为：
- * - 有 `image` 渲染 `<img>`，没有则渲染首字母 fallback（OAuth 用户 vs 邮箱密码用户）；
- * - 展开菜单提供「退出登录」——这是个人中心内唯一的登出入口（`_layout` 路由不渲染营销导航栏）；
- * - 登出委托给 `signOutAndRedirect`，卡片自身不碰 `location`；
- * - 折叠成 icon 时只露头像，菜单仍可打开。
- *
- * 渲染必须包在 `SidebarProvider` 里：`SidebarMenuButton` 内部调 `useSidebar()`
- * （见 `src/components/ui/sidebar.tsx`），在 Provider 外会直接抛错。
+ * 个人中心侧栏底部的用户卡片：头像 / 首字母 fallback、退出登录（本路由唯一登出口）、
+ * 折叠态菜单。渲染必须包在 `SidebarProvider` 里，`SidebarMenuButton` 内部调 `useSidebar()`。
  */
 const mocks = vi.hoisted(() => ({
   signOutAndRedirect: vi.fn(),
@@ -27,10 +19,7 @@ vi.mock('@/auth/sign-out', () => ({
   signOutAndRedirect: (...args: unknown[]) => mocks.signOutAndRedirect(...args),
 }))
 
-/**
- * 菜单里的「个人中心」是 `Link`。这里只替换 `Link`：`useLinkProps` 需要 Router
- * 上下文，jsdom 里没有；其余导出（`linkOptions` 等纯函数）走真实实现。
- */
+/** 只替换 `Link`：`useLinkProps` 需要 Router 上下文，jsdom 里没有。 */
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
@@ -52,13 +41,8 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 })
 
 /**
- * jsdom 不带 `canvas` 包，`new window.Image()` 既不解析也不报错——jsdom 的
- * `HTMLImageElement-impl` 在 `_updateTheImageData` 开头就 `if (!Canvas) return`，
- * 于是 `complete` 永远是 `false`，`load` / `error` 一个都不派发。Base UI Avatar 的
- * `useImageLoadingStatus` 因此永远停在 `'loading'`，`AvatarImage` 永不挂载。
- *
- * 这里补一个只做一件事的 stub：把「异步派发 load」还原成浏览器的语义，让头像图能走完
- * 加载路径。组件本身的 `image` → `<img>` 分支才是被测行为。
+ * jsdom 没有 `canvas`，`new Image()` 既不解析也不派发 `load` / `error`，Base UI Avatar
+ * 会永远停在 loading。这里补一个异步派发 load 的 stub，让 `image` → `<img>` 分支可测。
  */
 function stubImageLoad() {
   vi.stubGlobal(
@@ -86,7 +70,7 @@ function stubImageLoad() {
   )
 }
 
-/** 渲染卡片；包 `SidebarProvider` 是因为 `SidebarMenuButton` 内部调 `useSidebar()`。 */
+/** 渲染卡片；`SidebarProvider` 是 `useSidebar()` 的必需上下文。 */
 function renderCard(session: SessionInfo) {
   return render(
     <SidebarProvider>
@@ -135,16 +119,13 @@ function clearCookies() {
   }
 }
 
-/** 头像图：`alt=""` 是刻意的（名字就在旁边，避免读屏重复播报），
- *  空的 alt 会把 `img` 角色变成 presentation，所以按 data-slot 取元素。 */
+/** 头像图 `alt=""`（旁边已有名字），空 alt 使 img 角色变 presentation，故按 data-slot 取。 */
 function avatarImage() {
   return document.querySelector<HTMLImageElement>('img[data-slot="avatar-image"]')
 }
 
-/** 触发按钮的文本区：头像右侧那个 `grid flex-1` div，名字与邮箱都在其内。
- *  按结构而非样式类取——按钮里唯一的 div 就是它（头像是 span、箭头是 svg）。
- *  必须先定位它再断言：按钮自身的 `aria-label` 也是 `name || email`，直接
- *  `screen.getByText('woods')` 会命中按钮与 span 两侧，`getAllByText` 一样含糊。 */
+/** 触发按钮的文本区。按钮 `aria-label` 也是 `name || email`，直接 `getByText` 会同时
+ *  命中按钮与 span，故先收窄到这个 div 再断言。 */
 function textSlot() {
   const trigger = screen.getByRole('button', { name: 'woods' })
   const slot = trigger.querySelector('div')
@@ -157,13 +138,12 @@ describe('DashboardUserCard', () => {
     renderCard(sessionWith({ image: 'https://example.com/a.png' }))
     await waitFor(() => expect(avatarImage()).not.toBeNull())
     expect(avatarImage()).toHaveAttribute('src', 'https://example.com/a.png')
-    // 装饰性头像：不参与可访问名，旁边已有名字与邮箱。
     expect(avatarImage()).toHaveAttribute('alt', '')
   })
 
   it('无 image 时渲染 name 首字母作为 fallback', () => {
     renderCard(sessionWith())
-    // Avatar 的 fallback 渲染首字母；没有 <img>。
+    // fallback 渲染首字母，没有 <img>。
     expect(document.querySelector('img')).toBeNull()
     expect(screen.getByText('W')).toBeInTheDocument()
   })
@@ -176,8 +156,7 @@ describe('DashboardUserCard', () => {
 
   it('展示名字与邮箱', () => {
     renderCard(sessionWith())
-    // 名字必须来自 `name` 字段、且是正文里的那一行（按钮 aria-label 也是
-    // `name || email`，所以收窄到文本区内取，确保测的是渲染而非可访问名）。
+    // 收窄到文本区内取，确保测的是渲染而非按钮的 aria-label。
     const slot = textSlot()
     expect(within(slot).getByText('woods')).toBeInTheDocument()
     expect(within(slot).getByText('woods@example.com')).toBeInTheDocument()
@@ -193,12 +172,8 @@ describe('DashboardUserCard', () => {
 })
 
 /**
- * 用户菜单里的主题子菜单。
- *
- * 主题从侧栏里单独一行挪进账号菜单后，有两件事必须守住：
- * - 它和其它账号项同组（不再是侧栏里一个图标对不齐的孤立行）；
- * - 点选后写 `THEME` cookie 并更新 `<html data-theme>`，与独立按钮走同一套逻辑
- *   （`useTheme`），不能出现「菜单里切了但下次刷新又回去」。
+ * 用户菜单里的主题子菜单：与其它账号项同组，且点选后写 `THEME` cookie 并更新
+ * `<html data-theme>`，不能出现「菜单里切了但刷新又回去」。
  */
 describe('DashboardUserCard 主题子菜单', () => {
   afterEach(() => {
@@ -209,7 +184,7 @@ describe('DashboardUserCard 主题子菜单', () => {
   async function openThemeSubmenu() {
     screen.getByRole('button', { name: /woods/ }).click()
     const trigger = await screen.findByRole('menuitem', { name: '切换主题' })
-    // Base UI 的子菜单在 hover / 点击 trigger 时展开；点击在 jsdom 下最稳。
+    // 子菜单在 hover / 点击时展开，点击在 jsdom 下最稳。
     trigger.click()
     return trigger
   }
@@ -218,7 +193,7 @@ describe('DashboardUserCard 主题子菜单', () => {
     renderCard(sessionWith())
     const trigger = await openThemeSubmenu()
     expect(trigger).toBeInTheDocument()
-    // 子菜单 trigger 自带展开指示（chevron），说明用的是 `DropdownMenuSub`。
+    // trigger 自带 chevron，说明用的是 `DropdownMenuSub`。
     expect(trigger.querySelector('svg')).not.toBeNull()
   })
 

@@ -7,10 +7,7 @@ import {
   normalizeHeader,
 } from '../../scripts/normalize-content-collections'
 
-/**
- * content-collections 的生成头含 `new Date()`，每次构建都变，导致
- * .content-collections/generated/index.js 反复被标记为已修改。规范化为固定串。
- */
+/** content-collections 生成头含 `new Date()`，每次构建都变，需规范化为固定串。 */
 describe('normalizeHeader', () => {
   it('把带时间戳的生成头替换为固定串', () => {
     const input =
@@ -29,10 +26,7 @@ describe('normalizeHeader', () => {
   })
 })
 
-/**
- * `normalizeGeneratedFile` 是 Vite 插件（build / dev 两条路径）复用的落盘入口：
- * 读文件、规范化、仅在变化时写回，并在文件缺失时 no-op 而非抛错。
- */
+/** `normalizeGeneratedFile`：读文件、规范化、仅在变化时写回，文件缺失时 no-op。 */
 describe('normalizeGeneratedFile', () => {
   const tmpDirs: string[] = []
 

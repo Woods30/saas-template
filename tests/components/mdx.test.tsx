@@ -4,13 +4,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Mdx } from '@/components/mdx/Mdx'
 
-/**
- * Mdx 渲染器的块级与行内语法。
- *
- * 背景：配置文档大量使用「字段 / 类型 / 默认值 / 说明」表格与站内交叉链接；
- * 渲染器此前只支持标题、代码块与段落，表格会被当成普通段落输出成一行竖线，
- * 链接则原样显示 `[文字](地址)`。这里把这两类语法定住。
- */
+/** Mdx 渲染器的表格、链接、代码块与步骤时间线。 */
 
 afterEach(cleanup)
 
@@ -18,38 +12,31 @@ describe('Mdx 表格', () => {
   it('把 markdown 表格渲染为 ui/table 结构', () => {
     render(<Mdx source={['| 字段 | 类型 |', '| --- | --- |', '| name | string |'].join('\n')} />)
     const table = screen.getByRole('table')
-    // ui/table 的 Table 根带 data-slot="table"（外层容器是 table-container）。
     expect(table).toHaveAttribute('data-slot', 'table')
     const columnHeaders = within(table).getAllByRole('columnheader')
     expect(columnHeaders.map((c) => c.textContent)).toEqual(['字段', '类型'])
   })
 
   it('表头带底色、外层容器带边框与圆角（由 globals.css 统一补齐）', () => {
-    // ui/table 上游的 TableHeader 只有 `[&_tr]:border-b`、TableHead 无背景、Table 根无
-    // border。这三样以前写在 Mdx.tsx 的调用处，工作台的六处表格又各自没写——同一种
-    // 组件两种表头。现在统一收到 globals.css 的 `[data-slot='table-*']` 规则，
-    // 调用处不再写边框 / 底色；这里断言「集中规则存在 + 调用处干净」。
+    // 表头样式统一收到 globals.css 的 `[data-slot='table-*']` 规则，调用处不再写边框 / 底色。
     render(<Mdx source={['| 字段 | 类型 |', '| --- | --- |', '| name | string |'].join('\n')} />)
     const table = screen.getByRole('table')
 
-    // 表头与滚动容器自带 data-slot，集中规则按它们选人。
     const container = table.closest('[data-slot="table-container"]')
     expect(container).not.toBeNull()
     for (const head of within(table).getAllByRole('columnheader')) {
       expect(head).toHaveAttribute('data-slot', 'table-head')
     }
 
-    // 测试跑在 jsdom 里，`import.meta.url` 不是 file: URL，改用 cwd 定位仓库根。
+    // jsdom 下 `import.meta.url` 不是 file: URL，改用 cwd 定位仓库根。
     const globals = readFileSync(resolve(process.cwd(), 'src/styles/globals.css'), 'utf-8')
     expect(globals).toMatch(/\[data-slot=['"]table-container['"]\]\s*\{[^}]*border:/)
     expect(globals).toMatch(/\[data-slot=['"]table-container['"]\]\s*\{[^}]*border-radius:/)
-    // 底色挂在 thead 上（`table-header`），不是每个 th——按 shadcn dashboard-01 的写法。
-    // 同时带吸顶：`sticky` 与 `top-0` 必须成对出现，缺一个都吸不住。
+    // 底色挂在 thead 上；`sticky` 与 `top-0` 必须成对，缺一个都吸不住。
     expect(globals).toMatch(/\[data-slot=['"]table-header['"]\]\s*\{[^}]*background-color:/)
     expect(globals).toMatch(/\[data-slot=['"]table-header['"]\]\s*\{[^}]*position:\s*sticky/)
     expect(globals).toMatch(/\[data-slot=['"]table-header['"]\]\s*\{[^}]*top:\s*0/)
 
-    // 调用处不再重复定义外框 / 底色，只保留隔离 typography 的 `not-prose`。
     const wrapper = table.closest('.not-prose')
     expect(wrapper).not.toBeNull()
     expect(wrapper?.className).not.toContain('border-border')
@@ -72,8 +59,7 @@ describe('Mdx 表格', () => {
   })
 
   it('同一行出现重复单元格值时仍产生唯一 key（无 React 重复 key 警告）', () => {
-    // 配置表里 `'stripe'` 会同时出现在「类型」与「默认值」两列，若直接用单元格
-    // 文本作 key 就会撞车，React 会打印重复 key 警告并可能丢弃单元格。
+    // `'stripe'` 会同时出现在两列，用单元格文本作 key 会撞车并可能丢弃单元格。
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
       render(
@@ -134,7 +120,7 @@ describe('Mdx 行内链接', () => {
 })
 
 describe('Mdx 标题锚点', () => {
-  // 右侧目录靠 `href="#id"` 跳转，标题必须带同样的 id，否则点击无效。
+  // 目录靠 `href="#id"` 跳转，标题必须带同样的 id。
   it('h2 / h3 带与 headingId 一致的锚点 id', () => {
     render(<Mdx source={['## 准备开发环境', '', '### 使用 `pnpm check`'].join('\n')} />)
     expect(screen.getByRole('heading', { level: 2 })).toHaveAttribute('id', '准备开发环境')
@@ -159,7 +145,7 @@ describe('Mdx 有序列表', () => {
 })
 
 describe('Mdx 引用块', () => {
-  // 文档用 `> 注意：…` 单独列出注意事项；不支持时这些行会连同 `>` 一起原样输出。
+  // 不支持引用时，`> 注意：…` 会连同 `>` 一起原样输出。
   it('把 `> ` 行渲染为 blockquote', () => {
     render(<Mdx source="> 注意：生产环境必须配置真实域名。" />)
     const quote = screen.getByRole('blockquote')
@@ -191,14 +177,13 @@ describe('Mdx 引用块', () => {
 })
 
 describe('Mdx 链接 scheme 白名单', () => {
-  // 正文来自 content/ 下的仓库自有 Markdown，但渲染器是通用组件；一旦内容源变为
-  // 用户可写，未校验的 `javascript:` 地址就是 XSS。React 不会拦截该地址（仅开发期告警），
-  // 因此必须在渲染前丢弃。
+  // 渲染器是通用组件，内容源若变为用户可写，未校验的 `javascript:` 就是 XSS；
+  // React 只在开发期告警，因此必须在渲染前丢弃。
   it('丢弃 javascript: 地址，不产生 a 元素也不泄漏 href', () => {
     const { container } = render(<Mdx source="[点我](javascript:alert(1))" />)
     expect(screen.queryByRole('link')).toBeNull()
     expect(container.innerHTML).not.toContain('javascript:')
-    // 链接文字保留（地址里含 `)`，正则会在该处截断，故用子串匹配）。
+    // 地址里含 `)`，正则会在该处截断，故用子串匹配。
     expect(screen.getByText(/点我/)).toBeTruthy()
   })
 
@@ -251,12 +236,7 @@ describe('Mdx 既有语法不回归', () => {
   })
 })
 
-/**
- * 代码块：语言标签与复制按钮。
- *
- * 没有复制按钮时，读者只能手动选中——在 `bash` 多行命令上尤其容易漏掉续行符。
- * 断言落在 shadcn 原件的 `data-slot` 契约上，而不是自造的类名。
- */
+/** 代码块的语言标签与复制按钮；断言落在 shadcn 原件的 `data-slot` 契约上。 */
 describe('Mdx 代码块', () => {
   const SOURCE = ['```bash', 'pnpm install', 'pnpm dev', '```'].join('\n')
 
@@ -285,7 +265,7 @@ describe('Mdx 代码块', () => {
 
   it('无语言围栏也渲染标题栏（显示「代码」）与复制按钮', () => {
     render(<Mdx source={['```', 'echo hi', '```'].join('\n')} />)
-    // 标题栏承担「与正文分割」的职责，因此无语言时也保留，只是文案退化为「代码」。
+    // 无语言时仍保留标题栏，文案退化为「代码」。
     expect(document.querySelector('[data-slot="code-block-header"]')).not.toBeNull()
     expect(
       screen.getByText('Code', { selector: '[data-slot="code-block-title"]' }),
@@ -309,12 +289,7 @@ describe('Mdx 代码块', () => {
   })
 })
 
-/**
- * 步骤时间线。
- *
- * 判定规则是「某个 `##` 之后成组出现 `###`」——孤立的 `###`（同级小节，如
- * 「验证链接 / 重置链接」）必须保持普通标题，否则会凭空套上编号。
- */
+/** 步骤时间线：某个 `##` 之后成组出现 `###` 才算步骤，孤立 `###` 保持普通标题。 */
 describe('Mdx 步骤时间线', () => {
   const STEPS = [
     '## 设置',
@@ -335,7 +310,6 @@ describe('Mdx 步骤时间线', () => {
     expect(steps).toHaveLength(2)
     expect(steps[0]?.querySelector('.mdx-step-number')?.textContent).toBe('1')
     expect(steps[1]?.querySelector('.mdx-step-number')?.textContent).toBe('2')
-    // 正文留在各自步骤内，不跑到时间线外面。
     expect(steps[0]?.textContent).toContain('先建 bucket')
     expect(steps[1]?.textContent).toContain('再绑 binding')
   })
@@ -351,5 +325,35 @@ describe('Mdx 步骤时间线', () => {
     render(<Mdx source={['## 会话', '### 验证链接', '说明。', '## 下一节', '正文。'].join('\n')} />)
     expect(document.querySelector('.mdx-step')).toBeNull()
     expect(document.querySelector('h3')?.textContent).toBe('验证链接')
+  })
+})
+
+describe('Mdx 图片', () => {
+  it('独占一行的 ![](src) 渲染为带说明文字的 figure', () => {
+    render(<Mdx source={'![工作台截图](/docs/screenshots/dashboard.png)'} />)
+    const img = screen.getByRole('img')
+    expect(img).toHaveAttribute('src', '/docs/screenshots/dashboard.png')
+    expect(img).toHaveAttribute('alt', '工作台截图')
+    expect(img).toHaveAttribute('loading', 'lazy')
+    // alt 同时作为说明文字。
+    expect(document.querySelector('figcaption')?.textContent).toBe('工作台截图')
+  })
+
+  it('带标题的写法用标题覆盖说明文字', () => {
+    render(<Mdx source={'![alt 文本](/a.png "个人中心 · 资料")'} />)
+    expect(screen.getByRole('img')).toHaveAttribute('alt', 'alt 文本')
+    expect(document.querySelector('figcaption')?.textContent).toBe('个人中心 · 资料')
+  })
+
+  it('图片地址同样走 scheme 白名单，javascript: 不进入 src', () => {
+    // 图片与链接地址必须同一套校验。
+    render(<Mdx source={'![x](javascript:alert(1))'} />)
+    expect(document.querySelector('img')).toBeNull()
+  })
+
+  it('行内图片不打断段落（只识别独占一行的写法）', () => {
+    render(<Mdx source={'看这张图 ![x](/a.png) 即可。'} />)
+    expect(document.querySelector('img')).toBeNull()
+    expect(document.querySelector('p')?.textContent).toContain('看这张图')
   })
 })
