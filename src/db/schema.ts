@@ -77,7 +77,10 @@ export const verifications = sqliteTable('verifications', {
  * 三列各建普通索引对应三条热点查询：webhook 按 subscription_id 更新、按 customer_id
  * 反查用户，工作台与 portal 按 user_id 取当前订阅。
  *
- * 不建唯一索引：Stripe 允许同一用户有多个订阅（升降级并存），唯一约束会让 webhook 写入失败。
+ * 不建唯一索引：一个账号只允许一份**活跃订阅**这条规则由**应用层**保证（结账守卫 +
+ * 站内切换）。这里不能加部分唯一索引——webhook 的 INSERT（新建活跃行）先于把旧行改成
+ * canceled 的 UPDATE，索引存在时 INSERT 直接违反约束，webhook 抛错、Stripe 无限重投，
+ * 反而把正常流程卡死。
  */
 export const subscriptions = sqliteTable(
   'subscriptions',
@@ -110,6 +113,23 @@ export const subscriptions = sqliteTable(
     currentPeriodStart: integer('current_period_start', { mode: 'timestamp' }),
     currentPeriodEnd: integer('current_period_end', { mode: 'timestamp' }),
     cancelAtPeriodEnd: integer('cancel_at_period_end', { mode: 'boolean' }).default(false),
+    /**
+     * 已安排、**周期末生效**的方案变更（降级）。
+     *
+     * 降级用 Stripe 的 `proration_behavior: 'none'` 实现：Stripe 上的价格立刻变成
+     * 新价，而本期已付金额不变——用户此刻仍在按旧价扣款。若照单全收 Stripe 的
+     * `customer.subscription.updated`，本地行会显示新（低）价，账单页就会说谎。
+     *
+     * 约定：**当前列 = 用户此刻正在付的价**，pending 列 = 周期末要切到的。
+     * 续费发票付清（`invoice.paid`）或周期翻页（`subscription.updated`）时晋升。
+     */
+    pendingPriceId: text('pending_price_id'),
+    pendingProductId: text('pending_product_id'),
+    pendingStripeProductId: text('pending_stripe_product_id'),
+    pendingInterval: text('pending_interval'),
+    pendingAmount: integer('pending_amount'),
+    pendingCurrency: text('pending_currency'),
+    pendingEffectiveAt: integer('pending_effective_at', { mode: 'timestamp' }),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   },

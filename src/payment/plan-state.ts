@@ -19,6 +19,14 @@
  *
  * 判据以**产品配置**为准（等级 + 互斥声明），都判不出来时退回 **Stripe Product**
  * 判定：同一个 Stripe Product 下的价格是同一个东西的不同价位。
+ *
+ * 上面回答的是「买的东西之间**怎么归属**」。本文件另外回答一个不同的问题：
+ * 「这个账号**能不能再开一份订阅**」——那是**账号级**规则，与产品级归属是两回事，
+ * 两套规则分开放在这里：
+ *
+ * - `purchaseBlockedBy`：这次购买与已有持有物**是否冲突**（买断 vs 订阅、显式互斥）；
+ * - `resolveSubscriptionAction`：账号能不能再开一份订阅（一个账号最多一份），
+ *   还是只能在**现有那份**上切换。
  */
 
 /** 仍占用订阅名额的订阅状态，与结账守卫的判定保持一致。 */
@@ -397,4 +405,145 @@ export function resolveCurrentPlan(input: {
   // 同级并列：没有唯一的当前方案。
   if (atMax.length > 1) return null
   return atMax[0] ?? null
+}
+
+/* -------------------------------------------------------------------------- *
+ * 账号级唯一性与切换
+ *
+ * 一个账号最多一份**活跃订阅**。要换档位或换周期，只能在现有那份上改（Stripe 的
+ * 订阅更新），不能再开一份——两份订阅就是两份扣款。
+ * -------------------------------------------------------------------------- */
+
+/** 目标付费方式：切换与新购共用同一个形状。 */
+export interface PlanTarget {
+  /** 本站产品 id（档位）。 */
+  productId: string
+  /** Stripe Product id；兜底判据。 */
+  stripeProductId?: string | null
+  /** 单价（分）。 */
+  amount?: number | null
+  currency?: string | null
+  /** 计费周期：`month` / `year` / … */
+  interval?: string | null
+}
+
+/** 账号当前那一份活跃订阅（切换的「现状」）。 */
+export interface ActiveSubscription extends OwnedPlan {
+  amount?: number | null
+  currency?: string | null
+  interval?: string | null
+}
+
+/**
+ * 切换方向。
+ *
+ * - `upgrade`：档位更高，或同级但更贵——立即生效并按比例结算；
+ * - `downgrade`：档位更低，或同级但更便宜——**期末生效**，本期权益不变；
+ * - `change`：同一档位换周期（月付 ↔ 年付）——权益没变，立即生效。
+ */
+export type SwitchDirection = 'upgrade' | 'downgrade' | 'change'
+
+/**
+ * 账号级判定结果。
+ *
+ * - `checkout`：没有活跃订阅 → 走 Checkout 新开一份；
+ * - `switch`：有活跃订阅 → 只能切换，不能再开；
+ * - `blocked`：状态不明确（认不出归属、多份活跃订阅）→ 保守处理，指去门户。
+ */
+export type SubscriptionAction =
+  | { kind: 'checkout' }
+  | { kind: 'switch'; direction: SwitchDirection; current: ActiveSubscription }
+  | { kind: 'blocked'; reason: 'unknown_product' | 'multiple_subscriptions' }
+
+/**
+ * 金额折算成「每月」（分）。
+ *
+ * 跨周期比价必须折算：年付 $99 与月付 $10 谁更贵，不能直接比原值。折算不出来
+ * （缺金额或未知周期）返回 `null`——**判不出就不判**，别拿 0 参与比较。
+ */
+export function monthlyEquivalent(
+  amount: number | null | undefined,
+  interval: string | null | undefined,
+): number | null {
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) return null
+  switch (interval) {
+    case 'month':
+      return amount
+    case 'year':
+      return amount / 12
+    case 'week':
+      return (amount * 52) / 12
+    case 'day':
+      return amount * 30
+    default:
+      return null
+  }
+}
+
+/**
+ * 从当前方案切到目标方案的方向。
+ *
+ * 判定顺序：
+ *
+ * 1. **档位不同** → 等级说了算：更高是 `upgrade`，更低是 `downgrade`；
+ * 2. **同一产品**（只是换周期）→ `change`：权益没变，不能算降级——否则「月付改
+ *    年付」会被延到周期末，用户白等一个月才拿到年付价；
+ * 3. **同级不同产品** → 比折算月均价：更贵算升级，更便宜算降级；
+ * 4. **档位不可比**（有一方没配等级）→ 同样比金额；金额也判不出 → `change` 兜底。
+ */
+export function resolveSwitchDirection(input: {
+  current: ActiveSubscription
+  target: PlanTarget
+  context?: OwnershipContext
+}): SwitchDirection {
+  const { current, target, context = {} } = input
+
+  // 比较方向：target 相对 current。
+  const cmp = comparePlanTiers(target, current, context)
+  if (cmp !== null && cmp !== 0) return cmp > 0 ? 'upgrade' : 'downgrade'
+
+  if (target.productId && target.productId === current.productId) return 'change'
+
+  const targetMonthly = monthlyEquivalent(target.amount, target.interval)
+  const currentMonthly = monthlyEquivalent(current.amount, current.interval)
+  if (targetMonthly !== null && currentMonthly !== null) {
+    if (targetMonthly > currentMonthly) return 'upgrade'
+    if (targetMonthly < currentMonthly) return 'downgrade'
+  }
+  return 'change'
+}
+
+/**
+ * 这个账号能不能再开一份订阅，还是只能在现有那份上切换。
+ *
+ * 一个账号最多一份**活跃订阅**——两份订阅就是两份扣款，账单页也只能标一份
+ * 「当前生效」。所以已有活跃订阅时，一切新订阅都必须走**切换**。
+ *
+ * 买断（一次性购买）不占订阅名额：它由 `purchaseBlockedBy` 单独判定。
+ */
+export function resolveSubscriptionAction(input: {
+  activeSubscriptions: ActiveSubscription[]
+  target: PlanTarget
+  context?: OwnershipContext
+}): SubscriptionAction {
+  const active = input.activeSubscriptions.filter((sub) => isActiveSubscriptionStatus(sub.status))
+
+  if (active.length === 0) return { kind: 'checkout' }
+  // 多份活跃订阅是脏数据（绕过本站开的）。判不出「当前那份」就不要动：
+  // 取消订阅不可逆，宁可让人去门户处理。
+  if (active.length > 1) return { kind: 'blocked', reason: 'multiple_subscriptions' }
+
+  const current = active[0] as ActiveSubscription
+  // 认不出属于哪个档位：分不清是重复还是切换，同样保守处理。
+  if (!current.productId) return { kind: 'blocked', reason: 'unknown_product' }
+
+  return {
+    kind: 'switch',
+    direction: resolveSwitchDirection({
+      current,
+      target: input.target,
+      context: input.context,
+    }),
+    current,
+  }
 }

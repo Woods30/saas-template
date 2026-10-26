@@ -66,10 +66,62 @@ export interface PortalResult {
   url: string
 }
 
+/**
+ * provider 侧的订阅快照。
+ *
+ * 站内切换方案改的是**订阅项的价格**，所以快照里必须有 `itemId`：Stripe 的更新
+ * 接口不带 `items[].id` 时会**新增**一个订阅项，两个价格同时生效、两份都扣款。
+ */
+export interface ProviderSubscription {
+  /** Stripe 订阅 id。 */
+  id: string
+  /** 订阅项 id（`si_...`）；换价时必须带上。 */
+  itemId: string
+  /** 当前订阅项的 Price id。 */
+  priceId: string
+  /** 单价（分）。 */
+  amount: number | null
+  currency: string | null
+  /** 计费周期（`month` / `year` …）。 */
+  interval: string | null
+  /** 当前周期结束（unix 秒）。 */
+  currentPeriodEnd: number | null
+  status: string
+}
+
+/**
+ * 折算行为：换价时差额怎么结算。
+ *
+ * - `always_invoice`：立刻按差额开票扣款（**升级**用）；
+ * - `create_prorations`：生成折算行项，在下次续费时结算；
+ * - `none`：不产生任何折算，本期已付金额不变，**新价从下一张账单起算**
+ *   （**降级期末生效**用，不退差价）。
+ */
+export type ProrationBehavior = 'always_invoice' | 'create_prorations' | 'none'
+
+export interface UpdateSubscriptionPriceParams {
+  /** Stripe 订阅 id。 */
+  subscriptionId: string
+  /** 订阅项 id；必填——漏了 Stripe 会新增一个订阅项而不是替换。 */
+  itemId: string
+  /** 目标 Price id。 */
+  priceId: string
+  prorationBehavior: ProrationBehavior
+  /**
+   * 归属 metadata：切换后要更新 `productId`，否则 webhook 会把旧产品写回来
+   * （Stripe 的 metadata 是**合并**更新，只传 productId 不会丢 userId）。
+   */
+  metadata?: Record<string, string>
+}
+
 export interface PaymentProvider {
   getProviderName(): string
   createCheckoutSession(params: CheckoutParams): Promise<CheckoutResult>
   createCustomerPortalLink(params: PortalParams): Promise<PortalResult>
+  /** 读取订阅快照（取订阅项 id、当前价、周期）。 */
+  retrieveSubscription(subscriptionId: string): Promise<ProviderSubscription>
+  /** 替换订阅项的价格 = 站内切换方案。 */
+  updateSubscriptionPrice(params: UpdateSubscriptionPriceParams): Promise<ProviderSubscription>
   /**
    * 按 `lookup_key` 批量取价。
    *

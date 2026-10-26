@@ -34,14 +34,17 @@ async function register(page: import('@playwright/test').Page): Promise<string> 
  * 写本地 D1，失败重试。wrangler 与 dev server 共用同一个 SQLite 文件，并发写入会
  * 抢不到 session commit token（环境竞争，不是产品缺陷）；真写不进去就让用例失败。
  */
-function seedSubscriptionWithRetry(email: string) {
+function seedSubscriptionWithRetry(email: string, withPending = false) {
   // 注册刚写过 users 表，先让 dev server 的请求落一落，降低 commit token 竞争。
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200)
+
+  const args = ['exec', 'tsx', 'scripts/e2e-seed-subscription.ts', email]
+  if (withPending) args.push('--pending')
 
   let lastError: unknown
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      execFileSync('pnpm', ['exec', 'tsx', 'scripts/e2e-seed-subscription.ts', email], {
+      execFileSync('pnpm', args, {
         stdio: 'pipe',
         encoding: 'utf-8',
       })
@@ -61,7 +64,10 @@ async function paymentConfigured(request: import('@playwright/test').APIRequestC
 }
 
 test.describe('Payment', () => {
-  test('已订阅时定价页显示提示，且服务端返回 409 而不是再开一次结账', async ({ page, request }) => {
+  test('已订阅时定价页显示「当前方案」，换档位点下去被服务端挡下（409）而不是再开一次结账', async ({
+    page,
+    request,
+  }) => {
     test.skip(!(await paymentConfigured(request)), '支付模块未配置（缺 Stripe 凭据或 Price）')
 
     const email = await register(page)
@@ -70,12 +76,23 @@ test.describe('Payment', () => {
     seedSubscriptionWithRetry(email)
 
     await page.goto('/zh/pricing')
-    // 冷启动时按钮可能还是 SSR 的静态 DOM，点下去没有处理器。提示走全局 toast，
-    // 会自动消失，因此重试判的是「文案出现过」而不是常驻元素的可见性。
+    // 冷启动时按钮可能还是 SSR 的静态 DOM，点下去没有处理器。先等水合。
+    await page.waitForLoadState('networkidle')
+
+    // 已有订阅时，当前档位的按钮是「当前方案」且禁用：不能再买一份。
+    const currentCta = page.getByRole('button', { name: '当前方案' })
+    await expect(currentCta).toBeVisible({ timeout: 15000 })
+    await expect(currentCta).toBeDisabled()
+
+    // 换到年付：CTA 变成「切换到 专业版」。点了不会被静默接受——
+    // 服务端挡下重复订阅，提示去账单页切换。
+    await page.getByRole('button', { name: '按年付' }).click()
+    const switchCta = page.getByRole('button', { name: '切换到 专业版' })
+    await expect(switchCta).toBeVisible()
     const notice = page.getByText('你已经订阅了该方案')
     await expect(async () => {
       if (await notice.isVisible()) return
-      await page.getByRole('button', { name: '选择专业版' }).click()
+      await switchCta.click()
       await expect(notice).toBeVisible({ timeout: 3000 })
     }).toPass({ timeout: 20000 })
     await expect(page).toHaveURL(/\/zh\/pricing/)
@@ -110,6 +127,42 @@ test.describe('Payment', () => {
     await expect(section.getByText('终身')).toHaveCount(0)
     // 一页通常只有一条订阅，卡片比横向四列的表格合适。
     await expect(section.locator('table')).toHaveCount(0)
+  })
+
+  test('账单页出现「切换方案」区块：当前方案禁用，其余目标按方向标注', async ({
+    page,
+    request,
+  }) => {
+    test.skip(!(await paymentConfigured(request)), '支付模块未配置（缺 Stripe 凭据或 Price）')
+
+    const email = await register(page)
+    await new Promise((r) => setTimeout(r, 200))
+    seedSubscriptionWithRetry(email)
+
+    await page.goto('/zh/dashboard/billing')
+    await page.waitForURL(/\/zh\/dashboard\/billing/)
+
+    const section = page.locator('section', { hasText: '切换方案' }).first()
+    await expect(section).toBeVisible({ timeout: 15000 })
+    // 当前方案禁用：不能「切到」自己。
+    await expect(section.getByRole('button', { name: '当前方案' }).first()).toBeDisabled()
+    // 另一个周期是「换周期」：同档换周期立即生效。
+    await expect(section.getByText('换周期').first()).toBeVisible()
+  })
+
+  test('已安排降级时订阅卡显示「已安排变更」并可取消', async ({ page, request }) => {
+    test.skip(!(await paymentConfigured(request)), '支付模块未配置（缺 Stripe 凭据或 Price）')
+
+    const email = await register(page)
+    await new Promise((r) => setTimeout(r, 200))
+    seedSubscriptionWithRetry(email, true)
+
+    await page.goto('/zh/dashboard/billing')
+    await page.waitForURL(/\/zh\/dashboard\/billing/)
+
+    // 降级期间用户仍在按旧价扣款，页面必须说清「已安排变更」与生效时刻。
+    await expect(page.getByText(/已安排变更为/).first()).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole('button', { name: '取消变更' }).first()).toBeVisible()
   })
 
   test('已登录用户点免费档按钮进入工作台，不再被送回注册页', async ({ page }) => {

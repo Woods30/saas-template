@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  type ActiveSubscription,
   comparePlanTiers,
   doesSupersede,
   findSupersededSubscriptions,
@@ -7,12 +8,16 @@ import {
   isSameProduct,
   isStrictlyEarlier,
   isSubscriptionSuperseded,
+  monthlyEquivalent,
   type OwnedPlan,
   type OwnershipContext,
+  type PlanTarget,
   planTier,
   purchaseBlockedBy,
   resolveCurrentPlan,
   resolveProductHoldings,
+  resolveSubscriptionAction,
+  resolveSwitchDirection,
 } from '@/payment/plan-state'
 
 /**
@@ -445,6 +450,197 @@ describe('plan-state 等级判定', () => {
         context: CONTEXT,
       })
       expect(current).toBeNull()
+    })
+  })
+})
+
+describe('plan-state 账号级唯一性与切换', () => {
+  /** 目标付费方式：档位 + 周期 + 价格。 */
+  function target(overrides: Partial<PlanTarget> = {}): PlanTarget {
+    return {
+      productId: 'pro',
+      stripeProductId: 'prod_pro',
+      amount: 1000,
+      currency: 'usd',
+      interval: 'month',
+      ...overrides,
+    }
+  }
+
+  /** 当前那一份订阅。 */
+  function active(overrides: Partial<ActiveSubscription> = {}): ActiveSubscription {
+    return {
+      kind: 'subscription',
+      id: 'sub_1',
+      subscriptionId: 'sub_1',
+      productId: 'pro',
+      stripeProductId: 'prod_pro',
+      status: 'active',
+      amount: 1000,
+      currency: 'usd',
+      interval: 'month',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      ...overrides,
+    }
+  }
+
+  describe('monthlyEquivalent', () => {
+    it('月付就是原值', () => {
+      expect(monthlyEquivalent(1000, 'month')).toBe(1000)
+    })
+
+    it('年付折算成月', () => {
+      expect(monthlyEquivalent(12000, 'year')).toBe(1000)
+    })
+
+    it('周付与日付也折算成月', () => {
+      expect(monthlyEquivalent(100, 'week')).toBeCloseTo(100 * (52 / 12), 6)
+      expect(monthlyEquivalent(10, 'day')).toBe(300)
+    })
+
+    it('缺金额或周期未知时返回 null —— 判不出就不判', () => {
+      // 拿 0 参与比较会把「不知道」变成「最便宜」，方向就反了。
+      expect(monthlyEquivalent(null, 'month')).toBeNull()
+      expect(monthlyEquivalent(1000, null)).toBeNull()
+      expect(monthlyEquivalent(1000, 'quarter')).toBeNull()
+      expect(monthlyEquivalent(Number.NaN, 'month')).toBeNull()
+    })
+  })
+
+  describe('resolveSwitchDirection', () => {
+    it('档位更高 → 升级', () => {
+      const direction = resolveSwitchDirection({
+        current: active({ productId: 'pro' }),
+        target: target({ productId: 'lifetime', stripeProductId: 'prod_life' }),
+        context: CONTEXT,
+      })
+      expect(direction).toBe('upgrade')
+    })
+
+    it('档位更低 → 降级', () => {
+      const direction = resolveSwitchDirection({
+        current: active({ productId: 'lifetime', stripeProductId: 'prod_life' }),
+        target: target({ productId: 'pro' }),
+        context: CONTEXT,
+      })
+      expect(direction).toBe('downgrade')
+    })
+
+    it('同一产品换周期 → 不是降级，是切换', () => {
+      // 权益没变：月付改年付若算成降级，用户要白等一个月才拿到年付价。
+      const direction = resolveSwitchDirection({
+        current: active({ amount: 1000, interval: 'month' }),
+        target: target({ amount: 12000, interval: 'year' }),
+        context: CONTEXT,
+      })
+      expect(direction).toBe('change')
+    })
+
+    it('同级不同产品：更贵算升级，更便宜算降级', () => {
+      expect(
+        resolveSwitchDirection({
+          current: active({ productId: 'plus', stripeProductId: 'prod_plus', amount: 1000 }),
+          target: target({ productId: 'team', stripeProductId: 'prod_team', amount: 2000 }),
+          context: CONTEXT,
+        }),
+      ).toBe('upgrade')
+      expect(
+        resolveSwitchDirection({
+          current: active({ productId: 'plus', stripeProductId: 'prod_plus', amount: 1000 }),
+          target: target({ productId: 'team', stripeProductId: 'prod_team', amount: 500 }),
+          context: CONTEXT,
+        }),
+      ).toBe('downgrade')
+    })
+
+    it('同级同价 → 切换', () => {
+      expect(
+        resolveSwitchDirection({
+          current: active({ productId: 'plus', stripeProductId: 'prod_plus', amount: 1000 }),
+          target: target({ productId: 'team', stripeProductId: 'prod_team', amount: 1000 }),
+          context: CONTEXT,
+        }),
+      ).toBe('change')
+    })
+
+    it('档位不可比时退回比金额', () => {
+      // 实物商品没有等级：只能按钱判断谁更贵。
+      expect(
+        resolveSwitchDirection({
+          current: active({ productId: 'merch', stripeProductId: 'prod_merch', amount: 1000 }),
+          target: target({ productId: 'gift', stripeProductId: 'prod_gift', amount: 5000 }),
+          context: CONTEXT,
+        }),
+      ).toBe('upgrade')
+    })
+
+    it('档位不可比且金额也判不出 → 切换（不退款也不补差价）', () => {
+      expect(
+        resolveSwitchDirection({
+          current: active({ productId: 'merch', stripeProductId: 'prod_merch', amount: null }),
+          target: target({ productId: 'gift', stripeProductId: 'prod_gift', amount: null }),
+          context: CONTEXT,
+        }),
+      ).toBe('change')
+    })
+  })
+
+  describe('resolveSubscriptionAction', () => {
+    it('没有活跃订阅 → 走 Checkout 新开一份', () => {
+      const action = resolveSubscriptionAction({
+        activeSubscriptions: [],
+        target: target(),
+        context: CONTEXT,
+      })
+      expect(action).toEqual({ kind: 'checkout' })
+    })
+
+    it('已取消的订阅不占名额 → 仍可新开', () => {
+      const action = resolveSubscriptionAction({
+        activeSubscriptions: [active({ status: 'canceled' })],
+        target: target(),
+        context: CONTEXT,
+      })
+      expect(action).toEqual({ kind: 'checkout' })
+    })
+
+    it('已有活跃订阅 → 只能切换，方向按等级判定', () => {
+      const action = resolveSubscriptionAction({
+        activeSubscriptions: [active()],
+        target: target({ productId: 'lifetime', stripeProductId: 'prod_life' }),
+        context: CONTEXT,
+      })
+      expect(action.kind).toBe('switch')
+      if (action.kind !== 'switch') throw new Error('unreachable')
+      expect(action.direction).toBe('upgrade')
+      expect(action.current.id).toBe('sub_1')
+    })
+
+    it('认不出属于哪个档位 → 保守挡住', () => {
+      const action = resolveSubscriptionAction({
+        activeSubscriptions: [active({ productId: null })],
+        target: target(),
+        context: CONTEXT,
+      })
+      expect(action).toEqual({ kind: 'blocked', reason: 'unknown_product' })
+    })
+
+    it('多份活跃订阅 → 挡住，不要动订阅', () => {
+      const action = resolveSubscriptionAction({
+        activeSubscriptions: [active(), active({ id: 'sub_2' })],
+        target: target(),
+        context: CONTEXT,
+      })
+      expect(action).toEqual({ kind: 'blocked', reason: 'multiple_subscriptions' })
+    })
+
+    it('past_due 也算活跃 —— 订阅还在，照样占名额', () => {
+      const action = resolveSubscriptionAction({
+        activeSubscriptions: [active({ status: 'past_due' })],
+        target: target(),
+        context: CONTEXT,
+      })
+      expect(action.kind).toBe('switch')
     })
   })
 })

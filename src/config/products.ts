@@ -205,6 +205,27 @@ export function productExclusivityMap(): Record<string, string[]> {
 }
 
 /**
+ * 可切换的订阅付费方式（档位 × 周期）。
+ *
+ * 只收 `kind === 'subscription'` 的 option：免费档没有付费方式，买断不是订阅
+ * （买断与订阅的归属判定走另一条路）。
+ *
+ * 账单页的「切换方案」与结账守卫共用这份清单——**唯一来源**，否则两处各列一份
+ * 迟早漂移。
+ */
+export function subscriptionTargets(): Array<{ productId: string; interval: PricingInterval }> {
+  const targets: Array<{ productId: string; interval: PricingInterval }> = []
+  for (const id of PRODUCT_IDS) {
+    for (const option of productOptions(id)) {
+      if (option.kind !== 'subscription') continue
+      if (!option.interval) continue
+      targets.push({ productId: id, interval: option.interval })
+    }
+  }
+  return targets
+}
+
+/**
  * 某个产品的互斥对象：显式声明 + 等级推导。
  *
  * 等级推导只发生在**可购买**的产品之间：`free` 是默认状态、不可购买，不该和谁

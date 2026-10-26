@@ -67,4 +67,37 @@ describe('buildSeedSql', () => {
   it('status 写 active，让重复订阅守卫命中', () => {
     expect(buildSeedSql(base)).toContain("'active'")
   })
+
+  it('给了待生效变更时写入 pending_* 列，时间戳同样是裸整数', () => {
+    const sql = buildSeedSql({
+      ...base,
+      pending: {
+        priceId: 'price_year',
+        productId: 'pro',
+        stripeProductId: 'prod_e2e_pro',
+        interval: 'year',
+        amount: 5990,
+        currency: 'usd',
+        effectiveAt: 1797690509,
+      },
+    })
+    for (const column of [
+      'pending_price_id',
+      'pending_product_id',
+      'pending_stripe_product_id',
+      'pending_interval',
+      'pending_amount',
+      'pending_currency',
+      'pending_effective_at',
+    ]) {
+      expect(sql, `缺少列 ${column}`).toContain(column)
+    }
+    expect(sql).toContain('1797690509')
+    expect(sql).not.toContain('datetime(')
+  })
+
+  it('没有待生效变更时不写 pending_* 列', () => {
+    const sql = buildSeedSql(base)
+    expect(sql).not.toContain('pending_price_id')
+  })
 })

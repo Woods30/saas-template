@@ -20,6 +20,7 @@ import {
   ACTIVE_SUBSCRIPTION_STATUSES,
   type PurchaseBlockReason,
   purchaseBlockedBy,
+  resolveSubscriptionAction,
 } from '@/payment/plan-state'
 import { buildProductIdByPriceId } from '@/payment/price-catalog'
 import { getPriceCatalog } from '@/payment/price-catalog.server'
@@ -151,7 +152,13 @@ export const Route = createFileRoute('/api/payment/$')({
 
         // 计费模式以 **Stripe 上的 Price** 为准，而不是配置里的猜测：
         // 一次性 Price 没有 `recurring`，订阅 Price 有。
-        let price: { priceId: string; recurring: boolean; stripeProductId: string | null }
+        let price: {
+          priceId: string
+          recurring: boolean
+          stripeProductId: string | null
+          amount: number
+          currency: string
+        }
         // Price id → 产品 id。老数据没有 product_id 时靠它反查，否则归属判定会退回
         // 「查不出产品」，守卫只能保守地一律挡住。
         let productIdByPriceId: Record<string, string> = {}
@@ -165,6 +172,8 @@ export const Route = createFileRoute('/api/payment/$')({
             priceId: found.priceId,
             recurring: found.recurring,
             stripeProductId: found.stripeProductId,
+            amount: found.amount,
+            currency: found.currency,
           }
           productIdByPriceId = buildProductIdByPriceId(catalog)
         } catch (err) {
@@ -176,10 +185,11 @@ export const Route = createFileRoute('/api/payment/$')({
         }
         const mode = price.recurring ? 'subscription' : 'payment'
 
-        // 拒绝重复订阅与降级：一个用户**同一个产品**只能有一份订阅，换周期走
-        // Billing Portal 折算迁移；已经持有更高等级时也不能再买低级别的。
-        // 一次性支付不在此列。这是应用侧守卫，与 Stripe 后台的「限一个客户一个订阅」
-        // 互为两层——后者挡得住绕过本站的 Checkout 链接。
+        // 拒绝重复订阅：一个账号最多一份**活跃订阅**，换档位/换周期只能改现有那份
+        // （`POST /api/payment/switch`），不能新开——两份订阅就是两份扣款。
+        // 一次性支付不在此列：买断是独立付费物，它可以接管订阅。
+        // 这是应用侧守卫，与 Stripe 后台的「限一个客户一个订阅」互为两层——后者挡得住
+        // 绕过本站的 Checkout 链接。
         if (mode === 'subscription') {
           const db = createDb(env.DB)
           const [existingSubscriptions, purchases] = await Promise.all([
@@ -189,6 +199,9 @@ export const Route = createFileRoute('/api/payment/$')({
                 priceId: schema.subscriptions.priceId,
                 productId: schema.subscriptions.productId,
                 stripeProductId: schema.subscriptions.stripeProductId,
+                amount: schema.subscriptions.amount,
+                currency: schema.subscriptions.currency,
+                interval: schema.subscriptions.interval,
               })
               .from(schema.subscriptions)
               .where(
@@ -215,23 +228,58 @@ export const Route = createFileRoute('/api/payment/$')({
           const target = {
             productId: body.productId,
             stripeProductId: price.stripeProductId,
+            amount: price.amount,
+            currency: price.currency,
+            interval,
           }
 
-          // 已有持有物挡住这次购买时给出**具体原因**，页面才能说清该干什么：
-          // 同产品 → 去「管理订阅」换周期；更高等级 → 不用再买；显式互斥 → 不能并存。
-          const held = [
-            ...existingSubscriptions.map((row) => ({
+          // 已持有的**买断**与这次购买冲突时挡住：买断是终态权益，不能被订阅顶掉。
+          for (const purchase of purchases) {
+            const reason = purchaseBlockedBy(purchase, target, ownershipContext)
+            if (!reason) continue
+            return Response.json({ error: BLOCK_ERROR_CODES[reason] }, { status: 409 })
+          }
+
+          // 账号级唯一：已有活跃订阅 → 只能切换，不能再开一份。
+          const action = resolveSubscriptionAction({
+            activeSubscriptions: existingSubscriptions.map((row) => ({
+              kind: 'subscription' as const,
+              id: row.id,
+              status: 'active',
               // 老数据没有 product_id：按 Price id 反查一次，避免判不出归属就乱挡。
               productId:
                 row.productId ?? (row.priceId ? productIdByPriceId[row.priceId] : null) ?? null,
               stripeProductId: row.stripeProductId,
+              amount: row.amount,
+              currency: row.currency,
+              interval: row.interval,
             })),
-            ...purchases,
-          ]
-          for (const existing of held) {
-            const reason = purchaseBlockedBy(existing, target, ownershipContext)
-            if (!reason) continue
-            return Response.json({ error: BLOCK_ERROR_CODES[reason] }, { status: 409 })
+            target,
+            context: ownershipContext,
+          })
+
+          if (action.kind === 'blocked') {
+            const code =
+              action.reason === 'multiple_subscriptions'
+                ? 'MULTIPLE_ACTIVE_SUBSCRIPTIONS'
+                : BLOCK_ERROR_CODES.unknown_product
+            return Response.json({ error: code }, { status: 409 })
+          }
+
+          if (action.kind === 'switch') {
+            // 409 的载荷带上切换方向：页面据此提示「升级 / 降级 / 换周期」，并把人
+            // 引到账单页的「切换方案」——降级是允许的，只是期末生效。
+            return Response.json(
+              {
+                error: BLOCK_ERROR_CODES.same_product,
+                switch: {
+                  direction: action.direction,
+                  targetProductId: body.productId,
+                  targetInterval: interval ?? null,
+                },
+              },
+              { status: 409 },
+            )
           }
         }
 

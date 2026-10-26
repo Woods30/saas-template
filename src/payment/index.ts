@@ -7,6 +7,8 @@ import type {
   PaymentProvider,
   PortalParams,
   PortalResult,
+  ProviderSubscription,
+  UpdateSubscriptionPriceParams,
 } from './types'
 
 export type PaymentProviderName = 'stripe'
@@ -42,5 +44,13 @@ export function getPaymentProvider(name: PaymentProviderName): PaymentProvider {
   return factory()
 }
 
-export type { CheckoutParams, CheckoutResult, PaymentProvider, PortalParams, PortalResult }
+export type {
+  CheckoutParams,
+  CheckoutResult,
+  PaymentProvider,
+  PortalParams,
+  PortalResult,
+  ProviderSubscription,
+  UpdateSubscriptionPriceParams,
+}
 export { StripePaymentProvider }

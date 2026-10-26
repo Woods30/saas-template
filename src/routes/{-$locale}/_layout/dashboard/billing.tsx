@@ -1,4 +1,4 @@
-import { IconAlertTriangle, IconCreditCard } from '@tabler/icons-react'
+import { IconAlertTriangle, IconClock, IconCreditCard } from '@tabler/icons-react'
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { toast } from '@/components/ui/toast'
 import { productTier } from '@/config/products'
 import { useCheckoutNotice } from '@/hooks/use-checkout-notice'
 import { trackPurchase } from '@/lib/analytics/events'
@@ -33,6 +34,7 @@ import {
   fetchBillingOverview,
   type PaymentRecord,
   type SubscriptionRecord,
+  type SwitchTarget,
 } from '@/payment/billing'
 import {
   paymentStatusMessageKey,
@@ -40,6 +42,7 @@ import {
   subscriptionIntervalMessageKey,
   subscriptionStatusMessageKey,
 } from '@/payment/billing-query'
+import { startSwitch } from '@/payment/switch-client'
 
 /**
  * 账单与订阅页。
@@ -71,8 +74,11 @@ function BillingPage() {
   const [subscriptions, setSubscriptions] = useState<SubscriptionRecord[] | null>(null)
   const [payments, setPayments] = useState<PaymentRecord[] | null>(null)
   const [currentPlan, setCurrentPlan] = useState<CurrentPlan | null>(null)
+  const [switchTargets, setSwitchTargets] = useState<SwitchTarget[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [managing, setManaging] = useState(false)
+  /** 正在切换的目标（`产品-周期`）；同时只有一个请求在飞。 */
+  const [switching, setSwitching] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -80,6 +86,7 @@ function BillingPage() {
       setSubscriptions(result.subscriptions)
       setPayments(result.payments)
       setCurrentPlan(result.currentPlan)
+      setSwitchTargets(result.switchTargets)
     } catch {
       // 不回显服务端错误体：401 / 500 对用户是同一件事。
       setError(m.settings_error_generic())
@@ -146,6 +153,57 @@ function BillingPage() {
       setError(m.settings_error_generic())
     } finally {
       setManaging(false)
+    }
+  }
+
+  /**
+   * 切换方案。
+   *
+   * 切换的是**现有那份订阅的价格**，不新开订阅：两份订阅就是两份扣款。降级**期末
+   * 生效**——服务端会把「待生效」的方案另记一份，账单页据此显示「已安排变更」。
+   */
+  async function onSwitch(productId: string, interval: 'month' | 'year' | 'one_time') {
+    const key = `${productId}-${interval}`
+    setSwitching(key)
+    try {
+      const outcome = await startSwitch({ productId, interval })
+      switch (outcome.kind) {
+        case 'switched':
+          toast.add({
+            type: 'success',
+            title: m.settings_billing_switch_success(),
+            description: m.settings_billing_switch_switched_desc({
+              name: productNameForProductId(productId) ?? productId,
+            }),
+          })
+          break
+        case 'scheduled':
+          toast.add({
+            type: 'success',
+            title: m.settings_billing_switch_scheduled({
+              date: formatDateTime(outcome.effectiveAt),
+            }),
+          })
+          break
+        case 'unchanged':
+          toast.add({
+            type: 'info',
+            title: outcome.pendingCancelled
+              ? m.settings_billing_switch_cancelled()
+              : m.settings_billing_switch_unchanged(),
+          })
+          break
+        case 'no-subscription':
+        case 'blocked':
+          toast.add({ type: 'info', title: m.settings_billing_switch_blocked() })
+          break
+        default:
+          toast.add({ type: 'error', title: m.settings_billing_switch_failed() })
+      }
+      // 切换后刷新：当前方案、待生效变更都变了。
+      await load()
+    } finally {
+      setSwitching(null)
     }
   }
 
@@ -230,12 +288,36 @@ function BillingPage() {
                 key={sub.id}
                 sub={sub}
                 managing={managing}
+                switching={switching !== null}
                 onManage={() => onManageSubscription(sub.customerId)}
+                onSwitch={onSwitch}
               />
             ))}
           </div>
         )}
       </section>
+
+      {/* 切换方案：账号级唯一订阅——换档位只能改现有那份。 */}
+      {switchTargets && switchTargets.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium text-muted-foreground">
+            {m.settings_billing_switch_title()}
+          </h2>
+          <p className="text-sm text-muted-foreground">{m.settings_billing_switch_desc()}</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {switchTargets.map((target) => (
+              <SwitchCard
+                key={`${target.productId}-${target.interval}`}
+                target={target}
+                switching={switching === `${target.productId}-${target.interval}`}
+                onSwitch={() =>
+                  onSwitch(target.productId, target.interval as 'month' | 'year' | 'one_time')
+                }
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* 交易记录常驻不折叠。表头必须留着：第一列是款项性质而非方案名，
           第三列把状态与金额挤在一格，没有表头只能靠猜。 */}
@@ -299,11 +381,16 @@ function BillingPage() {
 function SubscriptionCard({
   sub,
   managing,
+  switching,
   onManage,
+  onSwitch,
 }: {
   sub: SubscriptionRecord
   managing: boolean
+  /** 是否有切换请求在飞：取消变更按钮同时只允许一个。 */
+  switching: boolean
   onManage: () => void
+  onSwitch: (productId: string, interval: 'month' | 'year' | 'one_time') => void
 }) {
   const productName = productNameForProductId(sub.productId)
   const statusKey = subscriptionStatusMessageKey(sub.status)
@@ -352,6 +439,31 @@ function SubscriptionCard({
             <span className="font-medium tabular-nums">{formatDateTime(sub.currentPeriodEnd)}</span>
           </div>
         )}
+        {sub.pending && (
+          <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg bg-muted px-3 py-2 text-sm">
+            <div className="flex items-start gap-2">
+              <IconClock aria-hidden className="mt-0.5 size-4 shrink-0" />
+              <span>
+                {m.settings_billing_switch_pending_desc({
+                  name: productNameForProductId(sub.pending.productId) ?? sub.pending.productId,
+                  date: formatDateTime(sub.pending.effectiveAt),
+                })}
+              </span>
+            </div>
+            {sub.productId && sub.interval && sub.interval !== 'one_time' && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={switching}
+                onClick={() =>
+                  onSwitch(sub.productId as string, sub.interval as 'month' | 'year' | 'one_time')
+                }
+              >
+                {m.settings_billing_switch_cancel()}
+              </Button>
+            )}
+          </div>
+        )}
         {sub.superseded && (
           <div className="flex items-start gap-2 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
             <IconAlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" />
@@ -370,6 +482,71 @@ function SubscriptionCard({
             <span>{m.settings_billing_past_due()}</span>
           </div>
         )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * 一个可切换目标的卡片（档位 × 周期）。
+ *
+ * 方向（升级 / 降级 / 换周期）由服务端算好再下发：客户端不重复判定，两处各判一次
+ * 迟早漂移——最怕的是客户端说「升级」而服务端按「降级」处理，用户被少扣钱。
+ */
+function SwitchCard({
+  target,
+  switching,
+  onSwitch,
+}: {
+  target: SwitchTarget
+  switching: boolean
+  onSwitch: () => void
+}) {
+  const productName = productNameForProductId(target.productId)
+  const intervalLabel = subscriptionIntervalMessageKey(target.interval)
+  const amount = formatAmount(target.amount, target.currency)
+  const directionKey =
+    target.direction === 'upgrade'
+      ? 'settings_billing_switch_upgrade'
+      : target.direction === 'downgrade'
+        ? 'settings_billing_switch_downgrade'
+        : 'settings_billing_switch_change'
+  const hintKey =
+    target.direction === 'upgrade'
+      ? 'settings_billing_switch_upgrade_hint'
+      : target.direction === 'downgrade'
+        ? 'settings_billing_switch_downgrade_hint'
+        : 'settings_billing_switch_change_hint'
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle className="text-base">{productName ?? target.productId}</CardTitle>
+          {target.isCurrent ? (
+            <Badge variant="default">{m.settings_billing_switch_current()}</Badge>
+          ) : (
+            <Badge variant="outline">{m[directionKey]()}</Badge>
+          )}
+        </div>
+        <CardDescription>
+          {amount}
+          {intervalLabel ? ` / ${intervalLabel}` : ''}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">{m[hintKey]()}</p>
+        <Button
+          size="sm"
+          variant={target.isCurrent ? 'secondary' : 'default'}
+          disabled={target.isCurrent || switching}
+          onClick={onSwitch}
+        >
+          {switching ? <Spinner className="size-4" /> : null}
+          {target.isCurrent
+            ? m.settings_billing_switch_current()
+            : m.settings_billing_switch_action()}
+        </Button>
       </CardContent>
     </Card>
   )

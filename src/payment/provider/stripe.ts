@@ -7,6 +7,8 @@ import type {
   PortalParams,
   PortalResult,
   ProviderPrice,
+  ProviderSubscription,
+  UpdateSubscriptionPriceParams,
 } from '../types'
 
 /**
@@ -18,6 +20,28 @@ import type {
 function isResourceMissing(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false
   return (err as { code?: unknown }).code === 'resource_missing'
+}
+
+/**
+ * Stripe 订阅 → provider 快照。
+ *
+ * 周期字段在**订阅项**上，不在订阅顶层（API `2025-09-30.clover`）；`price` 可能
+ * 是未展开的 id 字符串，两种形态都要能读。
+ */
+function toProviderSubscription(subscription: Stripe.Subscription): ProviderSubscription {
+  const item = subscription.items.data[0]
+  const price = item?.price
+  const expanded = typeof price === 'string' ? null : price
+  return {
+    id: subscription.id,
+    itemId: item?.id ?? '',
+    priceId: expanded?.id ?? (typeof price === 'string' ? price : ''),
+    amount: expanded?.unit_amount ?? null,
+    currency: expanded?.currency ?? null,
+    interval: expanded?.recurring?.interval ?? null,
+    currentPeriodEnd: item?.current_period_end ?? null,
+    status: subscription.status,
+  }
 }
 
 /**
@@ -120,6 +144,40 @@ export class StripePaymentProvider implements PaymentProvider {
       return_url: params.returnUrl,
     })
     return { url: portal.url }
+  }
+
+  /**
+   * 读订阅快照。
+   *
+   * 必须展开 `items.data.price` 才拿得到单价与周期——不展开时 `price` 只是个 id
+   * 字符串。
+   */
+  async retrieveSubscription(subscriptionId: string): Promise<ProviderSubscription> {
+    const subscription = await this.stripe.subscriptions.retrieve(subscriptionId, {
+      expand: ['items.data.price'],
+    })
+    return toProviderSubscription(subscription)
+  }
+
+  /**
+   * 替换订阅项的价格 = 站内切换方案。
+   *
+   * `items[0].id` **必须带**：Stripe 的更新接口在缺 `id` 时会**新增**一个订阅项，
+   * 于是旧价与新价同时生效、两份都扣款。这是切换路径最容易踩的坑，所以缺 id 时
+   * 直接抛错，不猜。
+   */
+  async updateSubscriptionPrice(
+    params: UpdateSubscriptionPriceParams,
+  ): Promise<ProviderSubscription> {
+    if (!params.itemId) {
+      throw new Error('updateSubscriptionPrice: 缺少订阅项 id（漏传会让 Stripe 新增订阅项）')
+    }
+    const subscription = await this.stripe.subscriptions.update(params.subscriptionId, {
+      items: [{ id: params.itemId, price: params.priceId }],
+      proration_behavior: params.prorationBehavior,
+      ...(params.metadata ? { metadata: params.metadata } : {}),
+    })
+    return toProviderSubscription(subscription)
   }
 
   async parseWebhookEvent(rawBody: string, signature: string): Promise<unknown> {

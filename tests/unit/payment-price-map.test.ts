@@ -15,6 +15,7 @@ import {
   productTier,
   productTierMap,
   resolveLookupKey,
+  subscriptionTargets,
 } from '@/config/products'
 import {
   buildProductIdByPriceId,
@@ -97,6 +98,23 @@ describe('resolveLookupKey', () => {
 
   it('不给周期时取第一个已配置的付费方式', () => {
     expect(resolveLookupKey('pro')).toBe('pro_monthly')
+  })
+})
+
+describe('subscriptionTargets', () => {
+  it('列出所有「档位 × 周期」的订阅目标', () => {
+    expect(subscriptionTargets()).toEqual([
+      { productId: 'pro', interval: 'month' },
+      { productId: 'pro', interval: 'year' },
+    ])
+  })
+
+  it('买断不是订阅目标：切换只改订阅的价格', () => {
+    expect(subscriptionTargets().some((target) => target.productId === 'lifetime')).toBe(false)
+  })
+
+  it('免费档没有付费方式，不进目标清单', () => {
+    expect(subscriptionTargets().some((target) => target.productId === 'free')).toBe(false)
   })
 })
 

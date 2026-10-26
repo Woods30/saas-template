@@ -19,6 +19,7 @@ import { Route as ApiContactSplatRouteImport } from './routes/api/contact/$'
 import { Route as ApiEmailSplatRouteImport } from './routes/api/email/$'
 import { Route as ApiNewsletterSplatRouteImport } from './routes/api/newsletter/$'
 import { Route as ApiPaymentSplatRouteImport } from './routes/api/payment/$'
+import { Route as ApiPaymentSwitchRouteImport } from './routes/api/payment/switch'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api/webhooks/stripe'
 import { Route as Char123LocaleChar125LayoutDashboardRouteImport } from './routes/{-$locale}/_layout/dashboard'
 import { Route as Char123LocaleChar125LayoutDocsRouteImport } from './routes/{-$locale}/_layout/docs'
@@ -101,6 +102,11 @@ const ApiNewsletterSplatRoute = ApiNewsletterSplatRouteImport.update({
 const ApiPaymentSplatRoute = ApiPaymentSplatRouteImport.update({
   id: '/api/payment/$',
   path: '/api/payment/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPaymentSwitchRoute = ApiPaymentSwitchRouteImport.update({
+  id: '/api/payment/switch',
+  path: '/api/payment/switch',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiWebhooksStripeRoute = ApiWebhooksStripeRouteImport.update({
@@ -294,6 +300,7 @@ export interface FileRoutesByFullPath {
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/newsletter/$': typeof ApiNewsletterSplatRoute
   '/api/payment/$': typeof ApiPaymentSplatRoute
+  '/api/payment/switch': typeof ApiPaymentSwitchRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/{-$locale}/dashboard': typeof Char123LocaleChar125LayoutDashboardRouteWithChildren
   '/{-$locale}/docs': typeof Char123LocaleChar125LayoutDocsRouteWithChildren
@@ -336,6 +343,7 @@ export interface FileRoutesByTo {
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/newsletter/$': typeof ApiNewsletterSplatRoute
   '/api/payment/$': typeof ApiPaymentSplatRoute
+  '/api/payment/switch': typeof ApiPaymentSwitchRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/{-$locale}/auth/error': typeof Char123LocaleChar125AuthErrorRoute
   '/{-$locale}/auth/forgot-password': typeof Char123LocaleChar125AuthForgotPasswordRoute
@@ -376,6 +384,7 @@ export interface FileRoutesById {
   '/api/email/$': typeof ApiEmailSplatRoute
   '/api/newsletter/$': typeof ApiNewsletterSplatRoute
   '/api/payment/$': typeof ApiPaymentSplatRoute
+  '/api/payment/switch': typeof ApiPaymentSwitchRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/{-$locale}/_layout/dashboard': typeof Char123LocaleChar125LayoutDashboardRouteWithChildren
   '/{-$locale}/_layout/docs': typeof Char123LocaleChar125LayoutDocsRouteWithChildren
@@ -420,6 +429,7 @@ export interface FileRouteTypes {
     | '/api/email/$'
     | '/api/newsletter/$'
     | '/api/payment/$'
+    | '/api/payment/switch'
     | '/api/webhooks/stripe'
     | '/{-$locale}/dashboard'
     | '/{-$locale}/docs'
@@ -462,6 +472,7 @@ export interface FileRouteTypes {
     | '/api/email/$'
     | '/api/newsletter/$'
     | '/api/payment/$'
+    | '/api/payment/switch'
     | '/api/webhooks/stripe'
     | '/{-$locale}/auth/error'
     | '/{-$locale}/auth/forgot-password'
@@ -501,6 +512,7 @@ export interface FileRouteTypes {
     | '/api/email/$'
     | '/api/newsletter/$'
     | '/api/payment/$'
+    | '/api/payment/switch'
     | '/api/webhooks/stripe'
     | '/{-$locale}/_layout/dashboard'
     | '/{-$locale}/_layout/docs'
@@ -544,6 +556,7 @@ export interface RootRouteChildren {
   ApiEmailSplatRoute: typeof ApiEmailSplatRoute
   ApiNewsletterSplatRoute: typeof ApiNewsletterSplatRoute
   ApiPaymentSplatRoute: typeof ApiPaymentSplatRoute
+  ApiPaymentSwitchRoute: typeof ApiPaymentSwitchRoute
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
   Char123LocaleChar125LayoutDashboardRoute: typeof Char123LocaleChar125LayoutDashboardRouteWithChildren
   Char123LocaleChar125LayoutDocsRoute: typeof Char123LocaleChar125LayoutDocsRouteWithChildren
@@ -626,6 +639,13 @@ declare module '@tanstack/react-router' {
       path: '/api/payment/$'
       fullPath: '/api/payment/$'
       preLoaderRoute: typeof ApiPaymentSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/payment/switch': {
+      id: '/api/payment/switch'
+      path: '/api/payment/switch'
+      fullPath: '/api/payment/switch'
+      preLoaderRoute: typeof ApiPaymentSwitchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/webhooks/stripe': {
@@ -948,6 +968,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiEmailSplatRoute: ApiEmailSplatRoute,
   ApiNewsletterSplatRoute: ApiNewsletterSplatRoute,
   ApiPaymentSplatRoute: ApiPaymentSplatRoute,
+  ApiPaymentSwitchRoute: ApiPaymentSwitchRoute,
   ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
   Char123LocaleChar125LayoutDashboardRoute:
     Char123LocaleChar125LayoutDashboardRouteWithChildren,

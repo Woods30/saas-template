@@ -519,7 +519,11 @@ describe('POST /api/payment 重复订阅守卫', () => {
     const response = await handler({ request })
 
     expect(response.status).toBe(409)
-    expect(await response.json()).toEqual({ error: 'ALREADY_SUBSCRIBED' })
+    // 载荷带上切换方向：页面据此提示「去切换方案」，而不是再开一份订阅。
+    expect(await response.json()).toEqual({
+      error: 'ALREADY_SUBSCRIBED',
+      switch: { direction: 'change', targetProductId: 'pro', targetInterval: 'month' },
+    })
     expect(mockCheckoutProvider.createCheckoutSession).not.toHaveBeenCalled()
   })
 
@@ -556,7 +560,10 @@ describe('POST /api/payment 重复订阅守卫', () => {
     const response = await handler({ request })
 
     expect(response.status).toBe(409)
-    expect(await response.json()).toEqual({ error: 'ALREADY_SUBSCRIBED' })
+    expect(await response.json()).toEqual({
+      error: 'ALREADY_SUBSCRIBED',
+      switch: { direction: 'change', targetProductId: 'pro', targetInterval: 'month' },
+    })
   })
 
   it('连 Price id 都查不出时保守挡住，不给用户开出第二份订阅', async () => {

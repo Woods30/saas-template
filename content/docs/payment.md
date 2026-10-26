@@ -238,10 +238,11 @@ When it blocks, it gives a **specific reason**, so the page can say what to do:
 
 | Situation | Error code | What the page says |
 |---|---|---|
-| The same product already has a plan | `ALREADY_SUBSCRIBED` | Manage the subscription to change period or cancel |
-| A higher tier is already held | `ALREADY_OWNED_HIGHER_TIER` | No need to buy the lower tier |
+| **Any** subscription in force | `ALREADY_SUBSCRIBED` (payload carries `switch.direction`) | Switch plan in "Billing & subscription" |
+| A higher tier is held as a **buyout** | `ALREADY_OWNED_HIGHER_TIER` | No need to buy the lower tier |
 | Explicitly exclusive with an existing plan | `ALREADY_OWNED_EXCLUSIVE_PRODUCT` | The two cannot be held at once |
 | The existing plan **cannot be attributed to a product** | `ALREADY_OWNED_UNKNOWN_PRODUCT` | Blocked conservatively; manage the subscription |
+| "The current one" can't be told (several subscriptions in force) | `MULTIPLE_ACTIVE_SUBSCRIPTIONS` | Manage the subscription |
 
 The last one is a fallback for old data: when it can't tell whether this would be a
 duplicate, blocking is safer than letting the user open a second subscription. The app
@@ -250,28 +251,29 @@ that fails too.
 
 **Allowed** cases:
 
-- The target tier is **higher** — that's an upgrade. The webhook takes the old
-  subscription over (cancel + prorated refund), so the user is never charged twice;
-- Same tier but **different products** — two different things, each billed and each in
-  force;
-- One-time payments — none of the above applies.
+- No subscription in force — open one;
+- One-time payments — none of the above applies (physical goods: three orders are three
+  orders).
 
-The same guard also **blocks downgrades**: buying a monthly pro plan (tier 1) while
-holding the lifetime tier (tier 2) is meaningless, so it's refused outright.
+The guard no longer lets a **higher tier** through as a new purchase: under
+account-level uniqueness an upgrade can only be a **switch** (see "One subscription per
+account, switched in place") — opening a second subscription means two charges.
+Downgrades work the same way: a lower tier is only reachable by switching, so the
+"higher-tier buyout vs. subscription" pair is still judged by `purchaseBlockedBy`.
 
 Stripe's `Limit customers to 1 subscription` (`Settings` → `Checkout and Payment Links` →
 `Subscriptions`) catches purchases that bypass this app and use a Checkout link
-directly, but it is a **global** limit: one customer, one subscription — which also
-blocks "upgrade to a higher tier". The app-side guard in this template decides per
-product and per tier, so **think before turning it on**: if you need cross-product
-upgrades, leave it off; if you only want to prevent double charges and need no upgrade
-path, it's a good extra layer. Note that the setting depends on the customer portal
-login link being enabled (`Billing` → `Customer portal`): disabling the login link
-disables the limit too.
+directly. It is a **global** limit: one customer, one subscription. This template now
+**recommends leaving it off**: in-place switching goes through `subscriptions.update`
+and never touches Checkout, so the setting can't block an upgrade — while it would
+block customers who legitimately hold a subscription elsewhere. Uniqueness is enforced
+by the app-side guard, which is more precise and can explain itself. Note that the
+setting depends on the customer portal login link being enabled (`Billing` → `Customer
+portal`): disabling the login link disables the limit too.
 
-Switching plans goes through Stripe Billing Portal ("Manage subscription" on the
-account page), which prorates the old subscription into the new one instead of adding
-a second.
+Switching plans happens in the app: the "Switch plan" block on the billing page (below).
+Stripe Billing Portal ("Manage subscription" on the account page) stays available as
+the entry point for "cancel renewal / change billing details".
 
 Failures return 502; a 409 stays on the pricing page with a toast pointing at the existing
 subscription; missing configuration or a network error falls back to the sign-up guide.
@@ -281,6 +283,122 @@ line: all three appear **after** a click or a redirect, where an inline message 
 lands outside the viewport. Success returns to the billing page (`?checkout=success`) and
 cancel returns to the pricing page (`?checkout=cancelled`); both clear the query parameter
 with a `replace` navigation right after showing the toast, so a reload never repeats it.
+
+## One subscription per account, switched in place
+
+**An account holds at most one subscription in force.** The uniqueness scope is the
+**account**, not the product: monthly and yearly are two prices of the *same*
+subscription, and `pro` vs. `pro_plus` (if configured) are mutually exclusive too. Two
+subscriptions at once means two charges, and the billing page can only mark one as
+"Active now".
+
+So switching tier or billing cycle does **not** open a new subscription — it changes the
+price of the **existing** one:
+
+```ts
+// Stripe: replace the subscription item's price
+await stripe.subscriptions.update(subscriptionId, {
+  items: [{ id: itemId, price: priceId }],
+  proration_behavior: 'always_invoice', // upgrade: charge the difference now
+})
+```
+
+**`items[0].id` is mandatory.** Without it Stripe **adds** a subscription item instead of
+replacing one — the old price and the new price are both in force and both charged. This
+is the easiest trap on the switching path, so the provider throws when `itemId` is empty
+rather than guessing. The item id isn't stored locally; the switch reads it from Stripe
+(`subscriptions.retrieve`, expanding `items.data.price`).
+
+### Switch direction
+
+| Direction | Decided by | Effective | Proration |
+|---|---|---|---|
+| Upgrade | Higher tier | Immediately | `always_invoice`: charge the difference now |
+| Downgrade | Lower tier | **At period end** | `none`: the amount already paid stands, the new price starts at the next invoice |
+| Cycle change | Same tier, other cycle | Immediately | `always_invoice` |
+
+A cycle change is **not** a downgrade: the entitlements don't change, and making the user
+wait a month for the yearly price would be absurd.
+
+The server computes the direction (`resolveSwitchDirection`); the client never decides
+it. Two implementations of the same rule drift, and the worst drift is the client saying
+"upgrade" while the server treats it as a downgrade — the user is then undercharged.
+
+### Downgrades land at period end
+
+A downgrade uses `proration_behavior: 'none'`: Stripe's price changes **immediately**
+while the amount already paid stands — the user is still being charged the old price.
+Taking `customer.subscription.updated` at face value would write the new (lower) price
+locally and the billing page would be lying.
+
+So `subscriptions` keeps a second copy — the "pending" plan:
+
+| Column | Meaning |
+|---|---|
+| `pending_price_id` / `pending_product_id` / `pending_stripe_product_id` | The target at period end |
+| `pending_interval` / `pending_amount` / `pending_currency` | The target's price and cycle |
+| `pending_effective_at` | When it takes effect = the end of the current period |
+
+The convention: **the current columns are what the user is paying right now**, the
+pending columns are what the period end switches to. Promotion (write pending into the
+current columns and clear pending) has two entry points that back each other up, so the
+**event order doesn't matter**:
+
+- `invoice.paid`: the invoice's price equals the pending price (the renewal is billed at
+  the new price) → promote;
+- `customer.subscription.updated`: the event's period start is past the effective time →
+  the period flipped, promote.
+
+### The switch endpoint
+
+`POST /api/payment/switch`, body carries the **product + cycle** only (the client never
+sends a Price id — same rule as checkout: the server resolves the price by
+`lookup_key`):
+
+```json
+{ "productId": "pro", "interval": "year" }
+```
+
+Success returns `{ status: 'switched' | 'scheduled' | 'unchanged', direction, ... }`:
+a downgrade is `scheduled` (with `effectiveAt`), an upgrade or cycle change is
+`switched`, no change at all is `unchanged`.
+
+Error codes: `401` / `400 PRICE_NOT_CONFIGURED | NOT_A_SUBSCRIPTION` / `409
+NO_ACTIVE_SUBSCRIPTION | MULTIPLE_ACTIVE_SUBSCRIPTIONS | ALREADY_OWNED_HIGHER_TIER |
+ALREADY_OWNED_UNKNOWN_PRODUCT` / `429` / `502 STRIPE_ERROR` (**local state unchanged**).
+
+**Three idempotency levels**: target price == current price with no pending →
+`unchanged` and **no Stripe call**; target price == pending price → `scheduled`, no
+Stripe call; target price == current price while a pending change exists → **cancel the
+scheduled downgrade** (restore Stripe's price and clear pending).
+
+**A downgrade writes pending first, then calls Stripe**: pending records the intent,
+and a Stripe failure clears it again (compensation) and returns 502. Without the
+compensation the local state keeps a change that was never scheduled, and the user gets
+downgraded at renewal out of nowhere.
+
+### "Restore first, then apply" — the proration base
+
+After a downgrade request, **Stripe's price is already the low one**, while the user
+paid the high one for this period. Upgrading directly would make `always_invoice`
+compute the difference against the low price — the user is undercharged.
+
+Handling: when a pending change exists and the new direction isn't a downgrade,
+**restore** first (pull Stripe's price back to the tier the user actually paid,
+`proration_behavior: 'none'`, no money moves), **then apply** the target price
+(`always_invoice`). If the second step fails → clear pending (compensation) → 502.
+
+Restore and apply emit two events back to back, and Stripe **doesn't guarantee delivery
+order**: a late stale event would write the old price back. So when the event's price
+doesn't match the local one, the webhook reads Stripe once and trusts the current state
+it finds there.
+
+### Switching doesn't create a row
+
+The switch **updates the subscription row in place** (price and product id are
+overwritten) — no new row, no cancelled row. The price: "My plans" therefore shows no
+switch history; only the transaction ledger does (the proration invoice is written as
+`payments.type = 'proration'`, with the **signed** amount — negative means a credit).
 
 ## A buyout supersedes the old subscription
 
@@ -319,10 +437,18 @@ so the page can never claim "superseded" while Stripe keeps charging.
   but marked as such, so the user doesn't think they are still being charged. Under the
   section heading there's a line "Current tier: <product>", answering "what am I on"
   directly.
+- **Switch plan** — only when the account has a subscription in force. One card per
+  "tier × cycle": the current one has a disabled button and an "Current plan" badge;
+  the others carry the direction the server computed (upgrade / downgrade / cycle
+  change) and how it takes effect (immediately, prorated / unchanged this period, new
+  price from the next renewal / immediately). After a downgrade the subscription card
+  shows "Change to <target>, effective on <period end>" with a "Cancel change" button —
+  cancelling is implemented as "switch back to the current tier", which restores
+  Stripe's price and clears the pending change.
 - **Transactions** — a table that keeps its header. The first column labels what the
-  money was for (subscription charge / one-time purchase), then the date, then a status
-  badge with the amount. Transactions are **unlimited**: buy three times, three rows —
-  it's a ledger, not a state.
+  money was for (subscription charge / one-time purchase / plan change proration), then
+  the date, then a status badge with the amount. Transactions are **unlimited**: buy
+  three times, three rows — it's a ledger, not a state.
 
 Two separate status vocabularies, never swapped: "My plans" uses subscription states
 (active / past due / trialing / cancelled), while "Transactions" uses payment states
@@ -410,8 +536,8 @@ Handled events:
 | Event | Persisted to |
 |---|---|
 | `checkout.session.completed` | `subscriptions` for subscriptions; `payments` for one-time |
-| `invoice.paid` | `payments` (with `invoiceId` / `chargeId`) |
-| `customer.subscription.created` / `updated` | status, price, and period; stops the subscription when it is superseded by a higher tier |
+| `invoice.paid` | `payments` (with `invoiceId` / `chargeId`); proration invoices are written as `proration`; a renewal invoice priced at the pending price promotes the pending change |
+| `customer.subscription.created` / `updated` | status, price, and period; **does not overwrite the current price while a pending change exists**; stops the subscription when it is superseded by a higher tier |
 | `customer.subscription.deleted` | marks `canceled` |
 | `charge.refunded` | marks refunded by `chargeId` |
 
@@ -478,6 +604,29 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe \
   --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,charge.refunded
 ```
 
+### Pending changes in the webhook
+
+Right after a downgrade request Stripe's price is already the new one, and
+`customer.subscription.updated` arrives immediately. Let the pending price be `P`, the
+effective time `E`, the event's price `Q`, and the event's period start `S`:
+
+| Condition | Action |
+|---|---|
+| `Q === P` and `S >= E` | **Promote**: pending becomes the current plan, pending is cleared |
+| `Q === P` and `S < E` | **Status fields only**: don't write the price columns, don't clear pending |
+| `Q !== P` | A new switch replaced the pending one → clear pending, write `Q` the normal way |
+
+`invoice.paid` is the **second promotion entry point**: the invoice's price equals the
+pending price (the renewal is billed at the new price) → promote right away. The two
+entry points back each other up, so the **event order doesn't matter**: if `invoice.paid`
+arrives first it promotes by the invoice price and the later `subscription.updated` takes
+the "period flipped" branch and promotes again (idempotent); the other way round, the
+promotion happens first and `invoice.paid` writes the ledger row against the already
+promoted subscription — so the attribution is the new product.
+
+Proration invoices (`billing_reason = 'subscription_change'`) are written as
+`payments.type = 'proration'`, with the **signed** amount (negative = credit).
+
 ### Event order is not guaranteed
 
 Stripe states it explicitly: *"Stripe doesn't guarantee the delivery of events in the
@@ -524,12 +673,32 @@ Product attribution uses two columns:
 Both tables carry these two columns. Feature gating reads `product_id` directly — there
 is no separate entitlements table.
 
+`subscriptions` has 7 more `pending_*` columns holding the plan the **period end** will
+switch to (a downgrade). The convention: **the current columns are what the user is
+paying right now**, the pending columns are what the period end switches to.
+
+| Column | Meaning |
+|---|---|
+| `pending_price_id` | The Price id to switch to |
+| `pending_product_id` | The product id to switch to |
+| `pending_stripe_product_id` | The target Stripe Product id (fallback attribution) |
+| `pending_interval` | The target billing cycle |
+| `pending_amount` / `pending_currency` | The target price and currency |
+| `pending_effective_at` | When it takes effect = the end of the current period |
+
+Uniqueness is **not** enforced by a database index, only by the application: the
+webhook's INSERT (a new active row) comes before the UPDATE that marks the old row
+`canceled`, and with an index the INSERT would violate the constraint → the webhook
+throws → Stripe retries forever → the normal flow deadlocks.
+
 ## References
 
 - [Manage prices](https://docs.stripe.com/products-prices/manage-prices) — `lookup_key` and price display
 - [Stripe API keys](https://docs.stripe.com/keys) — key types, webhook signing secrets, rotation
 - [Stripe Checkout](https://docs.stripe.com/payments/checkout) — session creation and success/cancel URLs
 - [Stripe Billing Portal](https://docs.stripe.com/customer-management/integrate-customer-portal) — the manage-subscription entry point
+- [Change a subscription's price](https://docs.stripe.com/billing/subscriptions/change-price) — swapping a price requires `items[].id`
+- [Prorations](https://docs.stripe.com/billing/subscriptions/prorations) — the three `proration_behavior` modes
 
 ## Next steps
 

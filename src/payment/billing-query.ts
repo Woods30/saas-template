@@ -36,7 +36,54 @@ export interface SubscriptionRecord {
   currentPeriodStart?: Date | string | null
   currentPeriodEnd?: Date | string | null
   cancelAtPeriodEnd?: boolean | null
+  /** 已安排、周期末生效的方案变更（降级）。没有则为空。 */
+  pending?: PendingChange | null
   createdAt: Date | string
+}
+
+/**
+ * 切换方向。
+ *
+ * 由**服务端**算（`resolveSwitchDirection`）：客户端不重复判定，两处各判一次迟早
+ * 漂移——最怕的是客户端说「升级」而服务端按「降级」处理，用户被少扣钱。
+ */
+export type SwitchDirection = 'upgrade' | 'downgrade' | 'change'
+
+/**
+ * 可切换到的目标（档位 × 周期）。
+ *
+ * 目标价由服务端按 `lookup_key` 解析后下发：客户端不传 Price id，与结账同一原则。
+ */
+export interface SwitchTarget {
+  productId: string
+  interval: BillingInterval
+  /** 目标价 id。 */
+  priceId: string
+  /** 单价（分）。 */
+  amount: number
+  currency: string
+  direction: SwitchDirection
+  /** 是否就是当前这份订阅的价。 */
+  isCurrent: boolean
+  /** 降级 = 周期末生效的时刻（ISO 字符串）；立即生效的目标为 `null`。 */
+  effectiveAt: string | null
+}
+
+/**
+ * 已安排、**周期末生效**的方案变更。
+ *
+ * 降级用 `proration_behavior: 'none'` 实现：Stripe 上的价格立刻变成新价，而本期
+ * 已付金额不变——用户此刻仍在按旧价扣款。本地另记一份「待生效」，账单页才不会显示
+ * 一个用户其实没在付的低价。
+ */
+export interface PendingChange {
+  productId: string
+  interval: BillingInterval
+  /** 目标单价（分）。 */
+  amount: number
+  currency: string
+  /** 生效时刻（ISO 字符串）= 当前周期的结束时刻。 */
+  effectiveAt: string
 }
 
 export interface PaymentRecord {

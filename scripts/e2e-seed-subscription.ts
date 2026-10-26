@@ -32,6 +32,22 @@ interface SeedSubscription {
   interval: string
   /** Unix 秒；写未来时间，让用例能断言「续费日期」确实渲染了具体时刻。 */
   currentPeriodEnd: number
+  /**
+   * 已安排、周期末生效的变更（降级）。
+   *
+   * 给出时写入 `pending_*` 列：账单页会显示「已安排变更」提示块——降级期间用户
+   * 仍在按旧价扣款，页面必须说清这一点。
+   */
+  pending?: {
+    priceId: string
+    productId: string
+    stripeProductId: string | null
+    interval: string
+    amount: number
+    currency: string
+    /** Unix 秒；生效时刻 = 当前周期的结束时刻。 */
+    effectiveAt: number
+  }
 }
 
 /** 读 `.env` 里的值；空串由调用方报错。 */
@@ -91,7 +107,22 @@ function escapeSql(value: string): string {
 
 /** 构造 INSERT；导出供单测固定转义规则，防止改拼接方式时引入注入。 */
 export function buildSeedSql(sub: SeedSubscription): string {
-  const values = [
+  const columns = [
+    'id',
+    'user_id',
+    'customer_id',
+    'subscription_id',
+    'status',
+    'price_id',
+    'product_id',
+    'stripe_product_id',
+    'amount',
+    'currency',
+    'interval',
+    // 必须是整数 Unix 秒：写成 `datetime(...)` 会得到 TEXT，读回转不成 Date，渲染成 `—`。
+    'current_period_end',
+  ]
+  const values: Array<string | number | null> = [
     sub.id,
     sub.userId,
     sub.customerId,
@@ -103,19 +134,43 @@ export function buildSeedSql(sub: SeedSubscription): string {
     sub.amount,
     sub.currency,
     sub.interval,
-    // 必须是整数 Unix 秒：写成 `datetime(...)` 会得到 TEXT，读回转不成 Date，渲染成 `—`。
     sub.currentPeriodEnd,
   ]
-  const quoted = values.map((v) => (typeof v === 'number' ? v : `'${escapeSql(String(v))}'`))
-  return `INSERT INTO subscriptions (id, user_id, customer_id, subscription_id, status, price_id, product_id, stripe_product_id, amount, currency, interval, current_period_end) VALUES (${quoted.join(', ')})`
+  if (sub.pending) {
+    columns.push(
+      'pending_price_id',
+      'pending_product_id',
+      'pending_stripe_product_id',
+      'pending_interval',
+      'pending_amount',
+      'pending_currency',
+      'pending_effective_at',
+    )
+    values.push(
+      sub.pending.priceId,
+      sub.pending.productId,
+      sub.pending.stripeProductId,
+      sub.pending.interval,
+      sub.pending.amount,
+      sub.pending.currency,
+      sub.pending.effectiveAt,
+    )
+  }
+  const quoted = values.map((v) => {
+    if (v === null) return 'NULL'
+    return typeof v === 'number' ? v : `'${escapeSql(String(v))}'`
+  })
+  return `INSERT INTO subscriptions (${columns.join(', ')}) VALUES (${quoted.join(', ')})`
 }
 
 async function main(): Promise<void> {
   const email = process.argv[2]
   if (!email) {
-    console.error('用法：pnpm exec tsx scripts/e2e-seed-subscription.ts <email>')
+    console.error('用法：pnpm exec tsx scripts/e2e-seed-subscription.ts <email> [--pending]')
     process.exit(1)
   }
+  // `--pending`：额外写一份「已安排、周期末生效」的降级，用来测账单页的待生效提示。
+  const withPending = process.argv.includes('--pending')
 
   // lookup_key 写在产品配置里（`src/config/products.ts`），不再从 env 读。
   const lookupKey = resolveLookupKey('pro', 'month')
@@ -148,6 +203,40 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
+  // 待生效的降级：目标价同样取自 Stripe，不能写死金额。
+  let pending: SeedSubscription['pending']
+  if (withPending) {
+    const pendingLookupKey = resolveLookupKey('pro', 'year')
+    if (!pendingLookupKey) {
+      console.error('❌ 产品配置里没有 pro 产品的年付 lookup_key，无法构造待生效变更')
+      process.exit(1)
+    }
+    let pendingPrice: StripePrice
+    try {
+      pendingPrice = await fetchPriceByLookupKey(pendingLookupKey, secretKey)
+    } catch (err) {
+      console.error(`❌ 取待生效价格失败：${err instanceof Error ? err.message : 'unknown'}`)
+      process.exit(1)
+    }
+    if (pendingPrice.unit_amount === null) {
+      console.error('❌ 待生效的 Price 是阶梯计价，没有单一金额，无法构造待生效变更')
+      process.exit(1)
+    }
+    pending = {
+      priceId: pendingPrice.id,
+      productId: 'pro',
+      stripeProductId:
+        typeof pendingPrice.product === 'string'
+          ? pendingPrice.product
+          : (pendingPrice.product?.id ?? null),
+      interval: pendingPrice.recurring?.interval ?? 'year',
+      amount: pendingPrice.unit_amount,
+      currency: pendingPrice.currency,
+      // 生效时刻 = 当前周期的结束时刻，与当前价的续费时刻一致。
+      effectiveAt: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
+    }
+  }
+
   // 时间戳 + 随机段：同一邮箱重复 seed 时主键不撞。
   const unique = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
   const sql = buildSeedSql({
@@ -164,6 +253,7 @@ async function main(): Promise<void> {
     currency: price.currency,
     interval: price.recurring?.interval ?? 'one_time',
     currentPeriodEnd: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
+    ...(pending ? { pending } : {}),
   })
 
   execFileSync('wrangler', ['d1', 'execute', 'DB', '--local', '--json', '--command', sql], {

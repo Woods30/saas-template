@@ -11,7 +11,7 @@ import {
   isSubscriptionSuperseded,
   type OwnershipContext,
 } from '@/payment/plan-state'
-import type { SubscriptionStatus } from '@/payment/types'
+import type { ProviderSubscription, SubscriptionStatus } from '@/payment/types'
 
 /**
  * Stripe webhook：幂等（`webhook_events`）+ 失败重投。
@@ -27,6 +27,11 @@ interface InvoicePaidObject {
   amount_paid: number
   currency: string
   created: number
+  /**
+   * 发票成因：`subscription_cycle`（续费）/ `subscription_create`（首期）/
+   * `subscription_change`（换档位的折算发票）。
+   */
+  billing_reason?: string | null
   /** 新 API：订阅信息挂在 parent 上。 */
   parent?: {
     subscription_details?: {
@@ -456,13 +461,29 @@ export async function handleInvoicePaid(
   let subscriptionProductId: string | null = null
   let subscriptionStripeProductId: string | null = null
   let subscriptionInterval: string | null = null
+  let pendingRow: {
+    id: string
+    pendingPriceId: string | null
+    pendingProductId: string | null
+    pendingStripeProductId: string | null
+    pendingInterval: string | null
+    pendingAmount: number | null
+    pendingCurrency: string | null
+  } | null = null
   if (subscriptionId) {
     const rows = await db
       .select({
+        id: schema.subscriptions.id,
         userId: schema.subscriptions.userId,
         productId: schema.subscriptions.productId,
         stripeProductId: schema.subscriptions.stripeProductId,
         interval: schema.subscriptions.interval,
+        pendingPriceId: schema.subscriptions.pendingPriceId,
+        pendingProductId: schema.subscriptions.pendingProductId,
+        pendingStripeProductId: schema.subscriptions.pendingStripeProductId,
+        pendingInterval: schema.subscriptions.pendingInterval,
+        pendingAmount: schema.subscriptions.pendingAmount,
+        pendingCurrency: schema.subscriptions.pendingCurrency,
       })
       .from(schema.subscriptions)
       .where(eq(schema.subscriptions.subscriptionId, subscriptionId))
@@ -471,6 +492,17 @@ export async function handleInvoicePaid(
     subscriptionProductId = rows[0]?.productId ?? null
     subscriptionStripeProductId = rows[0]?.stripeProductId ?? null
     subscriptionInterval = rows[0]?.interval ?? null
+    pendingRow = rows[0]
+      ? {
+          id: rows[0].id,
+          pendingPriceId: rows[0].pendingPriceId,
+          pendingProductId: rows[0].pendingProductId,
+          pendingStripeProductId: rows[0].pendingStripeProductId,
+          pendingInterval: rows[0].pendingInterval,
+          pendingAmount: rows[0].pendingAmount,
+          pendingCurrency: rows[0].pendingCurrency,
+        }
+      : null
   }
   if (!userId && customerId) {
     const rows = await db
@@ -492,6 +524,27 @@ export async function handleInvoicePaid(
   // 付款行也记下产品归属：账单页要显示「买的是哪个产品」，互斥判定也要靠它。
   // 订阅行还没写好时按发票上的 Price / Product 反查。
   const priceId = priceIdFromInvoice(inv)
+
+  // 降级的**晋升入口之一**：续费发票付清、且发票上的价就是待生效的价 → 待生效的
+  // 方案就是用户下一期在付的方案，立刻晋升。与 `customer.subscription.updated`
+  // 的晋升入口互为兜底，两个入口谁先到都不影响结果（事件顺序无关）。
+  //
+  // 折算发票（`subscription_change`）不算：它对应的是「刚刚发生的切换」，不是
+  // 「周期末该换到哪个价」。
+  const isProrationInvoice = inv.billing_reason === 'subscription_change'
+  if (
+    pendingRow?.pendingPriceId &&
+    priceId &&
+    priceId === pendingRow.pendingPriceId &&
+    !isProrationInvoice
+  ) {
+    await promotePendingChange(db, pendingRow)
+    // 晋升后归属也跟着变了：这张发票买的正是待生效的那个方案。
+    subscriptionProductId = pendingRow.pendingProductId ?? subscriptionProductId
+    subscriptionStripeProductId = pendingRow.pendingStripeProductId ?? subscriptionStripeProductId
+    subscriptionInterval = pendingRow.pendingInterval ?? subscriptionInterval
+  }
+
   const productId = subscriptionProductId ?? (await productIdForPriceId(priceId)) ?? null
   const stripeProductId = subscriptionStripeProductId ?? stripeProductIdFromInvoice(inv) ?? null
 
@@ -501,7 +554,9 @@ export async function handleInvoicePaid(
       id: inv.id ?? `pay_${Date.now()}`,
       userId,
       provider: 'stripe',
-      type: subscriptionId ? 'subscription' : 'invoice',
+      // 换档位会立刻产生一张折算发票：它不是新订阅，是「方案变更的差价」。
+      // 金额保留**带符号**：负数 = 抵扣（退差价），不取绝对值。
+      type: isProrationInvoice ? 'proration' : subscriptionId ? 'subscription' : 'invoice',
       invoiceId: inv.id ?? null,
       chargeId: chargeIdFromInvoice(inv),
       status: 'paid',
@@ -516,11 +571,96 @@ export async function handleInvoicePaid(
 }
 
 /**
+ * 订阅行的「待生效」晋升：把 pending 列写成当前列，并清空 pending。
+ *
+ * 晋升是**降级生效**的唯一真相来源：pending 列记的是「周期末要切到的价」，晋升时
+ * 它就是用户下一期真正在付的价。只写 pending 里**有值**的字段：pending 为空时
+ * 保留当前列已有的值，不拿空值覆盖。
+ */
+async function promotePendingChange(
+  db: ReturnType<typeof createDb>,
+  row: {
+    id: string
+    pendingPriceId: string | null
+    pendingProductId: string | null
+    pendingStripeProductId: string | null
+    pendingInterval: string | null
+    pendingAmount: number | null
+    pendingCurrency: string | null
+  },
+  extra?: {
+    status?: SubscriptionStatus
+    currentPeriodStart?: Date
+    currentPeriodEnd?: Date
+  },
+): Promise<void> {
+  await db
+    .update(schema.subscriptions)
+    .set({
+      priceId: row.pendingPriceId,
+      ...(row.pendingProductId ? { productId: row.pendingProductId } : {}),
+      ...(row.pendingStripeProductId ? { stripeProductId: row.pendingStripeProductId } : {}),
+      ...(row.pendingInterval ? { interval: row.pendingInterval } : {}),
+      ...(row.pendingAmount !== null && row.pendingAmount !== undefined
+        ? { amount: row.pendingAmount }
+        : {}),
+      ...(row.pendingCurrency ? { currency: row.pendingCurrency } : {}),
+      pendingPriceId: null,
+      pendingProductId: null,
+      pendingStripeProductId: null,
+      pendingInterval: null,
+      pendingAmount: null,
+      pendingCurrency: null,
+      pendingEffectiveAt: null,
+      ...(extra ?? {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.subscriptions.id, row.id))
+}
+
+/**
+ * Stripe 上这份订阅**此刻**的样子。
+ *
+ * 用来分辨事件是不是**过时**的：站内切换（尤其「先恢复再应用」）会在很短时间内连发
+ * 两个事件，而 Stripe 不保证投递顺序——迟到的旧事件会把本地价格改回旧价。读一次
+ * Stripe 就能分辨：它上面的当前状态才是真相。
+ *
+ * 读失败时返回 `null`（不猜）：调用方退回「相信事件」的老行为。
+ */
+async function currentStripeSubscription(
+  subscriptionId: string,
+): Promise<ProviderSubscription | null> {
+  try {
+    const provider = getPaymentProvider(websiteConfig.payment.provider)
+    return await provider.retrieveSubscription(subscriptionId)
+  } catch (err) {
+    console.warn(
+      '[stripe-webhook] 读 Stripe 当前订阅失败：',
+      err instanceof Error ? err.message.split('\n')[0] : 'unknown',
+    )
+    return null
+  }
+}
+
+/**
  * Handles `customer.subscription.created` / `updated`.
  *
  * 周期字段挂在 `items.data[]` 上，只取第一项：本模板不支持多项订阅。
  * 只在有值时才写 amount / currency / interval，否则中间态会用 `undefined`
  * 擦掉上一次的正确值。
+ *
+ * **降级的周期末语义**：降级用 `proration_behavior: 'none'` 实现，Stripe 上的价格
+ * 立刻变成新价，而本期已付金额不变——用户此刻仍在按旧价扣款。若照单全收 Stripe 的
+ * `customer.subscription.updated`，本地行会显示新（低）价，账单页就会说谎。
+ *
+ * 约定：**当前列 = 用户此刻正在付的价**，pending 列 = 周期末要切到的。事件带来的价
+ * 为 `Q`、pending 的价为 `P`、生效时刻为 `E`、事件里的周期起点为 `S`：
+ *
+ * | 条件 | 动作 |
+ * |---|---|
+ * | `Q === P` 且 `S >= E` | **晋升**：pending 写成当前，清空 pending |
+ * | `Q === P` 且 `S < E` | **只写状态类字段**：不写价格列、不清 pending |
+ * | `Q !== P` | pending 被新切换取代 → 清 pending，按普通路径写 `Q` |
  *
  * Stripe 不保证事件顺序，`customer.subscription.created` 可能早于
  * `checkout.session.completed` 到达。此时订阅行还不存在，UPDATE 影响 0 行，
@@ -552,82 +692,180 @@ export async function handleSubscriptionUpsert(
   // 买的是什么），没有则按 Price id 反查价格目录。
   const productId =
     sub.metadata?.productId?.trim() || (await productIdForPriceId(item?.price.id)) || null
+  // 事件带来的价：下面所有分支都以它为准。
+  const eventPriceId = item?.price.id ?? ''
 
-  const values = {
+  // 状态类字段：任何事件都要写（与价格无关）。
+  const statusValues = {
     status: sub.status as SubscriptionStatus,
-    priceId: item?.price.id ?? '',
-    ...(productId ? { productId } : {}),
-    ...(stripeProductId ? { stripeProductId } : {}),
-    ...(periodStart ? { currentPeriodStart: periodStart } : {}),
-    ...(periodEnd ? { currentPeriodEnd: periodEnd } : {}),
-    ...(amount !== undefined ? { amount } : {}),
-    ...(currency !== undefined ? { currency } : {}),
-    ...(interval !== undefined ? { interval } : {}),
     cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
-    updatedAt: new Date(),
   }
 
-  const updated = await db
-    .update(schema.subscriptions)
-    .set(values)
-    .where(eq(schema.subscriptions.subscriptionId, sub.id))
-    .returning({
+  const rows = await db
+    .select({
       id: schema.subscriptions.id,
       userId: schema.subscriptions.userId,
       createdAt: schema.subscriptions.createdAt,
+      priceId: schema.subscriptions.priceId,
+      pendingPriceId: schema.subscriptions.pendingPriceId,
+      pendingProductId: schema.subscriptions.pendingProductId,
+      pendingStripeProductId: schema.subscriptions.pendingStripeProductId,
+      pendingInterval: schema.subscriptions.pendingInterval,
+      pendingAmount: schema.subscriptions.pendingAmount,
+      pendingCurrency: schema.subscriptions.pendingCurrency,
+      pendingEffectiveAt: schema.subscriptions.pendingEffectiveAt,
     })
+    .from(schema.subscriptions)
+    .where(eq(schema.subscriptions.subscriptionId, sub.id))
+    .limit(1)
+  const row = rows[0]
 
-  if (updated.length > 0) {
-    const row = updated[0]
-    if (row) {
-      // 订阅事件到达 → 接管被它取代的旧订阅：买断在先、订阅后到的情形也在这里
-      // 兜住（买断是持有物之一，判定时一并参与）。
-      await takeOverSupersededSubscriptions(db, {
-        userId: row.userId,
-        holding: {
-          kind: 'subscription',
-          id: row.id,
-          productId,
-          stripeProductId,
-          createdAt: row.createdAt,
-        },
+  if (!row) {
+    // 行不存在：只有拿得到归属才能建，`subscriptions.user_id` 是 NOT NULL。
+    const userId = sub.metadata?.userId?.trim()
+    if (!userId) {
+      // 抛错而不是静默 return：return 会让事件被记成「已处理」，Stripe 永不重投，
+      // 这条订阅的价格与周期就永远补不上——账单页只能显示一个空壳卡片。
+      // 抛错会删掉事件行并返回 500，重投时 `checkout.session.completed` 很可能
+      // 已经把订阅行写好，UPDATE 就落得下了。
+      throw new Error(
+        `[stripe-webhook] subscription ${sub.id} has no row and no metadata.userId to attribute it`,
+      )
+    }
+
+    await db
+      .insert(schema.subscriptions)
+      .values({
+        id: sub.id,
+        userId,
+        customerId: idOf(sub.customer),
+        subscriptionId: sub.id,
+        status: sub.status as SubscriptionStatus,
+        priceId: eventPriceId,
+        ...(productId ? { productId } : {}),
+        ...(stripeProductId ? { stripeProductId } : {}),
+        ...(periodStart ? { currentPeriodStart: periodStart } : {}),
+        ...(periodEnd ? { currentPeriodEnd: periodEnd } : {}),
+        ...(amount !== undefined ? { amount } : {}),
+        ...(currency !== undefined ? { currency } : {}),
+        ...(interval !== undefined ? { interval } : {}),
+        cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
+        updatedAt: new Date(),
       })
+      .onConflictDoNothing({ target: schema.subscriptions.id })
+
+    // 买断在先、订阅后到的情形：订阅建好即发现已有更高等级的买断，立刻停掉。
+    await takeOverSupersededSubscriptions(db, {
+      userId,
+      holding: {
+        kind: 'subscription',
+        id: sub.id,
+        productId,
+        stripeProductId,
+        createdAt: new Date(),
+      },
+    })
+    return
+  }
+
+  const pendingPriceId = row.pendingPriceId
+  /** pending 被新切换取代时，与价格一起清掉。 */
+  let clearPending = false
+
+  // 事件带来的价就是「待生效的价」→ 这是降级相关的事件。
+  if (pendingPriceId && eventPriceId === pendingPriceId) {
+    const effectiveAt = row.pendingEffectiveAt
+    // 周期已翻（事件的周期起点 ≥ 生效时刻）→ 降级生效，晋升。
+    const periodFlipped = Boolean(periodStart && effectiveAt && periodStart >= effectiveAt)
+    if (periodFlipped) {
+      await promotePendingChange(db, row, {
+        ...statusValues,
+        ...(periodStart ? { currentPeriodStart: periodStart } : {}),
+        ...(periodEnd ? { currentPeriodEnd: periodEnd } : {}),
+      })
+    } else {
+      // 周期未翻 → 用户还在按旧价扣款：只写状态类字段，不写价格列、不清 pending。
+      await db
+        .update(schema.subscriptions)
+        .set({ ...statusValues, updatedAt: new Date() })
+        .where(eq(schema.subscriptions.id, row.id))
     }
     return
   }
 
-  // 行不存在：只有拿得到归属才能建，`subscriptions.user_id` 是 NOT NULL。
-  const userId = sub.metadata?.userId?.trim()
-  if (!userId) {
-    // 抛错而不是静默 return：return 会让事件被记成「已处理」，Stripe 永不重投，
-    // 这条订阅的价格与周期就永远补不上——账单页只能显示一个空壳卡片。
-    // 抛错会删掉事件行并返回 500，重投时 `checkout.session.completed` 很可能
-    // 已经把订阅行写好，UPDATE 就落得下了。
-    throw new Error(
-      `[stripe-webhook] subscription ${sub.id} has no row and no metadata.userId to attribute it`,
-    )
+  // 事件带来的价 ≠ 待生效的价：要么是新切换取代了 pending，要么是**过时**的事件。
+  if (pendingPriceId) {
+    const truth = await currentStripeSubscription(sub.id)
+    if (truth?.priceId && truth.priceId !== eventPriceId) {
+      // 过时事件：Stripe 上也不是这个价 → 只写状态类字段，不动价格、不清 pending。
+      await db
+        .update(schema.subscriptions)
+        .set({ ...statusValues, updatedAt: new Date() })
+        .where(eq(schema.subscriptions.id, row.id))
+      return
+    }
+    // 新切换取代了 pending → 清 pending，按普通路径写事件带来的价。
+    // 清 pending 与写价格在同一条 UPDATE 里：分两条写会出现「价格已换、pending 还在」
+    // 的中间态，账单页会把两个方案都显示成生效的。
+    clearPending = true
+  }
+
+  // 普通路径。事件带来的价与本地不一致时，先问一次 Stripe：本地这一行可能是站内
+  // 切换刚写好的（切换才是权威），迟到的旧事件不能把它改回去。
+  let priceToWrite = eventPriceId
+  if (eventPriceId !== (row.priceId ?? '')) {
+    const truth = await currentStripeSubscription(sub.id)
+    if (truth?.priceId && truth.priceId !== eventPriceId) {
+      if (row.priceId) {
+        // 本地已有价且与事件不符：认为是过时事件，只写状态类字段。
+        await db
+          .update(schema.subscriptions)
+          .set({ ...statusValues, updatedAt: new Date() })
+          .where(eq(schema.subscriptions.id, row.id))
+        return
+      }
+      // 本地还没价（刚建行）→ 以 Stripe 的当前状态为准。
+      priceToWrite = truth.priceId
+    }
   }
 
   await db
-    .insert(schema.subscriptions)
-    .values({
-      id: sub.id,
-      userId,
-      customerId: idOf(sub.customer),
-      subscriptionId: sub.id,
-      ...values,
+    .update(schema.subscriptions)
+    .set({
+      priceId: priceToWrite,
+      ...(productId ? { productId } : {}),
+      ...(stripeProductId ? { stripeProductId } : {}),
+      ...(periodStart ? { currentPeriodStart: periodStart } : {}),
+      ...(periodEnd ? { currentPeriodEnd: periodEnd } : {}),
+      ...(amount !== undefined ? { amount } : {}),
+      ...(currency !== undefined ? { currency } : {}),
+      ...(interval !== undefined ? { interval } : {}),
+      ...(clearPending
+        ? {
+            pendingPriceId: null,
+            pendingProductId: null,
+            pendingStripeProductId: null,
+            pendingInterval: null,
+            pendingAmount: null,
+            pendingCurrency: null,
+            pendingEffectiveAt: null,
+          }
+        : {}),
+      ...statusValues,
+      updatedAt: new Date(),
     })
-    .onConflictDoNothing({ target: schema.subscriptions.id })
+    .where(eq(schema.subscriptions.id, row.id))
 
-  // 买断在先、订阅后到的情形：订阅建好即发现已有更高等级的买断，立刻停掉。
+  // 订阅事件到达 → 接管被它取代的旧订阅：买断在先、订阅后到的情形也在这里
+  // 兜住（买断是持有物之一，判定时一并参与）。
   await takeOverSupersededSubscriptions(db, {
-    userId,
+    userId: row.userId,
     holding: {
       kind: 'subscription',
-      id: sub.id,
+      id: row.id,
       productId,
       stripeProductId,
-      createdAt: new Date(),
+      createdAt: row.createdAt,
     },
   })
 }
@@ -642,13 +880,18 @@ async function notifyPaymentSucceeded(params: {
   userId: string
   amount: number
   currency: string
-  kind: 'subscription' | 'one_time'
+  kind: 'subscription' | 'one_time' | 'proration'
   /** 定价页上的套餐名（如「专业版」）；查不到时由调用方退回 Price id。 */
   plan?: string
 }): Promise<void> {
   if (!websiteConfig.notification.enabled) return
   const amount = `${(params.amount / 100).toFixed(2)} ${params.currency.toUpperCase()}`
-  const title = params.kind === 'subscription' ? '新订阅付款成功' : '新一次性付款成功'
+  const title =
+    params.kind === 'subscription'
+      ? '新订阅付款成功'
+      : params.kind === 'proration'
+        ? '方案变更折算完成'
+        : '新一次性付款成功'
   await notify(websiteConfig.notification.provider, {
     title,
     // 套餐名缺失时退回「未知套餐」，而不是省略整段。
@@ -727,7 +970,8 @@ export const Route = createFileRoute('/api/webhooks/stripe')({
                     userId: rows[0].userId,
                     amount: inv.amount_paid,
                     currency: inv.currency,
-                    kind: 'subscription',
+                    kind:
+                      inv.billing_reason === 'subscription_change' ? 'proration' : 'subscription',
                     plan: (await productNameForPrice(priceId)) ?? priceId,
                   })
                 }

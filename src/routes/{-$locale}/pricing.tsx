@@ -13,6 +13,7 @@ import { seo } from '@/lib/seo'
 import { resolveRedirectTarget } from '@/lib/urls'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
+import { fetchCurrentPlan } from '@/payment/billing'
 import { startCheckout } from '@/payment/checkout-client'
 import { mergePricingProducts } from '@/payment/price-catalog'
 import { fetchPriceCatalog } from '@/payment/pricing'
@@ -24,8 +25,13 @@ export const Route = createFileRoute('/{-$locale}/pricing')({
   // 按钮文案会在水合后跳变一次。
   // 价格也走 server function：展示价来自 Stripe，不写死在代码里。
   loader: async () => {
-    const [session, catalog] = await Promise.all([fetchSession(), fetchPriceCatalog()])
-    return { session, catalog }
+    // `fetchCurrentPlan` 匿名时直接返回 null，不查库。
+    const [session, catalog, currentPlan] = await Promise.all([
+      fetchSession(),
+      fetchPriceCatalog(),
+      fetchCurrentPlan(),
+    ])
+    return { session, catalog, currentPlan }
   },
   // 不声明这个参数，`?checkout=cancelled` 会被当成未知 search 丢掉，
   // 用户取消结账回来就没有任何提示。
@@ -53,7 +59,7 @@ export const Route = createFileRoute('/{-$locale}/pricing')({
 function PricingPage() {
   const router = useRouter()
   const { checkout } = Route.useSearch()
-  const { session, catalog } = Route.useLoaderData()
+  const { session, catalog, currentPlan } = Route.useLoaderData()
   const authenticated = session !== null
   const [pendingProductId, setPendingProductId] = useState<string | null>(null)
 
@@ -126,12 +132,13 @@ function PricingPage() {
           })
           return
         case 'already-subscribed':
-          // 服务端已挡下重复订阅（409）。用 toast 而非页面底部文案：
-          // 提示必须出现在点击处附近，且这条要读两行，超时放宽到 8 秒。
+          // 服务端已挡下重复订阅（409）：一个账号最多一份订阅，付费档位只能**切换**。
+          // 用 toast 而非页面底部文案：提示必须出现在点击处附近，且这条要读两行，
+          // 超时放宽到 8 秒。载荷里带着服务端算好的切换方向，提示里一并说清。
           toast.add({
             type: 'info',
             title: m.payment_already_subscribed(),
-            description: m.payment_already_subscribed_hint(),
+            description: describeSwitchDirection(outcome.direction),
             timeout: 8000,
           })
           return
@@ -174,16 +181,29 @@ function PricingPage() {
         renderCta={(product, option) => {
           const configured = isProductPurchasable(product.id)
           const pending = pendingProductId === product.id
+          // 已持有订阅时，订阅档位的按钮是「切换到 X」；当前那一份标「当前方案」并禁用。
+          // CTA 不说升级还是降级——方向是服务端算完才知道的事，结果提示里再说。
+          const subscribable = option?.kind === 'subscription'
+          const isCurrentOption =
+            Boolean(currentPlan) &&
+            subscribable &&
+            currentPlan?.productId === product.id &&
+            currentPlan?.interval === option?.interval
+          const switchable = Boolean(currentPlan) && subscribable && !isCurrentOption
           // 按钮文字跟随点击后真正会发生的事，而不是固定的营销文案。
-          const label = configured
-            ? product.cta.label
-            : authenticated && product.id === 'free'
-              ? m.pricing_goto_dashboard()
-              : m.pricing_free_cta()
+          const label = isCurrentOption
+            ? m.pricing_cta_current()
+            : switchable
+              ? m.pricing_cta_switch({ name: product.name })
+              : configured
+                ? product.cta.label
+                : authenticated && product.id === 'free'
+                  ? m.pricing_goto_dashboard()
+                  : m.pricing_free_cta()
           return (
             <Button
               className="w-full"
-              disabled={pending}
+              disabled={pending || isCurrentOption}
               onClick={() => onSelectProduct(product.id, option?.interval)}
             >
               {pending ? m.payment_checkout_redirecting() : label}
@@ -203,6 +223,24 @@ function PricingPage() {
       )}
     </main>
   )
+}
+
+/**
+ * 409 提示语：已有订阅时告诉用户「去切换」，并说出切换方向。
+ *
+ * 方向由服务端算（升级 / 降级 / 换周期）：客户端不重复判定。方向未知时不加尾巴，
+ * 不猜。
+ */
+function describeSwitchDirection(direction: 'upgrade' | 'downgrade' | 'change' | undefined) {
+  const hint = m.payment_already_subscribed_hint()
+  if (!direction) return hint
+  const label =
+    direction === 'upgrade'
+      ? m.settings_billing_switch_upgrade()
+      : direction === 'downgrade'
+        ? m.settings_billing_switch_downgrade()
+        : m.settings_billing_switch_change()
+  return `${hint}（${label}）`
 }
 
 /** 任一产品配了价格时才隐藏「暂未开放购买」提示。 */

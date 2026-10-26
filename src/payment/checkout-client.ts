@@ -2,6 +2,7 @@ import type { Locale } from '@/config/locale'
 import { resolveLookupKey } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import type { PricingInterval } from '@/types/pricing'
+import type { SwitchDirection } from './billing-query'
 
 /**
  * 浏览器端发起结账：POST `/api/payment` → 整页跳转到 Stripe Checkout。
@@ -20,8 +21,13 @@ export type CheckoutOutcome =
   | { kind: 'redirect'; url: string }
   | { kind: 'unauthenticated' }
   | { kind: 'not-configured' }
-  /** 同一个产品已经有方案了（换周期走「管理订阅」）。 */
-  | { kind: 'already-subscribed' }
+  /**
+   * 已经有订阅了：一个账号最多一份订阅，只能**切换**不能再开一份。
+   *
+   * `direction` 是服务端算出来的切换方向（升级 / 降级 / 换周期），没有时为 `undefined`
+   * ——方向只是提示，判定权始终在服务端。
+   */
+  | { kind: 'already-subscribed'; direction?: SwitchDirection }
   /** 已经持有更高等级的方案，不必再买低级的。 */
   | { kind: 'already-higher-tier' }
   /** 与已购方案显式互斥，不能同时持有。 */
@@ -75,16 +81,20 @@ export async function startCheckout(params: StartCheckoutParams): Promise<Checko
   // 409 是服务端的归属守卫。三种原因要分开：同一个产品已有方案（去「管理订阅」
   // 换周期）、已有更高等级（不用再买）、显式互斥（不能并存）——提示不同。
   if (response.status === 409) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null
+    const body = (await response.json().catch(() => null)) as {
+      error?: string
+      switch?: { direction?: SwitchDirection }
+    } | null
     switch (body?.error) {
       case 'ALREADY_OWNED_HIGHER_TIER':
         return { kind: 'already-higher-tier' }
       case 'ALREADY_OWNED_EXCLUSIVE_PRODUCT':
         return { kind: 'exclusive-product' }
       // `ALREADY_SUBSCRIBED` 与「查不出已有方案属于哪个产品」都归到这一条：
-      // 用户看到的是同一件事——你已经有订阅了，去「管理订阅」处理。
+      // 用户看到的是同一件事——已经有订阅了，去「切换方案」处理。
+      // 载荷里的 `switch` 带着服务端算好的方向，页面可以据此给更准的提示。
       default:
-        return { kind: 'already-subscribed' }
+        return { kind: 'already-subscribed', direction: body?.switch?.direction }
     }
   }
   if (!response.ok) {

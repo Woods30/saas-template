@@ -209,34 +209,34 @@ const PRODUCT_EXCLUSIVITY: Record<string, string[]> = {
 
 | 情况 | 错误码 | 页面提示 |
 |---|---|---|
-| 同一个产品已有方案 | `ALREADY_SUBSCRIBED` | 去「管理订阅」换周期或取消续费 |
-| 已有更高等级的方案 | `ALREADY_OWNED_HIGHER_TIER` | 不必再买低等级的 |
+| 已有**任何**活跃订阅 | `ALREADY_SUBSCRIBED`（载荷带 `switch.direction`） | 去「账单与订阅」页的「切换方案」 |
+| 持有更高等级的**买断** | `ALREADY_OWNED_HIGHER_TIER` | 不必再买低等级的 |
 | 显式声明与已有方案互斥 | `ALREADY_OWNED_EXCLUSIVE_PRODUCT` | 两者不能同时持有 |
 | 已有方案**查不出属于哪个产品** | `ALREADY_OWNED_UNKNOWN_PRODUCT` | 保守挡住，去「管理订阅」处理 |
+| 判不出「当前那一份」（多份活跃订阅） | `MULTIPLE_ACTIVE_SUBSCRIPTIONS` | 去「管理订阅」处理 |
 
 最后一条是给老数据兜底的：判不出是否重复时，宁可挡住，也不要让用户开出第二份
 订阅。应用侧会按 Price id 反查一次产品归属，反查不出才落到这条。
 
 **允许**的情况：
 
-- 目标等级**更高**——这是升级。旧订阅由 webhook 接管（取消 + 按比例退款），用户
-  不会同时被扣两份钱；
-- 同等级但**不同产品**——两个不同的东西，各自计费、各自生效；
-- 一次性支付——不受上述限制。
+- 没有活跃订阅——正常开一份；
+- 一次性支付——不受上述限制（实物商品买三件就是三单）。
 
-同一层守卫的另一个作用是**挡住降级**：已经持有终身版（等级 2）再订专业版月付
-（等级 1）没有意义，直接拒绝。
+守卫不再按「目标等级更高就放行」处理升级：账号级唯一性下**升级只能走切换**（见
+「账号级唯一订阅与站内切换」），再开一份就是两份扣款。降级同理：低档位只能通过切换
+到达，所以「更高等级的买断 vs 订阅」这一对仍由 `purchaseBlockedBy` 单独判定。
 
 Stripe 后台的 `Limit customers to 1 subscription`（`Settings` → `Checkout and
-Payment Links` → `Subscriptions`）能挡住绕过本站、直接用 Checkout 链接的情况，但它
-是**全局**限制：一个客户只能有一份订阅，连「升级到更高等级」也会一起挡掉。本模板
-的应用侧守卫按产品 + 等级判定，所以**开启它之前先想清楚**：要支持跨产品升级就别
-开；只想防重复扣款、且不需要升级路径，那它是一道不错的额外防线。注意这条设置依赖
-客户门户的登录链接处于启用状态（`Billing` → `Customer portal`）：关掉登录链接，
-限制也会一起失效。
+Payment Links` → `Subscriptions`）能挡住绕过本站、直接用 Checkout 链接的情况。它是
+**全局**限制，一个客户只能有一份订阅。本模板现在**建议关掉**：站内切换走
+`subscriptions.update`，根本不经 Checkout，这条设置挡不到升级；而它会把「客户在别处
+本来就有订阅」也一起挡掉。唯一性由应用层守卫负责——它更精确，还能给出可读的原因。
+注意这条设置依赖客户门户的登录链接处于启用状态（`Billing` → `Customer portal`）：
+关掉登录链接，限制也会一起失效。
 
-换方案走 Stripe Billing Portal（账户页的「管理订阅」），它会把旧订阅折算迁移，不会
-多出一份。
+换方案在站内完成：账单页的「切换方案」区块（见下）。Stripe Billing Portal
+（账户页的「管理订阅」）仍然保留，作为「取消续费 / 改发票抬头」的入口。
 
 失败返回 502；409 时停留在定价页并用 toast 提示去管理已有的订阅；配置缺失或网络
 错误时退回注册引导。
@@ -245,6 +245,103 @@ Payment Links` → `Subscriptions`）能挡住绕过本站、直接用 Checkout 
 **跳转或点击之后**出现，行内提示很容易落在视口外。成功回跳落在账单页
 （`?checkout=success`），取消回跳落在定价页（`?checkout=cancelled`），两处都在展示
 后立刻用 `replace` 清掉查询参数，避免刷新时重复弹同一条。
+
+## 账号级唯一订阅与站内切换
+
+**一个账号最多一份活跃订阅。** 唯一性的作用域是**账号**，不是产品：月付与年付是同一
+份订阅的两个价，`pro` 与 `pro_plus`（若配置了）也只能二选一。同一时间有两份订阅就是
+两份扣款，账单页也只能标一份「当前生效」。
+
+因此换档位、换周期**不新开订阅**，而是改**现有那份**订阅的价格：
+
+```ts
+// Stripe：替换订阅项的 price
+await stripe.subscriptions.update(subscriptionId, {
+  items: [{ id: itemId, price: priceId }],
+  proration_behavior: 'always_invoice', // 升级：立刻按差额扣款
+})
+```
+
+**`items[0].id` 必须带。** 漏了它，Stripe 会**新增**一个订阅项而不是替换——旧价与新价
+同时生效、两份都扣款。这是切换路径最容易踩的坑，所以 provider 在 `itemId` 为空时直接
+抛错，不猜。订阅项 id 本地没存，切换时先读一次 Stripe（`subscriptions.retrieve`，展开
+`items.data.price`）。
+
+### 切换方向
+
+| 方向 | 判定 | 生效 | 折算 |
+|---|---|---|---|
+| 升级 | 档位更高 | 立即 | `always_invoice`：立刻按差额扣款 |
+| 降级 | 档位更低 | **期末** | `none`：本期已付金额不变，新价从下一张账单起算 |
+| 换周期 | 同一档位换周期 | 立即 | `always_invoice` |
+
+同档换周期**不算降级**：权益没变，让用户等一个月才拿到年付价是荒唐的。
+
+方向由服务端算（`resolveSwitchDirection`），客户端不重复判定——两处各判一次迟早漂移，
+最怕的是客户端说「升级」而服务端按「降级」处理，用户被少扣钱。
+
+### 降级的周期末语义
+
+降级用 `proration_behavior: 'none'`：Stripe 上的价格**立刻**变成新价，而本期已付金额
+不变——用户此刻仍在按旧价扣款。若照单全收 Stripe 的 `customer.subscription.updated`，
+本地行会显示新（低）价，账单页就会说谎。
+
+所以 `subscriptions` 表另记一份「待生效」：
+
+| 列 | 含义 |
+|---|---|
+| `pending_price_id` / `pending_product_id` / `pending_stripe_product_id` | 周期末要切到的目标 |
+| `pending_interval` / `pending_amount` / `pending_currency` | 目标的价格与周期 |
+| `pending_effective_at` | 生效时刻 = 当前周期的结束时刻 |
+
+约定：**当前列 = 用户此刻正在付的价**，pending 列 = 周期末要切到的。晋升（把 pending
+写成当前并清空 pending）有两条入口，互为兜底，**事件顺序无关**：
+
+- `invoice.paid`：发票的价 == pending 的价（续费按新价开票）→ 立即晋升；
+- `customer.subscription.updated`：事件的周期起点 ≥ 生效时刻 → 周期已翻，晋升。
+
+### 切换端点
+
+`POST /api/payment/switch`，请求体只给**产品 + 周期**（客户端不传 Price id，与结账同一
+原则——价格由服务端按 `lookup_key` 解析）：
+
+```json
+{ "productId": "pro", "interval": "year" }
+```
+
+成功返回 `{ status: 'switched' | 'scheduled' | 'unchanged', direction, ... }`：降级是
+`scheduled`（附带 `effectiveAt`），升级与换周期是 `switched`，无变化是 `unchanged`。
+
+错误码：`401` / `400 PRICE_NOT_CONFIGURED | NOT_A_SUBSCRIPTION` / `409
+NO_ACTIVE_SUBSCRIPTION | MULTIPLE_ACTIVE_SUBSCRIPTIONS | ALREADY_OWNED_HIGHER_TIER |
+ALREADY_OWNED_UNKNOWN_PRODUCT` / `429` / `502 STRIPE_ERROR`（**本地状态不变**）。
+
+**幂等三档**：目标价 == 当前价且无 pending → `unchanged`，**不调 Stripe**；目标价 ==
+pending 价 → `scheduled`，不调 Stripe；目标价 == 当前价但有 pending → **取消已安排的
+降级**（恢复 Stripe 上的价格 + 清 pending）。
+
+**降级先写 pending 再调 Stripe**：写的是「意图」，Stripe 失败就清掉 pending（补偿）
+并返回 502。不补偿的话，本地会留下一个「已安排但其实没安排」的变更，用户到期突然被
+降级。
+
+### 「先恢复再应用」的折算基准
+
+降级请求后，**Stripe 上的价格已经是低价**，而用户本周期实付的是高价。此时直接升级，
+`always_invoice` 会拿低价做基准算差额 → 少收钱。
+
+处理：存在 pending 且新方向不是降级时，**先恢复**（把 Stripe 价格拉回用户实付的档位，
+`proration_behavior: 'none'`，不动钱），**再应用**目标价（`always_invoice`）。第二步
+失败 → 补偿清 pending → 502。
+
+恢复与应用连发两个事件，而 Stripe **不保证投递顺序**：迟到的旧事件会把本地价格改回
+旧价。因此 webhook 在「事件带来的价与本地不符」时先读一次 Stripe，以它上面的当前
+状态为准。
+
+### 切换不建新行
+
+切换**就地更新**订阅行（价格与产品 id 被覆盖），不新建行、不取消旧行。代价：「我的
+方案」看不到切换历史，只有交易记录（`payments`）留痕——折算发票以
+`payments.type = 'proration'` 记账，金额保留**带符号**（负数 = 抵扣）。
 
 ## 买断接管旧订阅
 
@@ -277,9 +374,14 @@ Stripe 上还在扣款」。
   生效」徽章——那就是等级最高的那个（`lifetime > pro > free`）；被取代的订阅仍会
   列出，但标出「已被更高等级的方案取代」，用户不会以为自己还被扣着钱。区块标题下
   有一行「当前等级：<产品名>」，直接回答「我现在是什么档位」。
+- **切换方案**——只在该账号有活跃订阅时出现。每个「档位 × 周期」一张卡：当前那一份
+  按钮禁用并标「当前方案」；其余按服务端算好的方向标注（升级 / 降级 / 换周期）与生效
+  方式（立即生效并按比例结算 / 本期不变、下期起按新价续费 / 立即生效）。降级成功后
+  订阅卡里出现「已安排变更为 <目标>，将于 <周期末> 生效」与「取消变更」按钮——取消的
+  实现是「切回当前档位」，服务端会恢复 Stripe 上的价格并清掉待生效的变更。
 - **交易记录**——表格（保留表头）。第一列标示这笔钱的性质（订阅扣款 / 一次性
-  购买），第二列日期，第三列状态徽章加金额。交易记录**不限量**：买过几次就是几行，
-  它是流水，不是状态。
+  购买 / 方案变更折算），第二列日期，第三列状态徽章加金额。交易记录**不限量**：买过
+  几次就是几行，它是流水，不是状态。
 
 状态词表两套，不能互用：「我的方案」走订阅状态（生效中 / 逾期 / 试用中 / 已取消），
 「交易记录」走付款状态（已支付 / 已退款）。两者的取值域不同——`payments.status` 只有
@@ -355,8 +457,8 @@ Entitlements 解决的是第三件事，而第三件事在模板里恰恰是最�
 | 事件 | 落库 |
 |---|---|
 | `checkout.session.completed` | 订阅写 `subscriptions`；一次性支付写 `payments` |
-| `invoice.paid` | 写 `payments`（含 `invoiceId` / `chargeId`） |
-| `customer.subscription.created` / `updated` | 更新状态、价格与周期；发现被更高等级的方案取代则停掉订阅 |
+| `invoice.paid` | 写 `payments`（含 `invoiceId` / `chargeId`）；折算发票记为 `proration`；发票价命中待生效价时晋升 |
+| `customer.subscription.created` / `updated` | 更新状态、价格与周期；**存在待生效变更时不覆盖当前价**；发现被更高等级的方案取代则停掉订阅 |
 | `customer.subscription.deleted` | 标记 `canceled` |
 | `charge.refunded` | 按 `chargeId` 标记退款 |
 
@@ -419,6 +521,25 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe \
   --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,charge.refunded
 ```
 
+### 待生效变更的处理
+
+降级请求后 Stripe 的价格立刻变成新价，而 `customer.subscription.updated` 紧接着就到。
+设 pending 价 = `P`、生效时刻 = `E`、事件带来的价 = `Q`、事件里的周期起点 = `S`：
+
+| 条件 | 动作 |
+|---|---|
+| `Q === P` 且 `S >= E` | **晋升**：pending 写成当前，清空 pending |
+| `Q === P` 且 `S < E` | **只写状态类字段**：不写价格列、不清 pending |
+| `Q !== P` | pending 被新切换取代 → 清 pending，按普通路径写 `Q` |
+
+`invoice.paid` 是**第二个晋升入口**：发票的价 == pending 的价（续费按新价开票）→
+立即晋升。两个入口互为兜底，**事件顺序无关**：`invoice.paid` 先到就按发票价晋升，
+随后的 `subscription.updated` 走「周期已翻」分支再晋升一次（幂等）；反过来则先晋升，
+`invoice.paid` 按已提升的订阅行写流水，归属取自新产品。
+
+折算发票（`billing_reason = 'subscription_change'`）写 `payments.type = 'proration'`，
+金额保留**带符号**（负数 = 抵扣）。
+
 ### 事件顺序不保证
 
 Stripe 官方明确说明：**不保证事件按产生顺序投递**（"Stripe doesn't guarantee the
@@ -460,12 +581,30 @@ delivery of events in the order that they're generated"）。`customer.subscript
 `subscriptions` 与 `payments` 都有这两列；功能门禁直接按 `product_id` 判定，不需要
 额外的权益表。
 
+`subscriptions` 另有 7 个 `pending_*` 列，记「周期末要切到的方案」（降级）。约定：
+**当前列 = 用户此刻正在付的价**，pending 列 = 周期末要切到的。
+
+| 列 | 含义 |
+|---|---|
+| `pending_price_id` | 周期末要切到的 Price id |
+| `pending_product_id` | 周期末要切到的产品 id |
+| `pending_stripe_product_id` | 目标 Stripe Product id（兜底判据） |
+| `pending_interval` | 目标的计费周期 |
+| `pending_amount` / `pending_currency` | 目标的单价与币种 |
+| `pending_effective_at` | 生效时刻 = 当前周期的结束时刻 |
+
+唯一性**不建数据库索引**，只在应用层保证：webhook 的 INSERT（新建活跃行）先于把旧行
+改成 `canceled` 的 UPDATE，索引存在时 INSERT 直接违反约束 → webhook 抛错 → Stripe
+无限重投 → 正常流程被卡死。
+
 ## 参考资料
 
 - [Manage prices](https://docs.stripe.com/products-prices/manage-prices)——`lookup_key` 与价格展示的官方建议
 - [Stripe API keys](https://docs.stripe.com/keys)——密钥类型、webhook 签名密钥与轮换
 - [Stripe Checkout](https://docs.stripe.com/payments/checkout)——会话创建与 success/cancel URL
 - [Stripe Billing Portal](https://docs.stripe.com/customer-management/integrate-customer-portal)——管理订阅入口
+- [Change a subscription's price](https://docs.stripe.com/billing/subscriptions/change-price)——换价必须带 `items[].id`
+- [Prorations](https://docs.stripe.com/billing/subscriptions/prorations)——`proration_behavior` 三档语义
 
 ## 下一步
 
