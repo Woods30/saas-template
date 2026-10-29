@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { type ReactNode, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { m } from '@/locale/paraglide/messages.js'
-import type { PricingInterval, PricingProduct, ProductPrice } from '@/types/pricing'
+import type { PricingProduct, ProductPrice } from '@/types/pricing'
 
 export type { PricingInterval, PricingProduct, ProductPrice } from '@/types/pricing'
 
@@ -11,6 +11,7 @@ export interface PricingProps {
   subtitle?: string
   /** 产品列表；每个产品的付费方式由产品定义决定。 */
   products: PricingProduct[]
+  initialSelection?: { productId: string; offerId: string }
   /**
    * 渲染自定义 CTA（用于接 authClient + startCheckout）。
    *
@@ -27,14 +28,21 @@ export interface PricingProps {
  * 渲染的金额来自 Stripe 的实时价格（`product.options` 由 `mergePricingProducts` 填好），
  * 不是写死的文案常量：展示价与实际扣款价必须是同一个数。
  */
-export function Pricing({ title, subtitle, products, renderCta }: PricingProps) {
+export function Pricing({ title, subtitle, products, renderCta, initialSelection }: PricingProps) {
   return (
     <section className="mx-auto max-w-6xl px-6 py-20">
       {title && <h2 className="text-center text-3xl font-bold">{title}</h2>}
       {subtitle && <p className="mt-2 text-center text-muted-foreground">{subtitle}</p>}
       <div className="mt-10 grid gap-6 md:grid-cols-3">
         {products.map((product) => (
-          <ProductCard key={product.id} product={product} renderCta={renderCta} />
+          <ProductCard
+            key={product.id}
+            product={product}
+            renderCta={renderCta}
+            initialOffer={
+              initialSelection?.productId === product.id ? initialSelection.offerId : undefined
+            }
+          />
         ))}
       </div>
     </section>
@@ -51,27 +59,29 @@ export function Pricing({ title, subtitle, products, renderCta }: PricingProps) 
 function ProductCard({
   product,
   renderCta,
+  initialOffer,
 }: {
   product: PricingProduct
+  initialOffer?: string
   renderCta?: (product: PricingProduct, option: ProductPrice | undefined) => ReactNode
 }) {
   // 默认选第一个已配置价格的付费方式；没有价格时保持 `undefined`（只渲染 CTA）。
-  const [selected, setSelected] = useState<PricingInterval | undefined>(
-    product.options[0]?.interval,
+  const [selected, setSelected] = useState<string | undefined>(
+    initialOffer ?? product.options[0]?.id,
   )
   const option = resolveOption(product, selected)
-  // 只有「多个订阅周期」才需要切换器：买断产品只有一种付费方式，切换器没有意义。
-  const switchable = product.options.filter((item) => item.kind === 'subscription')
+  // 多个购买选项在卡片内选择，支持订阅与一次性混合。
+  const switchable = product.options
 
   return (
     <div
       className={`relative flex flex-col rounded-lg border p-6 ${
-        product.highlighted ? 'border-primary shadow-lg ring-2 ring-primary/20' : 'border-border'
+        product.recommended ? 'border-primary shadow-lg ring-2 ring-primary/20' : 'border-border'
       }`}
     >
-      {product.badge && (
+      {(product.recommended ? m.pricing_recommended() : '') && (
         <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
-          {product.badge}
+          {product.recommended ? m.pricing_recommended() : ''}
         </span>
       )}
       <h3 className="text-xl font-semibold">{product.name}</h3>
@@ -86,12 +96,12 @@ function ProductCard({
           <div className="flex gap-1 text-sm">
             {switchable.map((item) => (
               <button
-                key={item.interval ?? item.kind}
+                key={item.id}
                 type="button"
-                aria-pressed={item.interval === option?.interval}
-                onClick={() => setSelected(item.interval)}
+                aria-pressed={item.id === option?.id}
+                onClick={() => setSelected(item.id)}
                 className={`rounded-md px-3 py-1 transition-colors ${
-                  item.interval === option?.interval
+                  item.id === option?.id
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
@@ -105,14 +115,27 @@ function ProductCard({
       <div className="mt-4 space-y-1">
         {option && (
           <p className="text-2xl font-bold">
-            {(option.amount / 100).toLocaleString('en-US', {
+            {(
+              option.amount /
+              10 **
+                (new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: option.currency,
+                }).resolvedOptions().maximumFractionDigits ?? 2)
+            ).toLocaleString('en-US', {
               style: 'currency',
               currency: option.currency.toUpperCase(),
             })}
             {option.interval && option.interval !== 'one_time' && (
               <span className="text-sm font-normal text-muted-foreground">
                 {' '}
-                /{option.interval === 'month' ? 'mo' : 'yr'}
+                /
+                {option.intervalCount && option.intervalCount > 1 ? `${option.intervalCount} ` : ''}
+                {option.interval === 'month'
+                  ? 'mo'
+                  : option.interval === 'year'
+                    ? 'yr'
+                    : option.interval}
               </span>
             )}
           </p>
@@ -133,10 +156,11 @@ function ProductCard({
           renderCta(product, option)
         ) : (
           <Link
-            to={product.cta.href}
+            to="/{-$locale}"
+            hash="pricing"
             className="rounded bg-primary px-4 py-2 text-center text-primary-foreground"
           >
-            {product.cta.label}
+            {m.pricing_pro_cta()}
           </Link>
         )}
       </div>
@@ -150,13 +174,10 @@ function ProductCard({
  * 选中的周期没有对应价格时（配置里配了月付与年付，但 Stripe 上只配了月付）退回
  * 第一个有价格的方式：给用户一个真实可买的价格，好过显示空白。
  */
-function resolveOption(
-  product: PricingProduct,
-  interval: PricingInterval | undefined,
-): ProductPrice | undefined {
+function resolveOption(product: PricingProduct, id: string | undefined): ProductPrice | undefined {
   if (product.options.length === 0) return undefined
-  if (interval) {
-    const match = product.options.find((option) => option.interval === interval)
+  if (id) {
+    const match = product.options.find((option) => option.id === id)
     if (match) return match
   }
   return product.options[0]
@@ -175,8 +196,13 @@ function YearlySavingHint({
   product: PricingProduct
   option: ProductPrice | undefined
 }) {
-  if (option?.interval !== 'year') return null
-  const month = product.options.find((item) => item.interval === 'month')
+  if (option?.interval !== 'year' || (option.intervalCount ?? 1) !== 1) return null
+  const month = product.options.find(
+    (item) =>
+      item.interval === 'month' &&
+      (item.intervalCount ?? 1) === 1 &&
+      item.currency === option.currency,
+  )
   if (!month?.amount || !option.amount) return null
   const monthlyEquivalent = option.amount / 12
   const percent = Math.round((1 - monthlyEquivalent / month.amount) * 100)

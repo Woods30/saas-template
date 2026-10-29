@@ -12,20 +12,26 @@ import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons'
 import { SubmitButton } from '@/components/auth/SubmitButton'
 import { trackSignUp } from '@/lib/analytics/events'
 import { assertPageEnabled } from '@/lib/module-access'
+import { resolveRedirectTarget, type SafeInternalPath, safeInternalPath } from '@/lib/urls'
 import { m } from '@/locale/paraglide/messages.js'
+import { getLocale } from '@/locale/paraglide/runtime.js'
 
 export const Route = createFileRoute('/{-$locale}/auth/register')({
   beforeLoad: async () => {
     assertPageEnabled('auth')
     return fetchAuthProviderAvailability()
   },
-  // 本页不消费 `?plan`，但必须声明，否则带 search 导航类型不通过、刷新会丢参数。
-  validateSearch: (search: Record<string, unknown>): { plan?: string } =>
-    typeof search.plan === 'string' ? { plan: search.plan } : {},
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { plan?: string; redirect?: SafeInternalPath } => ({
+    ...(typeof search.plan === 'string' ? { plan: search.plan } : {}),
+    ...(safeInternalPath(search.redirect) ? { redirect: safeInternalPath(search.redirect) } : {}),
+  }),
   component: RegisterPage,
 })
 
 function RegisterPage() {
+  const { redirect } = Route.useSearch()
   const { google } = Route.useRouteContext()
   // `submitted` 与 `serverError` 是页面级状态，不属于字段状态，故不放进 TanStack Form。
   const [submitted, setSubmitted] = useState(false)
@@ -40,6 +46,7 @@ function RegisterPage() {
         email: value.email,
         password: value.password,
         name: value.name,
+        callbackURL: `/${getLocale()}/auth/verify-email?redirect=${encodeURIComponent(resolveRedirectTarget(redirect))}`,
       })
       if (error) {
         setServerError(error.message?.split('\n')[0] ?? m.auth_error_generic())
@@ -53,12 +60,12 @@ function RegisterPage() {
         return
       }
       trackSignUp()
-      window.location.assign('/')
+      window.location.assign(resolveRedirectTarget(redirect))
     },
   })
 
   function onGoogleClick() {
-    void signIn.social({ provider: 'google', callbackURL: '/' })
+    void signIn.social({ provider: 'google', callbackURL: resolveRedirectTarget(redirect) })
   }
 
   if (submitted) {
@@ -67,6 +74,7 @@ function RegisterPage() {
         <p className="text-sm text-muted-foreground">{m.auth_register_check_email()}</p>
         <Link
           to="/{-$locale}/auth/login"
+          search={{ redirect }}
           className="mt-4 block text-center text-sm text-muted-foreground underline hover:text-foreground"
         >
           {m.auth_register_to_login()}
@@ -136,6 +144,7 @@ function RegisterPage() {
       <SocialAuthButtons googleEnabled={google} onGoogleClick={onGoogleClick} />
       <Link
         to="/{-$locale}/auth/login"
+        search={{ redirect }}
         className="mt-4 block text-center text-sm text-muted-foreground underline hover:text-foreground"
       >
         {m.auth_register_to_login()}

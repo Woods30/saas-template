@@ -1,7 +1,6 @@
 import {
   IconArrowUpRight,
   IconBraces,
-  IconBulb,
   IconCheck,
   IconCloud,
   IconCloudUpload,
@@ -11,152 +10,22 @@ import {
   IconFile,
   IconLanguage,
   IconMail,
-  IconPlayerPause,
-  IconPlayerPlay,
   IconPlugConnected,
-  IconRocket,
   IconShieldLock,
 } from '@tabler/icons-react'
-import { Link } from '@tanstack/react-router'
-import { createElement, type PointerEvent, useEffect, useId, useRef, useState } from 'react'
-import { Cta, Faq, Features, Hero } from '@/components/sections'
-import { getProducts } from '@/config/products'
+import { createElement, useId, useState } from 'react'
+import { useSession } from '@/auth/client'
+import { SourceProductDemo } from '@/components/marketing/SourceProductDemo'
+import { Cta, Faq, Features } from '@/components/sections'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
-import { mergePricingProducts, type PriceCatalog } from '@/payment/price-catalog'
-
-const MAX_TILT_DEGREES = 4
+import { startCheckout } from '@/payment/checkout-client'
 
 /** docs 开关启用时指向当前语言的文档入口，关闭时回退首页锚点。 */
 function docsCtaHref(): string {
   return websiteConfig.docs.enabled ? `/${getLocale()}/docs` : '#features'
-}
-
-function LeapJourney({ paused }: { paused: boolean }) {
-  const [selected, setSelected] = useState(0)
-  const id = useId()
-  const steps = [
-    {
-      label: m.home_journey_idea(),
-      title: m.home_journey_idea_title(),
-      description: m.home_journey_idea_description(),
-      Icon: IconBulb,
-    },
-    {
-      label: m.home_journey_build(),
-      title: m.home_journey_build_title(),
-      description: m.home_journey_build_description(),
-      Icon: IconCode,
-    },
-    {
-      label: m.home_journey_launch(),
-      title: m.home_journey_launch_title(),
-      description: m.home_journey_launch_description(),
-      Icon: IconRocket,
-    },
-  ] as const
-  const active = steps[selected] ?? steps[0]
-
-  function tilt(event: PointerEvent<HTMLElement>) {
-    if (
-      paused ||
-      event.pointerType !== 'mouse' ||
-      !window.matchMedia(
-        '(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)',
-      ).matches
-    )
-      return
-    const { currentTarget, clientX, clientY } = event
-    const bounds = currentTarget.getBoundingClientRect()
-    currentTarget.style.setProperty(
-      '--tilt-x',
-      `${((clientY - bounds.top) / bounds.height - 0.5) * -MAX_TILT_DEGREES}deg`,
-    )
-    currentTarget.style.setProperty(
-      '--tilt-y',
-      `${((clientX - bounds.left) / bounds.width - 0.5) * MAX_TILT_DEGREES}deg`,
-    )
-  }
-
-  function resetTilt(event: PointerEvent<HTMLElement>) {
-    event.currentTarget.style.removeProperty('--tilt-x')
-    event.currentTarget.style.removeProperty('--tilt-y')
-  }
-
-  return (
-    <figure
-      className="lab-stage lab-tilt min-w-0"
-      data-ambient
-      onPointerMove={tilt}
-      onPointerLeave={resetTilt}
-    >
-      <p className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="size-2 rounded-full bg-highlight" />
-        {m.home_visual_label()}
-      </p>
-      <div className="leap-scene" data-step={selected}>
-        <svg className="leap-trail" viewBox="0 0 400 260" fill="none" aria-hidden="true">
-          <path className="leap-trail-small" d="M 24 230 Q 70 128 128 183" />
-          <path className="leap-trail-big" d="M 128 183 Q 215 -8 369 112" />
-          <circle cx="24" cy="230" r="5" />
-          <circle cx="128" cy="183" r="5" />
-          <circle cx="369" cy="112" r="5" />
-        </svg>
-        <span className="leap-horizon" aria-hidden="true" />
-        {/* 深色主题单独一份 mascot：浅色版在白底上抠图，深色下边缘会残留一圈近白
-            抗锯齿像素。两份同画幅同构图，切换时不跳变。 */}
-        <img
-          src="/mascot.png"
-          alt={m.home_mascot_alt()}
-          width={1032}
-          height={714}
-          className="leap-mascot"
-          decoding="async"
-        />
-        <img
-          src="/mascot-dark.png"
-          alt=""
-          aria-hidden="true"
-          width={1032}
-          height={714}
-          className="leap-mascot leap-mascot-on-dark"
-          decoding="async"
-        />
-      </div>
-      <ol className="leap-stops">
-        {steps.map(({ label, Icon }, index) => (
-          <li key={label}>
-            <button
-              id={`${id}-journey-${index}`}
-              type="button"
-              className="leap-stop"
-              aria-pressed={selected === index}
-              aria-controls={`${id}-detail`}
-              onClick={() => setSelected(index)}
-            >
-              <span className="leap-stop-icon" aria-hidden="true">
-                <Icon size={20} />
-              </span>
-              <span>
-                <span className="font-mono text-xs">{String(index + 1).padStart(2, '0')}</span>{' '}
-                {label}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ol>
-      <section
-        id={`${id}-detail`}
-        aria-labelledby={`${id}-journey-${selected}`}
-        className="mt-5 min-h-24 rounded-xl border border-border bg-background/70 p-4"
-      >
-        <p className="text-sm font-semibold">{active.title}</p>
-        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{active.description}</p>
-      </section>
-      <figcaption className="sr-only">{m.home_lab_hint()}</figcaption>
-    </figure>
-  )
 }
 
 function BrandStory() {
@@ -390,120 +259,126 @@ function Workflow() {
   )
 }
 
-/**
- * 首页定价概览，仅在 `payment.enabled` 时渲染。周期切换与结账在独立定价页，
- * CTA 只做导流，不在这里承担付款。
- *
- * 金额来自 Stripe 的实时价格目录（`catalog`），与定价页同源。
- */
-function HomePricing({ catalog }: { catalog: PriceCatalog }) {
-  if (!websiteConfig.payment.enabled) return null
-  const products = mergePricingProducts(getProducts(), catalog).filter(
-    (product) => product.id !== 'free',
-  )
+function templatePrice(): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(websiteConfig.template.priceUsd)
+}
+
+function TemplatePricing() {
+  const id = useId()
+  const { data: session, isPending } = useSession()
+  const [pending, setPending] = useState(false)
+  const [notice, setNotice] = useState('')
+  const locale = getLocale()
+  const loginUrl = `/${locale}/auth/login?redirect=${encodeURIComponent(`/${locale}/#pricing`)}`
+  const enabled = websiteConfig.auth.enabled && websiteConfig.payment.enabled
+
+  async function buy() {
+    if (pending) return
+    setPending(true)
+    setNotice('')
+    const result = await startCheckout({
+      productId: websiteConfig.template.productId,
+      offerId: websiteConfig.template.offerId,
+      locale,
+    })
+    if (result.kind === 'redirect') {
+      window.location.assign(result.url)
+      return
+    }
+    if (result.kind === 'unauthenticated') {
+      window.location.assign(loginUrl)
+      return
+    }
+    setPending(false)
+    setNotice(
+      result.kind === 'not-configured'
+        ? m.payment_checkout_not_configured()
+        : result.kind === 'error' && result.message === 'checkout_pending'
+          ? m.payment_checkout_pending()
+          : m.payment_checkout_error(),
+    )
+  }
+  const benefits = [
+    m.home_pricing_source(),
+    m.home_pricing_support(),
+    m.home_pricing_updates(),
+    m.home_pricing_modules(),
+  ]
   return (
-    <section id="plans" className="lab-reveal mx-auto max-w-6xl scroll-mt-16 px-6 py-16 md:py-24">
-      <p className="text-xs font-semibold tracking-widest text-primary">
-        {m.home_pricing_eyebrow()}
-      </p>
-      <h2 className="mt-4 max-w-2xl text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
-        {m.home_pricing_title()}
-      </h2>
-      <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
-        {m.home_pricing_description()}
-      </p>
-      <ul className="mt-8 grid gap-4 md:grid-cols-3">
-        {products.map((product) => (
-          <li
-            key={product.id}
-            className="lab-feature-card flex min-w-0 flex-col rounded-2xl border border-border bg-card p-6"
-          >
-            <h3 className="text-lg font-semibold">{product.name}</h3>
-            {product.description && (
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                {product.description}
-              </p>
-            )}
-            {/* 多个付费方式时逐行列出：首页只做概览，切换与结账在定价页。 */}
-            {product.options.length > 0 ? (
-              <ul className="mt-5 space-y-1">
-                {product.options.map((option) => (
-                  <li
-                    key={`${option.kind}-${option.interval ?? 'once'}`}
-                    className="text-2xl font-bold"
-                  >
-                    {(option.amount / 100).toLocaleString('en-US', {
-                      style: 'currency',
-                      currency: option.currency.toUpperCase(),
-                    })}
-                    {option.label && (
-                      <span className="ml-1 text-sm font-normal text-muted-foreground">
-                        {option.label}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-5 text-2xl font-bold">—</p>
-            )}
-          </li>
-        ))}
-      </ul>
-      <Link
-        to="/{-$locale}/pricing"
-        params={{ locale: getLocale() }}
-        className="mt-7 inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-4 py-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring motion-reduce:transition-none"
-      >
-        {m.home_pricing_view_all()}
-        <IconArrowUpRight size={17} aria-hidden="true" />
-      </Link>
+    <section
+      id="pricing"
+      aria-labelledby={id}
+      className="mx-auto max-w-6xl scroll-mt-20 px-6 py-16 md:py-24"
+    >
+      <div className="grid gap-10 rounded-xl border border-border bg-card p-7 md:grid-cols-2 md:p-12">
+        <div>
+          <h2 id={id} className="text-3xl font-semibold tracking-tight md:text-4xl">
+            {m.home_pricing_title()}
+          </h2>
+          <p className="mt-5 max-w-md leading-relaxed text-muted-foreground">
+            {m.home_pricing_description()}
+          </p>
+          <ul className="mt-7 space-y-3">
+            {benefits.map((benefit) => (
+              <li key={benefit} className="flex items-center gap-3 text-sm">
+                <IconCheck size={18} className="text-success" aria-hidden />
+                {benefit}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="flex flex-col items-start justify-center md:pl-10">
+          <p className="text-5xl font-semibold tracking-tight">{templatePrice()}</p>
+          <p className="mt-3 text-sm text-muted-foreground">{m.home_pricing_once()}</p>
+          {enabled && !isPending && !session ? (
+            <a
+              href={loginUrl}
+              className={buttonVariants({ className: 'mt-7 h-auto min-h-11 px-5 py-3' })}
+            >
+              {m.home_pricing_buy()}
+            </a>
+          ) : (
+            <Button
+              disabled={!enabled || isPending || pending}
+              onClick={() => void buy()}
+              aria-busy={pending}
+              className="mt-7 h-auto min-h-11 px-5 py-3"
+            >
+              {pending ? m.payment_checkout_opening() : m.home_pricing_buy()}
+            </Button>
+          )}
+          {notice && (
+            <p role="status" className="mt-3 text-sm text-destructive">
+              {notice}
+            </p>
+          )}
+          <p className="mt-5 text-xs leading-relaxed text-muted-foreground">
+            {m.home_source_resources_description()}
+          </p>
+        </div>
+      </div>
     </section>
   )
 }
 
-function SourceOverview() {
+function ValuePropositions() {
   const items = [
-    { title: m.home_source_code_title(), description: m.home_source_code_description() },
-    { title: m.home_source_resources_title(), description: m.home_source_resources_description() },
-    { title: m.home_source_scope_title(), description: m.home_source_scope_description() },
+    { title: m.home_value_practices_title(), description: m.home_value_practices_description() },
+    { title: m.home_value_start_title(), description: m.home_value_start_description() },
+    { title: m.home_value_source_title(), description: m.home_value_source_description() },
   ]
   return (
-    <section id="pricing" className="mx-auto max-w-6xl scroll-mt-16 px-6 py-8">
-      <div className="grid gap-10 rounded-2xl border border-border bg-card p-7 md:grid-cols-2 md:p-10">
-        <div>
-          <p className="mb-4 text-xs font-semibold tracking-widest text-primary">
-            {m.home_source_eyebrow()}
-          </p>
-          <h2 className="text-3xl font-semibold leading-tight tracking-tight">
-            {m.home_source_title()}
-          </h2>
-          <p className="mt-5 text-sm leading-relaxed text-muted-foreground">
-            {m.home_source_description()}
-          </p>
-          <Link
-            to="/{-$locale}/docs"
-            params={{ locale: getLocale() }}
-            className="mt-7 inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-4 py-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring motion-reduce:transition-none"
-          >
-            {m.home_source_cta()}
-            <IconArrowUpRight size={17} aria-hidden="true" />
-          </Link>
-        </div>
-        <dl className="divide-y divide-border">
-          {items.map(({ title, description }) => (
-            <div key={title} className="py-5 first:pt-0 last:pb-0">
-              <dt className="flex items-center gap-3 font-semibold">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-highlight" />
-                {title}
-              </dt>
-              <dd className="mt-2 pl-[18px] text-sm leading-relaxed text-muted-foreground">
-                {description}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </div>
+    <section className="mx-auto grid max-w-6xl gap-8 px-6 pb-14 md:grid-cols-3">
+      {items.map((item) => (
+        <article key={item.title} className="border-t border-border pt-6">
+          <h2 className="text-lg font-semibold">{item.title}</h2>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{item.description}</p>
+        </article>
+      ))}
     </section>
   )
 }
@@ -659,109 +534,130 @@ function CapabilityFeatures() {
       detail: m.home_features_i18n_detail(),
     },
   ]
+  const more = [
+    { title: m.home_feature_seo(), description: m.home_feature_seo_description(), Icon: IconCode },
+    {
+      title: m.home_feature_api(),
+      description: m.home_feature_api_description(),
+      Icon: IconShieldLock,
+    },
+    {
+      title: m.home_feature_marketing(),
+      description: m.home_feature_marketing_description(),
+      Icon: IconBraces,
+    },
+    {
+      title: m.home_feature_docs(),
+      description: m.home_feature_docs_description(),
+      Icon: IconFile,
+    },
+    {
+      title: m.home_feature_notification(),
+      description: m.home_feature_notification_description(),
+      Icon: IconMail,
+    },
+    {
+      title: m.home_feature_updates(),
+      description: m.home_feature_updates_description(),
+      Icon: IconPlugConnected,
+    },
+  ]
   return (
-    <Features
-      eyebrow={m.home_features_eyebrow()}
-      title={m.home_features_title()}
-      subtitle={m.home_features_subtitle()}
-      variant="bento"
-      items={items.map((item, index) => ({
-        ...item,
-        visual: <CapabilityIllustration index={index} />,
-      }))}
-    />
+    <>
+      <Features
+        title={m.home_features_title()}
+        subtitle={m.home_features_subtitle()}
+        variant="bento"
+        items={items.map((item, index) => ({
+          ...item,
+          visual: <CapabilityIllustration index={index} />,
+        }))}
+      />
+      <div className="mx-auto max-w-6xl px-6 pb-16">
+        <h3 className="text-2xl font-semibold tracking-tight">{m.home_features_more_title()}</h3>
+        <p className="mt-3 text-sm text-muted-foreground">{m.home_features_more_description()}</p>
+        <div className="mt-8 grid gap-x-8 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
+          {more.map(({ title, description, Icon }) => (
+            <article key={title} className="border-t border-border pt-5">
+              <Icon size={22} className="text-primary" aria-hidden />
+              <h4 className="mt-3 font-semibold">{title}</h4>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </>
   )
 }
 
-export interface LandingPageProps {
-  /** Stripe 实时价格目录；由首页路由的 loader 取。 */
-  catalog?: PriceCatalog
-}
-
-export function LandingPage({ catalog = {} }: LandingPageProps) {
-  const [paused, setPaused] = useState(false)
-  const [pageVisible, setPageVisible] = useState(true)
-  const root = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function visibilityChanged() {
-      setPageVisible(!document.hidden)
-    }
-    visibilityChanged()
-    document.addEventListener('visibilitychange', visibilityChanged)
-    const observer =
-      typeof IntersectionObserver === 'undefined'
-        ? undefined
-        : new IntersectionObserver(
-            (entries) => {
-              for (const entry of entries) {
-                if (entry.target.hasAttribute('data-ambient'))
-                  entry.target.setAttribute('data-in-view', String(entry.isIntersecting))
-                if (entry.isIntersecting) entry.target.setAttribute('data-revealed', 'true')
-              }
-            },
-            { threshold: 0.12 },
-          )
-    root.current?.querySelectorAll('[data-ambient], .lab-reveal').forEach((element) => {
-      observer?.observe(element)
-    })
-    return () => {
-      observer?.disconnect()
-      document.removeEventListener('visibilitychange', visibilityChanged)
-    }
-  }, [])
-
+export function LandingPage() {
+  const [motionRunning, setMotionRunning] = useState(true)
   return (
-    <div
-      ref={root}
-      className="landing-lab"
-      data-motion={paused || !pageVisible ? 'paused' : 'running'}
-    >
-      <div className="lab-hero">
-        <div className="mx-auto flex max-w-6xl justify-end px-6 pt-6">
-          <button
-            type="button"
-            className="lab-motion-toggle"
-            aria-pressed={paused}
-            onClick={() => setPaused((value) => !value)}
-          >
-            {paused ? (
-              <IconPlayerPlay size={14} aria-hidden />
-            ) : (
-              <IconPlayerPause size={14} aria-hidden />
-            )}
-            {paused ? m.home_motion_resume() : m.home_motion_pause()}
-          </button>
+    <div className="landing-lab" data-motion={motionRunning ? 'running' : 'paused'}>
+      <section className="lab-hero !bg-none mx-auto grid max-w-6xl items-center gap-12 px-6 py-16 md:py-24 lg:grid-cols-[0.95fr_1.05fr]">
+        <div className="min-w-0">
+          <p className="mb-6 flex items-center gap-3 font-semibold" lang="en">
+            <svg
+              width="25"
+              height="20"
+              viewBox="0 0 28 20"
+              fill="none"
+              className="text-primary"
+              aria-hidden="true"
+            >
+              <path
+                d="M1 17Q7 2 13 11Q20 -5 27 4"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+              />
+            </svg>
+            {m.brand_slogan()}
+          </p>
+          <h1 className="text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
+            {m.home_hero_title()}
+            {getLocale() === 'en' ? ' ' : ''}
+            <br />
+            {m.home_hero_title_emphasis()}
+          </h1>
+          <p className="mt-6 max-w-lg text-base leading-relaxed text-muted-foreground">
+            {m.home_hero_description()}
+          </p>
+          <p className="mt-4 max-w-lg text-sm leading-relaxed text-muted-foreground">
+            {m.home_hero_subtitle()}
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <a
+              href="#pricing"
+              className={buttonVariants({ className: 'h-auto min-h-11 px-5 py-3' })}
+            >
+              {m.home_hero_primary_cta({ price: templatePrice() })}
+            </a>
+            <a
+              href={docsCtaHref()}
+              className={buttonVariants({
+                variant: 'outline',
+                className: 'h-auto min-h-11 px-5 py-3',
+              })}
+            >
+              {m.home_hero_secondary_cta()}
+            </a>
+          </div>
+          <p className="mt-5 text-xs text-muted-foreground">{m.home_hero_note()}</p>
         </div>
-        <Hero
-          title={m.home_hero_title()}
-          titleLang="en"
-          titleEmphasis={m.home_hero_title_emphasis()}
-          eyebrow={m.home_hero_eyebrow()}
-          description={m.home_hero_description()}
-          note={m.home_hero_note()}
-          primaryCta={{ label: m.home_hero_primary_cta(), href: docsCtaHref() }}
-          secondaryCta={{ label: m.home_hero_secondary_cta(), href: '#features' }}
-          variant="split"
-          visual={<LeapJourney paused={paused || !pageVisible} />}
-        />
-      </div>
+        <SourceProductDemo replayKey={0} onMotionChange={setMotionRunning} />
+      </section>
+      <ValuePropositions />
       <TechnologyStrip />
-      <StackAndToolkit />
-      <section id="features" className="lab-reveal scroll-mt-16">
+      <section id="features" className="scroll-mt-16">
         <CapabilityFeatures />
       </section>
-      <div className="lab-reveal">
-        <Workflow />
-      </div>
-      <HomePricing catalog={catalog} />
-      <div className="lab-reveal">
-        <SourceOverview />
-      </div>
+      <StackAndToolkit />
+      <Workflow />
+      <TemplatePricing />
       <BrandStory />
-      <section id="faq" className="lab-reveal scroll-mt-16">
+      <section id="faq" className="scroll-mt-16">
         <Faq
-          eyebrow={m.home_faq_eyebrow()}
           title={m.home_faq_title()}
           variant="split"
           items={[
@@ -773,14 +669,12 @@ export function LandingPage({ catalog = {} }: LandingPageProps) {
           ]}
         />
       </section>
-      <div className="lab-reveal">
-        <Cta
-          title={m.home_cta_title()}
-          description={m.home_cta_description()}
-          primaryCta={{ label: m.home_cta_primary(), href: docsCtaHref() }}
-          variant="quiet"
-        />
-      </div>
+      <Cta
+        title={m.home_cta_title()}
+        description={m.home_cta_description()}
+        primaryCta={{ label: m.home_cta_primary(), href: '#pricing' }}
+        variant="quiet"
+      />
     </div>
   )
 }

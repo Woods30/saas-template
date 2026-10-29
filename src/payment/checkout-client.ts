@@ -1,114 +1,49 @@
 import type { Locale } from '@/config/locale'
-import { resolveLookupKey } from '@/config/products'
+import { resolvePriceReference } from '@/config/products'
 import { websiteConfig } from '@/config/website'
-import type { PricingInterval } from '@/types/pricing'
-import type { SwitchDirection } from './billing-query'
-
-/**
- * 浏览器端发起结账：POST `/api/payment` → 整页跳转到 Stripe Checkout。
- *
- * 只传 **产品 id + 计费周期**，不传 Price id：价格由服务端按 `lookup_key` 解析。
- * 好处有两层——改价不必改前端；客户端也指定不了别的价格。
- *
- * 用整页跳转而非 `window.open`：Checkout 完成后要回到本站 success_url，新标签页会让
- * 用户落在原标签的旧页面上。
- *
- * 各 outcome 对应不同后续动作：未登录跳注册页、未配置 Price 应禁用按钮、
- * 已有互斥订阅（409）应提示去「管理订阅」换方案。
- */
 
 export type CheckoutOutcome =
   | { kind: 'redirect'; url: string }
   | { kind: 'unauthenticated' }
   | { kind: 'not-configured' }
-  /**
-   * 已经有订阅了：一个账号最多一份订阅，只能**切换**不能再开一份。
-   *
-   * `direction` 是服务端算出来的切换方向（升级 / 降级 / 换周期），没有时为 `undefined`
-   * ——方向只是提示，判定权始终在服务端。
-   */
-  | { kind: 'already-subscribed'; direction?: SwitchDirection }
-  /** 已经持有更高等级的方案，不必再买低级的。 */
-  | { kind: 'already-higher-tier' }
-  /** 与已购方案显式互斥，不能同时持有。 */
-  | { kind: 'exclusive-product' }
+  | { kind: 'already-subscribed' }
   | { kind: 'error'; message: string }
-
 export interface StartCheckoutParams {
-  /** 本站产品 id（如 `pro`）。 */
   productId: string
-  /** 计费周期；买断传 `one_time`。 */
-  interval?: 'month' | 'year' | 'one_time'
+  offerId: string
   locale: Locale
 }
 
-/** 结账成功后回到工作台的账单页；取消则回定价页。 */
-function returnUrls(locale: Locale): { successUrl: string; cancelUrl: string } {
-  const base = websiteConfig.baseUrl.replace(/\/$/, '')
-  const prefix = locale ? `/${locale}` : ''
-  return {
-    successUrl: `${base}${prefix}/dashboard/billing?checkout=success`,
-    cancelUrl: `${base}${prefix}/pricing?checkout=cancelled`,
-  }
-}
-
 export async function startCheckout(params: StartCheckoutParams): Promise<CheckoutOutcome> {
-  // 未配置 lookup key 就别发请求：直接给「先注册」更贴近真实可做的事。
-  if (!resolveLookupKey(params.productId, params.interval)) {
-    return { kind: 'not-configured' }
-  }
-
-  const { successUrl, cancelUrl } = returnUrls(params.locale)
-
-  let response: Response
+  if (!resolvePriceReference(params.productId, params.offerId)) return { kind: 'not-configured' }
+  const base = websiteConfig.baseUrl.replace(/\/$/, '')
   try {
-    response = await fetch('/api/payment', {
+    const response = await fetch('/api/payment', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        productId: params.productId,
-        interval: params.interval,
-        successUrl,
-        cancelUrl,
-        locale: params.locale,
+        ...params,
+        successUrl: `${base}/${params.locale}/dashboard/billing?checkout=success`,
+        cancelUrl:
+          params.productId === websiteConfig.template.productId
+            ? `${base}/${params.locale}/#pricing`
+            : `${base}/${params.locale}/pricing?checkout=cancelled`,
       }),
     })
+    if (response.status === 401) return { kind: 'unauthenticated' }
+    if (response.status === 409) {
+      const body = (await response.json()) as { error?: string }
+      return body.error === 'CHECKOUT_PENDING'
+        ? { kind: 'error', message: 'checkout_pending' }
+        : { kind: 'already-subscribed' }
+    }
+    if (response.status === 400) return { kind: 'not-configured' }
+    if (!response.ok) return { kind: 'error', message: `http_${response.status}` }
+    const body = (await response.json()) as { url?: string }
+    return body.url
+      ? { kind: 'redirect', url: body.url }
+      : { kind: 'error', message: 'missing_url' }
   } catch {
     return { kind: 'error', message: 'network' }
   }
-
-  if (response.status === 401) return { kind: 'unauthenticated' }
-  // 409 是服务端的归属守卫。三种原因要分开：同一个产品已有方案（去「管理订阅」
-  // 换周期）、已有更高等级（不用再买）、显式互斥（不能并存）——提示不同。
-  if (response.status === 409) {
-    const body = (await response.json().catch(() => null)) as {
-      error?: string
-      switch?: { direction?: SwitchDirection }
-    } | null
-    switch (body?.error) {
-      case 'ALREADY_OWNED_HIGHER_TIER':
-        return { kind: 'already-higher-tier' }
-      case 'ALREADY_OWNED_EXCLUSIVE_PRODUCT':
-        return { kind: 'exclusive-product' }
-      // `ALREADY_SUBSCRIBED` 与「查不出已有方案属于哪个产品」都归到这一条：
-      // 用户看到的是同一件事——已经有订阅了，去「切换方案」处理。
-      // 载荷里的 `switch` 带着服务端算好的方向，页面可以据此给更准的提示。
-      default:
-        return { kind: 'already-subscribed', direction: body?.switch?.direction }
-    }
-  }
-  if (!response.ok) {
-    // 不回显服务端错误体：它可能包含内部路径。
-    return { kind: 'error', message: `http_${response.status}` }
-  }
-
-  const body = (await response.json().catch(() => null)) as { url?: string } | null
-  if (!body?.url) return { kind: 'error', message: 'missing_url' }
-
-  return { kind: 'redirect', url: body.url }
-}
-
-/** 该产品的这个付费方式是否已配置可购买的价格（用于禁用按钮）。 */
-export function isCheckoutConfigured(productId: string, interval?: PricingInterval): boolean {
-  return Boolean(resolveLookupKey(productId, interval))
 }

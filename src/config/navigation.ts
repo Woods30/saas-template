@@ -27,7 +27,7 @@ export function getPublicLinkOptions(target: PublicTarget, locale: Locale, hash?
     case 'changelog':
       return linkOptions({ to: '/{-$locale}/marketing/changelog', params: { locale } })
     case 'pricing':
-      return linkOptions({ to: '/{-$locale}/pricing', params: { locale } })
+      return linkOptions({ to: '/{-$locale}', params: { locale }, hash: 'pricing' })
     case 'contact':
       return linkOptions({ to: '/{-$locale}/marketing/contact', params: { locale } })
     case 'roadmap':

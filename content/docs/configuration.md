@@ -45,6 +45,30 @@ metadata: {
 
 See [Design System](./design-system#brand-logo) for how the logo is rendered.
 
+### Template homepage marketing
+
+```ts
+template: {
+  priceUsd: 99,
+  productId: 'template',
+  offerId: 'once',
+}
+```
+
+Pricing is shown in the homepage `#pricing` section. The old `/pricing` URL redirects to that section in the current language and no longer shows the demo plan page.
+
+The homepage uses the existing Checkout flow. `productId` / `offerId` select
+`template.prices.once = 'jerbix_template'` in `src/config/products.ts`; no external sales URL
+is needed. Configure that Stripe `lookup_key` with a one-time USD 99 price. The server
+checks the actual amount against `priceUsd`, along with the currency and payment mode,
+and rejects missing or mismatched prices.
+
+Enable `auth.enabled` and `payment.enabled`. Guests sign in or register first, with the
+return path preserved through email verification. They return to the homepage pricing
+section to continue purchasing. Cancelling Checkout returns there too; successful payments
+return to billing, with payment records confirmed by the existing webhook. “See how to start”
+links to the current language’s docs, falling back to features when docs are disabled.
+
 ### Theme
 
 ```ts
@@ -131,3 +155,6 @@ the `WebsiteConfig['social']` type.
 - [Navigation & Menus](./navigation) — configure menu entries
 - [Environment](./environment) — the `VITE_` rule
 - [Design System](./design-system) — change colors and the logo
+
+
+Configure plans in `src/config/products.ts` with `prices: { monthly: 'pro_monthly', yearly: 'pro_yearly' }`. References are interpreted by the selected provider; amount and billing interval come from its catalog. Empty prices means free. See [Payment](./payment).

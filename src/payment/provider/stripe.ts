@@ -3,138 +3,187 @@ import { defaultLocale } from '@/config/locale'
 import type {
   CheckoutParams,
   CheckoutResult,
+  PaymentEvent,
   PaymentProvider,
   PortalParams,
   PortalResult,
   ProviderPrice,
   ProviderSubscription,
-  UpdateSubscriptionPriceParams,
 } from '../types'
 
-/**
- * Stripe 的「资源不存在」错误。
- *
- * 已取消的订阅再取消一次，Stripe 返回 `resource_missing`（"No such subscription"），
- * 而这正是「已经停掉」的目标状态，不该当成失败。
- */
-function isResourceMissing(err: unknown): boolean {
-  if (typeof err !== 'object' || err === null) return false
-  return (err as { code?: unknown }).code === 'resource_missing'
+function idOf(value: unknown): string | null {
+  if (typeof value === 'string') return value
+  if (value && typeof value === 'object' && 'id' in value) return String(value.id)
+  return null
 }
 
-/**
- * Stripe 订阅 → provider 快照。
- *
- * 周期字段在**订阅项**上，不在订阅顶层（API `2025-09-30.clover`）；`price` 可能
- * 是未展开的 id 字符串，两种形态都要能读。
- */
-function toProviderSubscription(subscription: Stripe.Subscription): ProviderSubscription {
+function snapshot(subscription: Stripe.Subscription): ProviderSubscription {
   const item = subscription.items.data[0]
   const price = item?.price
-  const expanded = typeof price === 'string' ? null : price
   return {
     id: subscription.id,
-    itemId: item?.id ?? '',
-    priceId: expanded?.id ?? (typeof price === 'string' ? price : ''),
-    amount: expanded?.unit_amount ?? null,
-    currency: expanded?.currency ?? null,
-    interval: expanded?.recurring?.interval ?? null,
+    userId: subscription.metadata.userId ?? null,
+    customerId: idOf(subscription.customer),
+    priceId: price?.id ?? '',
+    reference: price?.lookup_key ?? null,
+    amount: price?.unit_amount ?? null,
+    currency: price?.currency ?? null,
+    interval: price?.recurring?.interval ?? null,
+    intervalCount: price?.recurring?.interval_count ?? null,
+    currentPeriodStart: item?.current_period_start ?? null,
     currentPeriodEnd: item?.current_period_end ?? null,
-    status: subscription.status,
+    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    status: subscription.status as ProviderSubscription['status'],
   }
 }
 
-/**
- * Stripe payment provider — Cloudflare Workers 适配。
- *
- * 必须用 `createFetchHttpClient()`，且验签走 `constructEventAsync` +
- * `createSubtleCryptoProvider()`：同步的 `constructEvent` 依赖 Node `crypto`，
- * 在 Workers 上不可用。
- */
+interface StripeEventInput {
+  id: string
+  type: string
+  created: number
+  data: { object: unknown }
+}
+
+/** 仅适配器了解 Stripe 的事件结构；业务层只消费归一化结果。 */
+export function normalizeStripeEvent(event: StripeEventInput): PaymentEvent {
+  const result: PaymentEvent = {
+    id: event.id,
+    provider: 'stripe',
+    type: event.type,
+    created: event.created,
+  }
+  if (event.type.startsWith('customer.subscription.')) {
+    const sub = event.data.object as Stripe.Subscription
+    result.subscriptionId = sub.id
+    result.subscription = snapshot(sub)
+  } else if (
+    event.type === 'checkout.session.completed' ||
+    event.type === 'checkout.session.async_payment_succeeded'
+  ) {
+    const session = event.data.object as Stripe.Checkout.Session
+    result.checkoutId = session.id
+    result.subscriptionId = idOf(session.subscription) ?? undefined
+    if (
+      session.mode === 'payment' &&
+      (session.payment_status === 'paid' || session.payment_status === 'no_payment_required')
+    ) {
+      result.payment = {
+        id: idOf(session.payment_intent) ?? session.id,
+        invoiceId: idOf(session.invoice),
+        chargeId: idOf(session.payment_intent),
+        customerId: idOf(session.customer),
+        userId: session.metadata?.userId ?? null,
+        productId: session.metadata?.productId ?? null,
+        offerId: session.metadata?.offerId ?? null,
+        subscriptionId: null,
+        type: 'one_time',
+        amount: session.amount_total ?? 0,
+        currency: session.currency ?? 'usd',
+        status: 'paid',
+      }
+    }
+  } else if (event.type === 'invoice.paid' || event.type === 'invoice.payment_failed') {
+    const invoice = event.data.object as Stripe.Invoice
+    const subscriptionId = idOf(invoice.parent?.subscription_details?.subscription)
+    result.subscriptionId = subscriptionId ?? undefined
+    if (subscriptionId) {
+      result.payment = {
+        id: invoice.id,
+        invoiceId: invoice.id,
+        chargeId: null,
+        customerId: idOf(invoice.customer),
+        userId: invoice.parent?.subscription_details?.metadata?.userId ?? null,
+        productId: null,
+        offerId: null,
+        subscriptionId,
+        type: 'subscription',
+        amount: event.type === 'invoice.paid' ? invoice.amount_paid : invoice.amount_due,
+        currency: invoice.currency,
+        status: event.type === 'invoice.paid' ? 'paid' : 'failed',
+      }
+    }
+  } else if (event.type === 'charge.refunded') {
+    const charge = event.data.object as Stripe.Charge
+    result.refund = {
+      chargeId: idOf(charge.payment_intent) ?? charge.id,
+      amount: charge.amount_refunded,
+    }
+  }
+  return result
+}
+
 export class StripePaymentProvider implements PaymentProvider {
   private readonly stripe: Stripe
-  private readonly webhookSecret: string
-
-  constructor(secretKey: string, webhookSecret: string) {
-    this.stripe = new Stripe(secretKey, {
-      apiVersion: '2025-09-30.clover' as Stripe.LatestApiVersion,
-      httpClient: Stripe.createFetchHttpClient(),
-    })
-    this.webhookSecret = webhookSecret
+  constructor(
+    secretKey: string,
+    private readonly webhookSecret: string,
+  ) {
+    this.stripe = new Stripe(secretKey, { httpClient: Stripe.createFetchHttpClient() })
   }
-
   getProviderName() {
     return 'stripe'
   }
 
-  async createCheckoutSession(params: CheckoutParams): Promise<CheckoutResult> {
-    const metadata = {
-      userId: params.userId,
-      ...(params.productId ? { productId: params.productId } : {}),
-      ...(params.stripeProductId ? { stripeProductId: params.stripeProductId } : {}),
+  async listPrices(references: string[]): Promise<ProviderPrice[]> {
+    const result: ProviderPrice[] = []
+    // Stripe lookup_keys 单次最多 10 个，分页也必须完整读取。
+    for (let offset = 0; offset < references.length; offset += 10) {
+      for await (const price of this.stripe.prices.list({
+        active: true,
+        lookup_keys: references.slice(offset, offset + 10),
+        limit: 100,
+      })) {
+        if (!price.lookup_key) continue
+        result.push({
+          id: price.id,
+          reference: price.lookup_key,
+          amount: price.unit_amount,
+          currency: price.currency,
+          mode: price.recurring ? 'subscription' : 'payment',
+          interval: (price.recurring?.interval ?? null) as ProviderPrice['interval'],
+          intervalCount: price.recurring?.interval_count ?? null,
+        })
+      }
     }
-    const session = await this.stripe.checkout.sessions.create({
-      mode: params.mode,
-      line_items: [{ price: params.priceId, quantity: 1 }],
-      customer_email: params.customerEmail,
-      success_url: params.successUrl,
-      cancel_url: params.cancelUrl,
-      // 兜底用站点默认语言，而非「非 zh 即 en」，否则新增语言会被当成 en 提交。
-      locale: params.locale ?? defaultLocale,
-      metadata,
-      // Checkout Session 自己的 metadata **不会**被 Stripe 复制到 Subscription
-      // （实测订阅对象上的 metadata 是空的）。归属必须显式写进
-      // `subscription_data.metadata`：否则 `customer.subscription.created` 早于
-      // `checkout.session.completed` 到达时，这条订阅无从知道属于谁——
-      // 补建不了，价格与周期也就永远补不上。
-      ...(params.mode === 'subscription' ? { subscription_data: { metadata } } : {}),
-      ...(params.mode === 'payment' ? { invoice_creation: { enabled: true } } : {}),
-      ...(params.mode === 'payment' ? { allow_promotion_codes: true } : {}),
-    })
-    return { url: session.url ?? '', sessionId: session.id }
+    return result
   }
 
-  /**
-   * 按 `lookup_key` 批量取价。
-   *
-   * 用 `lookup_keys[]` 而非逐个查 id：一次请求拿完所有展示价，且 key 换 Price 后
-   * 不用改代码。`prices.list` 默认只返回 active 的 Price。
-   */
-  async listPricesByLookupKey(lookupKeys: string[]): Promise<ProviderPrice[]> {
-    if (lookupKeys.length === 0) return []
-    const prices = await this.stripe.prices.list({ lookup_keys: lookupKeys })
-    return prices.data.map((price) => ({
-      id: price.id,
-      lookupKey: price.lookup_key,
-      amount: price.unit_amount,
-      currency: price.currency,
-      recurring: Boolean(price.recurring),
-      stripeProductId:
-        typeof price.product === 'string' ? price.product : (price.product?.id ?? null),
-    }))
+  async createCheckoutSession(params: CheckoutParams): Promise<CheckoutResult> {
+    const metadata = { userId: params.userId, productId: params.productId, offerId: params.offerId }
+    const session = await this.stripe.checkout.sessions.create(
+      {
+        mode: params.mode,
+        ...(params.expiresAt ? { expires_at: params.expiresAt } : {}),
+        line_items: [{ price: params.priceId, quantity: 1 }],
+        ...(params.customerId
+          ? { customer: params.customerId }
+          : { customer_email: params.customerEmail }),
+        ...(params.mode === 'payment'
+          ? {
+              ...(!params.customerId ? { customer_creation: 'always' as const } : {}),
+              invoice_creation: { enabled: true },
+            }
+          : { subscription_data: { metadata } }),
+        success_url: params.successUrl,
+        cancel_url: params.cancelUrl,
+        locale: params.locale ?? defaultLocale,
+        metadata,
+        ...(params.mode === 'payment' ? { payment_intent_data: { metadata } } : {}),
+      },
+      { idempotencyKey: params.idempotencyKey },
+    )
+    if (!session.url) throw new Error('Checkout URL missing')
+    return { url: session.url, sessionId: session.id, expiresAt: session.expires_at }
   }
 
-  /**
-   * 取消订阅；`proration` 为真时按未使用时间折算退款。
-   *
-   * `prorate + invoice_now` 的组合会立刻生成一张金额为负的发票：折算额进入客户
-   * 余额（余额为负 = 客户有钱），即「没用掉的时间退给客户」。
-   */
-  async cancelSubscription(
-    subscriptionId: string,
-    options?: { proration?: boolean },
-  ): Promise<void> {
-    try {
-      await this.stripe.subscriptions.cancel(
-        subscriptionId,
-        options?.proration ? { prorate: true, invoice_now: true } : undefined,
-      )
-    } catch (err) {
-      // 订阅已经不在了（首次取消已成功，这次是 webhook 重投）：目标状态已达成，
-      // 不算失败。不这样处理的话，重投会永远撞上「No such subscription」，
-      // 事件再也处理不完。
-      if (isResourceMissing(err)) return
-      throw err
+  async retrieveCheckoutSession(sessionId: string) {
+    const session = await this.stripe.checkout.sessions.retrieve(sessionId)
+    const status = session.status
+    if (status !== 'open' && status !== 'complete' && status !== 'expired')
+      throw new Error('Checkout status unavailable')
+    return {
+      status: status as 'open' | 'complete' | 'expired',
+      subscriptionId: idOf(session.subscription),
     }
   }
 
@@ -145,57 +194,41 @@ export class StripePaymentProvider implements PaymentProvider {
     })
     return { url: portal.url }
   }
-
-  /**
-   * 读订阅快照。
-   *
-   * 必须展开 `items.data.price` 才拿得到单价与周期——不展开时 `price` 只是个 id
-   * 字符串。
-   */
-  async retrieveSubscription(subscriptionId: string): Promise<ProviderSubscription> {
-    const subscription = await this.stripe.subscriptions.retrieve(subscriptionId, {
-      expand: ['items.data.price'],
-    })
-    return toProviderSubscription(subscription)
+  async retrieveSubscription(id: string): Promise<ProviderSubscription> {
+    return snapshot(await this.stripe.subscriptions.retrieve(id, { expand: ['items.data.price'] }))
   }
-
-  /**
-   * 替换订阅项的价格 = 站内切换方案。
-   *
-   * `items[0].id` **必须带**：Stripe 的更新接口在缺 `id` 时会**新增**一个订阅项，
-   * 于是旧价与新价同时生效、两份都扣款。这是切换路径最容易踩的坑，所以缺 id 时
-   * 直接抛错，不猜。
-   */
-  async updateSubscriptionPrice(
-    params: UpdateSubscriptionPriceParams,
-  ): Promise<ProviderSubscription> {
-    if (!params.itemId) {
-      throw new Error('updateSubscriptionPrice: 缺少订阅项 id（漏传会让 Stripe 新增订阅项）')
-    }
-    const subscription = await this.stripe.subscriptions.update(params.subscriptionId, {
-      items: [{ id: params.itemId, price: params.priceId }],
-      proration_behavior: params.prorationBehavior,
-      ...(params.metadata ? { metadata: params.metadata } : {}),
-    })
-    return toProviderSubscription(subscription)
-  }
-
-  async parseWebhookEvent(rawBody: string, signature: string): Promise<unknown> {
-    return this.stripe.webhooks.constructEventAsync(
-      rawBody,
+  async parseWebhookEvent(raw: string, signature: string): Promise<PaymentEvent> {
+    const event = await this.stripe.webhooks.constructEventAsync(
+      raw,
       signature,
       this.webhookSecret,
       undefined,
       Stripe.createSubtleCryptoProvider(),
     )
-  }
-
-  async verifyWebhook(rawBody: string, signature: string): Promise<boolean> {
-    try {
-      await this.parseWebhookEvent(rawBody, signature)
-      return true
-    } catch {
-      return false
+    const result = normalizeStripeEvent(event)
+    if (result.subscriptionId && event.type !== 'customer.subscription.deleted') {
+      result.subscription = await this.retrieveSubscription(result.subscriptionId)
     }
+    if (result.payment?.invoiceId && result.payment.type === 'subscription') {
+      const entries: NonNullable<PaymentEvent['payments']> = []
+      for await (const entry of this.stripe.invoicePayments.list({
+        invoice: result.payment.invoiceId,
+        limit: 100,
+      })) {
+        if (entry.status !== 'paid') continue
+        entries.push({
+          ...result.payment,
+          id: entry.id,
+          amount: entry.amount_paid ?? 0,
+          chargeId: idOf(entry.payment.payment_intent),
+          status: 'paid',
+        })
+      }
+      if (entries.length) {
+        result.payments = entries
+        delete result.payment
+      }
+    }
+    return result
   }
 }

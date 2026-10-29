@@ -45,6 +45,27 @@ metadata: {
 
 Logo 的替换细节见[设计系统](./design-system#品牌-logo)。
 
+### 模板首页营销
+
+```ts
+template: {
+  priceUsd: 99,
+  productId: 'template',
+  offerId: 'once',
+}
+```
+
+定价统一展示在首页 `#pricing`，旧 `/pricing` 地址跳转至当前语言首页价格区，不再展示独立演示套餐页。
+
+首页模板复用现有 Checkout：`productId` / `offerId` 指向 `src/config/products.ts` 中的
+`template.prices.once = 'jerbix_template'`，无需外部销售地址。在 Stripe 配置该 `lookup_key`
+对应的 USD 99 一次性价格。`priceUsd` 用于首页展示，服务端同时校验实际金额、币种与一次性
+计费方式，不匹配或缺少价格时拒绝结账，避免误收演示资源包的费用。
+
+开启 `auth.enabled` 与 `payment.enabled` 后，未登录购买先进入登录页；切换注册、邮箱验证
+和登录成功均保留回跳，返回首页价格区后可继续购买。取消结账也回到该区域，付款成功进入
+账单页；支付记录由既有 webhook 确认。“看看如何开始”指向当前语言文档，文档关闭时回退功能区。
+
 ### 主题
 
 ```ts
@@ -128,3 +149,6 @@ social: {
 - [导航与菜单](./navigation)——配置菜单项
 - [环境变量](./environment)——`VITE_` 规则
 - [设计系统](./design-system)——改配色与 Logo
+
+
+套餐在 `src/config/products.ts` 中集中配置，使用 `prices: { monthly: 'pro_monthly', yearly: 'pro_yearly' }` 映射购买选项到当前服务商销售引用。金额和周期从服务商获取，空 prices 表示免费套餐；详见[支付](./payment)。

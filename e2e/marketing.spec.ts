@@ -4,7 +4,9 @@ import { expect, test } from '@playwright/test'
 test.describe('Marketing', () => {
   test('首页渲染，语言切换走到真实的 /en 前缀', async ({ page }) => {
     await page.goto('/zh')
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Leap from Idea to Launch.')
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(
+      '不必从零开发，让想法更快上线。',
+    )
     await page.waitForLoadState('networkidle')
 
     // 冷启动时按钮可能还是 SSR 的静态 DOM，点下去没有处理器；菜单已开则不再点
@@ -19,6 +21,8 @@ test.describe('Marketing', () => {
     await menu.click()
     await expect(page).toHaveURL(/\/en\/?$/)
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Leap from Idea to Launch.')
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(
+      'Skip the groundwork. Launch your idea sooner.',
+    )
   })
 })

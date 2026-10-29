@@ -71,17 +71,7 @@ export const verifications = sqliteTable('verifications', {
 })
 
 // 业务表
-/**
- * 订阅。
- *
- * 三列各建普通索引对应三条热点查询：webhook 按 subscription_id 更新、按 customer_id
- * 反查用户，工作台与 portal 按 user_id 取当前订阅。
- *
- * 不建唯一索引：一个账号只允许一份**活跃订阅**这条规则由**应用层**保证（结账守卫 +
- * 站内切换）。这里不能加部分唯一索引——webhook 的 INSERT（新建活跃行）先于把旧行改成
- * canceled 的 UPDATE，索引存在时 INSERT 直接违反约束，webhook 抛错、Stripe 无限重投，
- * 反而把正常流程卡死。
- */
+/** 服务商订阅按外部 ID 幂等；账号购买名额由 Checkout 预留与状态守卫控制。 */
 export const subscriptions = sqliteTable(
   'subscriptions',
   {
@@ -89,110 +79,82 @@ export const subscriptions = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull().default('stripe'),
     customerId: text('customer_id'),
-    subscriptionId: text('subscription_id'),
+    subscriptionId: text('subscription_id').notNull(),
     status: text('status').notNull(),
     priceId: text('price_id'),
-    /**
-     * 本站产品 id（`src/config/products.ts` 里定义，如 `pro`）。
-     *
-     * 互斥判定的**权威**依据：同一个产品内，买断取代订阅（月付 / 年付 / 终身是同一件
-     * 东西的不同付费方式）。跨产品是否互斥看配置里的 `exclusiveWith`。
-     */
     productId: text('product_id'),
-    /**
-     * Stripe Product id。
-     *
-     * 配置没声明互斥关系时的**兜底**判据：挂在同一个 Stripe Product 下的价格是同
-     * 一个东西的不同价位。空值时判定为「不同产品」——宁可漏接管，也不误伤订阅。
-     */
-    stripeProductId: text('stripe_product_id'),
+    offerId: text('offer_id'),
     amount: integer('amount'),
     currency: text('currency'),
     interval: text('interval'),
+    intervalCount: integer('interval_count'),
     currentPeriodStart: integer('current_period_start', { mode: 'timestamp' }),
     currentPeriodEnd: integer('current_period_end', { mode: 'timestamp' }),
     cancelAtPeriodEnd: integer('cancel_at_period_end', { mode: 'boolean' }).default(false),
-    /**
-     * 已安排、**周期末生效**的方案变更（降级）。
-     *
-     * 降级用 Stripe 的 `proration_behavior: 'none'` 实现：Stripe 上的价格立刻变成
-     * 新价，而本期已付金额不变——用户此刻仍在按旧价扣款。若照单全收 Stripe 的
-     * `customer.subscription.updated`，本地行会显示新（低）价，账单页就会说谎。
-     *
-     * 约定：**当前列 = 用户此刻正在付的价**，pending 列 = 周期末要切到的。
-     * 续费发票付清（`invoice.paid`）或周期翻页（`subscription.updated`）时晋升。
-     */
-    pendingPriceId: text('pending_price_id'),
-    pendingProductId: text('pending_product_id'),
-    pendingStripeProductId: text('pending_stripe_product_id'),
-    pendingInterval: text('pending_interval'),
-    pendingAmount: integer('pending_amount'),
-    pendingCurrency: text('pending_currency'),
-    pendingEffectiveAt: integer('pending_effective_at', { mode: 'timestamp' }),
+    snapshotVersion: integer('snapshot_version').notNull().default(0),
+    eventCreated: integer('event_created').notNull().default(0),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   },
   (table) => ({
     userIdx: index('subscriptions_user_idx').on(table.userId),
-    customerIdx: index('subscriptions_customer_idx').on(table.customerId),
-    subscriptionIdx: index('subscriptions_subscription_idx').on(table.subscriptionId),
+    externalUnique: uniqueIndex('subscriptions_provider_external_unique').on(
+      table.provider,
+      table.subscriptionId,
+    ),
   }),
 )
 
-/**
- * 支付流水。
- *
- * 列名刻意保持供应商中立（`provider` / `invoiceId` / `chargeId` 而非 `stripeInvoiceId`）：
- * 把供应商写进列名，新增 provider 时要么改表、要么重复语义，查询还会按 provider 分支。
- */
 export const payments = sqliteTable(
   'payments',
   {
     id: text('id').primaryKey(),
     userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
     provider: text('provider').notNull().default('stripe'),
+    externalId: text('external_id').notNull(),
     type: text('type').notNull(),
     invoiceId: text('invoice_id'),
     chargeId: text('charge_id'),
+    subscriptionId: text('subscription_id'),
     status: text('status').notNull(),
     amount: integer('amount').notNull(),
+    refundedAmount: integer('refunded_amount').notNull().default(0),
     currency: text('currency').notNull(),
     description: text('description'),
-    /**
-     * 本站产品 id（`src/config/products.ts` 里定义，如 `pro`）。
-     *
-     * 买断也要知道买的是哪个产品：账单页要显示产品名而不是一个 Price id，也要靠它
-     * 区分「同产品的买断」与「另一个产品的买断」。
-     */
     productId: text('product_id'),
-    /**
-     * Stripe Product id；与 `subscriptions.stripe_product_id` 同一套兜底判据。
-     *
-     * 一次性付款没有订阅行可比对，但「买断是否接管旧订阅」要按 Product 判定，
-     * 所以买断这一侧也必须记下 Product id。
-     */
-    stripeProductId: text('stripe_product_id'),
-    /**
-     * 计费周期（`month` / `year`）。
-     *
-     * 一次性付款留空——它本身没有周期；账单页按 `type` 区分「终身 / 一次性」与订阅。
-     */
-    interval: text('interval'),
-    /** Stripe Customer id；账单门户与归属反查要靠它。 */
+    offerId: text('offer_id'),
     customerId: text('customer_id'),
+    eventCreated: integer('event_created').notNull().default(0),
     paidAt: integer('paid_at', { mode: 'timestamp' }),
     refundedAt: integer('refunded_at', { mode: 'timestamp' }),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   },
   (table) => ({
-    // 退款按 chargeId 回写、对账按 invoiceId 查询，两者都走点查。
-    invoiceIdx: index('payments_invoice_idx').on(table.invoiceId),
-    chargeIdx: index('payments_charge_idx').on(table.chargeId),
+    externalUnique: uniqueIndex('payments_provider_external_unique').on(
+      table.provider,
+      table.externalId,
+    ),
     userIdx: index('payments_user_idx').on(table.userId),
-    customerIdx: index('payments_customer_idx').on(table.customerId),
+    chargeIdx: index('payments_charge_idx').on(table.provider, table.chargeId),
   }),
 )
+
+/** 订阅 Checkout 每账号一个预留；一次性购买不占用。 */
+export const checkoutReservations = sqliteTable('checkout_reservations', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull(),
+  token: text('token').notNull(),
+  productId: text('product_id').notNull(),
+  offerId: text('offer_id').notNull(),
+  request: text('request').notNull(),
+  sessionId: text('session_id'),
+  url: text('url'),
+  expiresAt: integer('expires_at').notNull(),
+})
 
 export const files = sqliteTable('files', {
   id: text('id').primaryKey(),
@@ -253,8 +215,7 @@ export const newsletterSubscriptions = sqliteTable('newsletter_subscriptions', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 })
 
-// 幂等表：所有外部 webhook 统一落点。业务 handler 先 INSERT event id，
-// 成功后 UPDATE processedAt，失败 DELETE 整行让源端重投。
+// 幂等表：支付事件在业务幂等写入成功后标记 processedAt，失败由源端重投。
 export const webhookEvents = sqliteTable(
   'webhook_events',
   {

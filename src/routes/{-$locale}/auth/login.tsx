@@ -113,6 +113,7 @@ function LoginPage() {
         </Link>
         <Link
           to="/{-$locale}/auth/register"
+          search={{ redirect }}
           className="text-muted-foreground underline hover:text-foreground"
         >
           {m.auth_login_to_register_link()}

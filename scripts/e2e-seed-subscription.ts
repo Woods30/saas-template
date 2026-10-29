@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { parseEnv } from 'node:util'
-import { resolveLookupKey } from '../src/config/products'
+import { resolvePriceReference } from '../src/config/products'
 
 /**
  * 为 E2E 写入一条「已订阅」记录：E2E 不能真打 Stripe，故直接写本地 D1。
@@ -26,8 +26,6 @@ interface SeedSubscription {
   priceId: string
   /** 本站产品 id。 */
   productId: string
-  /** Stripe Product id；买断接管旧订阅的兜底判据。 */
-  stripeProductId: string | null
   amount: number
   currency: string
   interval: string
@@ -40,22 +38,6 @@ interface SeedSubscription {
    * 当成当前方案。
    */
   createdAt?: number
-  /**
-   * 已安排、周期末生效的变更（降级）。
-   *
-   * 给出时写入 `pending_*` 列：账单页会显示「已安排变更」提示块——降级期间用户
-   * 仍在按旧价扣款，页面必须说清这一点。
-   */
-  pending?: {
-    priceId: string
-    productId: string
-    stripeProductId: string | null
-    interval: string
-    amount: number
-    currency: string
-    /** Unix 秒；生效时刻 = 当前周期的结束时刻。 */
-    effectiveAt: number
-  }
 }
 
 /** 读 `.env` 里的值；空串由调用方报错。 */
@@ -70,8 +52,6 @@ interface StripePrice {
   unit_amount: number | null
   currency: string
   recurring: { interval?: string } | null
-  /** Stripe Product id；买断接管旧订阅的兜底判据。 */
-  product?: string | { id?: string } | null
 }
 
 /**
@@ -96,14 +76,26 @@ export async function fetchPriceByLookupKey(
   return price
 }
 
+export function buildLocalD1Args(sql: string, persistTo?: string): string[] {
+  return [
+    'd1',
+    'execute',
+    'DB',
+    '--local',
+    '--json',
+    ...(persistTo ? ['--persist-to', persistTo] : []),
+    '--command',
+    sql,
+  ]
+}
+
 /** 按邮箱查本地 D1 的 users 表。 */
-export function findUserIdByEmail(email: string): string | null {
+export function findUserIdByEmail(email: string, persistTo?: string): string | null {
   const sql = `SELECT id FROM users WHERE email = '${escapeSql(email)}'`
-  const out = execFileSync(
-    'wrangler',
-    ['d1', 'execute', 'DB', '--local', '--json', '--command', sql],
-    { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] },
-  )
+  const out = execFileSync('wrangler', buildLocalD1Args(sql, persistTo), {
+    encoding: 'utf-8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
   const results = JSON.parse(out)[0]?.results ?? []
   return results[0]?.id ?? null
 }
@@ -123,7 +115,7 @@ export function buildSeedSql(sub: SeedSubscription): string {
     'status',
     'price_id',
     'product_id',
-    'stripe_product_id',
+    'offer_id',
     'amount',
     'currency',
     'interval',
@@ -138,7 +130,7 @@ export function buildSeedSql(sub: SeedSubscription): string {
     sub.status,
     sub.priceId,
     sub.productId,
-    sub.stripeProductId,
+    sub.interval === 'year' ? 'yearly' : 'monthly',
     sub.amount,
     sub.currency,
     sub.interval,
@@ -147,26 +139,6 @@ export function buildSeedSql(sub: SeedSubscription): string {
   if (sub.createdAt !== undefined) {
     columns.push('created_at')
     values.push(sub.createdAt)
-  }
-  if (sub.pending) {
-    columns.push(
-      'pending_price_id',
-      'pending_product_id',
-      'pending_stripe_product_id',
-      'pending_interval',
-      'pending_amount',
-      'pending_currency',
-      'pending_effective_at',
-    )
-    values.push(
-      sub.pending.priceId,
-      sub.pending.productId,
-      sub.pending.stripeProductId,
-      sub.pending.interval,
-      sub.pending.amount,
-      sub.pending.currency,
-      sub.pending.effectiveAt,
-    )
   }
   const quoted = values.map((v) => {
     if (v === null) return 'NULL'
@@ -178,18 +150,19 @@ export function buildSeedSql(sub: SeedSubscription): string {
 async function main(): Promise<void> {
   const email = process.argv[2]
   if (!email) {
-    console.error(
-      '用法：pnpm exec tsx scripts/e2e-seed-subscription.ts <email> [--pending] [--history]',
-    )
+    console.error('用法：pnpm exec tsx scripts/e2e-seed-subscription.ts <email> [--history]')
     process.exit(1)
   }
-  // `--pending`：额外写一份「已安排、周期末生效」的降级，用来测账单页的待生效提示。
-  const withPending = process.argv.includes('--pending')
   // `--history`：额外写一份已取消的旧订阅，用来测「历史订阅」区块。
   const withHistory = process.argv.includes('--history')
+  const persistIndex = process.argv.indexOf('--persist-to')
+  const persistTo = persistIndex >= 0 ? process.argv[persistIndex + 1] : undefined
+  if (persistIndex >= 0 && (!persistTo || persistTo.startsWith('--'))) {
+    throw new Error('--persist-to 必须指定本地目录')
+  }
 
   // lookup_key 写在产品配置里（`src/config/products.ts`），不再从 env 读。
-  const lookupKey = resolveLookupKey('pro', 'month')
+  const lookupKey = resolvePriceReference('pro', 'monthly')
   if (!lookupKey) {
     console.error('❌ 产品配置里没有 pro 产品的月付 lookup_key，无法构造订阅行')
     process.exit(1)
@@ -213,16 +186,16 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  const userId = findUserIdByEmail(email)
+  const userId = findUserIdByEmail(email, persistTo)
   if (!userId) {
     console.error(`❌ 本地 D1 找不到用户：${email}`)
     process.exit(1)
   }
 
-  // 年付价：待生效的降级与历史订阅都用它，金额同样取自 Stripe，不能写死。
+  // 年付价：历史订阅使用它，金额同样取自 Stripe，不能写死。
   let yearlyPrice: (StripePrice & { unit_amount: number }) | null = null
-  if (withPending || withHistory) {
-    const yearlyLookupKey = resolveLookupKey('pro', 'year')
+  if (withHistory) {
+    const yearlyLookupKey = resolvePriceReference('pro', 'yearly')
     if (!yearlyLookupKey) {
       console.error('❌ 产品配置里没有 pro 产品的年付 lookup_key，无法构造年付订阅行')
       process.exit(1)
@@ -241,24 +214,6 @@ async function main(): Promise<void> {
     yearlyPrice = { ...fetched, unit_amount: fetched.unit_amount }
   }
 
-  // 待生效的降级：目标价同样取自 Stripe，不能写死金额。
-  let pending: SeedSubscription['pending']
-  if (withPending && yearlyPrice) {
-    pending = {
-      priceId: yearlyPrice.id,
-      productId: 'pro',
-      stripeProductId:
-        typeof yearlyPrice.product === 'string'
-          ? yearlyPrice.product
-          : (yearlyPrice.product?.id ?? null),
-      interval: yearlyPrice.recurring?.interval ?? 'year',
-      amount: yearlyPrice.unit_amount,
-      currency: yearlyPrice.currency,
-      // 生效时刻 = 当前周期的结束时刻，与当前价的续费时刻一致。
-      effectiveAt: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
-    }
-  }
-
   // 时间戳 + 随机段：同一邮箱重复 seed 时主键不撞。
   const unique = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
   const sql = buildSeedSql({
@@ -269,16 +224,13 @@ async function main(): Promise<void> {
     status: 'active',
     priceId: price.id,
     productId: 'pro',
-    stripeProductId:
-      typeof price.product === 'string' ? price.product : (price.product?.id ?? null),
     amount: price.unit_amount,
     currency: price.currency,
     interval: price.recurring?.interval ?? 'one_time',
     currentPeriodEnd: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
-    ...(pending ? { pending } : {}),
   })
 
-  execFileSync('wrangler', ['d1', 'execute', 'DB', '--local', '--json', '--command', sql], {
+  execFileSync('wrangler', buildLocalD1Args(sql, persistTo), {
     stdio: 'inherit',
   })
 
@@ -293,23 +245,15 @@ async function main(): Promise<void> {
       status: 'canceled',
       priceId: yearlyPrice.id,
       productId: 'pro',
-      stripeProductId:
-        typeof yearlyPrice.product === 'string'
-          ? yearlyPrice.product
-          : (yearlyPrice.product?.id ?? null),
       amount: yearlyPrice.unit_amount,
       currency: yearlyPrice.currency,
       interval: yearlyPrice.recurring?.interval ?? 'year',
       currentPeriodEnd: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 30,
       createdAt: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 60,
     })
-    execFileSync(
-      'wrangler',
-      ['d1', 'execute', 'DB', '--local', '--json', '--command', historySql],
-      {
-        stdio: 'inherit',
-      },
-    )
+    execFileSync('wrangler', buildLocalD1Args(historySql, persistTo), {
+      stdio: 'inherit',
+    })
   }
 
   console.log(`✅ 已为 ${email} 写入 active 订阅`)

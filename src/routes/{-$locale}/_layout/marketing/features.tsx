@@ -44,7 +44,7 @@ function FeaturesPage() {
       />
       <Cta
         title={m.features_cta_title()}
-        primaryCta={{ label: m.features_cta_primary(), href: '/pricing' }}
+        primaryCta={{ label: m.features_cta_primary(), href: `/${getLocale()}#pricing` }}
       />
     </>
   )

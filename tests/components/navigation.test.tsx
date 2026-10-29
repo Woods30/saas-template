@@ -78,6 +78,24 @@ function internalLink(
 }
 
 describe('Navbar 消费菜单配置（真实 Router）', () => {
+  it.each(['en', 'zh'] as const)('旧 %s 定价页跳转首页价格区且不展示演示商品', async (locale) => {
+    setLocale(locale, { reload: false })
+    await renderRoute(`/${locale}/pricing`)
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      locale === 'zh' ? '让想法更快上线。' : 'Launch your idea sooner.',
+    )
+    expect(
+      screen.getByRole('region', {
+        name: locale === 'zh' ? '一次购买，持续创造。' : 'Buy once. Keep building.',
+      }),
+    ).toHaveTextContent('$99')
+    expect(
+      screen.queryByText(locale === 'zh' ? '专业版' : 'Pro', { exact: true }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(locale === 'zh' ? '资源包' : 'Resource pack', { exact: true }),
+    ).not.toBeInTheDocument()
+  })
   it('渲染首页锚点、Docs、登录与主按钮的 href', async () => {
     await renderRoute('/en')
     const header = within(screen.getByRole('banner'))
@@ -90,7 +108,7 @@ describe('Navbar 消费菜单配置（真实 Router）', () => {
       'href',
       '/en#features',
     )
-    expect(header.getAllByRole('link', { name: "What's included" })[0]).toHaveAttribute(
+    expect(header.getAllByRole('link', { name: 'Pricing' })[0]).toHaveAttribute(
       'href',
       '/en#pricing',
     )
@@ -255,9 +273,11 @@ describe('首页 CTA 的 docs 回退', () => {
   it('docs 启用时指向 /{locale}/docs，关闭时回退 #features', async () => {
     await renderRoute('/en')
 
-    const hero = screen.getByRole('link', { name: 'See how to start' })
-    expect(hero).toHaveAttribute('href', '/en/docs')
-    expect(screen.getByRole('link', { name: 'Open the developer docs' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Get the source · $99' })).toHaveAttribute(
+      'href',
+      '#pricing',
+    )
+    expect(screen.getByRole('link', { name: 'See how to start' })).toHaveAttribute(
       'href',
       '/en/docs',
     )
@@ -266,13 +286,13 @@ describe('首页 CTA 的 docs 回退', () => {
     websiteConfig.docs.enabled = false
     await renderRoute('/en')
 
+    expect(screen.getByRole('link', { name: 'Get the source · $99' })).toHaveAttribute(
+      'href',
+      '#pricing',
+    )
     expect(screen.getByRole('link', { name: 'See how to start' })).toHaveAttribute(
       'href',
-      '/en/#features',
-    )
-    expect(screen.getByRole('link', { name: 'Open the developer docs' })).toHaveAttribute(
-      'href',
-      '/en/#features',
+      '#features',
     )
   })
 })
