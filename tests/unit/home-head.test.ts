@@ -49,7 +49,7 @@ describe('首页 head 的 i18n', () => {
     expect(en.meta).toContainEqual({
       name: 'description',
       content:
-        'Jerbix is a customizable SaaS starter for indie developers, built on TanStack Start and Cloudflare Workers to reduce repetitive auth, payment, and content integration work.',
+        'Jerbix is a SaaS starter built on best practices, with polished pages, auth, payments, email, languages, and Cloudflare deployment. Buy the complete source once, with lifetime support and free updates.',
     })
 
     withRequestLocale('zh')
@@ -57,7 +57,7 @@ describe('首页 head 的 i18n', () => {
     expect(zh.meta).toContainEqual({
       name: 'description',
       content:
-        'Jerbix 是面向独立开发者的 SaaS Starter 源码起步工程，基于 TanStack Start 与 Cloudflare Workers，减少认证、支付与内容模块的重复接线。',
+        'Jerbix 是基于最佳实践的 SaaS 脚手架，集成精美页面、认证、支付、邮件、多语言与 Cloudflare 部署。一次购买全部源码，永久支持，免费升级。',
     })
   })
 

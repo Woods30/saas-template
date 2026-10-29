@@ -281,7 +281,7 @@ describe('getSitemapPaths', () => {
     expect(locs).not.toContain(`${base}/en/marketing/contact`)
   })
 
-  it('模块开启时补上 pricing / contact', () => {
+  it('模块开启时收录 contact，但不收录跳转用的 pricing', () => {
     const config = makeConfig({
       payment: {
         enabled: true,
@@ -290,7 +290,7 @@ describe('getSitemapPaths', () => {
       contact: { enabled: true },
     })
     const locs = getSitemapPaths(config, 'en').map((p) => p.loc)
-    expect(locs).toContain(`${base}/en/pricing`)
+    expect(locs).not.toContain(`${base}/en/pricing`)
     // 联系页在 marketing 布局下，URL 必须带 `/marketing` 前缀，否则 sitemap 指向不存在的路径。
     expect(locs).toContain(`${base}/en/marketing/contact`)
   })
@@ -474,13 +474,15 @@ describe('页面路由门禁接线', () => {
     vi.resetModules()
   })
 
-  it('pricing 与 contact 关闭时 beforeLoad 抛 notFound', async () => {
+  it('payment 关闭时 pricing 仍跳首页，contact 关闭时抛 notFound', async () => {
     // 显式关闭：默认打开 payment，但门禁本身仍需被验证。
     const { Route: pricing } = (await importRouteWithConfig(
       { payment: { ...makeConfig().payment, enabled: false } },
       {},
       '@/routes/{-$locale}/pricing',
-    )) as { Route: { options: { beforeLoad: () => unknown } } }
+    )) as {
+      Route: { options: { beforeLoad: (context: { params: { locale: string } }) => unknown } }
+    }
     const { Route: contact } = (await importRouteWithConfig(
       { contact: { enabled: false } },
       {},
@@ -488,7 +490,14 @@ describe('页面路由门禁接线', () => {
     )) as { Route: { options: { beforeLoad: () => unknown } } }
     const pricingBeforeLoad = pricing.options.beforeLoad
     const contactBeforeLoad = contact.options.beforeLoad
-    expectNotFound(() => pricingBeforeLoad())
+    try {
+      pricingBeforeLoad({ params: { locale: 'zh' } })
+      expect.fail('旧价格页应跳转首页')
+    } catch (error) {
+      expect(error).toMatchObject({
+        options: { to: '/{-$locale}', params: { locale: 'zh' }, hash: 'pricing' },
+      })
+    }
     expectNotFound(() => contactBeforeLoad())
   })
 
@@ -759,7 +768,9 @@ describe('Stripe Webhook 不受 payment.enabled 门禁影响', () => {
     mocks.getServerContext.mockReturnValue({
       env: { STRIPE_SECRET_KEY: 'sk', STRIPE_WEBHOOK_SECRET: 'wh' },
     })
-    parseWebhookEvent.mockRejectedValueOnce(new Error('bad signature'))
+    parseWebhookEvent.mockRejectedValueOnce(
+      Object.assign(new Error('bad signature'), { type: 'StripeSignatureVerificationError' }),
+    )
     setupProvider()
     const { Route } = await import('@/routes/api/webhooks/stripe')
     const handler = getHandler(Route, 'POST')
@@ -779,8 +790,9 @@ describe('Stripe Webhook 不受 payment.enabled 门禁影响', () => {
     })
     parseWebhookEvent.mockResolvedValueOnce({
       id: 'evt_disabled_ok',
+      provider: 'stripe',
+      created: 100,
       type: 'unknown.event',
-      data: { object: {} },
     })
     setupProvider()
     // 模拟首次插入返回一行。
@@ -791,7 +803,14 @@ describe('Stripe Webhook 不受 payment.enabled 门禁影响', () => {
     const updateWhere = vi.fn().mockResolvedValue([])
     const updateSet = vi.fn().mockReturnValue({ where: updateWhere })
     const update = vi.fn().mockReturnValue({ set: updateSet })
-    mocks.createDb.mockReturnValue({ insert, update, select: vi.fn(), delete: vi.fn() })
+    const select = vi
+      .fn()
+      .mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([]) }) })
+    values.mockReturnValue({
+      onConflictDoNothing,
+      onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+    })
+    mocks.createDb.mockReturnValue({ insert, update, select, delete: vi.fn() })
 
     const { Route } = await import('@/routes/api/webhooks/stripe')
     const handler = getHandler(Route, 'POST')

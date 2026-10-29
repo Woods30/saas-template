@@ -69,7 +69,6 @@ export function getSitemapPaths(
   if (config.docs.enabled) pushStatic('/docs')
   if (config.blog.enabled) pushStatic('/marketing/blog')
   if (config.changelog.enabled) pushStatic('/marketing/changelog')
-  if (config.payment.enabled) pushStatic('/pricing')
   if (config.contact.enabled) pushStatic('/marketing/contact')
 
   // 博客 slug 取 `_meta.path`，URL 前缀是真实路由 `/marketing/blog/`。

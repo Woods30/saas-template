@@ -2,11 +2,15 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { z } from 'zod'
 import { AuthLayout } from '@/components/auth/AuthLayout'
 import { assertPageEnabled } from '@/lib/module-access'
+import { safeInternalPath } from '@/lib/urls'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/auth/verify-email')({
   // 未识别的参数一律忽略：用户可能手改 URL，不应因此 400。
-  validateSearch: z.object({ error: z.string().optional() }),
+  validateSearch: z.object({
+    error: z.string().optional(),
+    redirect: z.unknown().transform(safeInternalPath).optional(),
+  }),
   beforeLoad: () => assertPageEnabled('auth'),
   component: VerifyEmailPage,
 })
@@ -20,7 +24,7 @@ export const Route = createFileRoute('/{-$locale}/auth/verify-email')({
 const INVALID_TOKEN_CODES = new Set(['INVALID_TOKEN', 'TOKEN_EXPIRED', 'USER_NOT_FOUND'])
 
 function VerifyEmailPage() {
-  const { error } = Route.useSearch()
+  const { error, redirect } = Route.useSearch()
   const failed = error !== undefined && INVALID_TOKEN_CODES.has(error)
 
   return (
@@ -30,6 +34,7 @@ function VerifyEmailPage() {
       </p>
       <Link
         to="/{-$locale}/auth/login"
+        search={{ redirect }}
         className="mt-4 block text-center text-sm text-muted-foreground underline hover:text-foreground"
       >
         {m.auth_error_back()}

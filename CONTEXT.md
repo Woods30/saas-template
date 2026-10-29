@@ -77,8 +77,7 @@
   菜单契约、服务状态、配置文档）、工作台（`/{locale}/dashboard/*`：资料 / 安全 / 登录设备 /
   通知偏好 / API 密钥 / 用户管理，含 `fetchSession` 守卫）与表单统一（TanStack Form +
   Zod + shadcn `Field`）。
-- **尚未实现**：账单与订阅设置（账户工作台仅完成资料 / 安全 / 设备 / 通知 / API 密钥 /
-  用户管理六块）、文件上传、AI 网关、PWA。`websiteConfig.features` 中对应的开关是能力边界
+- **尚未实现**：文件上传、AI 网关、PWA。`websiteConfig.features` 中对应的开关是能力边界
   标记，不注册路由。
 - **Node 下限**：`package.json` 的 `engines.node` 为 `^22.12.0 || ^24.0.0 || >=26.0.0`（`vitest@5`
   排除奇数大版本 23 / 25，故为精确 union 而非简单 `>=`；`wrangler` 要求 ≥22、
@@ -96,3 +95,10 @@
 
 > 提醒：术语表与不变量应随每个 sub-plan 落地同步更新；尚未实现的模块不要在实现前登记为
 > 既有概念。
+
+## 支付模型
+
+- 套餐只在 `src/config/products.ts` 声明一次，prices 映射本站选项到当前 provider 销售引用。
+- 站点选择一个 provider，当前为 Stripe；金额和真实周期来自外部价格目录。
+- 账号全局最多一份未终止订阅，一次性商品独立购买，不存在等级互斥或买断接管。
+- 订阅管理交给托管 Portal；Webhook 由适配器转换，通用 events.ts 落库。

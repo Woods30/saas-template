@@ -50,7 +50,7 @@ describe('公共链接目标', () => {
     ['docs', '/{-$locale}/docs'],
     ['blog', '/{-$locale}/marketing/blog'],
     ['changelog', '/{-$locale}/marketing/changelog'],
-    ['pricing', '/{-$locale}/pricing'],
+    ['pricing', '/{-$locale}'],
     ['contact', '/{-$locale}/marketing/contact'],
     ['roadmap', '/{-$locale}/marketing/roadmap'],
     ['waitlist', '/{-$locale}/marketing/waitlist'],
@@ -63,6 +63,7 @@ describe('公共链接目标', () => {
     for (const locale of ['zh', 'en'] as const) {
       const options = getPublicLinkOptions(target, locale)
       expect(options.to).toBe(to)
+      if (target === 'pricing') expect(options).toHaveProperty('hash', 'pricing')
       expect(options.params).toEqual(slug ? { locale, slug } : { locale })
     }
   })

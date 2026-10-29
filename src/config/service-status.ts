@@ -1,12 +1,7 @@
 import { z } from 'zod'
 import type { PublicEnv } from '@/env/public'
 import type { ServerEnv } from '@/env/server'
-import {
-  collectLookupKeys,
-  findDuplicateLookupKeys,
-  findUnknownExclusiveRefs,
-  findUnknownTierRefs,
-} from './products'
+import { collectPriceReferences, productConfigErrors } from './products'
 import type { ServiceModule, WebsiteConfig } from './website'
 
 /**
@@ -143,10 +138,10 @@ export function getServiceStatuses(input: {
       ['STRIPE_SECRET_KEY', !!env.STRIPE_SECRET_KEY, 'env'],
       ['STRIPE_WEBHOOK_SECRET', !!env.STRIPE_WEBHOOK_SECRET, 'env'],
       // 一个 lookup key 都没配：定价页取不到任何价格，结账也无从下手。
-      ['payment.products', collectLookupKeys().length > 0, 'src/config/products.ts'],
+      ['payment.products', collectPriceReferences().length > 0, 'src/config/products.ts'],
     ],
     [],
-    // 产品配置写错（重复 key、互斥指向不存在的产品）会让归属判定出错，
+    // 重复产品 ID 或价格引用会让价格归属判定出错，
     // 属于「配置矛盾」：字段都在，但组合起来是错的。
     validateProductConfig(),
   )
@@ -244,43 +239,11 @@ export function validateWebsiteConfig(config: WebsiteConfig): ConfigIssue[] {
   return issues
 }
 
-/**
- * 校验产品配置里的**结构性**问题。
- *
- * 这些不是「字段缺失」，而是「配置写错了」：重复的 lookup_key 会让价格归属有歧义，
- * 指向不存在产品的互斥关系会**静默失效**——用户同时付月费和终身费，却看不到任何
- * 提示。类型系统守不住这两种错配，必须在自检里挑出来。
- */
+/** 校验套餐 ID 与销售引用，避免空值或重复配置导致归属不明确。 */
 export function validateProductConfig(): ConfigIssue[] {
-  const issues: ConfigIssue[] = []
-  const location = 'src/config/products.ts' as const
-
-  // 同一个 lookup key 挂到两个产品上：Price → 产品的反查有歧义，归属会漂。
-  for (const key of findDuplicateLookupKeys()) {
-    issues.push({
-      key: `payment.products.duplicateLookupKey.${key}`,
-      location,
-      reason: '同一个 lookup_key 配在了多个产品上，价格归属会不明确',
-    })
-  }
-
-  // 互斥关系指向不存在的产品：互斥不生效，用户会同时付两份钱。
-  for (const ref of findUnknownExclusiveRefs()) {
-    issues.push({
-      key: `payment.products.exclusiveWith.${ref}`,
-      location,
-      reason: '互斥关系指向的产品不存在，该互斥不会生效',
-    })
-  }
-
-  // 等级指向不存在的产品：该产品永远不参与等级比较，「高级别替换低级别」静默失效。
-  for (const ref of findUnknownTierRefs()) {
-    issues.push({
-      key: `payment.products.tier.${ref}`,
-      location,
-      reason: '等级指向的产品不存在，该产品不会参与等级比较',
-    })
-  }
-
-  return issues
+  return productConfigErrors().map((error) => ({
+    key: `payment.products.${error}`,
+    location: 'src/config/products.ts' as const,
+    reason: '套餐 ID、价格引用重复或为空，请检查套餐配置',
+  }))
 }

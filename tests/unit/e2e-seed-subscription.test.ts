@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { buildSeedSql } from '../../scripts/e2e-seed-subscription'
+import { buildLocalD1Args, buildSeedSql } from '../../scripts/e2e-seed-subscription'
+
+describe('buildLocalD1Args', () => {
+  it('隔离目录应用于所有本地 SQL，始终保留 --local', () => {
+    expect(buildLocalD1Args('SELECT 1', '.wrangler/payment-e2e-state')).toEqual([
+      'd1',
+      'execute',
+      'DB',
+      '--local',
+      '--json',
+      '--persist-to',
+      '.wrangler/payment-e2e-state',
+      '--command',
+      'SELECT 1',
+    ])
+  })
+})
 
 /**
  * seed 脚本的 SQL 构造（数据形状而非执行）：字段写错不会报错，只会让账单页显示 `—`，
@@ -30,7 +46,7 @@ describe('buildSeedSql', () => {
       'status',
       'price_id',
       'product_id',
-      'stripe_product_id',
+      'offer_id',
       'amount',
       'currency',
       'interval',
@@ -66,39 +82,6 @@ describe('buildSeedSql', () => {
 
   it('status 写 active，让重复订阅守卫命中', () => {
     expect(buildSeedSql(base)).toContain("'active'")
-  })
-
-  it('给了待生效变更时写入 pending_* 列，时间戳同样是裸整数', () => {
-    const sql = buildSeedSql({
-      ...base,
-      pending: {
-        priceId: 'price_year',
-        productId: 'pro',
-        stripeProductId: 'prod_e2e_pro',
-        interval: 'year',
-        amount: 5990,
-        currency: 'usd',
-        effectiveAt: 1797690509,
-      },
-    })
-    for (const column of [
-      'pending_price_id',
-      'pending_product_id',
-      'pending_stripe_product_id',
-      'pending_interval',
-      'pending_amount',
-      'pending_currency',
-      'pending_effective_at',
-    ]) {
-      expect(sql, `缺少列 ${column}`).toContain(column)
-    }
-    expect(sql).toContain('1797690509')
-    expect(sql).not.toContain('datetime(')
-  })
-
-  it('没有待生效变更时不写 pending_* 列', () => {
-    const sql = buildSeedSql(base)
-    expect(sql).not.toContain('pending_price_id')
   })
 
   it('给了创建时间就写 created_at：历史行必须比当前行旧', () => {

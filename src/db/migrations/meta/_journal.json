@@ -57,6 +57,13 @@
       "when": 1792979792012,
       "tag": "0007_stale_skrulls",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1793184143667,
+      "tag": "0008_payment_simplification",
+      "breakpoints": true
     }
   ]
 }

@@ -1,10 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LandingPage } from '@/components/marketing/LandingPage'
+import { websiteConfig } from '@/config/website'
 import { getLocale, setLocale } from '@/locale/paraglide/runtime.js'
 
-// 只替换路由边界，正文与 locale 使用真实组件和运行时。
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
     children,
@@ -25,186 +25,328 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }))
 
-beforeEach(() => setLocale('zh', { reload: false }))
+const auth = vi.hoisted(() => ({ session: null as { user: { id: string } } | null }))
+vi.mock('@/auth/client', () => ({ useSession: () => ({ data: auth.session, isPending: false }) }))
+
+const originalConfig = structuredClone(websiteConfig)
+let motion: MediaQueryList
+beforeEach(() => {
+  auth.session = null
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Unavailable', { status: 400 })))
+  setLocale('zh', { reload: false })
+  motion = Object.assign(new EventTarget(), {
+    matches: false,
+    media: '(prefers-reduced-motion: reduce)',
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+  }) as unknown as MediaQueryList
+  vi.spyOn(window, 'matchMedia').mockReturnValue(motion)
+})
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+  Object.assign(websiteConfig, structuredClone(originalConfig))
   setLocale('zh', { reload: false })
 })
+function advance(ms: number) {
+  act(() => {
+    vi.advanceTimersByTime(ms)
+  })
+}
+function reduce(matches: boolean) {
+  act(() => {
+    Object.defineProperty(motion, 'matches', { value: matches, configurable: true })
+    motion.dispatchEvent(new Event('change'))
+  })
+}
+function visibility(hidden: boolean) {
+  act(() => {
+    vi.spyOn(document, 'hidden', 'get').mockReturnValue(hidden)
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+}
+function demo() {
+  return screen.getByRole('figure', { name: /源码与产品预览|Source and product preview/ })
+}
 
 describe('LandingPage', () => {
-  it.each(['zh', 'en'] as const)('%s 首页连接品牌 Slogan、跳鼠故事与独立创造者', (locale) => {
+  it.each(['zh', 'en'] as const)('%s 首页销售模板源码并说明持续扩展能力', (locale) => {
     setLocale(locale, { reload: false })
     const { container } = render(<LandingPage />)
-    expect(container).toHaveTextContent('Small Steps. Big Leaps.')
-    expect(container).toHaveTextContent('Jerbix Starter')
-    const story = screen.getByRole('region', {
-      name: locale === 'zh' ? '小小的身躯，也能跨越远方。' : 'Small makers. Far horizons.',
-    })
-    expect(story).toHaveTextContent(locale === 'zh' ? '跳鼠' : 'jerboa')
-    expect(story).toHaveTextContent(locale === 'zh' ? '一个人' : 'solo maker')
-    expect(story).toHaveTextContent('Small Steps. Big Leaps.')
-    expect(container).not.toHaveTextContent(/工程能力示意|Engineering illustration|JERBIX \/ LAB/)
-  })
-  it.each(['zh', 'en'] as const)('%s 首页优先呈现技术栈与可复用组件，首屏保持简短', (locale) => {
-    setLocale(locale, { reload: false })
-    const { container } = render(<LandingPage />)
-    const hero = container.querySelector('.lab-hero')
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Leap from Idea to Launch.')
-    expect(screen.getByRole('heading', { level: 1 })).toHaveAttribute('lang', 'en')
-    expect(hero).not.toHaveTextContent('Small Steps. Big Leaps.')
-    const stack = container.querySelector('#stack')
-    expect(stack).toHaveTextContent('TanStack Start')
-    expect(stack).toHaveTextContent('Cloudflare')
-    expect(stack).toHaveTextContent('shadcn/ui')
-    expect(stack).toHaveTextContent('Base UI')
-    expect(stack).toHaveTextContent('Biome')
-    expect(stack).toHaveTextContent('Vitest')
-    expect(container.querySelectorAll('#story')).toHaveLength(1)
-  })
-  it('跳跃旅程串联灵感、构建与上线，并可暂停和恢复动效', () => {
-    const { container } = render(<LandingPage />)
-    const idea = screen.getByRole('button', { name: '01 灵感' })
-    const build = screen.getByRole('button', { name: '02 构建' })
-    const launch = screen.getByRole('button', { name: '03 上线' })
-    expect(idea).toHaveAttribute('aria-pressed', 'true')
-    fireEvent.click(build)
-    expect(build).toHaveAttribute('aria-pressed', 'true')
-    expect(idea).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByRole('region', { name: '02 构建' })).toHaveTextContent('Jerbix Starter')
-    expect(container.querySelector('.leap-scene')).toHaveAttribute('data-step', '1')
-    fireEvent.click(launch)
-    expect(screen.getByRole('region', { name: '03 上线' })).toHaveTextContent('用户')
-    expect(container.querySelector('.leap-scene')).toHaveAttribute('data-step', '2')
-    fireEvent.click(screen.getByRole('button', { name: '暂停动效' }))
-    expect(screen.getByRole('button', { name: '恢复动效' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '恢复动效' }))
-    expect(screen.getByRole('button', { name: '暂停动效' })).toBeInTheDocument()
-  })
-
-  it('启动步骤可切换对应预览面板', () => {
-    render(<LandingPage />)
-    const resources = screen.getByRole('button', { name: /配置自己的资源/ })
-    const business = screen.getByRole('button', { name: /接入产品业务/ })
-    const deploy = screen.getByRole('button', { name: /检查，然后部署/ })
-    expect(resources).toHaveAttribute('aria-pressed', 'true')
-    fireEvent.click(business)
-    expect(business).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('region', { name: /接入产品业务/ })).toHaveTextContent('src/routes/')
-    fireEvent.click(deploy)
-    expect(screen.getByRole('region', { name: /检查，然后部署/ })).toHaveTextContent('pnpm build')
-  })
-
-  it('双语场景可以切换预览，不改变页面语言', () => {
-    render(<LandingPage />)
-    const preview = screen.getByRole('group', { name: '语言预览' })
-    fireEvent.click(screen.getByRole('button', { name: 'English' }))
-    expect(preview).toHaveTextContent('Build your next idea.')
-    expect(getLocale()).toBe('zh')
-    fireEvent.click(screen.getByRole('button', { name: '中文' }))
-    expect(preview).toHaveTextContent('构建你的下一个想法。')
-  })
-  it('保留特性 / 源码说明 / FAQ 锚点，并提供三步启动流程', () => {
-    const { container } = render(<LandingPage />)
-    for (const id of ['features', 'pricing', 'faq', 'workflow']) {
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      locale === 'zh'
+        ? '不必从零开发，让想法更快上线。'
+        : 'Skip the groundwork. Launch your idea sooner.',
+    )
+    expect(container.querySelector('.lab-hero')).toHaveTextContent('Small Steps. Big Leaps.')
+    expect(container.querySelector('#pricing')).toHaveTextContent('$99')
+    expect(container.querySelector('#pricing')).toHaveTextContent(
+      locale === 'zh' ? '永久支持' : 'Lifetime support',
+    )
+    expect(container.querySelector('#pricing')).toHaveTextContent(
+      locale === 'zh' ? '免费升级' : 'Free updates',
+    )
+    expect(container).not.toHaveTextContent(/专业版|资源包|Pro monthly|Resource pack/)
+    for (const id of ['features', 'pricing', 'workflow', 'faq'])
       expect(container.querySelector(`#${id}`)).not.toBeNull()
-    }
-  })
-
-  it('连续 zh → en → zh render 时，标题、能力正文与文档入口跟随真实 locale', () => {
-    const { rerender } = render(<LandingPage />)
-    const cases = [
-      {
-        locale: 'zh',
-        title: 'Leap from Idea to Launch.',
-        feature: '认证基础，少写重复代码',
-        cta: '了解如何开始',
-      },
-      {
-        locale: 'en',
-        title: 'Leap from Idea to Launch.',
-        feature: 'Auth foundations, less repetitive code',
-        cta: 'See how to start',
-      },
-      {
-        locale: 'zh',
-        title: 'Leap from Idea to Launch.',
-        feature: '认证基础，少写重复代码',
-        cta: '了解如何开始',
-      },
-    ] as const
-    for (const { locale, title, feature, cta } of cases) {
-      setLocale(locale, { reload: false })
-      expect(getLocale()).toBe(locale)
-      rerender(<LandingPage />)
-      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(title)
-      expect(screen.getByRole('heading', { name: feature })).toBeInTheDocument()
-      expect(screen.getByRole('link', { name: cta })).toHaveAttribute('href', `/${locale}/docs`)
-    }
-  })
-
-  it.each(['zh', 'en'] as const)(
-    '%s 首页说明源码与自有资源，不展示演示套餐、性能数字或用户评价',
-    (locale) => {
-      setLocale(locale, { reload: false })
-      const { container } = render(<LandingPage />)
-      expect(container).not.toHaveTextContent(
-        /\$29|\$99|100ms|200\+|最多 3 个用户|Up to 3 users|用户怎么说|What users say|三天上线 MVP|Launched our MVP/i,
-      )
-      expect(
-        screen.queryByRole('link', { name: /立即注册|Create account/i }),
-      ).not.toBeInTheDocument()
-      expect(container.querySelector('#pricing')).toHaveTextContent(
-        locale === 'zh' ? '源码可修改' : 'Source you can modify',
-      )
-      expect(container.querySelector('#pricing')).toHaveTextContent(
-        locale === 'zh' ? '服务凭据' : 'service credentials',
-      )
-      expect(
-        screen.getByRole('link', {
-          name: locale === 'zh' ? '探索内置能力' : 'Explore built-in capabilities',
-        }),
-      ).toHaveAttribute('href', '#features')
-    },
-  )
-
-  // 定价模块受 `payment.enabled` 门禁；链接指向的 `/pricing` 自带同一道门禁。
-  it.each(['zh', 'en'] as const)('%s 首页展示方案概览并导流定价页', (locale) => {
-    setLocale(locale, { reload: false })
-    const { container } = render(<LandingPage />)
-
-    const plans = container.querySelector('#plans')
-    expect(plans).not.toBeNull()
-    // 只展示付费方案：免费版没有价格，在这个区块里是噪音。
-    expect(plans).toHaveTextContent(locale === 'zh' ? '专业版' : 'Pro')
-    expect(plans).toHaveTextContent(locale === 'zh' ? '终身版' : 'Lifetime')
-    expect(plans).not.toHaveTextContent(locale === 'zh' ? '免费版' : 'Free')
-
+    expect(container.querySelector('#features')).toHaveTextContent('API Key')
+    expect(container.querySelector('#features')).toHaveTextContent('SEO')
+    expect(container.querySelector('#features')).toHaveTextContent(
+      locale === 'zh' ? '更多语言' : 'more languages',
+    )
+    expect(container.querySelector('#features')).toHaveTextContent(
+      locale === 'zh' ? '更多支付服务商' : 'more payment providers',
+    )
     expect(
       screen.getByRole('link', {
-        name: locale === 'zh' ? '查看完整方案' : 'See all plans',
+        name: locale === 'zh' ? '获取全部源码 · $99' : 'Get the source · $99',
       }),
-    ).toBeInTheDocument()
+    ).toHaveAttribute('href', '#pricing')
   })
 
-  it.each(['zh', 'en'] as const)(
-    '%s FAQ 包含五问，展开后准确说明 D1 SQLite 与 Drizzle',
-    (locale) => {
+  it('locale 连续切换时标题与文档入口跟随语言', () => {
+    const { rerender } = render(<LandingPage />)
+    for (const locale of ['zh', 'en', 'zh'] as const) {
       setLocale(locale, { reload: false })
+      rerender(<LandingPage />)
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+        locale === 'zh' ? '让想法更快上线。' : 'Launch your idea sooner.',
+      )
+      expect(
+        screen.getByRole('link', { name: locale === 'zh' ? '看看如何开始' : 'See how to start' }),
+      ).toHaveAttribute('href', `/${locale}/docs`)
+    }
+  })
+
+  it.each([true, false])(
+    '支付模块 enabled=%s 不改变模板定价，文档关闭时不导向关闭页面',
+    (enabled) => {
+      auth.session = { user: { id: 'user_1' } }
+      websiteConfig.payment.enabled = enabled
+      websiteConfig.docs.enabled = false
       const { container } = render(<LandingPage />)
-      const faq = container.querySelector('#faq')
-      expect(faq?.querySelectorAll('details')).toHaveLength(5)
-      const summary = screen.getByText(
-        locale === 'zh' ? '使用什么数据库？' : 'Which database does it use?',
+      expect(container.querySelector('#pricing')).toHaveTextContent('$99')
+      expect(
+        within(screen.getByRole('region', { name: '一次购买，持续创造。' })).getByRole('button', {
+          name: '立即购买',
+        }),
+      )[enabled ? 'toBeEnabled' : 'toBeDisabled']()
+      expect(screen.getByRole('link', { name: '看看如何开始' })).toHaveAttribute(
+        'href',
+        '#features',
       )
-      fireEvent.click(summary)
-      expect(summary.closest('details')).toHaveAttribute('open')
-      expect(summary.closest('details')).toHaveTextContent(
-        locale === 'zh' ? 'D1（SQLite）' : 'D1 (SQLite)',
-      )
-      expect(summary.closest('details')).toHaveTextContent('Drizzle')
-      expect(faq).not.toHaveTextContent(
-        /PostgreSQL|MySQL|MFA|Magic Link|退款全流程|delivery tracking/i,
-      )
+      expect(
+        [...container.querySelectorAll('a')].some((a) =>
+          /\/docs|\/pricing/.test(a.getAttribute('href') ?? ''),
+        ),
+      ).toBe(false)
     },
   )
+
+  it.each(['zh', 'en'] as const)('%s 未登录购买先登录并携带继续购买目标', (locale) => {
+    setLocale(locale, { reload: false })
+    render(<LandingPage />)
+    const pricing = screen.getByRole('region', {
+      name: locale === 'zh' ? '一次购买，持续创造。' : 'Buy once. Keep building.',
+    })
+    const link = within(pricing).getByRole('link', {
+      name: locale === 'zh' ? '立即购买' : 'Buy now',
+    })
+    const url = new URL(link.getAttribute('href') ?? '', 'https://example.com')
+    expect(url.pathname).toBe(`/${locale}/auth/login`)
+    expect(url.searchParams.get('redirect')).toBe(`/${locale}/#pricing`)
+  })
+
+  it('登录后通过现有 Checkout 购买模板，等待期间禁止重复提交', async () => {
+    auth.session = { user: { id: 'user_1' } }
+    let finish!: (response: Response) => void
+    const request = vi.fn(
+      (_url: string, _init?: RequestInit) =>
+        new Promise<Response>((resolve) => {
+          finish = resolve
+        }),
+    )
+    vi.stubGlobal('fetch', request)
+    const assign = vi.fn()
+    vi.stubGlobal('location', { ...window.location, assign })
+    render(<LandingPage />)
+    const button = within(screen.getByRole('region', { name: '一次购买，持续创造。' })).getByRole(
+      'button',
+      { name: '立即购买' },
+    )
+    fireEvent.click(button)
+    expect(button).toBeDisabled()
+    expect(JSON.parse(request.mock.calls[0]?.[1]?.body as string)).toMatchObject({
+      productId: 'template',
+      offerId: 'once',
+      locale: 'zh',
+    })
+    expect(JSON.parse(request.mock.calls[0]?.[1]?.body as string).cancelUrl).toBe(
+      `${websiteConfig.baseUrl.replace(/\/$/, '')}/zh/#pricing`,
+    )
+    await act(async () =>
+      finish(new Response(JSON.stringify({ url: 'https://checkout.stripe.com/template' }))),
+    )
+    expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/template')
+  })
+
+  it('服务商价格未配置时明确提示并允许重试', async () => {
+    auth.session = { user: { id: 'user_1' } }
+    render(<LandingPage />)
+    const pricing = screen.getByRole('region', { name: '一次购买，持续创造。' })
+    fireEvent.click(within(pricing).getByRole('button', { name: '立即购买' }))
+    await waitFor(() =>
+      expect(within(pricing).getByRole('status')).toHaveTextContent('该方案暂未开放购买。'),
+    )
+    expect(within(pricing).getByRole('button', { name: '立即购买' })).toBeEnabled()
+  })
+
+  it('会话失效时仍引导登录并保留购买目标', async () => {
+    auth.session = { user: { id: 'user_1' } }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Unauthorized', { status: 401 })))
+    const assign = vi.fn()
+    vi.stubGlobal('location', { ...window.location, assign })
+    render(<LandingPage />)
+    fireEvent.click(
+      within(screen.getByRole('region', { name: '一次购买，持续创造。' })).getByRole('button', {
+        name: '立即购买',
+      }),
+    )
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledWith('/zh/auth/login?redirect=%2Fzh%2F%23pricing'),
+    )
+  })
+
+  it('源码与页面同步更新，默认自动进入第二轮', () => {
+    vi.useFakeTimers()
+    render(<LandingPage />)
+    expect(demo()).toHaveTextContent("'Jerbix'")
+    advance(850)
+    expect(demo()).toHaveTextContent("'你的品牌'")
+    advance(950)
+    expect(demo()).toHaveTextContent('你的想法，现在开始。')
+    advance(1200)
+    expect(demo()).toHaveTextContent('支持部署到 Cloudflare')
+    advance(3000)
+    expect(demo()).toHaveTextContent("'Jerbix'")
+    advance(850)
+    expect(demo()).toHaveTextContent("'你的品牌'")
+  })
+
+  it('暂停保持阶段，后台回来不解除暂停，恢复后可重播', () => {
+    vi.useFakeTimers()
+    render(<LandingPage />)
+    advance(850)
+    fireEvent.click(screen.getByRole('button', { name: '暂停动效' }))
+    visibility(true)
+    advance(10000)
+    visibility(false)
+    expect(demo()).toHaveTextContent("'你的品牌'")
+    expect(demo()).not.toHaveTextContent('你的想法，现在开始。')
+    expect(vi.getTimerCount()).toBe(0)
+    fireEvent.click(screen.getByRole('button', { name: '恢复动效' }))
+    advance(950)
+    expect(demo()).toHaveTextContent('你的想法，现在开始。')
+    fireEvent.click(screen.getByRole('button', { name: '重播演示' }))
+    expect(demo()).toHaveTextContent("'Jerbix'")
+    advance(850)
+    expect(demo()).toHaveTextContent("'你的品牌'")
+  })
+
+  it('后台停止计时，返回前台后继续，卸载清除任务', () => {
+    vi.useFakeTimers()
+    const { unmount } = render(<LandingPage />)
+    advance(850)
+    visibility(true)
+    expect(vi.getTimerCount()).toBe(0)
+    advance(10000)
+    visibility(false)
+    advance(950)
+    expect(demo()).toHaveTextContent('你的想法，现在开始。')
+    unmount()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('减少动态效果优先于重播，偏好恢复后继续循环', () => {
+    vi.useFakeTimers()
+    reduce(true)
+    render(<LandingPage />)
+    expect(demo()).toHaveTextContent('支持部署到 Cloudflare')
+    expect(vi.getTimerCount()).toBe(0)
+    fireEvent.click(screen.getByRole('button', { name: '重播演示' }))
+    expect(demo()).toHaveTextContent('支持部署到 Cloudflare')
+    expect(vi.getTimerCount()).toBe(0)
+    reduce(false)
+    advance(6000)
+    expect(demo()).toHaveTextContent("'Jerbix'")
+    reduce(true)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('重播清零进度并解除暂停，重新保留完整的首阶段', () => {
+    vi.useFakeTimers()
+    render(<LandingPage />)
+    advance(2400)
+    fireEvent.click(screen.getByRole('button', { name: '暂停动效' }))
+    fireEvent.click(screen.getByRole('button', { name: '重播演示' }))
+    expect(demo()).toHaveTextContent("'Jerbix'")
+    advance(849)
+    expect(demo()).toHaveTextContent("'Jerbix'")
+    advance(1)
+    expect(demo()).toHaveTextContent("'你的品牌'")
+    advance(1550)
+    fireEvent.click(screen.getByRole('button', { name: '重播演示' }))
+    expect(demo()).toHaveTextContent("'Jerbix'")
+    advance(849)
+    expect(demo()).toHaveTextContent("'Jerbix'")
+  })
+
+  it('启动流程能切换到部署指令', () => {
+    render(<LandingPage />)
+    fireEvent.click(screen.getByRole('button', { name: /检查，然后部署/ }))
+    expect(screen.getByRole('region', { name: /检查，然后部署/ })).toHaveTextContent('pnpm deploy')
+  })
+
+  it('语言示例切换不改变站点 locale', () => {
+    render(<LandingPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'English' }))
+    expect(screen.getByRole('group', { name: '语言预览' })).toHaveTextContent(
+      'Build your next idea.',
+    )
+    expect(getLocale()).toBe('zh')
+  })
+
+  it('修改配置金额后，FAQ 与价格区保持一致', () => {
+    websiteConfig.template.priceUsd = 199
+    const { container } = render(<LandingPage />)
+    expect(container.querySelector('#pricing')).toHaveTextContent('$199')
+    expect(container.querySelector('#faq')).not.toHaveTextContent('$99')
+  })
+
+  it('暂停与后台状态同时控制页面其余持续动效', () => {
+    const { container } = render(<LandingPage />)
+    const root = container.querySelector('.landing-lab')
+    expect(root).toHaveAttribute('data-motion', 'running')
+    fireEvent.click(screen.getByRole('button', { name: '暂停动效' }))
+    expect(root).toHaveAttribute('data-motion', 'paused')
+    visibility(true)
+    visibility(false)
+    expect(root).toHaveAttribute('data-motion', 'paused')
+    fireEvent.click(screen.getByRole('button', { name: '恢复动效' }))
+    expect(root).toHaveAttribute('data-motion', 'running')
+    visibility(true)
+    expect(root).toHaveAttribute('data-motion', 'paused')
+  })
+
+  it('FAQ 保留配置与数据库事实，不虚构客户评价', () => {
+    const { container } = render(<LandingPage />)
+    const summary = screen.getByText('使用什么数据库？')
+    fireEvent.click(summary)
+    expect(summary.closest('details')).toHaveAttribute('open')
+    expect(summary.closest('details')).toHaveTextContent('D1（SQLite）')
+    expect(container).not.toHaveTextContent(/三天上线 MVP|100ms|用户怎么说/)
+  })
 })
