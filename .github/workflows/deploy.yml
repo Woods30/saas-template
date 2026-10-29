@@ -223,6 +223,24 @@ jobs:
           BASE_URL: ${{ vars.VITE_BASE_URL || secrets.VITE_BASE_URL }}
         run: |
           set -euo pipefail
+          # 首次绑定自定义域名时 DNS 与证书签发需要时间（通常几分钟）。直接检查会以
+          # 「Could not resolve host」失败，掩盖真正的部署问题，故先等待域名就绪。
+          echo "等待 $BASE_URL 可解析并响应…"
+          ready=0
+          for attempt in $(seq 1 60); do
+            code=$(curl -sS -L --max-time 20 -o /dev/null -w '%{http_code}' "$BASE_URL/" 2>/dev/null || echo 000)
+            if [ "$code" = "200" ]; then
+              echo "就绪（第 $attempt 次探测，HTTP $code）"
+              ready=1
+              break
+            fi
+            echo "第 $attempt 次探测：HTTP $code，5 秒后重试"
+            sleep 5
+          done
+          if [ "$ready" != "1" ]; then
+            echo "::error::5 分钟内 $BASE_URL 未就绪；检查自定义域名绑定与 DNS 记录"
+            exit 1
+          fi
           for path in / /docs/getting-started; do
             code=$(curl --retry 3 --retry-delay 2 --max-time 30 -sS -L -o /dev/null -w '%{http_code}' "$BASE_URL$path")
             echo "$path → $code"
