@@ -144,28 +144,46 @@ Deployed demo triggers
 
 ## 自动部署
 
-`main` 分支的 CI 通过后自动部署。用 `workflow_run` 而非独立的 `push` 触发器，是为了让
-「CI 绿」成为部署的硬前置——两个 workflow 各跑各的时，CI 红了部署照样会发。
+合并到 `main` 只运行 CI。发布**正式 GitHub Release**（`release.published`）后，Deploy 工作流才部署；草稿、预发布、单独推送 tag 均不触发生产部署。
 
-配置四个 GitHub Secret：
+流程为：PR → 合并 `main` → 等该提交的 CI 成功 → 发布与 `package.json` 版本一致的 tag（如 `v0.2.0`）→ Deploy → 冒烟检查。工作流要求 tag 对应提交属于 `main`，且该提交在 `main` 的 push CI 已成功，再按不可变 SHA 部署。若发布时 CI 尚未完成，待 CI 成功后在 Actions 中重新运行 Deploy。
+
+### GitHub 配置
+
+在仓库 **Settings → Environments** 创建 `production`。若配置部署分支规则，需允许版本 tag（如 `v*`）。在这个 Environment 中填写下表；同名仓库级配置也可使用。不要把真实值写进仓库。
+
+| 类型 | 名称 | 值与用途 |
+|---|---|---|
+| Secret | `CLOUDFLARE_API_TOKEN` | 有 Workers Scripts Edit、D1 Edit、账号读取权限的部署 token；使用 KV 或自定义域名时按需增加对应权限 |
+| Variable | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Account ID，与 `wrangler.jsonc` 绑定资源所属账号一致 |
+| Variable | `VITE_BASE_URL` | 生产站点完整 HTTPS origin，例如当前 Worker 地址或自定义域名，不带路径 |
+| Variable | `BETTER_AUTH_URL` | 可选；默认使用 `VITE_BASE_URL`，用于服务端认证回调 |
+| Secret | `BETTER_AUTH_SECRET` | 至少 32 字符；已有站点沿用原值，避免会话失效 |
+| Secret | `STRIPE_SECRET_KEY` | Stripe 正式环境 API secret key；仅明确使用测试支付的演示站点使用测试 key |
+| Secret | `STRIPE_WEBHOOK_SECRET` | 同一 Stripe 环境、指向 `<VITE_BASE_URL>/api/webhooks/stripe` 的端点签名密钥（`whsec_…`） |
+| Secret | `DISCORD_WEBHOOK_URL` | Discord 频道 Webhook URL；开启通知模块时必填，当前已关闭 |
+| Variable | `VITE_GA_ID` | GA4 Measurement ID（`G-…`）；开启分析模块时必填，当前已关闭 |
+
+现有仓库 Secrets 中的 `CLOUDFLARE_ACCOUNT_ID`、`VITE_BASE_URL` 仍兼容，不强制迁移。其他公开配置请使用 Variables。Stripe 中还需在相同环境配置启用的 `jerbix_template`、USD 99、一次性价格；Webhook 事件配置见[支付文档](./payment)。不使用通知或分析时在 `src/config/website.ts` 关闭对应模块并合并，不能仅留空变量。
+
+按需配置：Google 登录使用 Variable `GOOGLE_CLIENT_ID` 和 Secret `GOOGLE_CLIENT_SECRET`；Turnstile 使用 Variable `VITE_TURNSTILE_SITE_KEY` 和 Secret `TURNSTILE_SECRET_KEY`；管理员邮件列表使用 Variable `ADMIN_EMAILS`。工作流已映射这些字段。以后启用邮件、其他通知或分析服务时，也要同步增加其 workflow env 与运行时上传字段。
+
+可用 CLI 交互录入（不会把值写进命令历史）：
 
 ```bash
-gh secret set CLOUDFLARE_API_TOKEN
-gh secret set CLOUDFLARE_ACCOUNT_ID
-gh secret set VITE_BASE_URL
-gh secret set BETTER_AUTH_SECRET
+gh secret set STRIPE_SECRET_KEY --env production
+gh secret set STRIPE_WEBHOOK_SECRET --env production
+gh secret set DISCORD_WEBHOOK_URL --env production
+gh variable set VITE_GA_ID --env production
 ```
 
-| Secret | 用途 |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | `wrangler deploy` 认证 |
-| `CLOUDFLARE_ACCOUNT_ID` | 账号定位 |
-| `VITE_BASE_URL` | 构建期内联进客户端 bundle |
-| `BETTER_AUTH_SECRET` | 让 `check:env:prod` 通过 |
+### 部署与迁移边界
 
-> CI 里**不创建** `.env.production` 文件，而是用 workflow 的 `env:` 块直接引用
-> `secrets.*`。进程 env 优先级最高，`check-env-prod.ts` 在文件不存在时会回退到它，
-> 这样 secret 不会落到 CI 磁盘上。
+工作流执行生产 env 校验、构建和客户端敏感字段扫描；随后通过 `wrangler deploy --secrets-file` 将白名单中的运行时字段与 Worker 版本一起上传。GitHub 是自动部署配置来源，无需再手工同步同一批 Worker secrets。临时 JSON 文件权限为仅当前用户读写，任务退出时删除，不输出 secret 值；Cloudflare 部署 token 不进入 Worker。
+
+**工作流不执行生产 D1 迁移。** 发布前独立备份和审查迁移。`0008_payment_simplification.sql` 要求空白支付表，不可直接用于包含历史支付数据的生产库。`wrangler.jsonc` 中的 D1 / KV 绑定仍需指向正确资源。
+
+上传是增量操作，省略的 Worker secrets 会保留；删除 GitHub Secret 不会自动删除远端同名值，停用凭据时需另外在 Cloudflare 删除。若只在 Cloudflare 修改值，下次自动部署会再次使用 GitHub 配置覆盖。
 
 ## 构建期变量与运行时 secret
 
@@ -173,8 +191,8 @@ gh secret set BETTER_AUTH_SECRET
 
 | 类型 | 怎么设 | 何时生效 | 例子 |
 |---|---|---|---|
-| **构建期**（`VITE_*`） | `.env.production` / GitHub Secret | `vite build` 时**内联进 bundle** | `VITE_BASE_URL` |
-| **运行时** | `wrangler secret put` | Worker 执行期经 `env` 读取 | `BETTER_AUTH_SECRET` |
+| **构建期**（`VITE_*`） | 本地 `.env.production` / GitHub Variables | `vite build` 时**内联进 bundle** | `VITE_BASE_URL` |
+| **运行时** | 本地 `wrangler secret put` / Release 部署自动上传 | Worker 执行期经 `env` 读取 | `BETTER_AUTH_SECRET` |
 
 **构建期变量改了必须重新构建并部署才生效**——它们已经是客户端 JS 里的字面量了。
 

@@ -1,11 +1,12 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { drizzle } from 'drizzle-orm/sqlite-proxy'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const notifications = vi.hoisted(() => ({ notify: vi.fn().mockResolvedValue(true) }))
 vi.mock('@/notification', () => ({ notify: notifications.notify }))
 
+import { websiteConfig } from '@/config/website'
 import { beginCheckout } from '@/payment/checkout'
 import { applyPaymentEvent } from '@/payment/events'
 import type { PaymentEvent, PaymentProvider } from '@/payment/types'
@@ -44,6 +45,11 @@ const subscription: NonNullable<PaymentEvent['subscription']> = {
   cancelAtPeriodEnd: false,
   status: 'active',
 }
+
+const notificationEnabled = websiteConfig.notification.enabled
+afterEach(() => {
+  websiteConfig.notification.enabled = notificationEnabled
+})
 
 describe('支付持久化', () => {
   it('旧订阅事件不会清除新 Checkout，改选项会明确拒绝', async () => {
@@ -149,6 +155,7 @@ describe('支付持久化', () => {
     sqlite.close()
   })
   it('重复事件只落一笔交易，终止订阅不被旧事件恢复', async () => {
+    websiteConfig.notification.enabled = true
     const { db, sqlite } = database()
     const event: PaymentEvent = {
       id: 'evt1',

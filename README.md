@@ -38,8 +38,8 @@ pnpm dev         # http://localhost:3000
 pnpm deploy   # 生产 env 校验 → 构建 → bundle 泄漏检查 → wrangler deploy
 ```
 
-推送到 `main` 且 CI 通过后会自动部署——需要先在 GitHub 配置四个 secret，
-步骤见 [文档站 · Cloudflare](content/docs/cloudflare.zh.md#自动部署)。
+合并到 `main` 只运行 CI；发布正式 GitHub Release 后，校验 tag 对应提交的 CI，再部署该版本。
+GitHub `production` Environment 的变量与 secrets 配置见 [文档站 · Cloudflare](content/docs/cloudflare.zh.md#自动部署)。
 
 ## 包含什么
 
