@@ -359,6 +359,8 @@ describe('社交配置', () => {
   ])('拒绝非法社交地址 %s 且不输出链接', (value) => {
     expect(isSafeSocialUrl(value)).toBe(false)
     const config = createConfig()
+    // 只看社交平台本身：支持邮箱是另一条独立的链接，默认配置里已有值。
+    config.mail.supportEmail = ''
     config.social.github = value
     expect(getSocialLinks(config, 'zh')).toEqual([])
   })
@@ -380,6 +382,8 @@ describe('社交配置', () => {
 
   it('固定遍历全部 11 个平台并保留技术名与对应图标', () => {
     const config = createConfig()
+    // 只断言社交平台：支持邮箱会额外产生一条 support 链接，单独有用例覆盖。
+    config.mail.supportEmail = ''
     const platforms = [
       'github',
       'x',
@@ -426,6 +430,18 @@ describe('社交配置', () => {
     const config = createConfig()
     config.mail.supportEmail = supportEmail
     expect(getSocialLinks(config, 'en')).toEqual([])
+  })
+
+  it('合法支持邮箱生成 support 链接', () => {
+    const config = createConfig()
+    config.mail.supportEmail = ['support', 'jerbix.dev'].join('@')
+    const items = getSocialLinks(config, 'en')
+    expect(items.map((item) => item.id)).toEqual(['support'])
+    expect(items[0]?.destination).toEqual({
+      kind: 'external',
+      href: `mailto:${config.mail.supportEmail}`,
+      newTab: false,
+    })
   })
 
   it('合法 HTTPS query / hash 原样保留', () => {

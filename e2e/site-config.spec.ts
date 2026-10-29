@@ -7,11 +7,17 @@ import { expect, test } from '@playwright/test'
  */
 test.describe('Module gating', () => {
   test('默认关闭的业务入口不会假成功', async ({ request }) => {
-    for (const path of ['contact/submit', 'newsletter/subscribe', 'email/send']) {
+    for (const path of ['contact/submit', 'newsletter/subscribe']) {
       const response = await request.post(`/api/${path}`, { data: {} })
       expect(response.status(), `/api/${path} 应为 404`).toBe(404)
       expect(await response.json()).toEqual({ error: 'MODULE_DISABLED' })
     }
+  })
+
+  test('已启用且配置完整的 mail 拒绝未认证的发送请求', async ({ request }) => {
+    const response = await request.post('/api/email/send', { data: {} })
+    expect(response.status()).toBe(401)
+    expect(await response.text()).not.toContain('MODULE_DISABLED')
   })
 
   // 凭据缺失时服务状态检查先返回 503，凭据齐备才走到鉴权返回 401；两者都算门禁放行。

@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // Worker 名决定线上地址：`<name>.<账号 workers.dev 子域>.workers.dev`。
   // 与 package.json 的 `name` 无关。
-  "name": "demo",
+  "name": "jerbix",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   // 自定义 server entry：注入语言上下文与 CSP nonce，见 src/server.ts。
@@ -11,7 +11,11 @@
     "NODE_ENV": "production"
   },
   "observability": { "enabled": true },
+  // 自定义域名：`www.jerbix.site` 的区域与本 Worker 同属一个 Cloudflare 账号，
+  // Cloudflare 会在部署时自动创建 DNS 记录并签发证书。
+  "routes": [{ "pattern": "www.jerbix.site", "custom_domain": true }],
   // ID 由 `wrangler d1 create` 产出后手工回填——`--update-config` 会抹掉本文件注释。
+  // 部署工作流会在目标账号下按 `database_name` 查找或创建资源，并回填这里的 ID。
   "d1_databases": [
     {
       "binding": "DB",
@@ -30,6 +34,7 @@
   // `src/server.ts` 在无该 binding 时得到 `undefined`，storage provider 相应降级。
   // "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "saas-template-uploads" }],
   // KV 命名空间（cache + newsletter status + rate limit）。
+  // ID 同 D1：部署工作流按标题 `saas-template-cache` 在目标账号下查找或创建并回填。
   "kv_namespaces": [{ "binding": "CACHE", "id": "42041d2cc3e84a378f3e264591790a3b" }]
   // Cloudflare Email Service binding（事务邮件）。
   //

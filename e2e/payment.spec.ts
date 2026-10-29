@@ -1,15 +1,16 @@
 import { execFileSync } from 'node:child_process'
 import { expect, test } from '@playwright/test'
+import { seedVerifiedUser } from '../scripts/e2e-seed-subscription'
 
 const PASSWORD = 'PaymentTest!2026'
-async function register(page: import('@playwright/test').Page): Promise<string> {
+async function login(page: import('@playwright/test').Page): Promise<string> {
   const email = `pay-${Date.now()}-${crypto.randomUUID().slice(0, 8)}@example.com`
-  await page.goto('/zh/auth/register')
+  await seedVerifiedUser({ email, name: '支付用户', password: PASSWORD })
+  await page.goto('/zh/auth/login')
   await expect(page.locator('button[type="submit"]').first()).toBeEnabled({ timeout: 15000 })
-  await page.getByLabel('昵称').fill('支付用户')
   await page.getByLabel('邮箱').fill(email)
-  await page.getByLabel('密码（≥ 8 字符）').fill(PASSWORD)
-  await page.getByRole('button', { name: '注册' }).click()
+  await page.getByLabel('密码', { exact: true }).fill(PASSWORD)
+  await page.getByRole('button', { name: '登录', exact: true }).click()
   await page.waitForURL((url) => url.pathname === '/zh' || url.pathname === '/')
   return email
 }
@@ -39,7 +40,7 @@ async function configured(request: import('@playwright/test').APIRequestContext)
 test.describe('Payment', () => {
   test('已有订阅从账单页管理，服务端拒绝新建订阅', async ({ page, request }) => {
     test.skip(!(await configured(request)), '支付未配置')
-    const email = await register(page)
+    const email = await login(page)
     seed(email)
     await page.goto('/zh/dashboard/billing')
     await expect(page.getByRole('button', { name: '管理订阅' })).toBeVisible()
@@ -55,7 +56,7 @@ test.describe('Payment', () => {
   })
   test('账单展示订阅及折叠历史，没有站内切换', async ({ page, request }) => {
     test.skip(!(await configured(request)), '支付未配置')
-    const email = await register(page)
+    const email = await login(page)
     seed(email, true)
     await page.goto('/zh/dashboard/billing')
     await expect(page.getByText('专业版', { exact: true }).first()).toBeVisible()
@@ -67,7 +68,7 @@ test.describe('Payment', () => {
   })
   test('购买接口拒绝外部回跳和未知选项，Portal 不接受传入的客户归属', async ({ page, request }) => {
     test.skip(!(await configured(request)), '支付未配置')
-    await register(page)
+    await login(page)
     const origin = new URL(page.url()).origin
     for (const data of [
       {

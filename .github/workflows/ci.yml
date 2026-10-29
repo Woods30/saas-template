@@ -99,19 +99,22 @@ jobs:
       # 必须有 `.env`：wrangler.jsonc 的 vars 把 NODE_ENV 定为 production，缺 `.env`
       # 时 better-auth 会拒绝默认 secret，所有走会话的用例全部 500。
       - name: Create .env
-        run: cp .env.example .env
+        # 仅给 E2E 本地邮件捕获服务使用，不能配置真实发信凭证。
+        run: |
+          cp .env.example .env
+          printf '\nRESEND_API_KEY=re_e2e_synthetic_never_send\nMAIL_FROM=e2e@example.invalid\n' >> .env
       # CI 的 D1 是全新空库，不建表则 `sign-up` 报 no such table: users，走会话的
       # 用例整片超时。
       - name: Apply D1 migrations
         run: pnpm run db:migrate:local
       - name: Start server
-        run: pnpm run dev --port 3000 &
+        run: pnpm exec tsx e2e/global-setup.ts &
         env:
           CI: true
       - name: Wait for server
         run: |
           for i in {1..90}; do
-            if curl -fsS http://localhost:3000/ > /dev/null; then
+            if curl -fsS http://localhost:3000/__e2e/mail-transport > /dev/null; then
               echo "Server ready"; exit 0
             fi
             sleep 1

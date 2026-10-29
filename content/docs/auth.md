@@ -4,10 +4,10 @@ description: Email/password and Google sign-in, email flows, session guards, and
 locale: en
 order: 10
 group: features
-updated: 2026-10-15
+updated: 2026-10-29
 ---
 
-Email/password plus Google OAuth, built on Better Auth v1.7.7 with the Drizzle adapter
+Email/password plus Google OAuth, built on Better Auth v1.7.10 with the Drizzle adapter
 (D1 / SQLite). Pages live at `/{locale}/auth/*`, the API at `/api/auth/*`, and the account
 center at `/{locale}/dashboard/*`.
 
@@ -15,22 +15,30 @@ center at `/{locale}/dashboard/*`.
 
 ![Sign-in page](/docs/screenshots/auth-login.png "Sign-in: email and password; third-party buttons appear once Google credentials are configured")
 
-Two fields in `websiteConfig.auth`, plus three environment variables:
+Authentication, Resend mail, and email verification are enabled by default:
 
 ```ts
 // src/config/website.ts
-auth: { enabled: true, requireEmailVerification: false },
+auth: { enabled: true, requireEmailVerification: true },
+mail: { enabled: true, provider: 'resend', supportEmail: 'service@jerbix.site' },
 ```
+
+`supportEmail` is `service@jerbix.site`. It receives support messages and is configured separately
+from the sending address `MAIL_FROM`; see [Email](./email).
 
 | Config / variable | When required | Purpose |
 |---|---|---|
 | `auth.enabled` | — | Gates pages and API together. When off, pages 404 via `assertPageEnabled('auth')` and `/api/auth/*` returns `404 { error: 'MODULE_DISABLED' }` before reaching Better Auth |
-| `auth.requireEmailVerification` | Set to `true` once mail is wired up | Whether an unverified email can sign in — see [below](#requireemailverification-is-a-security-control-not-a-mail-switch) |
+| `auth.requireEmailVerification` | Currently defaults to `true` | Unverified users cannot sign in with a password — see [below](#requireemailverification-is-a-security-control-not-a-mail-switch) |
+| `RESEND_API_KEY` / `MAIL_FROM` | Required for the current Resend configuration | API key and a plain sender email address on a verified domain |
+| `BETTER_AUTH_URL` | Email verification / Google sign-in | `http://localhost:3000` locally; the real HTTPS origin in production |
 | `BETTER_AUTH_SECRET` | Required in production | Signs sessions and email tokens, ≥ 32 characters; enforced by `check:env:prod` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | When enabling Google sign-in | OAuth credentials, both required |
 
-When `BETTER_AUTH_SECRET` is unset locally, Better Auth falls back to its development
-secret and `auth` still reports `configured` — the gate never blocks local development.
+When `BETTER_AUTH_SECRET` is unset locally, Better Auth can fall back to its development
+secret. Mail must still be configured in `.env` because email verification is required.
+Missing `RESEND_API_KEY` / `MAIL_FROM`, or disabled mail, makes `auth` report `incomplete`,
+`/api/auth/*` return 503, and `pnpm check:env:prod` fail. Verification is never implicitly disabled.
 
 ## Google sign-in
 
@@ -50,9 +58,15 @@ Three templates, rendered by the mail provider described in [Email](./email):
 
 | Flow | Trigger | Template |
 |---|---|---|
-| Email verification | On sign-up, and when an unverified user signs in | `verifyEmail` |
+| Email verification | On sign-up (`sendOnSignUp: true`); resent when an unverified user signs in with the correct password (`sendOnSignIn: true`) | `verifyEmail` |
 | Password reset | "Forgot password" | `forgotPassword` |
-| Welcome | `databaseHooks.user.create.after` | `welcome` |
+| Welcome | `emailVerification.afterEmailVerification`, after successful email verification | `welcome` |
+
+Sign-up creates the user and sends a verification email, **without creating a session**.
+An unverified user signing in with the correct password receives another verification email
+and **403 `EMAIL_NOT_VERIFIED`**, again without a session. After successful verification,
+`autoSignInAfterVerification: true` creates a session and the welcome email is triggered.
+Creating a user no longer sends the welcome email.
 
 `src/auth/emails.ts` is the only bridge between Better Auth callbacks and the mail
 registry. Two defences must stay:
@@ -60,8 +74,9 @@ registry. Two defences must stay:
 - **Never throw.** Better Auth invokes the callbacks through `runInBackgroundOrAwait`, so a
   throw makes **sign-up or sign-in fail**. All errors collapse into `{ ok: false, error }`
   plus a `console.warn`.
-- **Skip silently when mail is off.** With `mail.enabled: false` or no sender configured,
-  it returns without attempting to send.
+- **Do not attempt delivery when mail is off or the sender is missing.** The bridge returns
+  `{ ok: false, error }` and the caller logs a warning. This does not change the auth gate:
+  requiring verification with incomplete mail makes the API return 503 before Better Auth runs.
 
 The recipient locale is resolved from the `Request` passed as the callback's second
 argument (URL prefix → cookie → `Accept-Language` → default), so a Chinese visitor gets a
@@ -69,10 +84,17 @@ Chinese email with no extra wiring.
 
 ### Verification link
 
-The email link points at `/api/auth/verify-email?token=…&callbackURL=/{locale}/auth/verify-email`.
-This is a **GET** endpoint on the Better Auth side: it verifies then redirects, appending
-`?error=<code>` on failure, which the landing page renders as "link invalid or expired".
-The landing page itself calls no client SDK.
+The email link points at `/api/auth/verify-email?token=…&callbackURL=…`, where `callbackURL`
+is the encoded `/{locale}/auth/verify-email?redirect=<internal target>`. Both sign-up and
+password sign-in preserve a safe internal purchase target. `safeInternalPath()` rejects
+external origins, `//`, backslashes, and control characters; absent or invalid targets fall back to `/`.
+
+This is a **GET** endpoint on the Better Auth side: it verifies then redirects to the result
+page, appending `error=<code>` on failure. The result page treats any `error` parameter as a
+failure and offers a sign-in link retaining `redirect`, so unknown errors cannot appear as
+success. On success, its "Continue" link uses `resolveRedirectTarget(redirect)` as `href`
+and performs a full-page navigation to the safe internal target to refresh the session.
+The page calls no client SDK; preserving the purchase target does not automatically start checkout.
 
 ### Reset link
 
@@ -82,27 +104,21 @@ returns in the same language.
 
 ## `requireEmailVerification` is a security control, not a mail switch
 
-This field (default `false`) decides whether a user can sign in without proving they own
-the address. It deliberately does **not** derive from `mail.enabled`: email is an identity
-anchor downstream — `src/routes/api/payment/$.ts` passes `session.user.email` to Stripe as
-`customerEmail`, and `/api/email` authorizes on `ADMIN_EMAILS` membership. Letting "SMTP is
-not configured yet" quietly become "anyone can register with someone else's address" is
-privilege escalation.
-
-The default is `false` only because the template ships without mail: if verification were
-required by default, Better Auth would reject every unverified sign-in and stop
-auto-signing-in on sign-up, leaving the whole email/password path unusable out of the box.
-**Wiring up mail is a two-step change** — configure `mail` first, then flip this to `true`.
+This field currently defaults to `true` and decides whether a user can sign in with a
+password without proving ownership of the address. It deliberately does **not** derive from
+`mail.enabled`: email is an identity anchor downstream — payments pass `session.user.email`
+to Stripe, and `/api/email` authorizes on `ADMIN_EMAILS` membership. Missing mail configuration
+must not silently weaken identity verification.
 
 Security-side reads all go through `requiresEmailVerification()` in `src/auth/flow.ts`, so
 the server and the UI cannot disagree. `signUpOutcome()` in the same module decides where
-sign-up lands: with `false`, Better Auth **auto-signs-in** the new user and the page must
-redirect home; sending a signed-in user to "check your inbox" means waiting for an email
-that will never be sent.
+sign-up lands: the current configuration shows "check your inbox". Only an explicit change
+to `false` makes Better Auth auto-sign-in on sign-up and the page redirect to the safe internal target.
 
-`requireEmailVerification: true` with mail not fully configured is a **contradictory
-configuration**: `getServiceStatuses()` reports `auth` as incomplete and `check:env:prod`
-fails — verification is required but no email can be sent, so new users could never sign in.
+`requireEmailVerification: true` with incomplete mail is a **contradictory configuration**:
+`getServiceStatuses()` reports `auth` as `incomplete`, the auth API returns 503, and
+`check:env:prod` fails. Complete the mail configuration to restore service; verification
+is never automatically disabled.
 
 ## Session and sign-out
 
@@ -131,11 +147,9 @@ Forms themselves use TanStack Form + Zod throughout — see [Form conventions](.
 
 ## Legal notice on the sign-in / sign-up pages
 
-login and register render a line below the form card: "By clicking continue, you agree to our
-Terms of Service and Privacy Policy", linking to `/marketing/legal/terms` and
-`/marketing/legal/privacy` and following the current locale. The pattern follows shadcn's
-`login-03` block: the notice is a sibling of the card, because inside the card it reads as part
-of the form.
+login and register render "By clicking continue, you agree to our Terms of Service and
+Privacy Policy" **inside the form card's `CardFooter`**, linking to `/marketing/legal/terms`
+and `/marketing/legal/privacy` in the current locale. The "Back to home" link is outside the card.
 
 It is controlled by the `legalNotice` prop on `AuthLayout` and is **off by default**. Only pages
 where the user is actively consenting pass it: `verify-email` is a terminal state with no submit
@@ -143,13 +157,58 @@ button, users on `reset-password` / `forgot-password` are not creating an accoun
 has no action to consent to. Of register's two `AuthLayout` call sites, only the form one passes
 it — by the time "check your inbox" appears the account exists and consent already happened.
 
-> **Note**: the Terms and privacy bodies live under `content/legal/` and are **templates with
-     placeholder prompts**. Before going live, replace every "fill in before deploying" item with
-     your real facts — at minimum: data retention period, the sub-processor list (with each one's
-     DPA), refund window, liability cap, governing law and venue, a contact email, and which
-     cookies this deployment actually sets. Placeholders are written as `> **Note**` so they render
-     as prominent Alerts; once they are all replaced, consider dropping the "this document is
-     template placeholder content" note at the top of each file.
+Terms and privacy content lives in `content/legal/`, written for Jerbix,
+`https://www.jerbix.site`, and `service@jerbix.site`. It covers one-time source-code purchases,
+MIT licensing, refunds, and actual data processing. It does not select an exclusive jurisdiction;
+operator identity or address disclosures may still be required by applicable operating or target-market
+rules. When reusing the project, adapt the content to your own operation and providers.
+
+## Production
+
+### Resend and runtime configuration
+
+Verify your sending domain in Resend and set `MAIL_FROM` to a plain email address on that
+domain, without a display name or angle brackets. Locally, configure `RESEND_API_KEY`,
+`MAIL_FROM`, and `BETTER_AUTH_URL` in `.env`. In the GitHub `production` Environment, set
+Secret `RESEND_API_KEY` and Variable `MAIL_FROM`, **without a `VITE_` prefix**. The workflow
+also accepts Secret `MAIL_FROM`, with the Variable taking precedence, and uploads both
+fields through the `--secrets-file` allowlist. For manual deployments, values used for
+validation in `.env.production` must match Worker runtime bindings; see [Email](./email)
+and [Cloudflare](./cloudflare).
+
+### `BETTER_AUTH_SECRET`
+
+For a manual production deployment, upload the runtime secret with Wrangler; do not commit it:
+
+```bash
+printf '%s' "$BETTER_AUTH_SECRET" | pnpm exec wrangler secret put BETTER_AUTH_SECRET
+```
+
+It must be at least 32 characters; generate one with `openssl rand -base64 32`. Missing or
+short production secrets are rejected by `validateProdServerEnv`, so `pnpm deploy` fails
+at validation. The copy in `.env.production` satisfies validation; runtime reads the Worker
+secret. **The values must match.** Automatic Release deployment uses GitHub configuration
+and uploads the runtime binding; see [Environment variables](./environment).
+
+### `BETTER_AUTH_URL`
+
+This is the absolute base URL for callbacks and redirects. If empty, Better Auth derives
+it from the request origin and warns that the base URL is unset. **Set it explicitly for
+Google OAuth or email verification** so callback URLs and email links do not vary with the
+request origin. Use the real HTTPS origin in production, matching `VITE_BASE_URL`.
+
+### Google OAuth callback URL
+
+Configure the OAuth client in Google Cloud Console with:
+
+| Field | Value |
+|---|---|
+| Authorized JavaScript origin | `https://your-domain.com` |
+| Authorized redirect URI | `https://your-domain.com/api/auth/callback/google` |
+
+Also register `http://localhost:3000` and `http://localhost:3000/api/auth/callback/google`
+for local development. One client can include both environments. Leave both
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` empty if unused; the provider and button remain absent.
 
 ## Key invariants when changing this
 
@@ -182,3 +241,4 @@ Check each before touching auth code:
 - [Form conventions](./forms) — the minimal copyable TanStack Form + Zod + `Field` pattern
 - [Email](./email) — the mail provider and the contact form
 - [Environment variables](./environment) — every variable and its read layer
+- [Cloudflare](./cloudflare) — deployment and runtime secret configuration

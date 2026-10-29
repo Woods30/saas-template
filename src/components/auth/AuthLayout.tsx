@@ -1,8 +1,14 @@
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { BrandLogo } from '@/components/layout/BrandLogo'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { FieldDescription } from '@/components/ui/field'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import { websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
@@ -37,28 +43,29 @@ export function AuthLayout({ title, description, legalNotice, children }: AuthLa
           {description && <CardDescription>{description}</CardDescription>}
         </CardHeader>
         <CardContent>{children}</CardContent>
+        {legalNotice && (
+          <CardFooter className="block">
+            <p className="text-center text-xs leading-relaxed text-muted-foreground text-balance">
+              {m.auth_legal_disclaimer()}{' '}
+              <Link
+                to="/{-$locale}/marketing/legal/$slug"
+                params={{ locale: getLocale(), slug: 'terms' }}
+                className="underline hover:text-foreground"
+              >
+                {m.footer_terms()}
+              </Link>{' '}
+              {m.auth_legal_and()}{' '}
+              <Link
+                to="/{-$locale}/marketing/legal/$slug"
+                params={{ locale: getLocale(), slug: 'privacy' }}
+                className="underline hover:text-foreground"
+              >
+                {m.footer_privacy()}
+              </Link>
+            </p>
+          </CardFooter>
+        )}
       </Card>
-      {/* 放在卡片外：放进卡片里会被读成表单的一部分或一条校验提示。 */}
-      {legalNotice && (
-        <FieldDescription className="mt-6 text-center text-xs">
-          {m.auth_legal_disclaimer()}{' '}
-          <Link
-            to="/{-$locale}/marketing/legal/$slug"
-            params={{ locale: getLocale(), slug: 'terms' }}
-            className="underline hover:text-foreground"
-          >
-            {m.footer_terms()}
-          </Link>{' '}
-          {m.auth_legal_and()}{' '}
-          <Link
-            to="/{-$locale}/marketing/legal/$slug"
-            params={{ locale: getLocale(), slug: 'privacy' }}
-            className="underline hover:text-foreground"
-          >
-            {m.footer_privacy()}
-          </Link>
-        </FieldDescription>
-      )}
       <p className="mt-6 text-center text-xs text-muted-foreground">
         <Link
           to="/{-$locale}"

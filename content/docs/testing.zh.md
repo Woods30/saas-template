@@ -4,7 +4,7 @@ description: 三层测试的分工、常用命令与新增用例的取舍
 locale: zh
 order: 22
 group: develop
-updated: 2026-10-22
+updated: 2026-10-29
 ---
 
 **E2E 只守「用户能不能完成一件事」，细节交互交给组件测试。** 这页讲怎么分工，
@@ -41,7 +41,7 @@ locale 上跑主流程。
 
 | spec | 守什么 |
 |---|---|
-| `auth.spec.ts` | 注册 → 自动登录 → 登出；字段校验在提交前拦下 |
+| `auth.spec.ts` | 注册无会话 → 未验证登录被拒绝 → 邮件验证并自动登录 → 登出；字段校验在提交前拦下 |
 | `settings.spec.ts` | 路由守卫、默认落点、昵称写入 D1、登出后会话失效 |
 | `docs.spec.ts` | `/docs` 重定向、⌘K 搜索 → 跳转、侧栏偏好由服务端回读 |
 | `marketing.spec.ts` | 首页渲染 + 语言切换走真实 `/en` 前缀 |
@@ -54,6 +54,18 @@ locale 上跑主流程。
 > 它不真的打 Stripe：用 `scripts/e2e-seed-subscription.ts` 往本地 D1 写一条 `active`
 > 订阅来复现「已订阅」。价格锚点（`lookup_key`）写在 `src/config/products.ts` 里，
 > 不在 env。
+
+### 本地邮件捕获
+
+`pnpm test:e2e` 自动启动测试专用 server，在 Vite 传输层将 Resend 请求定向到本地内存捕获服务，并使用合成邮件配置。注册、模板渲染、验证链接和会话仍走真实产品实现，不发送真实邮件。个人中心与支付测试使用本地 D1 的已验证账号 fixture，再通过真实密码登录。
+
+测试不复用普通 `pnpm dev` server，也不接受 `.dev.vars` 覆盖。若 3000 端口已占用，可以使用独立端口：
+
+```bash
+E2E_BASE_URL=http://localhost:3107 pnpm test:e2e
+```
+
+CI 手工启动 server 时使用 `pnpm exec tsx e2e/global-setup.ts`，再以 `E2E_NO_SERVER=1` 运行测试；global setup 会检查本地邮件捕获入口，拒绝连接未安装测试传输层的 server。
 
 ### 写测试的两个坑
 

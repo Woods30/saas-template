@@ -1,5 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { buildLocalD1Args, buildSeedSql } from '../../scripts/e2e-seed-subscription'
+import {
+  buildLocalD1Args,
+  buildSeedSql,
+  buildUserSeedSql,
+} from '../../scripts/e2e-seed-subscription'
+
+describe('buildUserSeedSql', () => {
+  it('本地账号同时具有已验证邮箱和 credential 密码记录，字符串安全转义', () => {
+    const sql = buildUserSeedSql({
+      id: 'e2e-user-1',
+      email: "o'brien@example.com",
+      name: "O'Brien",
+      passwordHash: 'salt:hash',
+    })
+    expect(sql).toContain('INSERT INTO users (id, email, name, email_verified)')
+    expect(sql).toContain("'e2e-user-1', 'o''brien@example.com', 'O''Brien', 1")
+    expect(sql).toContain('INSERT INTO accounts')
+    expect(sql).toContain("'credential'")
+    expect(sql).toContain("'salt:hash'")
+    expect(sql).not.toContain('INSERT INTO sessions')
+  })
+})
 
 describe('buildLocalD1Args', () => {
   it('隔离目录应用于所有本地 SQL，始终保留 --local', () => {

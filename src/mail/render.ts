@@ -50,6 +50,14 @@ const actionUrlSchema = z
     (url) => {
       try {
         const parsed = new URL(url)
+        const base = new URL(getBaseUrl())
+        // 本地开发使用 HTTP；只放行配置为 loopback 的同源地址，不能扩展到公网或其他端口。
+        if (
+          base.protocol === 'http:' &&
+          ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname) &&
+          parsed.origin === base.origin
+        )
+          return true
         return (
           parsed.protocol === 'https:' &&
           allowedHostSuffixes().some(

@@ -66,7 +66,9 @@ describe('getMailFrom', () => {
 describe('getServiceStatuses — mail', () => {
   it('关闭时为 disabled 且不产出 issues（即便 secret 齐全）', () => {
     const statuses = getServiceStatuses({
-      config: makeConfig(),
+      config: makeConfig((c) => {
+        c.mail.enabled = false
+      }),
       publicEnv: parsePublicEnv({}),
       serverEnv: parseServerEnv({ RESEND_API_KEY: 'synthetic-secret', MAIL_FROM: 'a@jerbix.dev' }),
     })
@@ -544,9 +546,11 @@ describe('getServiceStatuses — analytics', () => {
 
 // auth 分支。
 describe('getServiceStatuses — auth', () => {
-  it('默认（不要求验证 + 邮件未配置）为 configured：开箱即用的注册登录必须可用', () => {
+  it('显式关闭邮箱验证时，邮件未配置不阻止密码登录', () => {
     const statuses = getServiceStatuses({
-      config: makeConfig(),
+      config: makeConfig((c) => {
+        c.auth.requireEmailVerification = false
+      }),
       publicEnv: parsePublicEnv({}),
       serverEnv: parseServerEnv({}),
     })
