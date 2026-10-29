@@ -117,18 +117,23 @@ jobs:
           }
           console.log(`账号：${account.name} (${accountId})`)
 
+          // 逐项探测权限，收集全部缺失项后统一报错：只报第一个会让用户补齐后再失败一次。
+          const missing = []
           try {
             await api(`/accounts/${accountId}/d1/database`)
-          } catch (error) {
-            throw new Error(
-              `token 可以读取账号，但无法访问 D1：请为它添加「D1 → Edit」权限。${error.message}`,
-            )
+          } catch {
+            missing.push('D1 → Edit')
           }
           try {
             await api(`/accounts/${accountId}/storage/kv/namespaces`)
-          } catch (error) {
+          } catch {
+            missing.push('Workers KV Storage → Edit')
+          }
+          if (missing.length > 0) {
             throw new Error(
-              `token 可以读取账号，但无法访问 KV：请为它添加「Workers KV Storage → Edit」权限。${error.message}`,
+              `token 可以读取账号 ${account.name}，但缺少以下权限：${missing.join('、')}。` +
+                '请在 Cloudflare Dashboard → My Profile → API Tokens 为该账号新建一个包含这些权限的 token，' +
+                '并更新 GitHub production Environment 的 CLOUDFLARE_API_TOKEN。',
             )
           }
 
