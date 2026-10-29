@@ -118,13 +118,12 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
     contact: { enabled: false },
     newsletter: { enabled: false, provider: 'resend' },
     payment: {
-      // 本仓当前用于本地联调：支付 / 通知 / 分析三模块默认打开。
-      // 模板发布给他人时改回 false，让未配置凭据的部署保持「模块关闭」而非「503」。
+      // 当前站点启用 Stripe 收款；通知与分析待配置后单独开启。
       enabled: true,
       provider: 'stripe',
     },
-    notification: { enabled: true, provider: 'discord' },
-    analytics: { enabled: true, providers: ['ga'] },
+    notification: { enabled: false, provider: 'discord' },
+    analytics: { enabled: false, providers: ['ga'] },
     // auth 默认开启：模板自带登录 / 注册，关闭时对应页面与 API 一律 404。
     auth: { enabled: true, requireEmailVerification: false },
     social: {},

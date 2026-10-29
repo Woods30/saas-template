@@ -67,7 +67,7 @@ const EXTRA_ENV_KEYS = [
 /** 从子进程环境删除的键集合：`.env.example` 全部键 + 额外键，确保临时 `.env` 是唯一来源。 */
 const scrubKeys = [...dotenvKeys, ...EXTRA_ENV_KEYS]
 
-/** 已启用服务模块（payment / notification / analytics 默认打开）所需的完整配置。 */
+/** 合成服务配置；包含已启用支付与可选的通知、分析字段。 */
 const ENABLED_SERVICES_ENV: Record<string, string> = {
   STRIPE_SECRET_KEY: 'sk_test_synthetic',
   STRIPE_WEBHOOK_SECRET: 'whsec_synthetic',
@@ -324,15 +324,15 @@ describe('check-env-prod.ts（生产校验）', () => {
     expect(result.code).toBe(0)
   })
 
-  it('已启用的服务模块缺少 secret 时失败（当前默认打开 payment / notification / analytics）', () => {
+  it('支付缺少 secret 时失败，已关闭的通知和分析不要求凭据', () => {
     const dir = makeWorkspace()
     // 只提供生产必需的 URL 与 auth secret，未提供 STRIPE / DISCORD / GA 凭据。
     writeDotEnv(dir, `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
     const result = runScript(dir, checkEnvProd)
     expect(result.code).toBe(1)
     expect(result.stderr).toContain('STRIPE_SECRET_KEY')
-    expect(result.stderr).toContain('DISCORD_WEBHOOK_URL')
-    expect(result.stderr).toContain('VITE_GA_ID')
+    expect(result.stderr).not.toContain('DISCORD_WEBHOOK_URL')
+    expect(result.stderr).not.toContain('VITE_GA_ID')
     // 只报字段名，不回声值。
     expect(result.stderr).not.toContain(VALID_SECRET)
   })

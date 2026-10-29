@@ -141,35 +141,53 @@ After binding, update `VITE_BASE_URL` and `BETTER_AUTH_URL` in `.env.production`
 
 ## CI deployment
 
-After CI passes on `main`, the deploy workflow runs. It uses `workflow_run` rather than a
-separate `push` trigger so that a green CI is a hard prerequisite.
+Merging to `main` runs CI only. Publishing a **stable GitHub Release** triggers production deployment through `release.published`. Drafts, prereleases, and tag pushes alone do not deploy.
 
-Set four GitHub secrets:
+Use this sequence: PR → merge `main` → wait for that commit's CI → publish a tag matching `package.json` (for example `v0.2.0`) → Deploy → smoke tests. The workflow verifies that the tag commit belongs to `main` and its push CI succeeded, then deploys the verified immutable SHA. If CI is still running at publication, rerun Deploy after it succeeds.
+
+### GitHub configuration
+
+Create the `production` Environment in **Settings → Environments**. If deployment branch rules are enabled, allow version tags such as `v*`. Set these environment values; repository-level values also work:
+
+| Type | Name | Value / purpose |
+|---|---|---|
+| Secret | `CLOUDFLARE_API_TOKEN` | Deployment token with Workers Scripts Edit, D1 Edit, and account read access; add KV / Workers Routes permissions as needed |
+| Variable | `CLOUDFLARE_ACCOUNT_ID` | Account that owns the resources in `wrangler.jsonc` |
+| Variable | `VITE_BASE_URL` | Production HTTPS origin without a path |
+| Variable | `BETTER_AUTH_URL` | Optional; defaults to `VITE_BASE_URL` for auth callbacks |
+| Secret | `BETTER_AUTH_SECRET` | At least 32 characters; preserve the existing value for an established site |
+| Secret | `STRIPE_SECRET_KEY` | Production Stripe API secret key; use a test key only for an intentionally test-mode demo |
+| Secret | `STRIPE_WEBHOOK_SECRET` | Signing secret (`whsec_…`) for the same-mode endpoint at `<VITE_BASE_URL>/api/webhooks/stripe` |
+| Secret | `DISCORD_WEBHOOK_URL` | Channel webhook URL; required when notifications are enabled (currently disabled) |
+| Variable | `VITE_GA_ID` | GA4 Measurement ID (`G-…`); required when analytics is enabled (currently disabled) |
+
+Existing repository Secrets for `CLOUDFLARE_ACCOUNT_ID` and `VITE_BASE_URL` remain supported. Use Variables for new public configuration. In the same Stripe environment, configure an active USD 99 one-time price with lookup key `jerbix_template`; see [Payment](./payment) for webhook events. Disable unused notification or analytics modules in `src/config/website.ts` instead of leaving required configuration empty.
+
+Optional mappings are included for Google OAuth (Variable `GOOGLE_CLIENT_ID`, Secret `GOOGLE_CLIENT_SECRET`), Turnstile (Variable `VITE_TURNSTILE_SITE_KEY`, Secret `TURNSTILE_SECRET_KEY`), and administrator emails (Variable `ADMIN_EMAILS`). When enabling additional providers, extend both workflow env mappings and the runtime upload allowlist.
+
+CLI prompts keep values out of shell history:
 
 ```bash
-gh secret set CLOUDFLARE_API_TOKEN
-gh secret set CLOUDFLARE_ACCOUNT_ID
-gh secret set VITE_BASE_URL
-gh secret set BETTER_AUTH_SECRET
+gh secret set STRIPE_SECRET_KEY --env production
+gh secret set STRIPE_WEBHOOK_SECRET --env production
+gh secret set DISCORD_WEBHOOK_URL --env production
+gh variable set VITE_GA_ID --env production
 ```
 
-| Secret | Purpose |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | Auth for `wrangler deploy` |
-| `CLOUDFLARE_ACCOUNT_ID` | Account targeting |
-| `VITE_BASE_URL` | Inlined into the client bundle at build time |
-| `BETTER_AUTH_SECRET` | Lets `check:env:prod` pass |
+### Deployment and migration boundaries
 
-> CI does **not** create `.env.production`; it passes values through the workflow `env:`
-> block. Process env has the highest priority and `check-env-prod.ts` falls back to it when
-> the file is missing, so secrets never land on the CI disk.
+The workflow validates production configuration, builds, scans the client bundle, and uses `wrangler deploy --secrets-file` to upload allowlisted runtime bindings with the Worker version. GitHub is the configuration source for automatic deployments; no separate manual synchronization to Worker secrets is needed. The temporary JSON file has restricted permissions and is deleted on exit. Secret values are never printed, and Cloudflare deployment credentials are excluded from Worker bindings.
+
+**Production D1 migrations are not automated.** Back up and review them separately before release. Migration `0008_payment_simplification.sql` requires empty payment tables and must not be applied directly to historical production payment data. D1 / KV bindings remain configured in `wrangler.jsonc`.
+
+Secret upload is additive: omitted Worker secrets persist. Removing a GitHub Secret does not delete its remote counterpart. Remove retired values in Cloudflare explicitly. A Cloudflare-only edit will be overwritten by the GitHub value on the next automatic deployment.
 
 ## Build-time vs runtime values
 
 | Type | How to set | When it takes effect | Example |
 |---|---|---|---|
-| **Build-time** (`VITE_*`) | `.env.production` / GitHub secret | Inlined into the bundle at `vite build` | `VITE_BASE_URL` |
-| **Runtime** | `wrangler secret put` | Read from `env` at Worker runtime | `BETTER_AUTH_SECRET` |
+| **Build-time** (`VITE_*`) | Local `.env.production` / GitHub Variables | Inlined into the bundle at `vite build` | `VITE_BASE_URL` |
+| **Runtime** | Local `wrangler secret put` / automatic Release upload | Read from `env` at Worker runtime | `BETTER_AUTH_SECRET` |
 
 **Build-time values require a rebuild and redeploy to change** — they are literals in the
 client JS.
