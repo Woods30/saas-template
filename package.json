@@ -1,6 +1,6 @@
 {
   "name": "saas-template",
-  "version": "0.0.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.4.2",
@@ -14,7 +14,7 @@
     "deploy": "pnpm run check:env:prod && pnpm run build && pnpm run check:client-bundle && wrangler deploy",
     "check": "pnpm run locale:compile && biome check . && tsc --noEmit && pnpm run check:env && pnpm run locale:check",
     "check:env": "tsx scripts/check-env.ts",
-    "check:env:prod": "tsx scripts/check-env-prod.ts",
+    "check:env:prod": "pnpm run locale:compile && tsx scripts/check-env-prod.ts",
     "check:client-bundle": "tsx scripts/check-client-bundle.ts",
     "check:locale": "pnpm run locale:compile && pnpm run locale:check",
     "locale:compile": "tsx scripts/locale-compile.ts",
