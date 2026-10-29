@@ -40,8 +40,8 @@ describe('requiresEmailVerification', () => {
     ).toBe(false)
   })
 
-  it('默认取站点单例配置，且默认不要求验证（开箱即用的邮箱密码路径必须可用）', () => {
-    expect(requiresEmailVerification()).toBe(false)
+  it('站点默认要求邮箱验证', () => {
+    expect(requiresEmailVerification()).toBe(true)
   })
 })
 

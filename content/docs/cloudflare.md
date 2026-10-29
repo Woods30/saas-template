@@ -4,11 +4,12 @@ description: Account, API token, resources, first deploy, and CI deployment
 locale: en
 order: 5
 group: deploy
-updated: 2026-10-21
+updated: 2026-10-29
 ---
 
 The site runs on **Cloudflare Workers**. This page sets up your account and API token,
-walks through the first deploy, and wires up deployment on push to `main`.
+walks through the first deploy, and wires up production deployment after publishing a stable
+GitHub Release. Pushing or merging to `main` runs CI only.
 
 Database, storage, and cache each have their own page — configure credentials and token
 permissions here first, then those pages will work.
@@ -113,7 +114,20 @@ Three things must be in place first:
 
 ```bash
 printf '%s' "$BETTER_AUTH_SECRET" | pnpm exec wrangler secret put BETTER_AUTH_SECRET
+pnpm exec wrangler secret put RESEND_API_KEY
+pnpm exec wrangler secret put MAIL_FROM
+pnpm exec wrangler secret put BETTER_AUTH_URL
 ```
+
+Currently `mail.enabled: true` selects `resend` and `auth.requireEmailVerification: true`.
+Verify your sending domain in Resend, then configure `RESEND_API_KEY` and a plain
+`MAIL_FROM` address on that domain, without a display name or angle brackets. Local development
+uses `.env`. For manual production deployment, supply the same environment's values in
+`.env.production` for validation and keep Worker runtime bindings consistent.
+`BETTER_AUTH_URL` is `http://localhost:3000` locally and the actual HTTPS origin in
+production, matching `VITE_BASE_URL`. Missing mail configuration makes `auth` report
+`incomplete`, `/api/auth/*` return 503, and production validation fail. Email verification
+is never implicitly disabled. See [Email](./email).
 
 `wrangler deploy` **does not** clear existing secrets; repeated deploys are idempotent.
 
@@ -139,6 +153,42 @@ After binding, update `VITE_BASE_URL` and `BETTER_AUTH_URL` in `.env.production`
 
 > A custom domain requires **Workers Routes → Edit**; workers.dev does not.
 
+**The zone must be in the same Cloudflare account as the Worker.** Cloudflare creates the DNS
+records and certificate inside the owning account, and it cannot create a custom domain on a
+zone you do not own; pointing a CNAME at `workers.dev` across accounts is blocked (CNAME
+Cross-User Banned, error 1014). When the domain lives in another account, either move the zone
+into the Worker's account, or deploy the Worker in that account and handle custom hostnames
+through Workers for Platforms. To find which account owns a zone:
+
+```bash
+curl -s "https://api.cloudflare.com/client/v4/zones?name=your-domain.com" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+```
+
+An empty `result` array means the current token cannot see the zone — usually because it
+belongs to another account or the token lacks Zone read permission.
+
+### 6. Receiving and sending on the same domain
+
+One domain can receive mail through Cloudflare Email Routing and send through Resend at the
+same time; their records have different names and coexist:
+
+| Purpose | Records | Added by |
+|---|---|---|
+| Receiving (forward to Gmail and similar) | Root `MX` → `route1/2/3.mx.cloudflare.net`, root `TXT` → `v=spf1 include:_spf.mx.cloudflare.net ~all`, DKIM at `cf2024-1._domainkey` | Added automatically when Email Routing is enabled |
+| Sending (verification emails and similar) | DKIM at `resend._domainkey`, Return-Path on the `send` subdomain (`MX` + `TXT`, or two `CNAME` records for domains created after August 2026) | The Records tab in the Resend dashboard |
+
+Key points:
+
+- **Only one SPF record may exist at the root.** Email Routing already claims it; if another
+  service must send as this domain, merge its `include:` into that record — a second
+  `v=spf1` record breaks SPF outright.
+- Resend's SPF lives on the `send` subdomain for bounce handling and does not affect the root.
+- Resend `CNAME` records **must not be proxied** (orange cloud), and no other record may share
+  the same name; otherwise verification never completes.
+- Email Routing receives only, never sends: forwarded mail cannot be replied to from the
+  original address, so reply from the Gmail account.
+
 ## CI deployment
 
 Merging to `main` runs CI only. Publishing a **stable GitHub Release** triggers production deployment through `release.published`. Drafts, prereleases, and tag pushes alone do not deploy.
@@ -156,6 +206,8 @@ Create the `production` Environment in **Settings → Environments**. If deploym
 | Variable | `VITE_BASE_URL` | Production HTTPS origin without a path |
 | Variable | `BETTER_AUTH_URL` | Optional; defaults to `VITE_BASE_URL` for auth callbacks |
 | Secret | `BETTER_AUTH_SECRET` | At least 32 characters; preserve the existing value for an established site |
+| Secret | `RESEND_API_KEY` | Required for current Resend mail and email verification; use an API key with sending permission |
+| Variable | `MAIL_FROM` | Plain email address on the Resend-verified domain, without display name or angle brackets; a same-name Secret also works, with the Variable taking precedence |
 | Secret | `STRIPE_SECRET_KEY` | Production Stripe API secret key; use a test key only for an intentionally test-mode demo |
 | Secret | `STRIPE_WEBHOOK_SECRET` | Signing secret (`whsec_…`) for the same-mode endpoint at `<VITE_BASE_URL>/api/webhooks/stripe` |
 | Secret | `DISCORD_WEBHOOK_URL` | Channel webhook URL; required when notifications are enabled (currently disabled) |
@@ -163,11 +215,19 @@ Create the `production` Environment in **Settings → Environments**. If deploym
 
 Existing repository Secrets for `CLOUDFLARE_ACCOUNT_ID` and `VITE_BASE_URL` remain supported. Use Variables for new public configuration. In the same Stripe environment, configure an active USD 99 one-time price with lookup key `jerbix_template`; see [Payment](./payment) for webhook events. Disable unused notification or analytics modules in `src/config/website.ts` instead of leaving required configuration empty.
 
-Optional mappings are included for Google OAuth (Variable `GOOGLE_CLIENT_ID`, Secret `GOOGLE_CLIENT_SECRET`), Turnstile (Variable `VITE_TURNSTILE_SITE_KEY`, Secret `TURNSTILE_SECRET_KEY`), and administrator emails (Variable `ADMIN_EMAILS`). When enabling additional providers, extend both workflow env mappings and the runtime upload allowlist.
+Neither `RESEND_API_KEY` nor `MAIL_FROM` uses a `VITE_` prefix. `MAIL_FROM` is the sender;
+the support inbox is configured separately in `websiteConfig.mail.supportEmail`. Setting one
+does not populate the other. Support is `service@jerbix.site` and the intended production domain
+is `https://www.jerbix.site`. Set production `VITE_BASE_URL` and `BETTER_AUTH_URL` to that origin
+and configure a separate Resend sender. Domain bindings and environment changes take effect during deployment.
+
+Optional mappings are included for Google OAuth (Variable `GOOGLE_CLIENT_ID`, Secret `GOOGLE_CLIENT_SECRET`), Turnstile (Variable `VITE_TURNSTILE_SITE_KEY`, Secret `TURNSTILE_SECRET_KEY`), and administrator emails (Variable `ADMIN_EMAILS`). These and both Resend fields are already mapped. When enabling additional providers, extend both workflow env mappings and the runtime upload allowlist.
 
 CLI prompts keep values out of shell history:
 
 ```bash
+gh secret set RESEND_API_KEY --env production
+gh variable set MAIL_FROM --env production
 gh secret set STRIPE_SECRET_KEY --env production
 gh secret set STRIPE_WEBHOOK_SECRET --env production
 gh secret set DISCORD_WEBHOOK_URL --env production
@@ -176,7 +236,7 @@ gh variable set VITE_GA_ID --env production
 
 ### Deployment and migration boundaries
 
-The workflow validates production configuration, builds, scans the client bundle, and uses `wrangler deploy --secrets-file` to upload allowlisted runtime bindings with the Worker version. GitHub is the configuration source for automatic deployments; no separate manual synchronization to Worker secrets is needed. The temporary JSON file has restricted permissions and is deleted on exit. Secret values are never printed, and Cloudflare deployment credentials are excluded from Worker bindings.
+The workflow validates production configuration, builds, scans the client bundle, and uses `wrangler deploy --secrets-file` to upload allowlisted runtime bindings with the Worker version. `RESEND_API_KEY` and `MAIL_FROM` are already allowlisted; `MAIL_FROM` is uploaded as a server binding even when sourced from a GitHub Variable. GitHub is the configuration source for automatic deployments; no separate manual synchronization to Worker secrets is needed. The temporary JSON file has restricted permissions and is deleted on exit. Secret values are never printed, and Cloudflare deployment credentials are excluded from Worker bindings.
 
 **Production D1 migrations are not automated.** Back up and review them separately before release. Migration `0008_payment_simplification.sql` requires empty payment tables and must not be applied directly to historical production payment data. D1 / KV bindings remain configured in `wrangler.jsonc`.
 

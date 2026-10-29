@@ -32,6 +32,8 @@ pnpm dev         # http://localhost:3000
 
 没有 Cloudflare 账号也能先跑：`pnpm run setup` 可以跳过资源创建，本地用 D1 模拟。
 
+当前默认启用 Resend 和注册邮箱验证。使用注册、登录前，在 `.env` 填写 `RESEND_API_KEY` 与已验证域名下的 `MAIL_FROM`，并确保 `BETTER_AUTH_URL` 与 `VITE_BASE_URL` 一致。缺少邮件配置时认证 API 返回 503；详见[邮件配置](content/docs/email.zh.md#resend-配置)。
+
 ## 部署
 
 ```bash

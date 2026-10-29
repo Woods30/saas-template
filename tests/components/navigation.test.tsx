@@ -194,9 +194,18 @@ describe('Footer 消费菜单配置（真实 Router）', () => {
 })
 
 describe('Footer 社交区', () => {
-  it('社交为空时不渲染社交导航', async () => {
+  it('社交平台与支持邮箱都为空时不渲染社交导航', async () => {
+    websiteConfig.mail.supportEmail = ''
     await renderRoute('/en')
     expect(screen.queryByRole('navigation', { name: 'Social links' })).toBeNull()
+  })
+
+  it('只有支持邮箱时渲染邮件入口', async () => {
+    await renderRoute('/en')
+    const social = within(screen.getByRole('navigation', { name: 'Social links' }))
+    const link = social.getByRole('link', { name: 'Support email' })
+    expect(link).toHaveAttribute('href', `mailto:${websiteConfig.mail.supportEmail}`)
+    expect(link).not.toHaveAttribute('target')
   })
 
   it('社交非空时渲染外链，带安全属性与可访问名', async () => {

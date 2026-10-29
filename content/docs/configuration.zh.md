@@ -4,7 +4,7 @@ description: websiteConfig 的全部字段与开关语义
 locale: zh
 order: 2
 group: config
-updated: 2026-10-21
+updated: 2026-10-29
 ---
 
 `src/config/website.ts` 是站点配置的唯一入口，导出 `websiteConfig` 对象。改站点名、
@@ -92,29 +92,31 @@ ui: {
 docs: { enabled: true },
 blog: { enabled: true },
 changelog: { enabled: true },
-mail: { enabled: false, provider: 'resend', supportEmail: '' },
+mail: { enabled: true, provider: 'resend', supportEmail: 'service@jerbix.site' },
 contact: { enabled: false },
 newsletter: { enabled: false, provider: 'resend' },
-payment: { enabled: false, provider: 'stripe', /* … */ },
+payment: { enabled: true, provider: 'stripe', /* … */ },
 notification: { enabled: false, provider: 'discord' },
 analytics: { enabled: false, providers: ['ga'] },
-auth: { enabled: true, requireEmailVerification: false },
+auth: { enabled: true, requireEmailVerification: true },
 ```
 
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `docs` / `blog` / `changelog` | `true` | 内容模块，页面已就位 |
-| `mail` | `false` | 事务邮件。`supportEmail` 用于生成 `mailto:` 入口 |
+| `mail` | `true` | 事务邮件。`supportEmail` 用于生成 `mailto:` 入口 |
 | `contact` | `false` | 联系表单 |
 | `newsletter` | `false` | 邮件订阅 |
-| `payment` | `false` | Stripe 结账与账单页 |
+| `payment` | `true` | Stripe 结账与账单页 |
 | `notification` | `false` | Discord / 飞书 webhook |
 | `analytics` | `false` | 分析脚本 |
 | `auth` | `true` | 登录注册。关闭时整条认证路径 404 |
 
-> `auth.requireEmailVerification` 是**安全控制**，不是邮件开关。默认 `false` 是为了让
-> 未接邮件的模板开箱可用；接上邮件后应改为 `true`。若设为 `true` 但邮件没配齐，
-> `pnpm check:env:prod` 会直接失败——要求验证却发不出验证邮件，新用户永远无法登录。
+> `auth.requireEmailVerification` 是**安全控制**，不是邮件开关，当前默认 `true`。
+> 当前 Resend 邮件也已启用，须配置 `RESEND_API_KEY` 与已验证域名下的纯发件地址 `MAIL_FROM`。
+> 要求验证但邮件未配齐时，`auth` 为 `incomplete`、认证 API 返回 503，
+> `pnpm check:env:prod` 失败，不会隐式关闭验证。`supportEmail` 为 `service@jerbix.site`，与 `MAIL_FROM` 独立；
+> 详见[身份认证](./auth)与[邮件](./email)。
 
 ### 功能开关
 

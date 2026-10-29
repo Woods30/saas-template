@@ -62,10 +62,10 @@ describe('legal 详情页真实渲染', () => {
 
 /**
  * 正文回归：标题断言不足以发现「命中失败渲染成 404」（`<h1>404</h1>` 一样查得到），
- * 因此再断言章节标题与 `role="alert"` 占位提示真的渲染了。
+ * 因此再断言正文、真实联系方式及外部服务链接，而非只检查路由命中。
  */
 describe('legal 详情页正文渲染', () => {
-  it('terms 中英文都渲染出章节标题与占位提示', async () => {
+  it('terms 中英文提供购买与 MIT 授权条款及真实联系方式', async () => {
     for (const [locale, path, heading] of [
       ['zh', '/zh/marketing/legal/terms', '服务的接受'],
       ['en', '/en/marketing/legal/terms', 'Acceptance'],
@@ -76,11 +76,22 @@ describe('legal 详情页正文渲染', () => {
         screen.getByRole('heading', { level: 2, name: heading }),
         `${path} 应渲染章节「${heading}」`,
       ).toBeInTheDocument()
-      expect(screen.getAllByRole('alert').length, `${path} 应有占位提示`).toBeGreaterThan(0)
+      expect(screen.queryByRole('alert'), `${path} 不应残留占位提示`).not.toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'service@jerbix.site' })).toHaveAttribute(
+        'href',
+        'mailto:service@jerbix.site',
+      )
+      expect(screen.getByRole('link', { name: 'www.jerbix.site' })).toHaveAttribute(
+        'href',
+        'https://www.jerbix.site',
+      )
+      expect(screen.getByText(/MIT License/)).toBeInTheDocument()
+      expect(screen.getByText(/99 USD/)).toBeInTheDocument()
+      cleanup()
     }
   })
 
-  it('privacy 中英文都渲染出章节标题与占位提示', async () => {
+  it('privacy 中英文披露实际服务商、数据用途与联系渠道', async () => {
     for (const [locale, path, heading] of [
       ['zh', '/zh/marketing/legal/privacy', '我们收集哪些信息'],
       ['en', '/en/marketing/legal/privacy', 'What we collect'],
@@ -91,7 +102,19 @@ describe('legal 详情页正文渲染', () => {
         screen.getByRole('heading', { level: 2, name: heading }),
         `${path} 应渲染章节「${heading}」`,
       ).toBeInTheDocument()
-      expect(screen.getAllByRole('alert').length, `${path} 应有占位提示`).toBeGreaterThan(0)
+      expect(screen.queryByRole('alert'), `${path} 不应残留占位提示`).not.toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'service@jerbix.site' })).toHaveAttribute(
+        'href',
+        'mailto:service@jerbix.site',
+      )
+      for (const [name, href] of [
+        ['Cloudflare', 'https://www.cloudflare.com/privacypolicy/'],
+        ['Stripe', 'https://stripe.com/privacy'],
+        ['Resend', 'https://resend.com/legal/privacy-policy'],
+      ])
+        expect(screen.getByRole('link', { name })).toHaveAttribute('href', href)
+      expect(screen.getByText(/NEXT_LOCALE/)).toBeInTheDocument()
+      cleanup()
     }
   })
 

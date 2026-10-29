@@ -73,8 +73,8 @@ export interface WebsiteConfig {
      * 这是安全控制而非邮件功能开关：邮箱在下游被当作身份依据（Stripe 的
      * `customerEmail`、`ADMIN_EMAILS`），放行未验证邮箱等于允许冒用他人地址。
      *
-     * 默认 `false` 只因默认未接邮件，否则整条邮箱密码路径不可用；**接上邮件后应改为
-     * `true`**。`true` + 邮件未配齐是矛盾配置，`getServiceStatuses()` 会报 incomplete。
+     * 当前默认 `true`，邮件必须配置完整。`true` + 邮件未配齐是矛盾配置，
+     * `getServiceStatuses()` 会报 incomplete，不会自动降级为免验证登录。
      */
     requireEmailVerification: boolean
   }
@@ -114,7 +114,7 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
     docs: { enabled: true },
     blog: { enabled: true },
     changelog: { enabled: true },
-    mail: { enabled: false, provider: 'resend', supportEmail: '' },
+    mail: { enabled: true, provider: 'resend', supportEmail: 'service@jerbix.site' },
     contact: { enabled: false },
     newsletter: { enabled: false, provider: 'resend' },
     payment: {
@@ -125,7 +125,7 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
     notification: { enabled: false, provider: 'discord' },
     analytics: { enabled: false, providers: ['ga'] },
     // auth 默认开启：模板自带登录 / 注册，关闭时对应页面与 API 一律 404。
-    auth: { enabled: true, requireEmailVerification: false },
+    auth: { enabled: true, requireEmailVerification: true },
     social: {},
     features: {
       enableI18n: true,

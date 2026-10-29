@@ -69,6 +69,105 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run content:build
+      # 目标账号下若还没有 D1 / KV，先按名字创建并把 ID 回填进 wrangler.jsonc。
+      # 资源 ID 是账号相关的：仓库里写死的是旧账号的值，换账号后必须重新绑定，
+      # 否则部署会因「绑定不存在」直接失败。
+      - name: Provision Cloudflare resources
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          d1_name=$(node --input-type=module -e "
+            import { readFileSync } from 'node:fs'
+            const text = readFileSync('wrangler.jsonc','utf8')
+            const match = text.match(/\"database_name\":\s*\"([^\"]+)\"/)
+            process.stdout.write(match ? match[1] : '')
+          ")
+          if [ -z "$d1_name" ]; then
+            echo "::error::无法从 wrangler.jsonc 读出 database_name"
+            exit 1
+          fi
+          # 已存在则直接取 ID，不存在则创建。--json 输出便于解析，避免依赖文案。
+          d1_id=$(pnpm exec wrangler d1 list --json \
+            | node --input-type=module -e "
+              let raw = ''
+              for await (const chunk of process.stdin) raw += chunk
+              const list = JSON.parse(raw)
+              const hit = list.find((db) => db.name === process.argv[1])
+              process.stdout.write(hit ? hit.uuid : '')
+            " "$d1_name")
+          if [ -z "$d1_id" ]; then
+            echo "创建 D1 数据库 $d1_name"
+            d1_id=$(curl -sS -X POST \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database" \
+              --data "{\"name\":\"$d1_name\"}" \
+              | node --input-type=module -e "
+                let raw = ''
+                for await (const chunk of process.stdin) raw += chunk
+                const body = JSON.parse(raw)
+                if (!body.success) {
+                  console.error('D1 创建失败：' + JSON.stringify(body.errors))
+                  process.exit(1)
+                }
+                process.stdout.write(body.result.uuid)
+              ")
+          fi
+          if [ -z "$d1_id" ]; then
+            echo "::error::D1 数据库 $d1_name 创建失败或无法取得 ID"
+            exit 1
+          fi
+          kv_id=$(pnpm exec wrangler kv namespace list \
+            | node --input-type=module -e "
+              let raw = ''
+              for await (const chunk of process.stdin) raw += chunk
+              const list = JSON.parse(raw)
+              // 标题即 wrangler.jsonc 里的 KV 名称；按标题找，避免依赖输出顺序。
+              const hit = list.find((ns) => ns.title === 'saas-template-cache')
+              process.stdout.write(hit ? hit.id : '')
+            ")
+          if [ -z "$kv_id" ]; then
+            echo "创建 KV 命名空间 saas-template-cache"
+            kv_id=$(curl -sS -X POST \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/storage/kv/namespaces" \
+              --data '{"title":"saas-template-cache"}' \
+              | node --input-type=module -e "
+                let raw = ''
+                for await (const chunk of process.stdin) raw += chunk
+                const body = JSON.parse(raw)
+                if (!body.success) {
+                  console.error('KV 创建失败：' + JSON.stringify(body.errors))
+                  process.exit(1)
+                }
+                process.stdout.write(body.result.id)
+              ")
+          fi
+          if [ -z "$kv_id" ]; then
+            echo "::error::KV 命名空间 CACHE 创建失败或无法取得 ID"
+            exit 1
+          fi
+          echo "D1 $d1_name = $d1_id"
+          echo "KV CACHE = $kv_id"
+          # 回填 wrangler.jsonc：KV 命名空间 ID 用 sed 精确替换，D1 用 node。
+          sed -i "s/\"binding\": \"CACHE\", \"id\": \"[0-9a-f]*\"/\"binding\": \"CACHE\", \"id\": \"$kv_id\"/" wrangler.jsonc
+          node --input-type=module -e "
+            import { readFileSync, writeFileSync } from 'node:fs'
+            const file = 'wrangler.jsonc'
+            const text = readFileSync(file, 'utf8')
+            const updated = text.replace(/(\"database_id\":\s*\")[0-9a-f-]*(\")/, '\$1' + process.argv[1] + '\$2')
+            if (updated === text) {
+              console.error('未在 wrangler.jsonc 中找到 database_id')
+              process.exit(1)
+            }
+            writeFileSync(file, updated)
+          " "$d1_id"
+          # 迁移必须先于部署：Worker 启动即访问 users 表，缺表会让所有走会话的请求 500。
+          echo "应用 D1 迁移"
+          pnpm exec wrangler d1 migrations apply DB --remote
       - name: Validate, build and deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -78,6 +177,8 @@ jobs:
           VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
           BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL || vars.VITE_BASE_URL || secrets.VITE_BASE_URL }}
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          MAIL_FROM: ${{ vars.MAIL_FROM || secrets.MAIL_FROM }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -98,7 +199,7 @@ jobs:
           node --input-type=module - "$secrets_file" <<'NODE'
           import { writeFileSync } from 'node:fs'
           const keys = [
-            'BETTER_AUTH_SECRET', 'BETTER_AUTH_URL',
+            'BETTER_AUTH_SECRET', 'BETTER_AUTH_URL', 'RESEND_API_KEY', 'MAIL_FROM',
             'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'DISCORD_WEBHOOK_URL',
             'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'TURNSTILE_SECRET_KEY', 'ADMIN_EMAILS',
           ]

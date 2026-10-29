@@ -14,21 +14,24 @@ import { Route as VerifyRoute } from '@/routes/{-$locale}/auth/verify-email'
 const flow = vi.hoisted(() => ({
   search: { redirect: '/zh/#pricing' } as Record<string, unknown>,
   signup: vi.fn().mockResolvedValue({ error: null }),
+  login: vi.fn().mockResolvedValue({ error: null }),
   social: vi.fn(),
 }))
 vi.mock('@/auth/client', () => ({
-  signIn: { social: flow.social, email: vi.fn() },
+  signIn: { social: flow.social, email: flow.login },
   signUp: { email: flow.signup },
 }))
 vi.mock('@/auth/providers', () => ({ fetchAuthProviderAvailability: vi.fn() }))
 vi.mock('@/lib/analytics/events', () => ({ trackSignUp: vi.fn(), trackLogin: vi.fn() }))
+
+const verificationRequired = websiteConfig.auth.requireEmailVerification
 
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
   flow.search = { redirect: '/zh/#pricing' }
   vi.unstubAllGlobals()
-  websiteConfig.auth.requireEmailVerification = false
+  websiteConfig.auth.requireEmailVerification = verificationRequired
 })
 
 /** 认证页共享 UI：提交态（含水合前禁用）、社交登录按钮、布局外壳。 */
@@ -59,6 +62,20 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 describe('购买后的认证回跳', () => {
+  it('邮箱验证成功后可直接继续购买', () => {
+    setLocale('zh', { reload: false })
+    const Page = VerifyRoute.options.component as React.ComponentType
+    render(<Page />)
+    expect(screen.getByText('邮箱已验证，你可以继续使用账号。')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '继续' })).toHaveAttribute('href', '/zh/#pricing')
+  })
+  it('未知验证错误同样显示失败，避免误报验证成功', () => {
+    setLocale('zh', { reload: false })
+    flow.search = { error: 'INTERNAL_SERVER_ERROR', redirect: '/zh/#pricing' }
+    const Page = VerifyRoute.options.component as React.ComponentType
+    render(<Page />)
+    expect(screen.getByText(/验证链接无效或已过期/)).toBeInTheDocument()
+  })
   it('验证邮件过期时显示失败并保留登录后的购买目标', () => {
     setLocale('zh', { reload: false })
     const validate = VerifyRoute.options.validateSearch as {
@@ -73,6 +90,21 @@ describe('购买后的认证回跳', () => {
       '/{-$locale}/auth/login?redirect=%2Fzh%2F%23pricing',
     )
     flow.search = { redirect: '/zh/#pricing' }
+  })
+  it('未验证账号登录显示查收邮件提示并保留验证回跳', async () => {
+    setLocale('zh', { reload: false })
+    flow.login.mockResolvedValueOnce({
+      error: { code: 'EMAIL_NOT_VERIFIED', message: 'Email not verified' },
+    })
+    const Page = LoginRoute.options.component as React.ComponentType
+    render(<Page />)
+    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'buyer@example.com' } })
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'StrongPassword123!' } })
+    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('请先验证邮箱'))
+    expect(flow.login).toHaveBeenCalledWith(
+      expect.objectContaining({ callbackURL: '/zh/auth/verify-email?redirect=%2Fzh%2F%23pricing' }),
+    )
   })
   it('登录页切换注册时携带购买目标', () => {
     setLocale('zh', { reload: false })
@@ -212,7 +244,10 @@ describe('AuthLayout', () => {
       </AuthLayout>,
     )
     // 只断言文案：本文件的 `Link` mock 吃不到 `params`，href 由 `navigation.test.ts` 覆盖。
-    expect(screen.getByRole('link', { name: '服务条款' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '隐私政策' })).toBeInTheDocument()
+    const terms = screen.getByRole('link', { name: '服务条款' })
+    const privacy = screen.getByRole('link', { name: '隐私政策' })
+    expect(terms.closest('[data-slot="card-footer"]')).toContainElement(privacy)
+    expect(terms.closest('p')).toHaveTextContent('点击继续，即表示你同意我们的')
+    expect(screen.getByRole('link', { name: '返回首页' }).closest('[data-slot="card"]')).toBeNull()
   })
 })

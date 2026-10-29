@@ -31,6 +31,7 @@ vi.mock('resend', () => ({
 
 // 必须在 mock 之后导入。
 import { ZodError } from 'zod'
+import * as urls from '@/lib/urls'
 import { allowedHostSuffixes, renderTemplate } from '@/mail/render'
 
 // 与路由的 contactMessageContextSchema 同形；因 `$` 文件名与 Bundler 解析不兼容，无法直接导入。
@@ -192,6 +193,49 @@ describe('renderTemplate context validation', () => {
           context: { username: 'Alice', actionUrl: 'https://attacker.com/verify?token=steal' },
         }),
       ).rejects.toThrow(ZodError)
+    })
+
+    it.each(['verifyEmail', 'forgotPassword'] as const)(
+      '本地 HTTP 同源链接可以渲染 %s 邮件',
+      async (template) => {
+        const base = vi.spyOn(urls, 'getBaseUrl').mockReturnValue('http://localhost:3000')
+        try {
+          await expect(
+            renderTemplate({
+              to: 'test@example.com',
+              template,
+              locale: 'zh',
+              context: {
+                username: 'Alice',
+                actionUrl: 'http://localhost:3000/api/auth/verify-email?token=test',
+              },
+            }),
+          ).resolves.toHaveProperty('html')
+        } finally {
+          base.mockRestore()
+        }
+      },
+    )
+
+    it.each([
+      ['https://example.com', 'http://localhost:3000/verify'],
+      ['http://localhost:3000', 'http://localhost:3001/verify'],
+      ['http://localhost:3000', 'http://app.localhost:3000/verify'],
+      ['http://example.com', 'http://example.com/verify'],
+    ])('拒绝不符合本地同源例外的 HTTP 链接 %s → %s', async (baseURL, actionUrl) => {
+      const base = vi.spyOn(urls, 'getBaseUrl').mockReturnValue(baseURL)
+      try {
+        await expect(
+          renderTemplate({
+            to: 'test@example.com',
+            template: 'verifyEmail',
+            locale: 'zh',
+            context: { username: 'Alice', actionUrl },
+          }),
+        ).rejects.toThrow(ZodError)
+      } finally {
+        base.mockRestore()
+      }
     })
 
     it('rejects actionUrl with http (non-https)', async () => {

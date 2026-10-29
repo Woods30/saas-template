@@ -4,7 +4,7 @@ description: The three test layers, common commands, and when to add an E2E
 locale: en
 order: 22
 group: develop
-updated: 2026-10-22
+updated: 2026-10-29
 ---
 
 **E2E only guards "can a user complete a task"; detailed interactions belong in component
@@ -43,7 +43,7 @@ locale only.
 
 | Spec | What it guards |
 |---|---|
-| `auth.spec.ts` | Sign-up → auto sign-in → sign-out; validation blocks submission |
+| `auth.spec.ts` | Sign-up without a session → unverified sign-in denied → email verification and auto sign-in → sign-out; validation blocks submission |
 | `settings.spec.ts` | Route guard, default landing, nickname written to D1, session invalid after sign-out |
 | `docs.spec.ts` | `/docs` redirect, ⌘K search → navigation, sidebar preference read back from the server |
 | `marketing.spec.ts` | Home renders, locale switch uses the real `/en` prefix |
@@ -56,6 +56,18 @@ locale only.
 > normal state. It never calls Stripe: it writes an `active` subscription into local D1
 > via `scripts/e2e-seed-subscription.ts` and exercises the real API and page. The price
 > anchors (`lookup_key`) live in `src/config/products.ts`, not in env.
+
+### Local email capture
+
+`pnpm test:e2e` starts a dedicated test server. A Vite transport layer directs Resend requests to an in-memory local capture service with synthetic mail configuration. Sign-up, template rendering, verification links, and sessions use the real product implementation without sending real email. Account and payment tests seed verified users in local D1 and then sign in with real passwords.
+
+Tests do not reuse a normal `pnpm dev` server or accept `.dev.vars` overrides. If port 3000 is occupied, use a separate port:
+
+```bash
+E2E_BASE_URL=http://localhost:3107 pnpm test:e2e
+```
+
+For an externally started server in CI, run `pnpm exec tsx e2e/global-setup.ts`, then run tests with `E2E_NO_SERVER=1`. Global setup checks the local mail capture endpoint and rejects servers without the test transport.
 
 ### Two traps
 

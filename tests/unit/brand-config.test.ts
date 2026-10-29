@@ -42,7 +42,12 @@ describe('websiteConfig 品牌信息', () => {
     expect(config.docs.enabled).toBe(true)
     expect(config.blog.enabled).toBe(true)
     expect(config.changelog.enabled).toBe(true)
-    expect(config.mail).toEqual({ enabled: false, provider: 'resend', supportEmail: '' })
+    expect(config.mail).toEqual({
+      enabled: true,
+      provider: 'resend',
+      supportEmail: 'service@jerbix.site',
+    })
+    expect(config.auth.requireEmailVerification).toBe(true)
     expect(config.contact.enabled).toBe(false)
     expect(config.newsletter).toEqual({ enabled: false, provider: 'resend' })
     // 服务模块开关是部署场景的决定，断言跟着当前默认值走。

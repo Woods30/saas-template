@@ -17,9 +17,10 @@ export default defineConfig({
   webServer: process.env.E2E_NO_SERVER
     ? undefined
     : {
-        command: 'pnpm dev --port 3000',
-        url: 'http://localhost:3000',
-        reuseExistingServer: !process.env.CI,
+        command: 'pnpm exec tsx e2e/global-setup.ts',
+        url: process.env.E2E_BASE_URL ?? 'http://localhost:3000',
+        // 现有 dev server 可能接真实 Resend，必须使用测试专属传输层。
+        reuseExistingServer: false,
         timeout: 120_000,
       },
   globalSetup: './e2e/global-setup.ts',

@@ -105,6 +105,50 @@ function escapeSql(value: string): string {
   return value.split("'").join("''")
 }
 
+/** 只造账号，不造 session；E2E 必须通过 Better Auth 的真实密码登录。 */
+export function buildUserSeedSql(user: {
+  id: string
+  email: string
+  name: string
+  passwordHash: string
+}): string {
+  const quote = (value: string) => `'${escapeSql(value)}'`
+  return `INSERT INTO users (id, email, name, email_verified) VALUES (${quote(user.id)}, ${quote(user.email)}, ${quote(user.name)}, 1);
+INSERT INTO accounts (id, user_id, account_id, provider_id, password) VALUES (${quote(`account_${user.id}`)}, ${quote(user.id)}, ${quote(user.id)}, 'credential', ${quote(user.passwordHash)});`
+}
+
+/** 与 dev server 共用 sqlite 文件时只重试 SQLITE_BUSY，不掩盖 schema / SQL 错误。 */
+export function executeLocalD1(sql: string, persistTo = process.env.E2E_D1_PERSIST_TO): void {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      execFileSync('wrangler', buildLocalD1Args(sql, persistTo), {
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      return
+    } catch (error) {
+      const stderr = String((error as { stderr?: unknown }).stderr ?? '')
+      if (attempt === 3 || !/SQLITE_BUSY|database is locked/i.test(stderr)) throw error
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, (attempt + 1) * 300)
+    }
+  }
+}
+
+export async function seedVerifiedUser(input: {
+  email: string
+  name: string
+  password: string
+}): Promise<void> {
+  const { hashPassword } = await import('better-auth/crypto')
+  executeLocalD1(
+    buildUserSeedSql({
+      ...input,
+      id: `e2e_${crypto.randomUUID()}`,
+      passwordHash: await hashPassword(input.password),
+    }),
+  )
+}
+
 /** 构造 INSERT；导出供单测固定转义规则，防止改拼接方式时引入注入。 */
 export function buildSeedSql(sub: SeedSubscription): string {
   const columns = [

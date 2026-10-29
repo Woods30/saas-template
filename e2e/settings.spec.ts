@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { seedVerifiedUser } from '../scripts/e2e-seed-subscription'
 
 /**
  * E2E: 工作台跨页面旅程（路由守卫、默认落点、资料落到 D1、登出后会话失效）。
@@ -14,15 +15,15 @@ async function waitForForm(page: import('@playwright/test').Page) {
   await expect(page.locator('button[type="submit"]').first()).toBeEnabled({ timeout: 15000 })
 }
 
-/** 注册并回到首页，返回使用的邮箱。 */
-async function register(page: import('@playwright/test').Page) {
+/** 本地 D1 fixture 已验证账号，再走真实登录，不调用注册 / 发信接口。 */
+async function login(page: import('@playwright/test').Page) {
   const email = `settings-${Date.now()}-${crypto.randomUUID().slice(0, 8)}@example.com`
-  await page.goto('/zh/auth/register')
+  await seedVerifiedUser({ email, name: '设置用户', password: PASSWORD })
+  await page.goto('/zh/auth/login')
   await waitForForm(page)
-  await page.getByLabel('昵称').fill('设置用户')
   await page.getByLabel('邮箱').fill(email)
-  await page.getByLabel('密码（≥ 8 字符）').fill(PASSWORD)
-  await page.getByRole('button', { name: '注册' }).click()
+  await page.getByLabel('密码', { exact: true }).fill(PASSWORD)
+  await page.getByRole('button', { name: '登录', exact: true }).click()
   await page.waitForURL((url) => url.pathname === '/zh' || url.pathname === '/')
   return email
 }
@@ -35,7 +36,7 @@ test.describe('Settings', () => {
   })
 
   test('/dashboard 落到资料板块，导航随模块门禁收敛', async ({ page }) => {
-    await register(page)
+    await login(page)
     await page.goto('/zh/dashboard')
     await page.waitForURL(/\/zh\/dashboard\/profile/)
 
@@ -46,7 +47,7 @@ test.describe('Settings', () => {
   })
 
   test('改昵称后刷新仍为新值', async ({ page }) => {
-    await register(page)
+    await login(page)
     await page.goto('/zh/dashboard/profile')
     await waitForForm(page)
 
@@ -64,7 +65,7 @@ test.describe('Settings', () => {
   })
 
   test('登出后再次访问个人中心被重定向', async ({ page }) => {
-    await register(page)
+    await login(page)
     await expect(page).toHaveURL(/\/zh$|\/$/)
 
     // 登出入口在侧栏用户卡片：`dashboard` 是 `_layout` 路由，首页顶栏的 `UserMenu`

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-/** E2E: 认证核心旅程（注册自动登录 → 登出；提交前校验）。 */
+/** E2E: 注册无 session → 未验证拒绝登录 → 本地捕获验证邮件 → 登录 → 登出。 */
 
 const PASSWORD = 'e2e-password-12345'
 
@@ -13,7 +13,7 @@ async function waitForForm(page: import('@playwright/test').Page) {
 }
 
 test.describe('Auth', () => {
-  test('注册 → 自动登录 → 用户菜单显示邮箱 → 登出', async ({ page }) => {
+  test('注册不产生会话，未验证不能登录，验证邮件后登录并登出', async ({ page }) => {
     const email = `e2e-${Date.now()}-${crypto.randomUUID().slice(0, 8)}@example.com`
     await page.goto('/zh/auth/register')
 
@@ -23,6 +23,41 @@ test.describe('Auth', () => {
     await page.getByLabel('密码（≥ 8 字符）').fill(PASSWORD)
     await page.getByRole('button', { name: '注册' }).click()
 
+    await expect(page.getByRole('heading', { name: '请查收邮件' })).toBeVisible()
+    expect(await (await page.request.get('/api/auth/get-session')).json()).toBeNull()
+    await page.goto('/zh/auth/login')
+    await waitForForm(page)
+    await page.getByLabel('邮箱').fill(email)
+    await page.getByLabel('密码', { exact: true }).fill(PASSWORD)
+    const denied = page.waitForResponse((response) =>
+      response.url().includes('/api/auth/sign-in/email'),
+    )
+    await page.getByRole('button', { name: '登录', exact: true }).click()
+    expect((await denied).status()).toBe(403)
+    await expect(page.getByRole('alert')).toContainText('请先验证邮箱')
+    expect(await (await page.request.get('/api/auth/get-session')).json()).toBeNull()
+    await page.goto('/zh/dashboard/profile')
+    await expect(page).toHaveURL(/\/zh\/auth\/login/)
+
+    let verificationURL = ''
+    await expect(async () => {
+      const response = await page.request.get('/__e2e/mail', { params: { email } })
+      const { html } = (await response.json()) as { html: string | null }
+      const href = html?.match(/href="([^"]*\/api\/auth\/verify-email[^"]*)"/)?.[1]
+      expect(href, '本地捕获服务应收到真实模板生成的验证链接').toBeTruthy()
+      verificationURL = href?.replaceAll('&amp;', '&') ?? ''
+    }).toPass({ timeout: 15000 })
+    expect(new URL(verificationURL).origin).toBe(new URL(page.url()).origin)
+    await page.goto(verificationURL)
+    await expect(
+      page
+        .getByRole('button', { name: '继续', exact: true })
+        .or(page.getByRole('link', { name: '继续', exact: true })),
+    ).toBeVisible()
+    await page
+      .getByRole('button', { name: '继续', exact: true })
+      .or(page.getByRole('link', { name: '继续', exact: true }))
+      .click()
     await page.waitForURL((url) => url.pathname === '/zh' || url.pathname === '/')
     // 15s：冷启动时会话请求可能晚于导航返回，导航栏短暂渲染未登录回退。
     const trigger = page.getByRole('button', { name: 'E2E 用户' })

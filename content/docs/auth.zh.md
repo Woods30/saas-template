@@ -4,32 +4,38 @@ description: 邮箱密码与 Google 登录、邮件流程、会话守卫与表�
 locale: zh
 order: 10
 group: features
-updated: 2026-10-15
+updated: 2026-10-29
 ---
 
-邮箱密码 + Google OAuth，基于 Better Auth v1.7.7 与 Drizzle adapter（D1 / SQLite）。
+邮箱密码 + Google OAuth，基于 Better Auth v1.7.10 与 Drizzle adapter（D1 / SQLite）。
 页面在 `/{locale}/auth/*`，API 在 `/api/auth/*`，工作台在 `/{locale}/dashboard/*`。
 
 ## 启用
 
 ![登录页](/docs/screenshots/auth-login.png "登录页：邮箱密码登录，配置 Google 凭据后自动出现第三方登录按钮")
 
-`websiteConfig.auth` 两个字段，加上三个环境变量：
+当前默认启用认证、Resend 邮件和邮箱验证：
 
 ```ts
 // src/config/website.ts
-auth: { enabled: true, requireEmailVerification: false },
+auth: { enabled: true, requireEmailVerification: true },
+mail: { enabled: true, provider: 'resend', supportEmail: 'service@jerbix.site' },
 ```
+
+`supportEmail` 已配置为 `service@jerbix.site`；它是支持收件邮箱，与发件地址 `MAIL_FROM` 分开配置，见[邮件](./email)。
 
 | 配置 / 变量 | 何时需要 | 作用 |
 |---|---|---|
 | `auth.enabled` | — | 同时门禁页面与 API。关闭时页面经 `assertPageEnabled('auth')` 404，`/api/auth/*` 在进入 Better Auth 前返回 `404 { error: 'MODULE_DISABLED' }` |
-| `auth.requireEmailVerification` | 接上邮件后应设为 `true` | 未验证邮箱能否登录，见[下文](#requireemailverification-是安全控制不是邮件开关) |
+| `auth.requireEmailVerification` | 当前默认 `true` | 未验证邮箱不能密码登录，见[下文](#requireemailverification-是安全控制不是邮件开关) |
+| `RESEND_API_KEY` / `MAIL_FROM` | 当前 Resend 配置必需 | API key 与已验证域名下的纯发件邮箱地址 |
+| `BETTER_AUTH_URL` | 邮件验证 / Google 登录必需 | 本地为 `http://localhost:3000`；生产为实际 HTTPS origin |
 | `BETTER_AUTH_SECRET` | 生产必需 | 签名会话与邮件 token，≥ 32 字符；由 `check:env:prod` 强制校验 |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 启用 Google 登录时 | OAuth 凭据，两者缺一不可 |
 
-本地开发未设 `BETTER_AUTH_SECRET` 时，Better Auth 退回自带的开发密钥，`auth` 仍报
-`configured`——门禁不会把本地开发挡在 503 之外。
+本地开发未设 `BETTER_AUTH_SECRET` 时，Better Auth 可退回自带的开发密钥；但当前要求邮箱验证，
+仍须在 `.env` 配齐邮件配置。缺少 `RESEND_API_KEY` / `MAIL_FROM` 或关闭邮件时，`auth` 状态为
+`incomplete`，`/api/auth/*` 返回 503，`pnpm check:env:prod` 失败，不会隐式降级为免验证登录。
 
 ## Google 登录
 
@@ -47,24 +53,34 @@ RPC。若改用普通函数，从导航栏点进登录页时按钮会静默消�
 
 | 流程 | 触发点 | 模板 |
 |---|---|---|
-| 邮箱验证 | 注册时，以及未验证用户登录时 | `verifyEmail` |
+| 邮箱验证 | 注册时（`sendOnSignUp: true`）；未验证用户以正确密码登录时（`sendOnSignIn: true`）重发 | `verifyEmail` |
 | 重置密码 | 「忘记密码」 | `forgotPassword` |
-| 欢迎邮件 | `databaseHooks.user.create.after` | `welcome` |
+| 欢迎邮件 | 邮箱验证成功后的 `emailVerification.afterEmailVerification` | `welcome` |
+
+当前注册会创建用户并发送验证邮件，**不创建 session**。未验证用户以正确密码登录时重发验证邮件，
+返回 **403 `EMAIL_NOT_VERIFIED`**，同样不创建 session。验证成功后，
+`autoSignInAfterVerification: true` 自动建立会话，并触发欢迎邮件；创建用户时不再发送欢迎邮件。
 
 `src/auth/emails.ts` 是 Better Auth 回调与 mail registry 之间唯一的桥梁，两条防御必须保留：
 
 - **绝不抛出。** Better Auth 经 `runInBackgroundOrAwait` 调用回调，抛错会让**注册或登录
   失败**。所有异常收敛为 `{ ok: false, error }` 并记 `console.warn`。
-- **邮件关闭即静默跳过。** `mail.enabled: false` 或发件人未配置时直接返回，不尝试发送。
+- **邮件关闭或缺少发件人时不尝试发送。** 桥接函数返回 `{ ok: false, error }`，调用方记录警告。
+  这不改变认证门禁：要求验证而邮件未配齐时，认证 API 在进入 Better Auth 前已返回 503。
 
 收件人语言从回调的第二个参数 `Request` 解析（URL 前缀 → cookie → `Accept-Language` →
 默认语言），中文访客收到中文邮件，无需额外接线。
 
 ### 验证链接
 
-邮件链接指向 `/api/auth/verify-email?token=…&callbackURL=/{locale}/auth/verify-email`。
-这是 Better Auth 侧的 **GET** 端点：校验后重定向，失败追加 `?error=<code>`，落地页据此
-渲染「链接无效或已过期」。落地页自身不调任何客户端 SDK。
+邮件链接指向 `/api/auth/verify-email?token=…&callbackURL=…`，其中 `callbackURL` 是编码后的
+`/{locale}/auth/verify-email?redirect=<站内目标>`。注册和密码登录都保留安全的站内购买目标；
+`safeInternalPath()` 拒绝外域、`//`、反斜杠和控制字符，不合法或缺失时回落 `/`。
+
+这是 Better Auth 侧的 **GET** 端点：校验后重定向到验证结果页，失败追加 `error=<code>`。
+结果页将任何 `error` 参数视为失败并提供保留 `redirect` 的登录链接，避免未知错误被误报成功。
+成功时显示「继续」链接，`href` 使用 `resolveRedirectTarget(redirect)`，以整页导航前往安全站内目标
+并刷新 session。结果页自身不调客户端 SDK；保留购买目标不代表验证成功后自动发起结账。
 
 ### 重置链接
 
@@ -73,22 +89,17 @@ RPC。若改用普通函数，从导航栏点进登录页时按钮会静默消�
 
 ## `requireEmailVerification` 是安全控制，不是邮件开关
 
-该字段（默认 `false`）决定用户能否在不证明拥有该邮箱的情况下登录。它**刻意不**从
-`mail.enabled` 推导：邮箱在下游是身份依据——`src/routes/api/payment/$.ts` 把
-`session.user.email` 作为 `customerEmail` 传给 Stripe，`/api/email` 按 `ADMIN_EMAILS`
-成员身份授权。让「还没配 SMTP」这一运维状态悄悄变成「任何人都能用别人的邮箱注册」，
-就是权限提升。
-
-默认 `false` 只因模板未接邮件：若默认要求验证，Better Auth 会拒绝一切未验证用户登录、
-注册也不再自动登录，整条邮箱密码路径开箱即不可用。**接上邮件是两步改动**——先配好
-`mail`，再把这里改成 `true`。
+该字段当前默认 `true`，决定用户能否在不证明拥有该邮箱的情况下密码登录。它**刻意不**从
+`mail.enabled` 推导：邮箱在下游是身份依据——支付把 `session.user.email` 交给 Stripe，
+`/api/email` 按 `ADMIN_EMAILS` 成员身份授权。缺少邮件配置不能悄悄放宽身份验证。
 
 安全侧统一读 `src/auth/flow.ts` 的 `requiresEmailVerification()`，服务端与 UI 不会分歧。
-同一模块的 `signUpOutcome()` 决定注册成功后落在哪里：`false` 时 Better Auth **会自动登录**
-新用户，页面必须跳首页；把已登录用户叫去查收邮件，等于让他等一封永远不会发出的信。
+同一模块的 `signUpOutcome()` 决定注册成功后的页面：当前要求验证，显示查收邮件提示；
+只有显式改成 `false` 时，Better Auth 才会在注册后自动登录，页面再跳转到安全站内目标。
 
-`requireEmailVerification: true` + 邮件未配齐是**矛盾配置**，会被 `getServiceStatuses()`
-报为 incomplete 并让 `check:env:prod` 失败——要求验证却发不出信，新用户将永远无法登录。
+`requireEmailVerification: true` + 邮件未配齐是**矛盾配置**，`getServiceStatuses()` 会将
+`auth` 报为 `incomplete`，认证 API 返回 503，`check:env:prod` 失败。补齐邮件配置即可恢复，
+系统不会自动关闭验证。
 
 ## 会话与登出
 
@@ -113,26 +124,34 @@ RPC。若改用普通函数，从导航栏点进登录页时按钮会静默消�
 
 ## 登录 / 注册页的法律声明
 
-login 与 register 在表单卡片**下方**渲染一行「点击继续，即表示你同意我们的服务条款与隐私政策」，
-指向 `/marketing/legal/terms` 与 `/marketing/legal/privacy`，随当前语言切换。写法参照 shadcn 的
-`login-03` 块：声明是卡片的同级元素，放进卡片里会被读成表单的一部分。
+login 与 register 在表单卡片**内部的 `CardFooter`** 渲染一行「点击继续，即表示你同意我们的
+服务条款与隐私政策」，指向 `/marketing/legal/terms` 与 `/marketing/legal/privacy`，随当前语言切换。
+「返回首页」链接位于卡片外部。
 
 它由 `AuthLayout` 的 `legalNotice` prop 控制，**默认关闭**。只有「用户此刻正在同意」的页面才传：
 `verify-email` 是终态且没有提交按钮，`reset-password` / `forgot-password` 用户也不在创建账号，
 `error` 更没有任何可同意的动作。register 的两个 `AuthLayout` 调用点里，只有表单那一支传——
 「请查收验证邮件」那支出现时账号已创建、同意已发生过。
 
-> **注意事项**：服务条款与隐私政策的正文在 `content/legal/` 下，**是带占位提示的模板**。
-   上线前必须把其中标注「部署前填写」的条目换成真实情况，至少包括：数据保留期限、子处理商
-   名单（含各自 DPA）、退款窗口、责任上限、管辖法律与争议解决地、联系邮箱，以及本部署实际
-   设置了哪些 Cookie。占位以 `> **注意事项**` 书写，会被渲染成醒目的 Alert；全部替换掉之后
-   再考虑删掉文档开头那条「本文档是模板占位内容」的提示。
+服务条款与隐私政策位于 `content/legal/`，当前按 Jerbix、`https://www.jerbix.site` 及
+`service@jerbix.site` 编写，涵盖一次性源码购买、MIT 授权、退款和实际数据处理。页面不指定专属
+司法辖区；这不免除实际经营地或目标市场可能要求的经营者身份与地址披露。复用到其他站点时，
+应按自己的运营方式、服务商与适用规则更新正文。
 
 ## 生产环境
 
+### Resend 与运行时配置
+
+在 Resend 验证自己的发信域名，将 `MAIL_FROM` 设为该域名下的纯邮箱地址（不带显示名或尖括号）。
+本地 `.env` 配置 `RESEND_API_KEY`、`MAIL_FROM` 和 `BETTER_AUTH_URL`；生产 GitHub
+`production` Environment 中设置 Secret `RESEND_API_KEY` 和 Variable `MAIL_FROM`，均**不加 `VITE_` 前缀**。
+工作流也兼容 Secret `MAIL_FROM`，Variable 优先，并通过 `--secrets-file` 白名单同步到 Worker。
+手工部署时，生产校验用的 `.env.production` 与 Worker 运行时绑定也必须一致，见[邮件](./email)和
+[Cloudflare](./cloudflare)。
+
 ### `BETTER_AUTH_SECRET`
 
-生产用 `wrangler secret put`，不要写进 `.env`：
+手工生产部署用 `wrangler secret put` 上传运行时 secret，不要将真实值提交到仓库：
 
 ```bash
 printf '%s' "$BETTER_AUTH_SECRET" | pnpm exec wrangler secret put BETTER_AUTH_SECRET
@@ -142,7 +161,8 @@ printf '%s' "$BETTER_AUTH_SECRET" | pnpm exec wrangler secret put BETTER_AUTH_SE
 过短会被 `validateProdServerEnv` 拒绝，`pnpm deploy` 第一步就失败。
 
 > **注意事项**：`.env.production` 里也有一份同名值，但那**只为让生产校验通过**——运行时读的是
-> Worker secret。两者必须是同一个值。详见[环境变量](./environment)。
+> Worker secret。两者必须是同一个值。自动 Release 部署使用 GitHub 配置并同步运行时绑定，
+> 无需手工重复上传。详见[环境变量](./environment)。
 
 ### `BETTER_AUTH_URL`
 

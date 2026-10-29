@@ -656,7 +656,11 @@ describe('API handler 门禁（默认服务全关）', () => {
   })
 
   it('email POST 返回 404，且不调用 auth / 不读取 body', async () => {
-    const { Route } = await import('@/routes/api/email/$')
+    const { Route } = (await importRouteWithConfig(
+      { mail: { ...makeConfig().mail, enabled: false } },
+      {},
+      '@/routes/api/email/$',
+    )) as { Route: unknown }
     const handler = getHandler(Route, 'POST')
     const request = new Request('https://jerbix.dev/api/email/send', {
       method: 'POST',

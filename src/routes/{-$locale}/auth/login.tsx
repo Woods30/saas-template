@@ -13,6 +13,7 @@ import { trackLogin } from '@/lib/analytics/events'
 import { assertPageEnabled } from '@/lib/module-access'
 import { resolveRedirectTarget, type SafeInternalPath, safeInternalPath } from '@/lib/urls'
 import { m } from '@/locale/paraglide/messages.js'
+import { getLocale } from '@/locale/paraglide/runtime.js'
 
 export const Route = createFileRoute('/{-$locale}/auth/login')({
   beforeLoad: async () => {
@@ -40,9 +41,17 @@ function LoginPage() {
     validators: { onSubmit: createLoginSchema(authFormMessages()) },
     onSubmit: async ({ value }) => {
       setServerError(null)
-      const { error } = await signIn.email({ email: value.email, password: value.password })
+      const { error } = await signIn.email({
+        email: value.email,
+        password: value.password,
+        callbackURL: `/${getLocale()}/auth/verify-email?redirect=${encodeURIComponent(resolveRedirectTarget(redirect))}`,
+      })
       if (error) {
-        setServerError(error.message?.split('\n')[0] ?? m.auth_error_generic())
+        setServerError(
+          error.code === 'EMAIL_NOT_VERIFIED'
+            ? m.auth_login_verify_required()
+            : (error.message?.split('\n')[0] ?? m.auth_error_generic()),
+        )
         return
       }
       trackLogin()

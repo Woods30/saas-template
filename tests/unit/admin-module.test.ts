@@ -19,8 +19,12 @@ vi.mock('@/auth/auth', () => ({
 }))
 
 vi.mock('@/lib/server-context', () => ({
-  getServerContext: () => ({ env: {} }),
-  als: { getStore: () => ({ env: {} }) },
+  getServerContext: () => ({
+    env: { RESEND_API_KEY: 're_synthetic', MAIL_FROM: 'test@example.com' },
+  }),
+  als: {
+    getStore: () => ({ env: { RESEND_API_KEY: 're_synthetic', MAIL_FROM: 'test@example.com' } }),
+  },
 }))
 
 type Handler = (ctx: { request: Request }) => Promise<Response>

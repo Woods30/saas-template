@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { z } from 'zod'
 import { AuthLayout } from '@/components/auth/AuthLayout'
 import { assertPageEnabled } from '@/lib/module-access'
-import { safeInternalPath } from '@/lib/urls'
+import { resolveRedirectTarget, safeInternalPath } from '@/lib/urls'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/auth/verify-email')({
@@ -21,24 +21,31 @@ export const Route = createFileRoute('/{-$locale}/auth/verify-email')({
  * 校验由邮件链接指向的 better-auth GET 端点完成，失败时重定向回本页并追加
  * `?error=<code>`。因此本页不调用任何客户端 SDK，只按查询参数渲染结果。
  */
-const INVALID_TOKEN_CODES = new Set(['INVALID_TOKEN', 'TOKEN_EXPIRED', 'USER_NOT_FOUND'])
-
 function VerifyEmailPage() {
   const { error, redirect } = Route.useSearch()
-  const failed = error !== undefined && INVALID_TOKEN_CODES.has(error)
+  const failed = error !== undefined
 
   return (
     <AuthLayout title={m.auth_verify_title()}>
       <p className="text-sm text-muted-foreground">
         {failed ? m.auth_verify_invalid() : m.auth_verify_verified()}
       </p>
-      <Link
-        to="/{-$locale}/auth/login"
-        search={{ redirect }}
-        className="mt-4 block text-center text-sm text-muted-foreground underline hover:text-foreground"
-      >
-        {m.auth_error_back()}
-      </Link>
+      {failed ? (
+        <Link
+          to="/{-$locale}/auth/login"
+          search={{ redirect }}
+          className="mt-4 block text-center text-sm text-muted-foreground underline hover:text-foreground"
+        >
+          {m.auth_error_back()}
+        </Link>
+      ) : (
+        <a
+          href={resolveRedirectTarget(redirect)}
+          className="mt-4 block text-center text-sm text-muted-foreground underline hover:text-foreground"
+        >
+          {m.auth_verify_continue()}
+        </a>
+      )}
     </AuthLayout>
   )
 }

@@ -71,7 +71,15 @@ export function getAuth(env: Env) {
     emailVerification: {
       // 概念与上面的 `requireEmailVerification` 不同：这里问的是「要不要发验证邮件」。
       sendOnSignUp: websiteConfig.mail.enabled,
+      sendOnSignIn: websiteConfig.mail.enabled && requiresEmailVerification(),
       autoSignInAfterVerification: true,
+      afterEmailVerification: async (user, request) => {
+        if (!websiteConfig.mail.enabled) return
+        await dispatch(
+          { kind: 'welcome', to: user.email, username: user.name ?? user.email },
+          request,
+        )
+      },
       sendVerificationEmail: async ({ user, url }, request) => {
         await dispatch(
           {
@@ -92,20 +100,6 @@ export function getAuth(env: Env) {
               clientSecret: parsed.GOOGLE_CLIENT_SECRET,
             }
           : undefined,
-    },
-    databaseHooks: {
-      user: {
-        create: {
-          after: async (user, context) => {
-            // 欢迎邮件与验证邮件解耦：邮件关闭时整体跳过。
-            if (!websiteConfig.mail.enabled) return
-            await dispatch(
-              { kind: 'welcome', to: user.email, username: user.name ?? user.email },
-              context?.request,
-            )
-          },
-        },
-      },
     },
     user: {
       deleteUser: { enabled: true },

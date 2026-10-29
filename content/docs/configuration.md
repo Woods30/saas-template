@@ -4,7 +4,7 @@ description: Every websiteConfig field and what its switches mean
 locale: en
 order: 2
 group: config
-updated: 2026-10-21
+updated: 2026-10-29
 ---
 
 `src/config/website.ts` is the single entry point for site configuration and exports the
@@ -95,31 +95,32 @@ Every optional module has `enabled`. When off, its pages 404, its API returns
 docs: { enabled: true },
 blog: { enabled: true },
 changelog: { enabled: true },
-mail: { enabled: false, provider: 'resend', supportEmail: '' },
+mail: { enabled: true, provider: 'resend', supportEmail: 'service@jerbix.site' },
 contact: { enabled: false },
 newsletter: { enabled: false, provider: 'resend' },
-payment: { enabled: false, provider: 'stripe', /* … */ },
+payment: { enabled: true, provider: 'stripe', /* … */ },
 notification: { enabled: false, provider: 'discord' },
 analytics: { enabled: false, providers: ['ga'] },
-auth: { enabled: true, requireEmailVerification: false },
+auth: { enabled: true, requireEmailVerification: true },
 ```
 
 | Field | Default | Notes |
 |---|---|---|
 | `docs` / `blog` / `changelog` | `true` | Content modules, pages already exist |
-| `mail` | `false` | Transactional email. `supportEmail` feeds a `mailto:` entry |
+| `mail` | `true` | Transactional email. `supportEmail` feeds a `mailto:` entry |
 | `contact` | `false` | Contact form |
 | `newsletter` | `false` | Email subscriptions |
-| `payment` | `false` | Stripe checkout and billing page |
+| `payment` | `true` | Stripe checkout and billing page |
 | `notification` | `false` | Discord / Feishu webhooks |
 | `analytics` | `false` | Analytics scripts |
 | `auth` | `true` | Sign-in and registration; off means the whole auth path 404s |
 
-> `auth.requireEmailVerification` is a **security control**, not an email switch. It
-> defaults to `false` so the template works without mail configured; set it to `true` once
-> email is wired up. Setting it to `true` without working mail makes
-> `pnpm check:env:prod` fail — requiring verification while being unable to send the
-> verification email would lock every new user out.
+> `auth.requireEmailVerification` is a **security control**, not an email switch, and
+> currently defaults to `true`. Resend mail is also enabled: configure `RESEND_API_KEY`
+> and a plain `MAIL_FROM` address on a verified domain. Required verification with incomplete
+> mail makes `auth` report `incomplete`, the auth API return 503, and `pnpm check:env:prod`
+> fail. Verification is never implicitly disabled. `supportEmail` is `service@jerbix.site` and is
+> independent of `MAIL_FROM`; see [Authentication](./auth) and [Email](./email).
 
 ### Feature switches
 

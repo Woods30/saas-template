@@ -4,11 +4,11 @@ description: 账号、Token、资源、首次部署与自动部署
 locale: zh
 order: 5
 group: deploy
-updated: 2026-10-21
+updated: 2026-10-29
 ---
 
 站点跑在 **Cloudflare Workers** 上。这页带你配好账号与 Token，完成首次部署，并接上
-推送到 `main` 就自动发布的流水线。
+发布正式 GitHub Release 后部署生产的流水线；推送或合并到 `main` 只运行 CI。
 
 数据库、存储、缓存各自的接线见后续三页——先按这页配好凭据与 Token 权限，那几页才能执行。
 
@@ -116,7 +116,18 @@ pnpm deploy
 
 ```bash
 printf '%s' "$BETTER_AUTH_SECRET" | pnpm exec wrangler secret put BETTER_AUTH_SECRET
+pnpm exec wrangler secret put RESEND_API_KEY
+pnpm exec wrangler secret put MAIL_FROM
+pnpm exec wrangler secret put BETTER_AUTH_URL
 ```
+
+当前 `mail.enabled: true`、provider 为 `resend`，且 `auth.requireEmailVerification: true`。
+先在 Resend 验证发信域名，再配置 `RESEND_API_KEY` 与该域名下的纯地址 `MAIL_FROM`
+（不带显示名 / 尖括号）。本地开发在 `.env` 配置；手工生产部署还须在 `.env.production`
+提供相同环境的值用于校验，并保持 Worker 运行时绑定一致。`BETTER_AUTH_URL` 本地为
+`http://localhost:3000`，生产为实际 HTTPS origin，与 `VITE_BASE_URL` 一致。
+缺邮件配置会使 `auth` 为 `incomplete`、`/api/auth/*` 返回 503、生产校验失败，不会隐式关闭邮箱验证。
+详见[邮件](./email)。
 
 `wrangler deploy` **不会**清除已有的 secret，重复部署是幂等的。
 
@@ -142,6 +153,39 @@ Deployed demo triggers
 
 > 绑自定义域名需要 Token 有 **Workers Routes → Edit** 权限，workers.dev 不需要。
 
+**区域必须与 Worker 在同一个 Cloudflare 账号。** 自定义域名由 Cloudflare 在该账号内直接创建
+DNS 记录与证书，官方明确不支持「在自己没有的 zone 上创建自定义域名」；跨账号把 CNAME 指向
+`workers.dev` 会被 Cloudflare 拦截（CNAME Cross-User Banned，错误 1014）。域名在另一个账号时，
+可选做法是：把该 zone 迁入 Worker 所在账号，或在该账号部署 Worker 并在原账号用 Dashboard
+的 Workers for Platforms 处理自定义主机名。查 zone 属于哪个账号：
+
+```bash
+curl -s "https://api.cloudflare.com/client/v4/zones?name=your-domain.com" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+```
+
+返回 `result` 为空数组，说明当前 Token 看不到该区域——多半是它属于另一个账号，或 Token
+缺少 Zone 读取权限。
+
+### 6. 同一域名同时收信与发信
+
+一个域名可以既用 Cloudflare Email Routing 收信转发，又用 Resend 发信，两者的 DNS 记录
+名字不同，可以共存：
+
+| 用途 | 记录 | 由谁添加 |
+|---|---|---|
+| 收信（转发到 Gmail 等） | 根域 `MX` → `route1/2/3.mx.cloudflare.net`，根域 `TXT` → `v=spf1 include:_spf.mx.cloudflare.net ~all`，`cf2024-1._domainkey` 的 DKIM | Email Routing 开启时自动添加 |
+| 发信（验证邮件等） | `resend._domainkey` 的 DKIM、`send` 子域上的 Return-Path（`MX` + `TXT`，或 2026 年 8 月后新建域名改用两条 `CNAME`） | Resend 控制台 Records 页 |
+
+要点：
+
+- **根域只能有一条 SPF 记录。** Email Routing 已占用根域 SPF；若还要用其他服务以本域身份
+  直接发信，必须把它的 `include:` **合并进这条记录**，新增第二条 `v=spf1` 会让 SPF 直接失效。
+- Resend 的 SPF 在 `send` 子域，作用是 Return-Path 的退信处理，与根域 SPF 互不影响。
+- Resend 给出的 `CNAME` **不能开 Cloudflare 代理**（橙云），且同一名字上不能有其他记录；
+  否则域名验证不通过。
+- Email Routing 只收不发：转发后无法以原地址回复，需要用 Gmail 账号回信。
+
 ## 自动部署
 
 合并到 `main` 只运行 CI。发布**正式 GitHub Release**（`release.published`）后，Deploy 工作流才部署；草稿、预发布、单独推送 tag 均不触发生产部署。
@@ -159,6 +203,8 @@ Deployed demo triggers
 | Variable | `VITE_BASE_URL` | 生产站点完整 HTTPS origin，例如当前 Worker 地址或自定义域名，不带路径 |
 | Variable | `BETTER_AUTH_URL` | 可选；默认使用 `VITE_BASE_URL`，用于服务端认证回调 |
 | Secret | `BETTER_AUTH_SECRET` | 至少 32 字符；已有站点沿用原值，避免会话失效 |
+| Secret | `RESEND_API_KEY` | 当前 Resend 邮件与邮箱验证必需，使用有发信权限的 API key |
+| Variable | `MAIL_FROM` | Resend 已验证域名下的纯邮箱地址，不带显示名或尖括号；也兼容同名 Secret，Variable 优先 |
 | Secret | `STRIPE_SECRET_KEY` | Stripe 正式环境 API secret key；仅明确使用测试支付的演示站点使用测试 key |
 | Secret | `STRIPE_WEBHOOK_SECRET` | 同一 Stripe 环境、指向 `<VITE_BASE_URL>/api/webhooks/stripe` 的端点签名密钥（`whsec_…`） |
 | Secret | `DISCORD_WEBHOOK_URL` | Discord 频道 Webhook URL；开启通知模块时必填，当前已关闭 |
@@ -166,11 +212,18 @@ Deployed demo triggers
 
 现有仓库 Secrets 中的 `CLOUDFLARE_ACCOUNT_ID`、`VITE_BASE_URL` 仍兼容，不强制迁移。其他公开配置请使用 Variables。Stripe 中还需在相同环境配置启用的 `jerbix_template`、USD 99、一次性价格；Webhook 事件配置见[支付文档](./payment)。不使用通知或分析时在 `src/config/website.ts` 关闭对应模块并合并，不能仅留空变量。
 
-按需配置：Google 登录使用 Variable `GOOGLE_CLIENT_ID` 和 Secret `GOOGLE_CLIENT_SECRET`；Turnstile 使用 Variable `VITE_TURNSTILE_SITE_KEY` 和 Secret `TURNSTILE_SECRET_KEY`；管理员邮件列表使用 Variable `ADMIN_EMAILS`。工作流已映射这些字段。以后启用邮件、其他通知或分析服务时，也要同步增加其 workflow env 与运行时上传字段。
+`RESEND_API_KEY` 和 `MAIL_FROM` 均不加 `VITE_` 前缀。`MAIL_FROM` 是发件地址，支持收件邮箱另在
+`websiteConfig.mail.supportEmail` 配置，不会自动互相填充。当前支持邮箱为 `service@jerbix.site`，
+部署目标域名为 `https://www.jerbix.site`；在 production Environment 将 `VITE_BASE_URL` 和
+`BETTER_AUTH_URL` 设为该 origin，并单独配置 Resend 发件地址。域名绑定和环境变量在实际部署时生效。
+
+按需配置：Google 登录使用 Variable `GOOGLE_CLIENT_ID` 和 Secret `GOOGLE_CLIENT_SECRET`；Turnstile 使用 Variable `VITE_TURNSTILE_SITE_KEY` 和 Secret `TURNSTILE_SECRET_KEY`；管理员邮件列表使用 Variable `ADMIN_EMAILS`。工作流已映射这些字段以及 Resend 的两个字段；以后启用其他服务时，也要同步增加其 workflow env 与运行时上传字段。
 
 可用 CLI 交互录入（不会把值写进命令历史）：
 
 ```bash
+gh secret set RESEND_API_KEY --env production
+gh variable set MAIL_FROM --env production
 gh secret set STRIPE_SECRET_KEY --env production
 gh secret set STRIPE_WEBHOOK_SECRET --env production
 gh secret set DISCORD_WEBHOOK_URL --env production
@@ -179,7 +232,7 @@ gh variable set VITE_GA_ID --env production
 
 ### 部署与迁移边界
 
-工作流执行生产 env 校验、构建和客户端敏感字段扫描；随后通过 `wrangler deploy --secrets-file` 将白名单中的运行时字段与 Worker 版本一起上传。GitHub 是自动部署配置来源，无需再手工同步同一批 Worker secrets。临时 JSON 文件权限为仅当前用户读写，任务退出时删除，不输出 secret 值；Cloudflare 部署 token 不进入 Worker。
+工作流执行生产 env 校验、构建和客户端敏感字段扫描；随后通过 `wrangler deploy --secrets-file` 将白名单中的运行时字段与 Worker 版本一起上传。`RESEND_API_KEY` 与 `MAIL_FROM` 已列入白名单，即使 `MAIL_FROM` 来自 GitHub Variable，也会作为服务端绑定上传。GitHub 是自动部署配置来源，无需再手工同步同一批 Worker secrets。临时 JSON 文件权限为仅当前用户读写，任务退出时删除，不输出 secret 值；Cloudflare 部署 token 不进入 Worker。
 
 **工作流不执行生产 D1 迁移。** 发布前独立备份和审查迁移。`0008_payment_simplification.sql` 要求空白支付表，不可直接用于包含历史支付数据的生产库。`wrangler.jsonc` 中的 D1 / KV 绑定仍需指向正确资源。
 
