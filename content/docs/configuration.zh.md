@@ -97,7 +97,7 @@ contact: { enabled: false },
 newsletter: { enabled: false, provider: 'resend' },
 payment: { enabled: true, provider: 'stripe', /* … */ },
 notification: { enabled: false, provider: 'discord' },
-analytics: { enabled: false, providers: ['ga'] },
+analytics: { enabled: true, providers: ['ga'] },
 auth: { enabled: true, requireEmailVerification: true },
 ```
 
@@ -109,7 +109,7 @@ auth: { enabled: true, requireEmailVerification: true },
 | `newsletter` | `false` | 邮件订阅 |
 | `payment` | `true` | Stripe 结账与账单页 |
 | `notification` | `false` | Discord / 飞书 webhook |
-| `analytics` | `false` | 分析脚本 |
+| `analytics` | `true` | 分析脚本；启用后需配 `VITE_GA_ID` |
 | `auth` | `true` | 登录注册。关闭时整条认证路径 404 |
 
 > `auth.requireEmailVerification` 是**安全控制**，不是邮件开关，当前默认 `true`。

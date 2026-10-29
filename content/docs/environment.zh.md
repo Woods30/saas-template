@@ -39,7 +39,7 @@ updated: 2026-10-22
 |---|---|---|
 | `VITE_BASE_URL` | `http://localhost:3000` | 站点基址，用于 canonical、OG、sitemap |
 | `VITE_PAYMENT_PROVIDER` | — | 支付 provider（目前只有 `stripe`） |
-| `VITE_GA_ID` | — | Google Analytics |
+| `VITE_GA_ID` | — | Google Analytics（`G-…`）。`analytics.enabled: true` 时必需 |
 | `VITE_PLAUSIBLE_DOMAIN` | — | Plausible |
 | `VITE_UMAMI_WEBSITE_ID` | — | Umami |
 | `VITE_UMAMI_SCRIPT_URL` | — | Umami 脚本地址（无凭据 HTTPS） |

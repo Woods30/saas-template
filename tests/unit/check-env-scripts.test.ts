@@ -326,17 +326,18 @@ describe('check-env-prod.ts（生产校验）', () => {
     expect(result.code).toBe(0)
   })
 
-  it('邮件与支付缺少配置时失败，已关闭的通知和分析不要求凭据', () => {
+  it('邮件、支付与分析缺少配置时失败，已关闭的通知不要求凭据', () => {
     const dir = makeWorkspace()
-    // 只提供生产必需的 URL 与 auth secret，未提供邮件或支付凭据。
+    // 只提供生产必需的 URL 与 auth secret，未提供邮件、支付或分析凭据。
     writeDotEnv(dir, `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET=${VALID_SECRET}\n`)
     const result = runScript(dir, checkEnvProd)
     expect(result.code).toBe(1)
     expect(result.stderr).toContain('STRIPE_SECRET_KEY')
     expect(result.stderr).toContain('RESEND_API_KEY')
     expect(result.stderr).toContain('MAIL_FROM')
+    // analytics 默认启用，缺少 GA ID 同样必须阻止部署。
+    expect(result.stderr).toContain('VITE_GA_ID')
     expect(result.stderr).not.toContain('DISCORD_WEBHOOK_URL')
-    expect(result.stderr).not.toContain('VITE_GA_ID')
     // 只报字段名，不回声值。
     expect(result.stderr).not.toContain(VALID_SECRET)
   })

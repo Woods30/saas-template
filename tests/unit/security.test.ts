@@ -38,6 +38,15 @@ describe('buildCspHeader', () => {
     expect(header).toContain("connect-src 'self'")
   })
 
+  // GA4 把事件上报到 *.google-analytics.com 与 analytics.google.com。
+  // 缺了它们：脚本能加载（script-src 放行），但事件在 connect-src 被浏览器拦掉，
+  // 表现为「装了 GA4 却收不到任何数据」。
+  it('connect-src 放行 GA4 的数据上报域名', () => {
+    const header = buildCspHeader('any-nonce')
+    expect(header).toContain('https://*.google-analytics.com')
+    expect(header).toContain('https://*.analytics.google.com')
+  })
+
   it('frame-src 包含 stripe js 域名', () => {
     const header = buildCspHeader('any-nonce')
     expect(header).toContain('https://js.stripe.com')

@@ -100,7 +100,7 @@ contact: { enabled: false },
 newsletter: { enabled: false, provider: 'resend' },
 payment: { enabled: true, provider: 'stripe', /* … */ },
 notification: { enabled: false, provider: 'discord' },
-analytics: { enabled: false, providers: ['ga'] },
+analytics: { enabled: true, providers: ['ga'] },
 auth: { enabled: true, requireEmailVerification: true },
 ```
 
@@ -112,7 +112,7 @@ auth: { enabled: true, requireEmailVerification: true },
 | `newsletter` | `false` | Email subscriptions |
 | `payment` | `true` | Stripe checkout and billing page |
 | `notification` | `false` | Discord / Feishu webhooks |
-| `analytics` | `false` | Analytics scripts |
+| `analytics` | `true` | Analytics scripts; requires `VITE_GA_ID` when enabled |
 | `auth` | `true` | Sign-in and registration; off means the whole auth path 404s |
 
 > `auth.requireEmailVerification` is a **security control**, not an email switch, and

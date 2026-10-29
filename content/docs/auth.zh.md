@@ -194,6 +194,14 @@ may not work correctly.
 未接 Google 登录时，`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` 留空即可——两个都不填时
 Better Auth 不注册该 provider，登录页也不渲染按钮。
 
+当前生产配置为 `https://www.jerbix.site`，因此重定向 URI 需填
+`https://www.jerbix.site/api/auth/callback/google`。凭据在 GitHub `production` Environment 中
+配置：`GOOGLE_CLIENT_ID` 与 `GOOGLE_CLIENT_SECRET`。工作流两者都接受 Variable 或 Secret，
+但 **Secret 更稳妥**（client secret 绝不能进客户端 bundle）。
+
+**Google 登录不受 `requireEmailVerification` 拦截**：Google 会返回 `email_verified`，
+Better Auth 据此把账号标记为已验证。只有邮箱密码路径会在未验证时返回 403。
+
 ## 改动时的关键不变量
 
 改认证相关代码前逐条核对：

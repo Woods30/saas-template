@@ -57,7 +57,7 @@ describe('websiteConfig 品牌信息', () => {
       provider: 'stripe',
     })
     expect(config.notification).toEqual({ enabled: false, provider: 'discord' })
-    expect(config.analytics).toEqual({ enabled: false, providers: ['ga'] })
+    expect(config.analytics).toEqual({ enabled: true, providers: ['ga'] })
     expect(config.social).toEqual({})
     expect(config.ui).toEqual({
       defaultTheme: 'system',

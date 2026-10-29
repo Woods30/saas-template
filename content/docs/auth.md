@@ -210,6 +210,16 @@ Also register `http://localhost:3000` and `http://localhost:3000/api/auth/callba
 for local development. One client can include both environments. Leave both
 `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` empty if unused; the provider and button remain absent.
 
+Production currently uses `https://www.jerbix.site`, so the redirect URI must be
+`https://www.jerbix.site/api/auth/callback/google`. Configure the credentials in the GitHub
+`production` Environment as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. The workflow accepts
+either a Variable or a Secret for both, but **Secret is safer** — a client secret must never
+reach the client bundle.
+
+**Google sign-in is not blocked by `requireEmailVerification`**: Google returns `email_verified`,
+and Better Auth marks the account verified accordingly. Only the email/password path returns 403
+for unverified accounts.
+
 ## Key invariants when changing this
 
 Check each before touching auth code:

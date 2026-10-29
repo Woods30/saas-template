@@ -123,7 +123,7 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       provider: 'stripe',
     },
     notification: { enabled: false, provider: 'discord' },
-    analytics: { enabled: false, providers: ['ga'] },
+    analytics: { enabled: true, providers: ['ga'] },
     // auth 默认开启：模板自带登录 / 注册，关闭时对应页面与 API 一律 404。
     auth: { enabled: true, requireEmailVerification: true },
     social: {},

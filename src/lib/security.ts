@@ -11,12 +11,15 @@ const KNOWN_THIRD_PARTY_ORIGINS = [
   'https://plausible.io',
   // Google Analytics / GTM — gtag/js loads from www.googletagmanager.com
   'https://www.googletagmanager.com',
+  // GA4 数据上报端点。gtag 脚本来自 googletagmanager.com，但事件本身发往
+  // region1.google-analytics.com 与 analytics.google.com；缺这两条时脚本能加载、
+  // 事件却被 connect-src 拦掉，表现为「GA4 装了却收不到数据」。
+  'https://*.google-analytics.com',
+  'https://*.analytics.google.com',
   // Microsoft Clarity — tag loader from www.clarity.ms
   'https://www.clarity.ms',
   // Umami — self-hosted or cloud.umami.is; *.umami.is covers cloud
   'https://*.umami.is',
-  // GA / GTM measurement uploads (RegExp-based allowlist rules additionally match
-  // https://*.google-analytics.com and https://*.analytics.google.com below).
 ] as const
 
 /**
