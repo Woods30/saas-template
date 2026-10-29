@@ -1,7 +1,7 @@
 import { websiteConfig } from '@/config/website'
 import { publicEnv } from '@/env/public'
 import { ClarityAnalyticsProvider } from './clarity'
-import { GAAnalyticsProvider } from './ga'
+import { createGtag, GAAnalyticsProvider, type GtagCommand } from './ga'
 import { PlausibleAnalyticsProvider } from './plausible'
 import type { AnalyticsEvent, AnalyticsProvider, AnalyticsProviderName } from './types'
 import { UmamiAnalyticsProvider } from './umami'
@@ -45,12 +45,10 @@ export function initAnalytics() {
     const gaId = publicEnv.VITE_GA_ID
     providers.push(new GAAnalyticsProvider(gaId))
     injectScript(`https://www.googletagmanager.com/gtag/js?id=${gaId}`)
-    ;(window as unknown as { dataLayer: unknown[] }).dataLayer =
-      (window as unknown as { dataLayer?: unknown[] }).dataLayer ?? []
-    const gtag = function gtag(...args: unknown[]) {
-      ;(window as unknown as { dataLayer: unknown[] }).dataLayer.push(args)
-    }
-    ;(window as unknown as { gtag: typeof gtag }).gtag = gtag
+    const dataLayer = (window as unknown as { dataLayer?: unknown[] }).dataLayer ?? []
+    ;(window as unknown as { dataLayer: unknown[] }).dataLayer = dataLayer
+    const gtag = createGtag(dataLayer)
+    ;(window as unknown as { gtag: GtagCommand }).gtag = gtag
     gtag('js', new Date())
     // GA4 必须发 `config` 才能把 measurement ID 绑定到数据流，否则事件不进报表。
     gtag('config', gaId)

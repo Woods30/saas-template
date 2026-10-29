@@ -1,8 +1,41 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ClarityAnalyticsProvider } from '@/lib/analytics/clarity'
-import { GAAnalyticsProvider } from '@/lib/analytics/ga'
+import { createGtag, GAAnalyticsProvider } from '@/lib/analytics/ga'
 import { PlausibleAnalyticsProvider } from '@/lib/analytics/plausible'
 import { UmamiAnalyticsProvider } from '@/lib/analytics/umami'
+
+/**
+ * gtag 命令入队。
+ *
+ * gtag.js **只解析 `arguments` 对象**形式的 dataLayer 元素；用 rest 参数收集成的
+ * 数组会被静默忽略。后果是脚本照常加载、`window.gtag` 照常存在、dataLayer 也有内容，
+ * 但 GA 后台一条数据都收不到——没有任何报错可查。
+ */
+describe('createGtag', () => {
+  it('命令以 arguments 对象入队，不能是数组', () => {
+    const dataLayer: unknown[] = []
+    const gtag = createGtag(dataLayer)
+
+    gtag('config', 'G-XYZ')
+
+    expect(dataLayer).toHaveLength(1)
+    expect(Array.isArray(dataLayer[0])).toBe(false)
+    expect((dataLayer[0] as IArguments)[0]).toBe('config')
+    expect((dataLayer[0] as IArguments)[1]).toBe('G-XYZ')
+  })
+
+  it('多条命令保持顺序', () => {
+    const dataLayer: unknown[] = []
+    const gtag = createGtag(dataLayer)
+
+    gtag('js', new Date())
+    gtag('event', 'page_view', { page_path: '/x' })
+
+    expect(dataLayer).toHaveLength(2)
+    expect((dataLayer[0] as IArguments)[0]).toBe('js')
+    expect((dataLayer[1] as IArguments)[0]).toBe('event')
+  })
+})
 
 // Analytics providers，需要 jsdom（window.gtag / window.plausible）。
 describe('Analytics providers', () => {
@@ -186,11 +219,15 @@ describe('initAnalytics', () => {
     const { initAnalytics } = await import('@/lib/analytics')
     initAnalytics()
     // 断言落在 dataLayer 条目上，这才是与 gtag.js 的真实契约。
+    // 形状必须是 `arguments` 对象而非数组：gtag.js 只解析前者，数组形式会被静默忽略，
+    // 表现为脚本正常加载但 GA 后台收不到任何数据。
     const dataLayer = (window as unknown as { dataLayer: unknown[] }).dataLayer
-    expect(dataLayer).toEqual([
-      ['js', expect.any(Date)],
-      ['config', 'G-CONFIG'],
-    ])
+    expect(dataLayer).toHaveLength(2)
+    expect(dataLayer.map((entry) => Array.isArray(entry))).toEqual([false, false])
+    expect((dataLayer[0] as IArguments)[0]).toBe('js')
+    expect((dataLayer[0] as IArguments)[1]).toBeInstanceOf(Date)
+    expect((dataLayer[1] as IArguments)[0]).toBe('config')
+    expect((dataLayer[1] as IArguments)[1]).toBe('G-CONFIG')
   })
 
   it('非浏览器环境下调用不永久占用初始化标记', async () => {
