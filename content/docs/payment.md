@@ -36,7 +36,7 @@ The client submits only `productId` and `offerId`. The server authenticates, rat
 
 Each account can have at most one non-terminal subscription. `active`, `trialing`, `past_due`, `unpaid`, `paused`, and `incomplete` occupy the slot. A subscription scheduled to cancel still occupies it until termination. `canceled` and `incomplete_expired` allow another purchase. Existing subscribers are directed to billing management.
 
-A persistent reservation and stable idempotency key reuse an unfinished subscription Checkout across concurrent requests. The same offer reuses that session. A different offer returns an explicit conflict; continue the original offer or wait for expiration. Historical subscription events cannot release a newer reservation.
+A persistent reservation and stable idempotency key reuse an unfinished subscription Checkout across concurrent requests. The same offer reuses that session. A different offer returns an explicit conflict; continue the original offer or wait for expiration. Historical subscription events cannot release a newer reservation. Before releasing a reservation, the server checks the provider session and synchronizes any completed subscription; repurchase requires a terminal subscription. Local expiration alone cannot establish that no payment occurred. Provider errors retain the reservation. A lost creation response is recovered with the original request, idempotency key, and fixed expiration time.
 
 Independent one-time products may be purchased separately and repeatedly. They never cancel or supersede subscriptions.
 

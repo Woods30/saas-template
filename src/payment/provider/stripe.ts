@@ -153,6 +153,7 @@ export class StripePaymentProvider implements PaymentProvider {
     const session = await this.stripe.checkout.sessions.create(
       {
         mode: params.mode,
+        ...(params.expiresAt ? { expires_at: params.expiresAt } : {}),
         line_items: [{ price: params.priceId, quantity: 1 }],
         ...(params.customerId
           ? { customer: params.customerId }
@@ -173,6 +174,17 @@ export class StripePaymentProvider implements PaymentProvider {
     )
     if (!session.url) throw new Error('Checkout URL missing')
     return { url: session.url, sessionId: session.id, expiresAt: session.expires_at }
+  }
+
+  async retrieveCheckoutSession(sessionId: string) {
+    const session = await this.stripe.checkout.sessions.retrieve(sessionId)
+    const status = session.status
+    if (status !== 'open' && status !== 'complete' && status !== 'expired')
+      throw new Error('Checkout status unavailable')
+    return {
+      status: status as 'open' | 'complete' | 'expired',
+      subscriptionId: idOf(session.subscription),
+    }
   }
 
   async createCustomerPortalLink(params: PortalParams): Promise<PortalResult> {

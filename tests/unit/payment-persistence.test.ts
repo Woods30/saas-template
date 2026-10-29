@@ -50,6 +50,7 @@ describe('支付持久化', () => {
     const { db, sqlite } = database()
     const provider = {
       getProviderName: () => 'stripe',
+      retrieveCheckoutSession: async () => ({ status: 'open', subscriptionId: null }),
       createCheckoutSession: async () => ({
         url: 'https://checkout.stripe.com/one',
         sessionId: 'cs_new',
@@ -84,6 +85,7 @@ describe('支付持久化', () => {
     const { db, sqlite } = database()
     const provider = {
       getProviderName: () => 'stripe',
+      retrieveCheckoutSession: async () => ({ status: 'open', subscriptionId: null }),
       createCheckoutSession: async () => {
         throw new Error('不得创建第二个 Checkout')
       },
@@ -327,6 +329,7 @@ describe('支付持久化', () => {
     const keys: string[] = []
     const provider = {
       getProviderName: () => 'stripe',
+      retrieveCheckoutSession: async () => ({ status: 'open', subscriptionId: null }),
       createCheckoutSession: async (p: { idempotencyKey: string }) => {
         keys.push(p.idempotencyKey)
         return {
@@ -352,11 +355,155 @@ describe('支付持久化', () => {
     expect(sqlite.prepare('SELECT count(*) as n FROM checkout_reservations').get()?.n).toBe(1)
     sqlite.close()
   })
+  it.each(['active', 'canceled'] as const)(
+    '已完成 Checkout 的订阅为 %s 时按远端状态决定是否重购',
+    async (status) => {
+      const { db, sqlite } = database()
+      const keys: string[] = []
+      let completed = false
+      const provider = {
+        getProviderName: () => 'stripe',
+        createCheckoutSession: async (p: { idempotencyKey: string }) => {
+          keys.push(p.idempotencyKey)
+          return {
+            url: `https://checkout.stripe.com/${keys.length}`,
+            sessionId: `cs_${keys.length}`,
+            expiresAt: Math.floor(Date.now() / 1000) + 3600,
+          }
+        },
+        retrieveCheckoutSession: async (id: string) => ({
+          status: completed && id === 'cs_1' ? 'complete' : 'open',
+          subscriptionId: completed && id === 'cs_1' ? subscription.id : null,
+        }),
+        retrieveSubscription: async () => ({ ...subscription, status }),
+      } as unknown as PaymentProvider
+      const input = {
+        userId: 'u1',
+        customerEmail: 'u1@example.com',
+        priceId: 'p1',
+        productId: 'pro',
+        offerId: 'monthly',
+        mode: 'subscription' as const,
+        successUrl: 'https://example.com/ok',
+        cancelUrl: 'https://example.com/no',
+      }
+      await beginCheckout(db, provider, input)
+      completed = true
+      if (status === 'active') {
+        // 本地预留已过期，但 Stripe 在过期前付款成功，Webhook 尚未到达。
+        sqlite.exec('UPDATE checkout_reservations SET expires_at = 1')
+        expect(await beginCheckout(db, provider, input)).toBeNull()
+        expect(keys).toHaveLength(1)
+        expect(
+          sqlite.prepare("SELECT status FROM subscriptions WHERE user_id = 'u1'").get()?.status,
+        ).toBe('active')
+      } else {
+        await applyPaymentEvent(db, {
+          id: 'active_lifecycle',
+          provider: 'stripe',
+          type: 'subscription',
+          created: 100,
+          subscription,
+        })
+        await applyPaymentEvent(db, {
+          id: 'canceled_lifecycle',
+          provider: 'stripe',
+          type: 'deleted',
+          created: 101,
+          subscription: { ...subscription, status },
+        })
+        const next = await beginCheckout(db, provider, {
+          ...input,
+          offerId: 'yearly',
+          priceId: 'p2',
+        })
+        expect(next?.sessionId).toBe('cs_2')
+        expect(new Set(keys).size).toBe(2)
+      }
+      sqlite.close()
+    },
+  )
+  it.each(['open', 'expired', 'unavailable'] as const)(
+    '本地过期预留在远端 %s 时安全处理',
+    async (status) => {
+      const { db, sqlite } = database()
+      let count = 0
+      const provider = {
+        getProviderName: () => 'stripe',
+        createCheckoutSession: async () => ({
+          url: `https://checkout.stripe.com/${++count}`,
+          sessionId: `cs_${count}`,
+          expiresAt: 1,
+        }),
+        retrieveCheckoutSession: async (id: string) => {
+          if (status === 'unavailable') throw new Error('Provider unavailable')
+          return { status: id === 'cs_1' ? status : 'open', subscriptionId: null }
+        },
+      } as unknown as PaymentProvider
+      const input = {
+        userId: 'u1',
+        customerEmail: 'u1@example.com',
+        priceId: 'p1',
+        productId: 'pro',
+        offerId: 'monthly',
+        mode: 'subscription' as const,
+        successUrl: 'https://example.com/ok',
+        cancelUrl: 'https://example.com/no',
+      }
+      await beginCheckout(db, provider, input)
+      if (status === 'unavailable') {
+        await expect(beginCheckout(db, provider, input)).rejects.toThrow('Provider unavailable')
+        expect(count).toBe(1)
+        expect(
+          sqlite.prepare('SELECT session_id FROM checkout_reservations').get()?.session_id,
+        ).toBe('cs_1')
+      } else {
+        expect((await beginCheckout(db, provider, input))?.sessionId).toBe(
+          status === 'expired' ? 'cs_2' : 'cs_1',
+        )
+      }
+      sqlite.close()
+    },
+  )
+  it('创建响应丢失后保留原请求与过期时间，并对账已完成会话', async () => {
+    const { db, sqlite } = database()
+    const requests: unknown[] = []
+    const provider = {
+      getProviderName: () => 'stripe',
+      createCheckoutSession: async (request: unknown) => {
+        requests.push(request)
+        if (requests.length === 1) throw new Error('Response lost')
+        return { url: 'https://checkout.stripe.com/1', sessionId: 'cs_1', expiresAt: 1 }
+      },
+      retrieveCheckoutSession: async () => ({
+        status: 'complete',
+        subscriptionId: subscription.id,
+      }),
+      retrieveSubscription: async () => subscription,
+    } as unknown as PaymentProvider
+    const input = {
+      userId: 'u1',
+      customerEmail: 'u1@example.com',
+      priceId: 'p1',
+      productId: 'pro',
+      offerId: 'monthly',
+      mode: 'subscription' as const,
+      successUrl: 'https://example.com/ok',
+      cancelUrl: 'https://example.com/no',
+    }
+    await expect(beginCheckout(db, provider, input)).rejects.toThrow('Response lost')
+    sqlite.exec('UPDATE checkout_reservations SET expires_at = 1')
+    expect(await beginCheckout(db, provider, input)).toBeNull()
+    expect(requests[1]).toEqual(requests[0])
+    expect(requests[0]).toHaveProperty('expiresAt')
+    sqlite.close()
+  })
   it('并发订阅结账使用同一个幂等键，已完成订阅阻止再次购买', async () => {
     const { db, sqlite } = database()
     const keys: string[] = []
     const provider = {
       getProviderName: () => 'stripe',
+      retrieveCheckoutSession: async () => ({ status: 'open', subscriptionId: null }),
       createCheckoutSession: async (p: { idempotencyKey: string }) => {
         keys.push(p.idempotencyKey)
         return {

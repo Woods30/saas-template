@@ -1,6 +1,7 @@
-import { and, eq, inArray, lt } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { type createDb, schema } from '@/db'
-import { ACTIVE_SUBSCRIPTION_STATUSES } from './plan-state'
+import { applyPaymentEvent } from './events'
+import { ACTIVE_SUBSCRIPTION_STATUSES, occupiesSubscriptionSlot } from './plan-state'
 import type { CheckoutParams, CheckoutResult, PaymentProvider } from './types'
 
 type Db = ReturnType<typeof createDb>
@@ -46,15 +47,7 @@ export async function beginCheckout(
     .limit(1)
   if (occupied.length) return null
   const now = Math.floor(Date.now() / 1000)
-  await db
-    .delete(schema.checkoutReservations)
-    .where(
-      and(
-        eq(schema.checkoutReservations.userId, input.userId),
-        lt(schema.checkoutReservations.expiresAt, now),
-      ),
-    )
-  await db
+  const inserted = await db
     .insert(schema.checkoutReservations)
     .values({
       userId: input.userId,
@@ -62,17 +55,18 @@ export async function beginCheckout(
       token: crypto.randomUUID(),
       productId: input.productId,
       offerId: input.offerId,
-      request: JSON.stringify(input),
+      request: JSON.stringify({ ...input, expiresAt: now + RESERVATION_SECONDS }),
       expiresAt: now + RESERVATION_SECONDS,
     })
     .onConflictDoNothing()
+    .returning({ token: schema.checkoutReservations.token })
   const [reservation] = await db
     .select()
     .from(schema.checkoutReservations)
     .where(eq(schema.checkoutReservations.userId, input.userId))
   if (!reservation || reservation.provider !== name)
     throw new Error('Checkout reservation unavailable')
-  // 预留始终保留到会话过期，旧 Webhook 无权释放新会话。
+  // 释放预留必须先核对远端状态，本地时间过期不代表付款未完成。
   // 再查一次，覆盖检查后、预留创建前订阅已同步的竞态。
   const [active] = await db
     .select({ id: schema.subscriptions.id })
@@ -85,6 +79,38 @@ export async function beginCheckout(
     )
     .limit(1)
   if (active) return null
+  if (reservation.sessionId) {
+    const session = await provider.retrieveCheckoutSession(reservation.sessionId)
+    if (session.status === 'complete') {
+      if (!session.subscriptionId) throw new Error('Completed Checkout subscription missing')
+      const subscription = await provider.retrieveSubscription(session.subscriptionId)
+      if (subscription.userId !== input.userId) throw new Error('Checkout owner mismatch')
+      await applyPaymentEvent(
+        db,
+        {
+          id: `checkout-reconcile:${crypto.randomUUID()}`,
+          provider: name,
+          type: 'checkout.reconciled',
+          created: now,
+          subscription,
+        },
+        () => provider.retrieveSubscription(session.subscriptionId as string),
+      )
+      if (occupiesSubscriptionSlot(subscription.status)) return null
+    }
+    if (session.status !== 'open') {
+      // token 条件防止并发请求删除后来创建的新预留。
+      await db
+        .delete(schema.checkoutReservations)
+        .where(
+          and(
+            eq(schema.checkoutReservations.userId, input.userId),
+            eq(schema.checkoutReservations.token, reservation.token),
+          ),
+        )
+      return beginCheckout(db, provider, input)
+    }
+  }
   if (
     reservation.productId !== input.productId ||
     reservation.offerId !== input.offerId ||
@@ -113,5 +139,7 @@ export async function beginCheckout(
         eq(schema.checkoutReservations.token, reservation.token),
       ),
     )
+  // 原请求结果未知时先用原幂等键恢复，再核对其是否已完成。
+  if (!inserted.length) return beginCheckout(db, provider, input)
   return result
 }

@@ -3,6 +3,7 @@ import { StripePaymentProvider } from '@/payment/provider/stripe'
 
 const api = vi.hoisted(() => ({
   checkout: vi.fn(),
+  retrieveCheckout: vi.fn(),
   portal: vi.fn(),
   verify: vi.fn(),
   invoicePayments: vi.fn(),
@@ -12,7 +13,7 @@ vi.mock('stripe', () => ({
   default: class {
     static createFetchHttpClient = () => ({})
     static createSubtleCryptoProvider = () => ({})
-    checkout = { sessions: { create: api.checkout } }
+    checkout = { sessions: { create: api.checkout, retrieve: api.retrieveCheckout } }
     billingPortal = { sessions: { create: api.portal } }
     webhooks = { constructEventAsync: api.verify }
     invoicePayments = { list: api.invoicePayments }
@@ -36,6 +37,7 @@ describe('Stripe 托管支付', () => {
       productId: 'pro',
       offerId: 'yearly',
       idempotencyKey: 'reservation1',
+      expiresAt: 1000,
       priceId: 'p1',
       mode: 'subscription',
       successUrl: 'https://example.com/ok',
@@ -49,6 +51,7 @@ describe('Stripe 托管支付', () => {
     expect(api.checkout).toHaveBeenCalledWith(
       expect.objectContaining({
         customer: 'cus1',
+        expires_at: 1000,
         subscription_data: { metadata: { userId: 'u1', productId: 'pro', offerId: 'yearly' } },
       }),
       { idempotencyKey: 'reservation1' },
@@ -94,6 +97,11 @@ describe('Stripe 托管支付', () => {
       }
     },
   )
+  it.each(['open', 'complete', 'expired'])('读取 Checkout 的 %s 状态与订阅标识', async (status) => {
+    api.retrieveCheckout.mockResolvedValue({ status, subscription: 'sub1' })
+    const result = await new StripePaymentProvider('test', 'hook').retrieveCheckoutSession('cs1')
+    expect(result).toEqual({ status, subscriptionId: 'sub1' })
+  })
   it('拒绝没有跳转地址的 Checkout', async () => {
     api.checkout.mockResolvedValue({ id: 'cs1', url: null })
     const provider = new StripePaymentProvider('test', 'hook')

@@ -23,6 +23,7 @@ export interface CheckoutParams {
   productId: string
   offerId: string
   idempotencyKey: string
+  expiresAt?: number
 }
 export interface CheckoutResult {
   url: string
@@ -93,6 +94,10 @@ export interface PaymentProvider {
   getProviderName(): string
   listPrices(references: string[]): Promise<ProviderPrice[]>
   createCheckoutSession(params: CheckoutParams): Promise<CheckoutResult>
+  retrieveCheckoutSession(sessionId: string): Promise<{
+    status: 'open' | 'complete' | 'expired'
+    subscriptionId: string | null
+  }>
   createCustomerPortalLink(params: PortalParams): Promise<PortalResult>
   retrieveSubscription(subscriptionId: string): Promise<ProviderSubscription>
   parseWebhookEvent(rawBody: string, signature: string): Promise<PaymentEvent>
