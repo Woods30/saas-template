@@ -142,6 +142,11 @@ describe('initAnalytics', () => {
     vi.doMock('@/env/public', () => ({ publicEnv: env }))
   }
 
+  /** jsdom 的 `document.readyState` 恒为 `complete`，需显式覆盖才能测「load 尚未触发」分支。 */
+  function setReadyState(state: DocumentReadyState) {
+    Object.defineProperty(document, 'readyState', { value: state, configurable: true })
+  }
+
   it('analytics 关闭时不注册也不注入脚本', async () => {
     vi.stubEnv('PROD', true)
     mockConfig({ enabled: false, providers: ['ga'] })
@@ -151,15 +156,31 @@ describe('initAnalytics', () => {
     expect(injected).toHaveLength(0)
   })
 
-  it('选中 GA 且配置 ID 时注入 gtag 脚本', async () => {
+  it('选中 GA 且配置 ID 时在页面 load 之后才注入 gtag 脚本', async () => {
     vi.stubEnv('PROD', true)
     mockConfig({ enabled: true, providers: ['ga'] })
     mockPublicEnv({ VITE_GA_ID: 'G-XXX' })
+    // 模拟脚本执行时页面尚未 load 完（浏览器在 hydration 阶段就是这个状态）。
+    setReadyState('interactive')
     const { initAnalytics } = await import('@/lib/analytics')
     initAnalytics()
+    // 脚本在页面 load 之后才注入：gtag.js 约 540KB，与首屏资源争抢带宽会拖慢可交互时间。
+    expect(injected).toHaveLength(0)
+    window.dispatchEvent(new Event('load'))
     expect(injected.map((s) => s.src)).toContain(
       'https://www.googletagmanager.com/gtag/js?id=G-XXX',
     )
+  })
+
+  it('load 事件已过时立即注入脚本', async () => {
+    vi.stubEnv('PROD', true)
+    mockConfig({ enabled: true, providers: ['ga'] })
+    mockPublicEnv({ VITE_GA_ID: 'G-XXX' })
+    setReadyState('complete')
+    const { initAnalytics } = await import('@/lib/analytics')
+    initAnalytics()
+    expect(injected).toHaveLength(1)
+    expect(injected[0]?.src).toBe('https://www.googletagmanager.com/gtag/js?id=G-XXX')
   })
 
   it('未选中 GA 时即使有 VITE_GA_ID 也不注入', async () => {

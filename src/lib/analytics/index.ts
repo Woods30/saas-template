@@ -44,7 +44,6 @@ export function initAnalytics() {
   if (selected.has('ga') && publicEnv.VITE_GA_ID) {
     const gaId = publicEnv.VITE_GA_ID
     providers.push(new GAAnalyticsProvider(gaId))
-    injectScript(`https://www.googletagmanager.com/gtag/js?id=${gaId}`)
     const dataLayer = (window as unknown as { dataLayer?: unknown[] }).dataLayer ?? []
     ;(window as unknown as { dataLayer: unknown[] }).dataLayer = dataLayer
     const gtag = createGtag(dataLayer)
@@ -52,6 +51,9 @@ export function initAnalytics() {
     gtag('js', new Date())
     // GA4 必须发 `config` 才能把 measurement ID 绑定到数据流，否则事件不进报表。
     gtag('config', gaId)
+    // 脚本推迟到页面 load 之后再注入：gtag.js 约 540KB，与首屏资源争抢带宽会拖慢
+    // 可交互时间（实测多耗约 400ms）。命令先入队，脚本到达后 gtag.js 会照常处理。
+    injectAfterLoad(`https://www.googletagmanager.com/gtag/js?id=${gaId}`)
   }
 
   if (selected.has('plausible') && publicEnv.VITE_PLAUSIBLE_DOMAIN) {
@@ -86,6 +88,22 @@ function injectScript(src: string, attrs: Record<string, string> = {}) {
   s.defer = true
   for (const [k, v] of Object.entries(attrs)) s.setAttribute(k, v)
   document.head.appendChild(s)
+}
+
+/**
+ * 页面 load 之后再注入脚本。
+ *
+ * 分析脚本不阻塞首屏渲染，但会与首屏资源争抢带宽。推迟注入让页面先可交互，
+ * 分析命令先入队、脚本到达后由 gtag.js 统一处理。
+ */
+function injectAfterLoad(src: string, attrs: Record<string, string> = {}) {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  // load 已触发（如 SPA 内的首次初始化晚于 load）时立即注入，否则等 load 事件。
+  if (document.readyState === 'complete') {
+    injectScript(src, attrs)
+    return
+  }
+  window.addEventListener('load', () => injectScript(src, attrs), { once: true })
 }
 
 export function track(event: AnalyticsEvent) {
