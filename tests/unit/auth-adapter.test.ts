@@ -115,6 +115,23 @@ describe('邮箱验证完整流程', () => {
   })
 })
 
+describe('better-auth 实例复用', () => {
+  it('同一 D1 binding 复用同一实例，避免每次请求重建', () => {
+    const sharedDb = fakeD1()
+    const first = getAuth({ ...env(), DB: sharedDb })
+    const second = getAuth({ ...env(), DB: sharedDb })
+    // 每个请求都会新建 normalizedEnv 对象，但 D1 binding 在 isolate 内稳定；
+    // 按 binding 缓存才能命中，否则每次 server function 都要重建实例（实测数百毫秒）。
+    expect(second).toBe(first)
+  })
+
+  it('不同 D1 binding 不复用实例', () => {
+    const a = getAuth({ ...env(), DB: fakeD1() })
+    const b = getAuth({ ...env(), DB: fakeD1() })
+    expect(b).not.toBe(a)
+  })
+})
+
 describe('会话 cookie 缓存', () => {
   it('已开启且缓存窗口不超过 30 秒', async () => {
     const ctx = await getAuth(env()).$context

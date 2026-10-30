@@ -10,15 +10,26 @@ import { parseServerEnv } from '@/env/server'
 import { sendMail } from '@/mail'
 
 /**
+ * 已创建的实例，按 D1 binding 复用。
+ *
+ * `getAuth` 会在每次会话校验、每个受保护 server function 里被调用。`betterAuth()`
+ * 要合并配置、构建 adapter、注册插件并生成路由表——每次重建实测能让一次请求多花
+ * 数百毫秒，而配置在进程内是常量。
+ *
+ * 键取 `env.DB`（D1 binding）而非 `env` 本身：`src/server.ts` 每个请求都会新建
+ * `normalizedEnv` 对象，按它缓存永远命中不了；binding 在 isolate 内是稳定对象。
+ * 用 `WeakMap` 避免持有 binding 阻止回收。
+ */
+/**
  * Better Auth + Drizzle adapter（D1）。
  *
  * `drizzleAdapter(...)` 必须作为顶层 `database:` 传入；放进 `plugins:` 会让
  * better-auth 静默回退到内存适配器（注册看似成功，实际不落库）。
  *
- * env 由调用方注入，每次调用创建独立实例。邮件回调统一走 `src/auth/emails.ts`
+ * 实例按 D1 binding 复用（见 `getAuth`）。邮件回调统一走 `src/auth/emails.ts`
  * 且绝不抛错——better-auth 经 `runInBackgroundOrAwait` 调用它们，抛错会让注册 / 登录失败。
  */
-export function getAuth(env: Env) {
+export function createAuth(env: Env) {
   const parsed = parseServerEnv(env as unknown as Record<string, unknown>)
   const db = createDb(env.DB)
   const deps = { sendMail, config: websiteConfig, serverEnv: parsed }
@@ -124,4 +135,29 @@ export function getAuth(env: Env) {
       deleteUser: { enabled: true },
     },
   })
+}
+
+/**
+ * 已创建的实例，按 D1 binding 复用。
+ *
+ * 键取 `env.DB`（D1 binding）而非 `env` 本身：`src/server.ts` 每个请求都会新建
+ * `normalizedEnv` 对象，按它缓存永远命中不了；binding 在 isolate 内是稳定对象。
+ * 用 `WeakMap` 避免持有 binding 阻止回收。
+ */
+const authInstances = new WeakMap<object, ReturnType<typeof createAuth>>()
+
+/**
+ * 取当前部署的 better-auth 实例，同一 D1 binding 复用。
+ *
+ * `getAuth` 会在每次会话校验、每个受保护 server function 里被调用。`betterAuth()`
+ * 要合并配置、构建 adapter、注册插件并生成路由表——每次重建实测能让一次请求多花
+ * 数百毫秒，而配置在进程内是常量。
+ */
+export function getAuth(env: Env) {
+  const cacheKey = env.DB as unknown as object
+  const cached = authInstances.get(cacheKey)
+  if (cached) return cached
+  const instance = createAuth(env)
+  authInstances.set(cacheKey, instance)
+  return instance
 }
