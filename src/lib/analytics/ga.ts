@@ -15,8 +15,7 @@ export function createGtag(dataLayer: unknown[]): GtagCommand {
   return function gtag(...args: unknown[]) {
     // `args` 仅为满足类型签名；真正入队的是 `arguments` 对象。
     void args
-    // biome-ignore lint/complexity/noArguments: gtag.js 只解析 `arguments` 对象，
-    // 改用 rest 数组会被静默忽略——脚本正常加载但 GA 后台收不到任何数据。
+    // biome-ignore lint/complexity/noArguments: gtag.js 只解析 `arguments` 对象，改用 rest 数组会被静默忽略
     dataLayer.push(arguments)
   }
 }

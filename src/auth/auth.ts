@@ -51,6 +51,22 @@ export function getAuth(env: Env) {
       },
     }),
     plugins: [apiKey({ defaultPrefix: 'key_' }), admin()],
+    session: {
+      /**
+       * 会话 cookie 缓存。
+       *
+       * 开启后 `getSession` 在有效期内直接读签名 cookie，不再查 D1——会话校验是每个
+       * 受保护请求的前置依赖，少一次数据库往返对响应时间影响明显。
+       *
+       * **代价**：cookie 里是带过期时间的签名 JWT，撤销会话只删除 D1 记录，不会通知
+       * 其它设备已发出去的缓存 cookie。因此 `maxAge` 就是「设备被踢后仍可访问」的窗口。
+       * 这里取 60 秒而非默认的 300 秒，把窗口压到最小；再长就换不回来了。
+       */
+      cookieCache: {
+        enabled: true,
+        maxAge: 60,
+      },
+    },
     emailAndPassword: {
       enabled: true,
       // 读显式配置，不随 `mail.enabled` 隐式降级：邮箱在下游是身份依据。

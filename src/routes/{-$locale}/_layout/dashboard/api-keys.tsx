@@ -1,6 +1,7 @@
 import { IconKey } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { type ApiKeyEntry, fetchApiKeys } from '@/auth/api-keys'
 import { authClient } from '@/auth/client'
 import {
   AlertDialog,
@@ -44,6 +45,15 @@ import { m } from '@/locale/paraglide/messages.js'
 export const Route = createFileRoute('/{-$locale}/_layout/dashboard/api-keys')({
   // 功能开关关闭时整页 404：与菜单项消失同源，路由本身始终保留。
   beforeLoad: () => assertFeatureEnabled('enableApiKeys'),
+  // 数据在路由加载阶段取回：客户端导航时内容随路由一起出现，不会先渲染空壳再补数据。
+  loader: async () => {
+    try {
+      return { ok: true as const, keys: await fetchApiKeys() }
+    } catch {
+      // 失败交给页面渲染提示，不用抛错打断整棵路由。
+      return { ok: false as const, keys: [] }
+    }
+  },
   head: () =>
     seo('/dashboard/api-keys', {
       title: m.settings_api_keys_title(),
@@ -67,20 +77,10 @@ const DEFAULT_EXPIRY_DAYS = 30
 /** 选择器的值；`'never'` 与数字天分开表示，避免用 `0` / `NaN` 当哨兵。 */
 type ExpiryChoice = number | 'never'
 
-/** `list` 返回的密钥条目（**不含**明文 `key`，只有 `start` 前几位）。 */
-interface ApiKeyEntry {
-  id: string
-  name?: string | null
-  start?: string | null
-  prefix?: string | null
-  enabled?: boolean | null
-  createdAt: Date | string
-  expiresAt?: Date | string | null
-}
-
 function ApiKeysPage() {
-  const [keys, setKeys] = useState<ApiKeyEntry[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const loaded = Route.useLoaderData()
+  const [keys, setKeys] = useState<ApiKeyEntry[] | null>(loaded.ok ? loaded.keys : null)
+  const [error, setError] = useState<string | null>(loaded.ok ? null : m.settings_error_generic())
   const [searchValue, setSearchValue] = useState('')
 
   const [createOpen, setCreateOpen] = useState(false)
@@ -91,6 +91,7 @@ function ApiKeysPage() {
 
   const [pendingDelete, setPendingDelete] = useState<ApiKeyEntry | null>(null)
 
+  // 首次数据来自路由 loader，不再在挂载后重复请求；这里只负责增删后的刷新。
   const load = useCallback(async () => {
     const { data, error: listError } = await authClient.apiKey.list()
     if (listError) {
@@ -100,10 +101,6 @@ function ApiKeysPage() {
     setError(null)
     setKeys((data?.apiKeys as ApiKeyEntry[] | undefined) ?? [])
   }, [])
-
-  useEffect(() => {
-    void load()
-  }, [load])
 
   async function onCreate() {
     setCreating(true)

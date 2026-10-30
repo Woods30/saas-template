@@ -30,10 +30,22 @@ const SECONDS_PER_DAY = 86_400
 // 页面未单独导出，只能从 `Route.options.component` 取。
 const ApiKeysPage = ApiKeysRoute.options.component as unknown as () => React.JSX.Element
 
+/**
+ * 页面数据来自路由 loader，组件直接渲染时没有 Router 上下文，
+ * 故 stub 掉 `useLoaderData`，让它返回空列表。
+ */
+function stubLoaderData(keys: unknown[] = []) {
+  vi.spyOn(ApiKeysRoute, 'useLoaderData').mockReturnValue({ ok: true, keys } as never)
+}
+
 /** 渲染页面并打开创建弹窗，返回有效期下拉。 */
 async function openCreateDialog(): Promise<HTMLSelectElement> {
+  stubLoaderData()
   render(<ApiKeysPage />)
-  await waitFor(() => expect(mocks.list).toHaveBeenCalled())
+  // 初始列表来自路由 loader，组件不再在挂载后请求；等创建按钮出现即可。
+  await waitFor(() =>
+    expect(screen.getAllByRole('button', { name: '创建密钥' }).length).toBeGreaterThan(0),
+  )
   screen.getAllByRole('button', { name: '创建密钥' })[0]?.click()
   return (await screen.findByLabelText('有效期')) as unknown as HTMLSelectElement
 }
