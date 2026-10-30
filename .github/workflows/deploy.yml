@@ -1,9 +1,9 @@
 name: Deploy
 
 # 两条入口，走同一套 Secrets 与部署步骤：
-# - 正式发布：Release（tag 必须与 package.json 版本一致）
+# - Release 发布（tag 必须与 package.json 版本一致）
 # - 日常部署：手动触发 `gh workflow run deploy.yml`，本地不需要任何 live 密钥
-# main 合并和预发布版本只运行 CI，不部署。
+# main 合并只运行 CI，不部署。**不区分预发布**：Release 一发布就部署。
 on:
   release:
     types: [published]
@@ -20,7 +20,7 @@ permissions:
 jobs:
   verify-release:
     # 手动触发没有 release 可校验，跳过；deploy 会退回部署触发时的提交。
-    if: github.event_name == 'release' && github.event.release.prerelease == false
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.verify.outputs.sha }}
@@ -58,18 +58,13 @@ jobs:
 
   deploy:
     needs: verify-release
-    # 只放行两种来源，且必须区分「跳过」的原因：
-    # 1) 正式 Release 通过校验（verify-release 成功）
+    # 只放行两种来源：
+    # 1) Release 通过校验（verify-release 成功）
     # 2) 手动触发，且 ref 必须是 main（否则等于用生产密钥执行任意分支的代码）
-    #
-    # 注意不能把 skipped 一律当放行：预发布 Release 也会让 verify-release 被跳过，
-    # 那样预发布就会被部署到生产——原有的「预发布不部署」门禁会失效。
     if: >
       always() && (
         needs.verify-release.result == 'success' ||
-        (github.event_name == 'workflow_dispatch' &&
-         github.ref == 'refs/heads/main' &&
-         needs.verify-release.result == 'skipped')
+        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
       )
     runs-on: ubuntu-latest
     environment: production

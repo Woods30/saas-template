@@ -188,7 +188,7 @@ curl -s "https://api.cloudflare.com/client/v4/zones?name=your-domain.com" \
 
 ## 自动部署
 
-合并到 `main` 只运行 CI。发布**正式 GitHub Release**（`release.published`）后，Deploy 工作流才部署；草稿、预发布、单独推送 tag 均不触发生产部署。
+合并到 `main` 只运行 CI。部署有两条入口：发布 **GitHub Release**（`release.published`，不区分是否为预发布），或手动触发 `gh workflow run deploy.yml`（要求该提交的 main CI 已通过、且 ref 为 `main`）。草稿 Release 与单独推送 tag 不触发部署。
 
 流程为：PR → 合并 `main` → 等该提交的 CI 成功 → 发布与 `package.json` 版本一致的 tag（如 `v0.2.0`）→ Deploy → 冒烟检查。工作流要求 tag 对应提交属于 `main`，且该提交在 `main` 的 push CI 已成功，再按不可变 SHA 部署。若发布时 CI 尚未完成，待 CI 成功后在 Actions 中重新运行 Deploy。
 

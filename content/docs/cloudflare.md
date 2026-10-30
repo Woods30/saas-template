@@ -191,7 +191,7 @@ Key points:
 
 ## CI deployment
 
-Merging to `main` runs CI only. Publishing a **stable GitHub Release** triggers production deployment through `release.published`. Drafts, prereleases, and tag pushes alone do not deploy.
+Merging to `main` runs CI only. Deployment has two entry points: publishing a **GitHub Release** (`release.published`, prerelease or not), or running `gh workflow run deploy.yml` manually (requires that commit's main CI to have passed and the ref to be `main`). Draft releases and tag pushes alone do not deploy.
 
 Use this sequence: PR → merge `main` → wait for that commit's CI → publish a tag matching `package.json` (for example `v0.2.0`) → Deploy → smoke tests. The workflow verifies that the tag commit belongs to `main` and its push CI succeeded, then deploys the verified immutable SHA. If CI is still running at publication, rerun Deploy after it succeeds.
 
