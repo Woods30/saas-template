@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { type AdminBillingResult, fetchAdminBilling } from '@/auth/admin-billing'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import {
@@ -15,7 +16,7 @@ import { getRequestLocale } from '@/lib/locale'
 import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
-import { paymentStatusMessageKey, productNameForProductId } from '@/payment/billing-query'
+import { productNameForProductId, subscriptionStatusMessageKey } from '@/payment/billing-query'
 
 /**
  * 管理台营收与订阅总览。
@@ -29,6 +30,12 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/revenu
     assertAdminRole(context.session.user.role)
   },
   loader: () => fetchAdminBilling(),
+  // 页码放 URL：刷新与分享链接能停在原页，也符合「URL 即状态」的路由数据流。
+  // 返回可选字段：首页不带 `?page=1`，菜单链接就不必逐处补 search。
+  validateSearch: (search: Record<string, unknown>): { page?: number } => {
+    const parsed = Number(search.page)
+    return Number.isInteger(parsed) && parsed > 0 ? { page: parsed } : {}
+  },
   head: () =>
     seo('/dashboard/admin/revenue', {
       title: m.admin_revenue_title(),
@@ -52,9 +59,18 @@ function date(value: Date | string | null | undefined) {
   return value ? new Date(value).toLocaleDateString(getRequestLocale()) : '—'
 }
 
+/** 每页订阅条数。 */
+const PAGE_SIZE = 20
+
 function AdminRevenuePage() {
   const data = Route.useLoaderData() as AdminBillingResult
   const { revenue, subscriptions, activeSubscriptionCount } = data
+  const { page = 1 } = Route.useSearch()
+  const navigate = Route.useNavigate()
+  const totalPages = Math.max(1, Math.ceil(subscriptions.length / PAGE_SIZE))
+  // 页码可能因数据变少而越界（如删除了订阅），夹到有效范围而不是渲染空表。
+  const currentPage = Math.min(page, totalPages)
+  const pageItems = subscriptions.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   return (
     <div className="space-y-8">
@@ -121,7 +137,9 @@ function AdminRevenuePage() {
           </Empty>
         ) : (
           <Card>
-            <CardContent className="overflow-x-auto p-0">
+            {/* `Table` 自带横向滚动容器，外层不再包 `overflow-x-auto`；`p-0` 会让表格
+                贴到卡片边缘、与标题区不对齐。 */}
+            <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -134,7 +152,7 @@ function AdminRevenuePage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {subscriptions.map((subscription) => (
+                  {pageItems.map((subscription) => (
                     <TableRow key={subscription.id}>
                       <TableCell className="max-w-[220px] truncate">
                         {subscription.email || subscription.userId}
@@ -149,7 +167,7 @@ function AdminRevenuePage() {
                           <Badge
                             variant={subscription.status === 'active' ? 'default' : 'secondary'}
                           >
-                            {m[paymentStatusMessageKey(subscription.status)]()}
+                            {m[subscriptionStatusMessageKey(subscription.status)]()}
                           </Badge>
                           {subscription.cancelAtPeriodEnd && (
                             <Badge variant="outline">
@@ -177,6 +195,32 @@ function AdminRevenuePage() {
               </Table>
             </CardContent>
           </Card>
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              {m.admin_revenue_page_status({ page: currentPage, total: totalPages })}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => void navigate({ search: { page: currentPage - 1 } })}
+              >
+                {m.admin_revenue_page_prev()}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= totalPages}
+                onClick={() => void navigate({ search: { page: currentPage + 1 } })}
+              >
+                {m.admin_revenue_page_next()}
+              </Button>
+            </div>
+          </div>
         )}
       </section>
     </div>
