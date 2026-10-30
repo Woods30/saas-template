@@ -97,7 +97,9 @@ test.describe('Payment', () => {
   test('旧价格地址跳转首页，只展示模板购买', async ({ page }) => {
     await page.goto('/zh/pricing')
     await expect(page).toHaveURL(/\/zh#pricing$/)
-    await expect(page.locator('#pricing')).toContainText('$99')
+    // 价格是运营可变的事实源（Stripe 后台改），这里只断言价格区确实渲染出金额，
+    // 硬编码 $99 会在改价后变成假失败。
+    await expect(page.locator('#pricing')).toContainText(/\$\d/)
     await expect(page.getByText('专业版', { exact: true })).toHaveCount(0)
     await expect(page.getByText('资源包', { exact: true })).toHaveCount(0)
   })
