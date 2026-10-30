@@ -56,9 +56,20 @@ updated: 2026-10-28
 
 ## Webhook
 
-Stripe 端点是 `/api/webhooks/stripe`。保留原始 body 并异步验签，适配器转换为通用 `PaymentEvent`，`src/payment/events.ts` 负责落库。
+Stripe 端点是 `/api/webhooks/stripe`。在 Stripe Dashboard → Developers → Webhooks 添加该地址，并勾选以下事件——**漏勾任何一个，对应的记录就永远写不进来**：
 
-需要处理 Checkout 完成和异步付款成功、订阅生命周期、`invoice.paid`、`invoice.payment_failed`、`charge.refunded`。尚未支付的异步订单不会提前记为已付；订阅创建、更新或发票事件会读取最新订阅状态抵御乱序。支付回跳页不授予权益。
+| 事件 | 作用 |
+|---|---|
+| `checkout.session.completed` | 一次性付款的结账上下文 |
+| `checkout.session.async_payment_succeeded` | 延迟付款方式的实际到账 |
+| `customer.subscription.created` / `updated` / `deleted` | 订阅生命周期 |
+| `invoice.paid` | **支付成功的权威事件** |
+| `invoice.payment_failed` | 失败付款，不授予权益 |
+| `charge.refunded` | 退款 |
+
+`invoice.paid` 是支付成功的权威事件。Stripe 不保证事件到达顺序，端点也可能只投递 `invoice.*`，所以付款记录不能单点依赖 `checkout.session.completed`：一次性支付同样会开票，归属写在 `invoice.metadata` 上，发票事件单独到达时据此定位用户。两条路径用同一个 PaymentIntent 作外部 ID，同一笔钱被看到两次时写入同一条记录。
+
+保留原始 body 并异步验签，适配器转换为通用 `PaymentEvent`，`src/payment/events.ts` 负责落库。尚未支付的异步订单不会提前记为已付；订阅创建、更新或发票事件会读取最新订阅状态抵御乱序。支付回跳页不授予权益。
 
 事件按 provider + event ID 去重，交易按 provider + 业务交易 ID 幂等。处理失败返回 500 供服务商重投；退款事件若早于付款同步到达，也等待重投。部分退款保留原付款金额及累计退款金额。多笔发票付款按实际金额分别记录，退款关联到对应付款。订阅快照用版本比较写入；并发冲突重新读取服务商状态。启用通知后，首次付款成功保留运营通知。
 

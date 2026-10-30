@@ -148,9 +148,11 @@ describe('Stripe 托管支付', () => {
       },
     })
     const event = await new StripePaymentProvider('test', 'hook').parseWebhookEvent('raw', 'sig')
+    // 外部 ID 用 PaymentIntent：与 `checkout.session.completed` 路径对齐，
+    // 同一笔钱被两条事件看到时写入同一条记录。
     expect(event.payments).toMatchObject([
-      { id: 'ip1', chargeId: 'pi_a', amount: 600 },
-      { id: 'ip2', chargeId: 'pi_b', amount: 400 },
+      { id: 'pi_a', chargeId: 'pi_a', amount: 600 },
+      { id: 'pi_b', chargeId: 'pi_b', amount: 400 },
     ])
     expect(event.payment).toBeUndefined()
   })

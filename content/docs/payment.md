@@ -50,9 +50,20 @@ Cancellation, payment methods, and invoices use the provider portal. There is no
 
 ## Webhooks
 
-`/api/webhooks/stripe` preserves the raw body and verifies its signature asynchronously. The adapter produces a provider-neutral `PaymentEvent`; `src/payment/events.ts` persists it.
+The endpoint is `/api/webhooks/stripe`. Add it under Stripe Dashboard → Developers → Webhooks and tick these events — **missing one means that record never gets written**:
 
-Handle completed and asynchronously paid Checkouts, subscription lifecycle events, paid/failed invoices, and charge refunds. Unpaid asynchronous sessions do not fulfill purchases. Subscription and invoice events retrieve the latest subscription state to resist out-of-order delivery. The success page never grants access.
+| Event | Purpose |
+|---|---|
+| `checkout.session.completed` | Checkout context for one-time payments |
+| `checkout.session.async_payment_succeeded` | Actual settlement for delayed payment methods |
+| `customer.subscription.created` / `updated` / `deleted` | Subscription lifecycle |
+| `invoice.paid` | **The authoritative payment-success event** |
+| `invoice.payment_failed` | Failed payment, never grants access |
+| `charge.refunded` | Refunds |
+
+`invoice.paid` is the authoritative payment-success event. Stripe does not guarantee delivery order, and an endpoint may deliver only `invoice.*` events, so payment records must not depend on `checkout.session.completed` alone: one-time payments also create an invoice, with ownership written into `invoice.metadata` so a standalone invoice event can still locate the user. Both paths use the same PaymentIntent as the external ID, so a payment seen twice is written once.
+
+The route preserves the raw body and verifies its signature asynchronously. The adapter produces a provider-neutral `PaymentEvent`; `src/payment/events.ts` persists it. Unpaid asynchronous sessions do not fulfill purchases. Subscription and invoice events retrieve the latest subscription state to resist out-of-order delivery. The success page never grants access.
 
 Provider-scoped event IDs deduplicate processing; business transaction IDs independently prevent duplicate payments. Failures return 500 for retries. Refunds that arrive before the payment is synchronized also retry. Partial refunds do not mark the full payment refunded. Multiple invoice payments are recorded separately with their actual amounts and refund references. Subscription snapshots use version-checked writes and re-fetch provider state after a conflict. Successful payments retain operational notifications when enabled.
 

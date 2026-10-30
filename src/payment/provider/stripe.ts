@@ -83,24 +83,31 @@ export function normalizeStripeEvent(event: StripeEventInput): PaymentEvent {
       }
     }
   } else if (event.type === 'invoice.paid' || event.type === 'invoice.payment_failed') {
+    // 发票是支付成功的**权威**事件：Stripe 不保证事件顺序，webhook 端点也可能只投递
+    // `invoice.*`（漏配 `checkout.session.completed`）。付款记录不能单点依赖后者。
+    //
+    // 归属来源分两种：订阅付款在 `parent.subscription_details`；一次性付款由
+    // `createCheckoutSession` 写进 `invoice.metadata`。
     const invoice = event.data.object as Stripe.Invoice
     const subscriptionId = idOf(invoice.parent?.subscription_details?.subscription)
     result.subscriptionId = subscriptionId ?? undefined
-    if (subscriptionId) {
-      result.payment = {
-        id: invoice.id,
-        invoiceId: invoice.id,
-        chargeId: null,
-        customerId: idOf(invoice.customer),
-        userId: invoice.parent?.subscription_details?.metadata?.userId ?? null,
-        productId: null,
-        offerId: null,
-        subscriptionId,
-        type: 'subscription',
-        amount: event.type === 'invoice.paid' ? invoice.amount_paid : invoice.amount_due,
-        currency: invoice.currency,
-        status: event.type === 'invoice.paid' ? 'paid' : 'failed',
-      }
+    const metadata = subscriptionId
+      ? invoice.parent?.subscription_details?.metadata
+      : invoice.metadata
+    result.payment = {
+      id: invoice.id,
+      invoiceId: invoice.id,
+      chargeId: null,
+      customerId: idOf(invoice.customer),
+      userId: metadata?.userId ?? null,
+      // 订阅的 product/offer 由 subscriptions 表提供（applyPaymentEvent 会优先用它）。
+      productId: subscriptionId ? null : (metadata?.productId ?? null),
+      offerId: subscriptionId ? null : (metadata?.offerId ?? null),
+      subscriptionId: subscriptionId ?? null,
+      type: subscriptionId ? 'subscription' : 'one_time',
+      amount: event.type === 'invoice.paid' ? invoice.amount_paid : invoice.amount_due,
+      currency: invoice.currency,
+      status: event.type === 'invoice.paid' ? 'paid' : 'failed',
     }
   } else if (event.type === 'charge.refunded') {
     const charge = event.data.object as Stripe.Charge
@@ -161,7 +168,9 @@ export class StripePaymentProvider implements PaymentProvider {
         ...(params.mode === 'payment'
           ? {
               ...(!params.customerId ? { customer_creation: 'always' as const } : {}),
-              invoice_creation: { enabled: true },
+              // 一次性支付也开发票：`invoice.paid` 是支付成功的权威事件，
+              // 发票上必须带归属，否则该事件单独到达时无法定位用户。
+              invoice_creation: { enabled: true, invoice_data: { metadata } },
             }
           : { subscription_data: { metadata } }),
         success_url: params.successUrl,
@@ -209,18 +218,22 @@ export class StripePaymentProvider implements PaymentProvider {
     if (result.subscriptionId && event.type !== 'customer.subscription.deleted') {
       result.subscription = await this.retrieveSubscription(result.subscriptionId)
     }
-    if (result.payment?.invoiceId && result.payment.type === 'subscription') {
+    if (result.payment?.invoiceId) {
       const entries: NonNullable<PaymentEvent['payments']> = []
       for await (const entry of this.stripe.invoicePayments.list({
         invoice: result.payment.invoiceId,
         limit: 100,
       })) {
         if (entry.status !== 'paid') continue
+        const paymentIntentId = idOf(entry.payment.payment_intent)
         entries.push({
           ...result.payment,
-          id: entry.id,
+          // 外部 ID 统一用 PaymentIntent：同一笔钱可能被 `invoice.paid` 与
+          // `checkout.session.completed` 两条路径各看到一次，ID 不一致会写成两条记录。
+          // 零金额订单（全额折扣）没有 PaymentIntent，退回用 InvoicePayment 的 ID。
+          id: paymentIntentId ?? entry.id,
           amount: entry.amount_paid ?? 0,
-          chargeId: idOf(entry.payment.payment_intent),
+          chargeId: paymentIntentId,
           status: 'paid',
         })
       }
