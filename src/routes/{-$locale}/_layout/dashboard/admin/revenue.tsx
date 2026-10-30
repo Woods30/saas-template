@@ -136,65 +136,59 @@ function AdminRevenuePage() {
             </EmptyHeader>
           </Empty>
         ) : (
-          <Card>
-            {/* `Table` 自带横向滚动容器，外层不再包 `overflow-x-auto`；`p-0` 会让表格
-                贴到卡片边缘、与标题区不对齐。 */}
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{m.admin_revenue_col_user()}</TableHead>
-                    <TableHead>{m.admin_revenue_col_plan()}</TableHead>
-                    <TableHead>{m.admin_revenue_col_status()}</TableHead>
-                    <TableHead>{m.admin_revenue_col_amount()}</TableHead>
-                    <TableHead>{m.admin_revenue_col_period()}</TableHead>
-                    <TableHead>{m.admin_revenue_col_renews_at()}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pageItems.map((subscription) => (
-                    <TableRow key={subscription.id}>
-                      <TableCell className="max-w-[220px] truncate">
-                        {subscription.email || subscription.userId}
-                      </TableCell>
-                      <TableCell>
-                        {productNameForProductId(subscription.productId) ??
-                          subscription.productId ??
-                          '—'}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap items-center gap-1">
-                          <Badge
-                            variant={subscription.status === 'active' ? 'default' : 'secondary'}
-                          >
-                            {m[subscriptionStatusMessageKey(subscription.status)]()}
-                          </Badge>
-                          {subscription.cancelAtPeriodEnd && (
-                            <Badge variant="outline">
-                              {m.admin_revenue_cancel_at_period_end()}
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {subscription.amount != null && subscription.currency
-                          ? money(subscription.amount, subscription.currency)
-                          : '—'}
-                      </TableCell>
-                      <TableCell>
-                        {subscription.interval === 'month'
-                          ? m.settings_billing_interval_month()
-                          : subscription.interval === 'year'
-                            ? m.settings_billing_interval_year()
-                            : '—'}
-                      </TableCell>
-                      <TableCell>{date(subscription.currentPeriodEnd)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          // 不再套 `Card`：卡片自带 ring 边框，与 `Table` 自身的分隔线叠成双层外框。
+          // `Table` 已自带横向滚动容器，外层也不需要 `overflow-x-auto`。
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{m.admin_revenue_col_user()}</TableHead>
+                <TableHead>{m.admin_revenue_col_plan()}</TableHead>
+                <TableHead>{m.admin_revenue_col_status()}</TableHead>
+                <TableHead>{m.admin_revenue_col_amount()}</TableHead>
+                <TableHead>{m.admin_revenue_col_period()}</TableHead>
+                <TableHead>{m.admin_revenue_col_started_at()}</TableHead>
+                <TableHead>{m.admin_revenue_col_renews_at()}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pageItems.map((subscription) => (
+                <TableRow key={subscription.id}>
+                  <TableCell className="max-w-[220px] truncate">
+                    {subscription.email || subscription.userId}
+                  </TableCell>
+                  <TableCell>
+                    {productNameForProductId(subscription.productId) ??
+                      subscription.productId ??
+                      '—'}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Badge variant={subscription.status === 'active' ? 'default' : 'secondary'}>
+                        {m[subscriptionStatusMessageKey(subscription.status)]()}
+                      </Badge>
+                      {subscription.cancelAtPeriodEnd && (
+                        <Badge variant="outline">{m.admin_revenue_cancel_at_period_end()}</Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {subscription.amount != null && subscription.currency
+                      ? money(subscription.amount, subscription.currency)
+                      : '—'}
+                  </TableCell>
+                  <TableCell>
+                    {subscription.interval === 'month'
+                      ? m.settings_billing_interval_month()
+                      : subscription.interval === 'year'
+                        ? m.settings_billing_interval_year()
+                        : '—'}
+                  </TableCell>
+                  <TableCell>{date(subscription.createdAt)}</TableCell>
+                  <TableCell>{date(subscription.currentPeriodEnd)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
 
         {totalPages > 1 && (

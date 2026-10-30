@@ -15,6 +15,7 @@
   "admin_revenue_col_period": "Period",
   "admin_revenue_col_plan": "Plan",
   "admin_revenue_col_renews_at": "Renews at",
+  "admin_revenue_col_started_at": "Started",
   "admin_revenue_col_status": "Status",
   "admin_revenue_col_user": "User",
   "admin_revenue_description": "View every subscription and the financial revenue.",

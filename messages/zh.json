@@ -15,6 +15,7 @@
   "admin_revenue_col_period": "周期",
   "admin_revenue_col_plan": "套餐",
   "admin_revenue_col_renews_at": "下次续费",
+  "admin_revenue_col_started_at": "开始时间",
   "admin_revenue_col_status": "状态",
   "admin_revenue_col_user": "用户",
   "admin_revenue_description": "查看全部订阅与财务营收。",
