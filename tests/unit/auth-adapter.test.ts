@@ -116,13 +116,13 @@ describe('邮箱验证完整流程', () => {
 })
 
 describe('会话 cookie 缓存', () => {
-  it('已开启且缓存窗口不超过 60 秒', async () => {
+  it('已开启且缓存窗口不超过 30 秒', async () => {
     const ctx = await getAuth(env()).$context
     const cookieCache = ctx.options.session?.cookieCache
     expect(cookieCache?.enabled).toBe(true)
-    // 缓存 cookie 是签名 JWT，撤销会话不会让它立刻失效；
+    // 缓存 cookie 是签名 JWT，跨设备撤销不会让它立刻失效；
     // 窗口越长，被踢设备仍可访问的时间越久。
-    expect(cookieCache?.maxAge).toBeLessThanOrEqual(60)
+    expect(cookieCache?.maxAge).toBeLessThanOrEqual(30)
   })
 })
 

@@ -237,6 +237,12 @@ Check each before touching auth code:
 - Email callbacks must never throw; a throw takes sign-up/sign-in down with it.
 - Protected routes check the session in `beforeLoad` with `fetchSession()` and `redirect` to
   the login page when signed out.
+- With `session.cookieCache` enabled, **cross-device revocation** does not invalidate the
+  revoked device right away: the cached cookie is a signed JWT with its own expiry, and only
+  the D1 row is deleted. `maxAge` is that window; it is currently 30 seconds. Sign-out,
+  password changes, and account deletion also clear the cache cookie on that device and are
+  not affected. If the site grows or revocation sensitivity rises, lower `maxAge` or disable
+  the cache.
 
 ## References
 
