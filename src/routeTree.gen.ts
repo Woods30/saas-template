@@ -9,6 +9,10 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as LlmsFullDottxtRouteImport } from './routes/llms-full[.]txt'
+import { Route as LlmsFullDotzhDottxtRouteImport } from './routes/llms-full[.]zh[.]txt'
+import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
+import { Route as LlmsDotzhDottxtRouteImport } from './routes/llms[.]zh[.]txt'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as Char123LocaleChar125IndexRouteImport } from './routes/{-$locale}/index'
@@ -51,6 +55,26 @@ import { Route as Char123LocaleChar125LayoutMarketingBlogSlugRouteImport } from 
 import { Route as Char123LocaleChar125LayoutMarketingChangelogIndexRouteImport } from './routes/{-$locale}/_layout/marketing/changelog/index'
 import { Route as Char123LocaleChar125LayoutMarketingLegalSlugRouteImport } from './routes/{-$locale}/_layout/marketing/legal/$slug'
 
+const LlmsFullDottxtRoute = LlmsFullDottxtRouteImport.update({
+  id: '/llms-full.txt',
+  path: '/llms-full.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LlmsFullDotzhDottxtRoute = LlmsFullDotzhDottxtRouteImport.update({
+  id: '/llms-full.zh.txt',
+  path: '/llms-full.zh.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
+  id: '/llms.txt',
+  path: '/llms.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LlmsDotzhDottxtRoute = LlmsDotzhDottxtRouteImport.update({
+  id: '/llms.zh.txt',
+  path: '/llms.zh.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
   id: '/robots.txt',
   path: '/robots.txt',
@@ -291,6 +315,10 @@ const Char123LocaleChar125LayoutMarketingLegalSlugRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
+  '/llms-full.txt': typeof LlmsFullDottxtRoute
+  '/llms-full.zh.txt': typeof LlmsFullDotzhDottxtRoute
+  '/llms.txt': typeof LlmsDottxtRoute
+  '/llms.zh.txt': typeof LlmsDotzhDottxtRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/{-$locale}/contact': typeof Char123LocaleChar125ContactRoute
@@ -334,6 +362,10 @@ export interface FileRoutesByFullPath {
   '/{-$locale}/marketing/changelog/': typeof Char123LocaleChar125LayoutMarketingChangelogIndexRoute
 }
 export interface FileRoutesByTo {
+  '/llms-full.txt': typeof LlmsFullDottxtRoute
+  '/llms-full.zh.txt': typeof LlmsFullDotzhDottxtRoute
+  '/llms.txt': typeof LlmsDottxtRoute
+  '/llms.zh.txt': typeof LlmsDotzhDottxtRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/{-$locale}/contact': typeof Char123LocaleChar125ContactRoute
@@ -375,6 +407,10 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/llms-full.txt': typeof LlmsFullDottxtRoute
+  '/llms-full.zh.txt': typeof LlmsFullDotzhDottxtRoute
+  '/llms.txt': typeof LlmsDottxtRoute
+  '/llms.zh.txt': typeof LlmsDotzhDottxtRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/{-$locale}/contact': typeof Char123LocaleChar125ContactRoute
@@ -420,6 +456,10 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/llms-full.txt'
+    | '/llms-full.zh.txt'
+    | '/llms.txt'
+    | '/llms.zh.txt'
     | '/robots.txt'
     | '/sitemap.xml'
     | '/{-$locale}/contact'
@@ -463,6 +503,10 @@ export interface FileRouteTypes {
     | '/{-$locale}/marketing/changelog/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/llms-full.txt'
+    | '/llms-full.zh.txt'
+    | '/llms.txt'
+    | '/llms.zh.txt'
     | '/robots.txt'
     | '/sitemap.xml'
     | '/{-$locale}/contact'
@@ -503,6 +547,10 @@ export interface FileRouteTypes {
     | '/{-$locale}/marketing/changelog'
   id:
     | '__root__'
+    | '/llms-full.txt'
+    | '/llms-full.zh.txt'
+    | '/llms.txt'
+    | '/llms.zh.txt'
     | '/robots.txt'
     | '/sitemap.xml'
     | '/{-$locale}/contact'
@@ -547,6 +595,10 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  LlmsFullDottxtRoute: typeof LlmsFullDottxtRoute
+  LlmsFullDotzhDottxtRoute: typeof LlmsFullDotzhDottxtRoute
+  LlmsDottxtRoute: typeof LlmsDottxtRoute
+  LlmsDotzhDottxtRoute: typeof LlmsDotzhDottxtRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   Char123LocaleChar125ContactRoute: typeof Char123LocaleChar125ContactRoute
@@ -571,6 +623,34 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/llms-full.txt': {
+      id: '/llms-full.txt'
+      path: '/llms-full.txt'
+      fullPath: '/llms-full.txt'
+      preLoaderRoute: typeof LlmsFullDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/llms-full.zh.txt': {
+      id: '/llms-full.zh.txt'
+      path: '/llms-full.zh.txt'
+      fullPath: '/llms-full.zh.txt'
+      preLoaderRoute: typeof LlmsFullDotzhDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/llms.txt': {
+      id: '/llms.txt'
+      path: '/llms.txt'
+      fullPath: '/llms.txt'
+      preLoaderRoute: typeof LlmsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/llms.zh.txt': {
+      id: '/llms.zh.txt'
+      path: '/llms.zh.txt'
+      fullPath: '/llms.zh.txt'
+      preLoaderRoute: typeof LlmsDotzhDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/robots.txt': {
       id: '/robots.txt'
       path: '/robots.txt'
@@ -961,6 +1041,10 @@ const Char123LocaleChar125LayoutMarketingRouteWithChildren =
   )
 
 const rootRouteChildren: RootRouteChildren = {
+  LlmsFullDottxtRoute: LlmsFullDottxtRoute,
+  LlmsFullDotzhDottxtRoute: LlmsFullDotzhDottxtRoute,
+  LlmsDottxtRoute: LlmsDottxtRoute,
+  LlmsDotzhDottxtRoute: LlmsDotzhDottxtRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   Char123LocaleChar125ContactRoute: Char123LocaleChar125ContactRoute,

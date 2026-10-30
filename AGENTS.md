@@ -38,8 +38,9 @@ Drizzle ORM + D1、Vitest + Playwright。
 
 ```
 src/
-├── routes/          文件路由（`{-$locale}` 是可选的 locale 前缀）
-├── config/          站点配置：website.ts（总开关）、products.ts（产品与价格锚点）、navigation.ts 等
+├── routes/          文件路由（`{-$locale}` 是可选的 locale 前缀；文件名里的字面点写成
+│                    `[.]`，否则点会被当成路径分隔符——`llms.zh[.]txt.ts` 会变成 `/llms/zh.txt`）
+├── config/          站点配置：website.ts（总开关）、products.ts（产品与价格锚点）、llms.ts（AI 索引文案）、navigation.ts 等
 ├── components/
 │   ├── sections/    可复用内容区块（Hero / Features / Pricing…），单文件含类型
 │   ├── marketing/   页面级装配（LandingPage / MarketingLayout / Navbar / Footer）
@@ -51,7 +52,7 @@ src/
 │                    服务模块：每个目录一个 provider 注册表 + 抽象接口
 ├── db/              Drizzle schema 与迁移
 ├── env/             两层 env 校验（public / server），读 env 的唯一出口
-├── lib/             纯逻辑：locale、seo、module-access、rate-limit…
+├── lib/             纯逻辑：locale、seo、llms、module-access、rate-limit…
 ├── locale/          Paraglide 生成物 + middleware
 └── styles/          globals.css（设计 token）、mdx.css
 
@@ -81,6 +82,9 @@ scripts/             构建与校验脚本
 7. **Workers 运行时**不是 Node.js，含 native binding 的包不可用。
 8. **`src/components/ui` 只放上游原件**，不本地修改；调外观在调用处传 `className`。
 9. **不硬编码颜色**：只用语义 token，规则见 `DESIGN.md`。
+10. **llms 文件由配置生成**：`/llms*.txt` 的内容来自 `src/config/llms.ts` 与 `content/`，
+    不手写正文、不硬编码价格与链接——价格取 `websiteConfig.template.priceUsd`，
+    链接按语言前缀拼装。
 
 ## 工作方式
 

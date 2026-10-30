@@ -5,10 +5,17 @@ import { websiteConfig } from '@/config/website'
 import { contentSlug } from '@/lib/content-locale'
 import { LOCALES, type Locale, parseLocale } from '@/lib/locale'
 
-/** 单条 sitemap 记录：绝对 loc 与同页其他语言的 alternate 链接。 */
+/** 单条 sitemap 记录：绝对 loc、同页其他语言的 alternate 链接、内容更新时间。 */
 export interface SitemapEntry {
   loc: string
   alternates: Array<{ hreflang: Locale; href: string }>
+  /**
+   * 内容最近更新日期（`YYYY-MM-DD`）。
+   *
+   * 搜索引擎与 AI 抓取器靠它判断「这篇内容是不是新的」，所以只在真有日期来源时
+   * 填写——静态营销页没有日期来源，宁可不给，也比编一个假日期好。
+   */
+  lastmod?: string
 }
 
 /** 动态内容来源；缺省时读取构建期生成的博客 / 文档清单，便于单测注入。 */
@@ -17,8 +24,15 @@ export interface SitemapSource {
     locale: string
     published: boolean
     _meta: { path: string; fileName: string }
+    /** 发布日期（ISO）；提供时写入 `<lastmod>`。 */
+    date?: string
   }>
-  docs: ReadonlyArray<{ locale: string; _meta: { fileName: string } }>
+  docs: ReadonlyArray<{
+    locale: string
+    _meta: { fileName: string }
+    /** 最近更新日期（`YYYY-MM-DD`）；提供时写入 `<lastmod>`。 */
+    updated?: string
+  }>
 }
 
 /** 默认内容来源：Content Collections 生成的清单。 */
@@ -91,6 +105,7 @@ export function getSitemapPaths(
       entries.push({
         loc: buildUrl(baseUrl, locale, `/marketing/blog/${slug}`),
         alternates,
+        lastmod: post.date ? toDatePart(post.date) : undefined,
       })
     }
   }
@@ -106,11 +121,20 @@ export function getSitemapPaths(
           const alt = parseLocale(d.locale)
           return alt ? [{ hreflang: alt, href: buildUrl(baseUrl, alt, `/docs/${slug}`) }] : []
         })
-      entries.push({ loc: buildUrl(baseUrl, locale, `/docs/${slug}`), alternates })
+      entries.push({
+        loc: buildUrl(baseUrl, locale, `/docs/${slug}`),
+        alternates,
+        lastmod: doc.updated,
+      })
     }
   }
 
   return entries
+}
+
+/** 把 ISO 时间戳截到日期部分（`YYYY-MM-DD`）；已是日期时原样返回。 */
+function toDatePart(value: string): string {
+  return value.slice(0, 10)
 }
 
 /** 对 XML 文本节点 / 属性值做转义，避免内容破坏文档结构。 */
@@ -133,7 +157,9 @@ export function renderSitemapXml(entries: readonly SitemapEntry[]): string {
             `<xhtml:link rel="alternate" hreflang="${escapeXml(a.hreflang)}" href="${escapeXml(a.href)}"/>`,
         )
         .join('')
-      return `<url><loc>${escapeXml(entry.loc)}</loc>${alternates}<changefreq>weekly</changefreq></url>`
+      // 没有日期来源时不输出该元素：空标签比缺省更容易被解析器误读。
+      const lastmod = entry.lastmod ? `<lastmod>${escapeXml(entry.lastmod)}</lastmod>` : ''
+      return `<url><loc>${escapeXml(entry.loc)}</loc>${alternates}${lastmod}<changefreq>weekly</changefreq></url>`
     })
     .join('\n')
   return `<?xml version="1.0" encoding="UTF-8"?>

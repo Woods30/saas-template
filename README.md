@@ -52,6 +52,18 @@ GitHub `production` Environment 的变量与 secrets 配置见 [文档站 · Clo
 - **服务模块**：邮件、订阅、通知、分析、文件存储——各自有 provider 抽象与开关
 - **工程**：两层 env 校验、模块门禁、CSP、SEO、单元 / 组件 / E2E 三层测试、CI
 
+## 面向 AI 的站点索引
+
+面向 AI 抓取器的两份纯文本，随站点内容自动生成：
+
+| 路径 | 内容 |
+|---|---|
+| `/llms.txt`、`/llms.zh.txt` | 站点索引：产品定位、技术栈、包含什么、价格与文档清单 |
+| `/llms-full.txt`、`/llms-full.zh.txt` | 全部文档正文（纯 Markdown），模型不必逐页抓取 |
+
+文案在 `src/config/llms.ts`，正文来自 `content/`——改了配置或文档，两份文件跟着变。
+`robots.txt` 显式放行主流 AI 爬虫。
+
 ## 文档
 
 | 主题 | 位置 |
