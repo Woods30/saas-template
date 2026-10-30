@@ -205,15 +205,21 @@ describe('板块标题元数据', () => {
       'admin',
     ] as const) {
       const meta = getSettingsSectionMeta(section)
-      expect(meta.title).toBeTruthy()
-      expect(meta.description).toBeTruthy()
-      expect(meta.icon).toBeTruthy()
+      expect(meta?.title).toBeTruthy()
+      expect(meta?.description).toBeTruthy()
+      expect(meta?.icon).toBeTruthy()
     }
+  })
+
+  it('管理分组下的子页面有各自的标题', () => {
+    expect(getSettingsSectionMeta('admin/revenue')?.title).toBe('营收与订阅')
+    // 未注册的路径段返回 undefined，调用方据此退回更粗的层级。
+    expect(getSettingsSectionMeta('admin/unknown')).toBeUndefined()
   })
 
   it('中文标题与导航项一致', () => {
     overwriteGetLocale(() => 'zh')
-    expect(getSettingsSectionMeta('profile').title).toBe('资料')
-    expect(getSettingsSectionMeta('sessions').title).toBe('登录设备')
+    expect(getSettingsSectionMeta('profile')?.title).toBe('资料')
+    expect(getSettingsSectionMeta('sessions')?.title).toBe('登录设备')
   })
 })

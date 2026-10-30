@@ -474,7 +474,7 @@
   "roadmap_status_done": "Shipped",
   "roadmap_status_planned": "Planned",
   "settings_admin_description": "Manage site users, subscriptions, and revenue.",
-  "settings_admin_title": "Administration",
+  "settings_admin_title": "Users",
   "settings_api_keys_cancel": "Cancel",
   "settings_api_keys_copied": "Copied",
   "settings_api_keys_copy": "Copy",

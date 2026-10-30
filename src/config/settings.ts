@@ -23,6 +23,8 @@ export type SettingsSection =
   | 'api-keys'
   | 'billing'
   | 'admin'
+  /** 管理分组下的子页面：路径含两段，与其它板块的单段不同。 */
+  | 'admin/revenue'
 
 /**
  * 个人中心侧边栏的导航项工厂。
@@ -140,11 +142,19 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
 }
 
 /** 每个板块的标题与说明，供页面 `head()` 与内容区标题使用。 */
-export function getSettingsSectionMeta(section: SettingsSection): {
-  title: string
-  description: string
-  icon: TablerIcon
-} {
+/**
+ * 每个板块的标题与说明，供页面 `head()` 与内容区标题使用。
+ *
+ * 参数是**路径段**（`profile`、`admin/revenue`），未注册时返回 `undefined`，
+ * 调用方据此退回到更粗的层级。
+ */
+export function getSettingsSectionMeta(section: string):
+  | {
+      title: string
+      description: string
+      icon: TablerIcon
+    }
+  | undefined {
   switch (section) {
     case 'profile':
       return {
@@ -187,6 +197,12 @@ export function getSettingsSectionMeta(section: SettingsSection): {
         title: m.settings_admin_title(),
         description: m.settings_admin_description(),
         icon: IconUsers,
+      }
+    case 'admin/revenue':
+      return {
+        title: m.admin_revenue_title(),
+        description: m.admin_revenue_description(),
+        icon: IconChartBar,
       }
   }
 }

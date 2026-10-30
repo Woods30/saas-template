@@ -61,11 +61,16 @@ export function DashboardLayout({
   })
   // 当前板块取 `/dashboard/` 之后的一段；未注册的板块匹配不到，面包屑退化为两级。
   const currentSection = pathname.split('/dashboard/')[1]?.split('/')[0]
-  const currentMeta = groups.some(
-    (group) => group.kind === 'group' && group.items.some((item) => item.id === currentSection),
-  )
-    ? getSettingsSectionMeta(currentSection as Parameters<typeof getSettingsSectionMeta>[0])
-    : null
+  /**
+   * 高亮按**目标路径**判定，而不是菜单 id。
+   *
+   * 菜单 id 与路由段并非一一对应：`admin` 分组下有 `admin/users` 与 `admin/revenue`
+   * 两个子页，只按第一段匹配会让两个菜单项同时命中或都不命中（用户管理抢走高亮）。
+   */
+  const currentDashboardPath = pathname.split('/dashboard/')[1] ?? ''
+  // 面包屑末级优先用完整路径（`admin/revenue`），匹配不到再退回第一段（`admin`）。
+  const currentMeta =
+    getSettingsSectionMeta(currentDashboardPath) ?? getSettingsSectionMeta(currentSection ?? '')
 
   return (
     <SidebarProvider>
@@ -102,9 +107,14 @@ export function DashboardLayout({
                       if (item.kind !== 'link') return null
                       const options =
                         item.destination.kind === 'internal' ? item.destination.options : null
-                      // 与 `currentSection` 用同一段 pathname，子路由也能点亮父板块。
+                      // 按目标路径判定：菜单 id 与路由段不是一一对应（`admin` 分组下有
+                      // `admin/users` 与 `admin/revenue` 两个子页），按 id 匹配会让
+                      // 「用户管理」抢走「营收与订阅」的高亮。
+                      const targetPath =
+                        options !== null && 'to' in options ? (options.to ?? '') : ''
                       const isActive =
-                        options !== null && 'to' in options && currentSection === item.id
+                        targetPath !== '' &&
+                        (targetPath.split('/dashboard/')[1] ?? '') === currentDashboardPath
                       const Icon = item.icon
                       return (
                         <SidebarMenuItem key={item.id}>

@@ -54,16 +54,16 @@ function clearCookies() {
 }
 
 /** 渲染外壳；session 由路由 beforeLoad 取到后透传进来。 */
-function renderLayout() {
+function renderLayout(role: SessionInfo['user']['role'] = 'user') {
   return render(
-    <DashboardLayout locale="zh" session={sessionWith()}>
+    <DashboardLayout locale="zh" session={sessionWith(role)}>
       <div>内容区</div>
     </DashboardLayout>,
   )
 }
 
 /** 与用户卡片测试同形的会话。 */
-function sessionWith(): SessionInfo {
+function sessionWith(role: SessionInfo['user']['role'] = 'user'): SessionInfo {
   return {
     user: {
       id: 'u_1',
@@ -71,7 +71,7 @@ function sessionWith(): SessionInfo {
       email: 'woods@example.com',
       emailVerified: true,
       image: null,
-      role: 'user',
+      role,
     },
     impersonating: false,
   }
@@ -123,6 +123,30 @@ describe('SettingsLayout 顶栏', () => {
   it('不放标题 h1（末级面包屑已是页面标题）', () => {
     renderLayout()
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
+  })
+
+  /**
+   * 侧栏高亮必须按**目标路径**判定，而不是菜单 id。
+   *
+   * `admin` 分组下有两个子页（`admin/users` 与 `admin/revenue`），只按第一段匹配
+   * 会让「用户管理」抢走「营收与订阅」的高亮——用户报过的实际缺陷。
+   */
+  it('管理子页高亮对应菜单项，不被同组其它项抢走', () => {
+    routerMocks.pathname = '/zh/dashboard/admin/revenue'
+    renderLayout('admin')
+    // 侧栏与面包屑都有同名文案，断言须限定在侧栏内。
+    const sidebar = document.querySelector('[data-slot="sidebar"]') as HTMLElement
+    const revenue = within(sidebar).getByRole('link', { name: '营收与订阅' })
+    const users = within(sidebar).getByRole('link', { name: '用户管理' })
+    expect(revenue).toHaveAttribute('data-active')
+    expect(users).not.toHaveAttribute('data-active')
+  })
+
+  it('管理子页的面包屑末级是页面自己的标题', () => {
+    routerMocks.pathname = '/zh/dashboard/admin/revenue'
+    renderLayout('admin')
+    const page = within(breadcrumb()).getByText('营收与订阅')
+    expect(page).toHaveAttribute('aria-current', 'page')
   })
 
   it('不放「返回站点」链接（logo 已是回站点出口）', () => {
