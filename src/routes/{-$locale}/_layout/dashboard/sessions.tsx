@@ -1,7 +1,8 @@
 import { IconDevices } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { authClient } from '@/auth/client'
+import { fetchSessionsOverview } from '@/auth/session'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -20,6 +21,9 @@ import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/dashboard/sessions')({
+  // 数据在路由加载阶段取好：客户端导航时内容随路由一起出现，不会先渲染空壳再补数据。
+  // 服务端并行取列表与当前会话，避免「列表 + 当前 token」拆成两次往返。
+  loader: () => fetchSessionsOverview(),
   head: () =>
     seo('/dashboard/sessions', {
       title: m.settings_sessions_title(),
@@ -41,11 +45,14 @@ interface SessionEntry {
 }
 
 function SessionsPage() {
-  const [sessions, setSessions] = useState<SessionEntry[] | null>(null)
+  const initial = Route.useLoaderData()
+  const [sessions, setSessions] = useState<SessionEntry[] | null>(
+    initial.sessions as SessionEntry[],
+  )
   const [error, setError] = useState<string | null>(null)
-  // `listSessions` 不标注哪条是「本机」，需靠 `getSession` 对照；
+  // `listSessions` 不标注哪条是「本机」，由 loader 一并取回的 `currentToken` 对照；
   // 否则用户点「注销」当前设备会把自己踢下线。
-  const [currentToken, setCurrentToken] = useState<string | null>(null)
+  const [currentToken] = useState<string | null>(initial.currentToken)
 
   const load = useCallback(async () => {
     const { data, error: listError } = await authClient.listSessions()
@@ -54,16 +61,6 @@ function SessionsPage() {
       return
     }
     setSessions((data as SessionEntry[] | null) ?? [])
-  }, [])
-
-  useEffect(() => {
-    void load()
-  }, [load])
-
-  useEffect(() => {
-    void authClient.getSession().then(({ data }) => {
-      setCurrentToken((data as { session?: { token?: string } } | null)?.session?.token ?? null)
-    })
   }, [])
 
   async function onRevoke(token: string) {

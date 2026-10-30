@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -26,6 +26,15 @@ import {
 
 export const Route = createFileRoute('/{-$locale}/_layout/dashboard/billing')({
   beforeLoad: () => assertPageEnabled('payment'),
+  // 数据在路由加载阶段取好：客户端导航时内容随路由一起出现，不会先渲染空壳再补数据。
+  loader: async () => {
+    try {
+      return { ok: true as const, data: await fetchBillingOverview({ data: { limit: 50 } }) }
+    } catch {
+      // 失败交给页面渲染提示，不用抛错打断整棵路由。
+      return { ok: false as const, data: null }
+    }
+  },
   head: () =>
     seo('/dashboard/billing', {
       title: m.settings_billing_title(),
@@ -55,14 +64,10 @@ function BillingPage() {
   const router = useRouter()
   const { checkout } = Route.useSearch()
   const locale = getRequestLocale()
-  const [data, setData] = useState<BillingOverview | null>(null)
-  const [error, setError] = useState(false)
+  const loaded = Route.useLoaderData()
+  const [data] = useState<BillingOverview | null>(loaded.data)
+  const [error, setError] = useState(!loaded.ok)
   const [managing, setManaging] = useState(false)
-  useEffect(() => {
-    void fetchBillingOverview({ data: {} })
-      .then(setData)
-      .catch(() => setError(true))
-  }, [])
   useCheckoutNotice({
     checkout,
     type: checkout === 'success' ? 'success' : 'info',

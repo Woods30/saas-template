@@ -21,6 +21,30 @@ export interface SessionInfo {
   impersonating: boolean
 }
 
+/** 登录设备页所需的会话列表与当前会话 token。 */
+export interface SessionsOverview {
+  sessions: Array<{
+    id: string
+    token: string
+    createdAt: Date | string
+    expiresAt: Date | string
+    ipAddress?: string | null
+    userAgent?: string | null
+  }>
+  /** 当前请求所属会话的 token；用于把「本机」与其它设备区分开。 */
+  currentToken: string | null
+}
+
+/** 读取原始 better-auth 会话；调用方自行挑字段。 */
+async function readSession() {
+  const [{ getServerContext }, { getAuth }, { getRequestHeaders }] = await Promise.all([
+    import('@/lib/server-context'),
+    import('@/auth/auth'),
+    import('@tanstack/react-start/server'),
+  ])
+  return getAuth(getServerContext().env).api.getSession({ headers: getRequestHeaders() })
+}
+
 /**
  * 读取当前请求的会话。
  *
@@ -29,14 +53,7 @@ export interface SessionInfo {
  */
 export const fetchSession = createServerFn({ method: 'GET' }).handler(
   async (): Promise<SessionInfo | null> => {
-    const [{ getServerContext }, { getAuth }, { getRequestHeaders }] = await Promise.all([
-      import('@/lib/server-context'),
-      import('@/auth/auth'),
-      import('@tanstack/react-start/server'),
-    ])
-    const session = await getAuth(getServerContext().env).api.getSession({
-      headers: getRequestHeaders(),
-    })
+    const session = await readSession()
     if (!session) return null
     return {
       user: {
@@ -53,6 +70,32 @@ export const fetchSession = createServerFn({ method: 'GET' }).handler(
       impersonating: Boolean(
         (session.session as { impersonatedBy?: string | null }).impersonatedBy,
       ),
+    }
+  },
+)
+
+/**
+ * 一次取回会话列表与当前 token。
+ *
+ * `listSessions` 不标注哪条是「本机」，必须与 `getSession` 对照，否则用户点「注销」
+ * 会把自己踢下线。两者在服务端并行发出：拆成两次客户端请求会让页面多等一个往返。
+ */
+export const fetchSessionsOverview = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<SessionsOverview> => {
+    const [{ getServerContext }, { getAuth }, { getRequestHeaders }] = await Promise.all([
+      import('@/lib/server-context'),
+      import('@/auth/auth'),
+      import('@tanstack/react-start/server'),
+    ])
+    const auth = getAuth(getServerContext().env)
+    const headers = getRequestHeaders()
+    const [sessions, current] = await Promise.all([
+      auth.api.listSessions({ headers }),
+      auth.api.getSession({ headers }),
+    ])
+    return {
+      sessions: (sessions ?? []) as SessionsOverview['sessions'],
+      currentToken: current?.session.token ?? null,
     }
   },
 )
