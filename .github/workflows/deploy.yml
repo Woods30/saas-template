@@ -58,8 +58,19 @@ jobs:
 
   deploy:
     needs: verify-release
-    # needs 被跳过时下游默认不执行；用 always() + 结果判断放行手动触发。
-    if: always() && (needs.verify-release.result == 'success' || needs.verify-release.result == 'skipped')
+    # 只放行两种来源，且必须区分「跳过」的原因：
+    # 1) 正式 Release 通过校验（verify-release 成功）
+    # 2) 手动触发，且 ref 必须是 main（否则等于用生产密钥执行任意分支的代码）
+    #
+    # 注意不能把 skipped 一律当放行：预发布 Release 也会让 verify-release 被跳过，
+    # 那样预发布就会被部署到生产——原有的「预发布不部署」门禁会失效。
+    if: >
+      always() && (
+        needs.verify-release.result == 'success' ||
+        (github.event_name == 'workflow_dispatch' &&
+         github.ref == 'refs/heads/main' &&
+         needs.verify-release.result == 'skipped')
+      )
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 20
