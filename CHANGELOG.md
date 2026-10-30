@@ -1,5 +1,18 @@
 # 更新日志
 
+## 0.7.0 (2026-10-30)
+
+### 特性与调整
+
+- 新增面向 AI 抓取器的站点索引与全文包，中英各一套：`/llms.txt`、`/llms.zh.txt`（定位、技术栈、包含什么、价格与文档清单），`/llms-full.txt`、`/llms-full.zh.txt`（全部文档正文，纯 Markdown）。
+- llms 文案集中在 `src/config/llms.ts`，正文取自 `content/`；改配置或加文档自动生效，价格读 `websiteConfig.template.priceUsd`，链接按语言前缀拼绝对 URL。
+- `robots.txt` 显式放行 GPTBot、OAI-SearchBot、ChatGPT-User、ClaudeBot、Claude-User、Claude-SearchBot、PerplexityBot、Google-Extended、Bytespider、CCBot，检索与训练都收录。
+- `sitemap.xml` 增加 `lastmod`：文档取 frontmatter `updated`，博客取 `date`；无日期来源的静态页不输出，不编造。
+
+### 安全
+
+- llms 文件不收录未发布的博客，站点私有的模板占位符按类型脱敏后输出。
+
 ## 0.2.0 (2026-10-29)
 
 ### 特性与调整
