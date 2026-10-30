@@ -1,5 +1,6 @@
 import {
   IconBell,
+  IconChartBar,
   IconCreditCard,
   IconDeviceLaptop,
   IconKey,
@@ -118,6 +119,18 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
           destination: {
             kind: 'internal',
             options: linkOptions({ to: '/{-$locale}/dashboard/admin/users', params: { locale } }),
+          },
+        },
+        {
+          kind: 'link',
+          id: 'admin-revenue',
+          title: m.settings_nav_admin_revenue(),
+          icon: IconChartBar,
+          // 与用户管理同一套约束：角色 + 功能开关都满足才显示。
+          visibility: { roles: ['admin'], feature: 'enableAdmin' },
+          destination: {
+            kind: 'internal',
+            options: linkOptions({ to: '/{-$locale}/dashboard/admin/revenue', params: { locale } }),
           },
         },
       ],
