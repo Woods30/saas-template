@@ -48,13 +48,13 @@ export const Route = createFileRoute('/api/payment/$')({
         const auth = await authorize(request, 'payment:checkout')
         if (auth instanceof Response) return auth
         const body = checkoutBody.safeParse(await request.json().catch(() => null))
-        if (!body.success) return new Response('Bad Request', { status: 400 })
+        if (!body.success) return Response.json({ error: 'BAD_REQUEST' }, { status: 400 })
         const { productId, offerId, locale } = body.data
         const reference = resolvePriceReference(productId, offerId)
         const successUrl = safeSameOriginUrl(body.data.successUrl)
         const cancelUrl = safeSameOriginUrl(body.data.cancelUrl)
         if (!reference || !successUrl || !cancelUrl)
-          return new Response('Invalid checkout', { status: 400 })
+          return Response.json({ error: 'INVALID_CHECKOUT' }, { status: 400 })
         try {
           const price = (await getPriceCatalog())[reference]
           if (

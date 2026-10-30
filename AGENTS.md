@@ -83,8 +83,11 @@ scripts/             构建与校验脚本
 8. **`src/components/ui` 只放上游原件**，不本地修改；调外观在调用处传 `className`。
 9. **不硬编码颜色**：只用语义 token，规则见 `DESIGN.md`。
 10. **llms 文件由配置生成**：`/llms*.txt` 的内容来自 `src/config/llms.ts` 与 `content/`，
-    不手写正文、不硬编码价格与链接——价格取 `websiteConfig.template.priceUsd`，
-    链接按语言前缀拼装。
+    不手写正文、不硬编码链接——链接按语言前缀拼装。
+11. **价格只存一份**：金额的事实源是 Stripe 的价格目录
+    （`src/payment/price-catalog.server.ts`）。首页展示、`llms.txt` 与结账收款读**同一份**
+    目录；代码与配置里**不得**再存第二份金额——两份金额必然漂移，漂移后结账会被判为
+    价格不可用。改价只需在 Stripe 后台操作。
 
 ## 工作方式
 

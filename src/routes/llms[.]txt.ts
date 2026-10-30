@@ -11,7 +11,7 @@ import { llmsTextResponse } from '@/lib/llms-response.server'
 export const Route = createFileRoute('/llms.txt')({
   server: {
     handlers: {
-      GET: () => llmsTextResponse('en', 'index'),
+      GET: async () => llmsTextResponse('en', 'index'),
     },
   },
 })

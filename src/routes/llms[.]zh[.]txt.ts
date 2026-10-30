@@ -10,7 +10,7 @@ import { llmsTextResponse } from '@/lib/llms-response.server'
 export const Route = createFileRoute('/llms.zh.txt')({
   server: {
     handlers: {
-      GET: () => llmsTextResponse('zh', 'index'),
+      GET: async () => llmsTextResponse('zh', 'index'),
     },
   },
 })

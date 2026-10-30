@@ -83,12 +83,12 @@ const source: LlmsContentSource = {
   ],
 }
 
-function renderIndex(locale: 'en' | 'zh', priceUsd = 99): string {
+function renderIndex(locale: 'en' | 'zh', priceCents = 9900): string {
   return renderLlmsIndex({
     config: llmsConfig,
     locale,
     baseUrl: BASE_URL,
-    priceUsd,
+    priceCents,
     siteName: 'Jerbix',
     source,
   })
@@ -113,8 +113,8 @@ describe('renderLlmsIndex', () => {
   })
 
   it('价格取自传入金额，不写死在文案里', () => {
-    expect(renderIndex('en', 149)).toContain('$149')
-    expect(renderIndex('en', 149)).not.toContain('$99')
+    expect(renderIndex('en', 14900)).toContain('$149')
+    expect(renderIndex('en', 14900)).not.toContain('$99')
   })
 
   it('列出模板包含的模块', () => {
@@ -161,7 +161,7 @@ describe('renderLlmsFull', () => {
       config: llmsConfig,
       locale,
       baseUrl: BASE_URL,
-      priceUsd: 99,
+      priceCents: 9900,
       siteName: 'Jerbix',
       source,
     })
@@ -208,7 +208,7 @@ describe('renderLlmsFull', () => {
       config: llmsConfig,
       locale: 'en',
       baseUrl: BASE_URL,
-      priceUsd: 99,
+      priceCents: 9900,
       siteName: 'Jerbix',
       source: source2,
     })
@@ -229,7 +229,7 @@ describe('renderLlmsFull', () => {
       config: llmsConfig,
       locale: 'en',
       baseUrl: BASE_URL,
-      priceUsd: 99,
+      priceCents: 9900,
       siteName: 'Jerbix',
       source: source2,
     })

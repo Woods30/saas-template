@@ -11,7 +11,7 @@ export async function getPriceCatalog(): Promise<PriceCatalog> {
   return getOrSetCache({
     key: createCacheKey(
       'payment',
-      'price-catalog-v2',
+      'price-catalog-v3',
       websiteConfig.payment.provider,
       JSON.stringify(references),
     ),

@@ -37,7 +37,14 @@ export async function startCheckout(params: StartCheckoutParams): Promise<Checko
         ? { kind: 'error', message: 'checkout_pending' }
         : { kind: 'already-subscribed' }
     }
-    if (response.status === 400) return { kind: 'not-configured' }
+    if (response.status === 400) {
+      // 400 有多个来源：只有价格不可用才说「暂未开放购买」。
+      // 其余（参数非法、回跳地址不被信任）报通用错误，否则用户会被引向错误方向。
+      const body = (await response.json().catch(() => null)) as { error?: string } | null
+      return body?.error === 'PRICE_UNAVAILABLE'
+        ? { kind: 'not-configured' }
+        : { kind: 'error', message: 'invalid_checkout' }
+    }
     if (!response.ok) return { kind: 'error', message: `http_${response.status}` }
     const body = (await response.json()) as { url?: string }
     return body.url

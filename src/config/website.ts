@@ -41,8 +41,13 @@ export interface WebsiteConfig {
      */
     themeColor: { light: string; dark: string }
   }
-  /** 首页模板的 Checkout 选项；priceUsd 同时用于展示与服务端收款校验。 */
-  template: { priceUsd: number; productId: string; offerId: string }
+  /**
+   * 首页模板的 Checkout 选项。
+   *
+   * **不含金额**：价格的唯一事实源是 Stripe 的价格目录，页面展示与结账收款
+   * 读同一份目录。配置里再存一份金额只会让两者漂移。
+   */
+  template: { productId: string; offerId: string }
   docs: { enabled: boolean }
   blog: { enabled: boolean }
   changelog: { enabled: boolean }
@@ -110,7 +115,7 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       // 与 globals.css 的 --background（浅 0.988 0.0069 304.2448 / 深 0.1473 0.0107 285.0074）等价。
       themeColor: { light: '#FCFAFF', dark: '#0A0A0F' },
     },
-    template: { priceUsd: 99, productId: 'template', offerId: 'once' },
+    template: { productId: 'template', offerId: 'once' },
     docs: { enabled: true },
     blog: { enabled: true },
     changelog: { enabled: true },

@@ -4,6 +4,8 @@ import { websiteConfig } from '@/config/website'
 import { renderLlmsFull, renderLlmsIndex } from '@/lib/llms'
 import { defaultLlmsSource } from '@/lib/llms-source.server'
 import { getBaseUrl } from '@/lib/urls'
+import { findCatalogAmount } from '@/payment/price-catalog'
+import { getPriceCatalog } from '@/payment/price-catalog.server'
 
 /**
  * llms.txt / llms-full.txt 的响应。
@@ -22,12 +24,20 @@ const CONTENT_TYPE = 'text/plain; charset=utf-8'
  *   不读 cookie——爬虫不带 cookie，靠 cookie 判定会让两个版本指向同一份内容。
  * @param variant - `index` 出索引，`full` 出全文。
  */
-export function llmsTextResponse(locale: Locale, variant: 'index' | 'full'): Response {
+export async function llmsTextResponse(
+  locale: Locale,
+  variant: 'index' | 'full',
+): Promise<Response> {
   const options = {
     config: llmsConfig,
     locale,
     baseUrl: getBaseUrl(),
-    priceUsd: websiteConfig.template.priceUsd,
+    // 价格事实源是 Stripe 的价格目录，与首页展示、结账收款同源。
+    priceCents: findCatalogAmount(
+      await getPriceCatalog(),
+      websiteConfig.template.productId,
+      websiteConfig.template.offerId,
+    ),
     siteName: websiteConfig.metadata.name,
     source: defaultLlmsSource(),
   }

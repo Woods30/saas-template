@@ -6,13 +6,29 @@ import {
   RouterProvider,
 } from '@tanstack/react-router'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MenuItems } from '@/components/layout/MenuItems'
 import { Navbar } from '@/components/marketing/Navbar'
 import { getPublicLinkOptions, type MenuItem } from '@/config/navigation'
 import { websiteConfig } from '@/config/website'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 import { getRouter } from '@/router'
+
+// 首页价格来自 Stripe 的价格目录（server function）。测试环境里 server function
+// 不可执行，loader 会降级为「价格暂不可用」——这里 mock 出目录，页面才显示真实价格。
+vi.mock('@/payment/pricing', () => ({
+  fetchPriceCatalog: vi.fn().mockResolvedValue({
+    jerbix_template: {
+      reference: 'jerbix_template',
+      priceId: 'p_template',
+      amount: 9900,
+      currency: 'usd',
+      mode: 'payment',
+      interval: null,
+      intervalCount: null,
+    },
+  }),
+}))
 
 // 站点配置是模块级单例，afterEach 用快照整体复原，避免用例相互污染。
 const originalConfig = structuredClone(websiteConfig)

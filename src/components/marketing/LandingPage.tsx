@@ -22,6 +22,7 @@ import { websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 import { startCheckout } from '@/payment/checkout-client'
+import { formatUsdAmount } from '@/payment/price-catalog'
 
 /** docs 开关启用时指向当前语言的文档入口，关闭时回退首页锚点。 */
 function docsCtaHref(): string {
@@ -259,15 +260,12 @@ function Workflow() {
   )
 }
 
-function templatePrice(): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(websiteConfig.template.priceUsd)
-}
-
-function TemplatePricing() {
+/**
+ * 模板买断价（分）；`null` 表示价格目录取不到。
+ *
+ * 金额由 Stripe 的价格目录给出（见 `fetchPriceCatalog`），代码里不存第二份。
+ */
+function TemplatePricing({ price }: { price: string | null }) {
   const id = useId()
   const { data: session, isPending } = useSession()
   const [pending, setPending] = useState(false)
@@ -332,8 +330,10 @@ function TemplatePricing() {
           </ul>
         </div>
         <div className="flex flex-col items-start justify-center md:pl-10">
-          <p className="text-5xl font-semibold tracking-tight">{templatePrice()}</p>
-          <p className="mt-3 text-sm text-muted-foreground">{m.home_pricing_once()}</p>
+          <p className="text-5xl font-semibold tracking-tight">{price ?? '—'}</p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {price ? m.home_pricing_once() : m.home_pricing_price_unavailable()}
+          </p>
           {enabled && !isPending && !session ? (
             <a
               href={loginUrl}
@@ -590,8 +590,10 @@ function CapabilityFeatures() {
   )
 }
 
-export function LandingPage() {
+export function LandingPage({ priceCents }: { priceCents: number | null }) {
   const [motionRunning, setMotionRunning] = useState(true)
+  // 价格事实源是 Stripe 的价格目录；取不到时降级为「价格暂不可用」，不编造金额。
+  const price = priceCents === null ? null : formatUsdAmount(priceCents)
   return (
     <div className="landing-lab" data-motion={motionRunning ? 'running' : 'paused'}>
       <section className="lab-hero !bg-none mx-auto grid max-w-6xl items-center gap-12 px-6 py-16 md:py-24 lg:grid-cols-[0.95fr_1.05fr]">
@@ -631,7 +633,7 @@ export function LandingPage() {
               href="#pricing"
               className={buttonVariants({ className: 'h-auto min-h-11 px-5 py-3' })}
             >
-              {m.home_hero_primary_cta({ price: templatePrice() })}
+              {price ? m.home_hero_primary_cta({ price }) : m.home_hero_primary_cta_unknown()}
             </a>
             <a
               href={docsCtaHref()}
@@ -654,7 +656,7 @@ export function LandingPage() {
       </section>
       <StackAndToolkit />
       <Workflow />
-      <TemplatePricing />
+      <TemplatePricing price={price} />
       <BrandStory />
       <section id="faq" className="scroll-mt-16">
         <Faq

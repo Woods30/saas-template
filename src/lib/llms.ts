@@ -1,5 +1,6 @@
 import type { LlmsConfig, LocalizedText } from '@/config/llms'
 import type { Locale } from '@/config/locale'
+import { formatUsdAmount } from '@/payment/price-catalog'
 
 /**
  * `llms.txt` / `llms-full.txt` 的渲染。
@@ -37,8 +38,8 @@ export interface LlmsRenderOptions {
   locale: Locale
   /** 站点根地址，不带尾斜杠。 */
   baseUrl: string
-  /** 模板买断价（美元）。 */
-  priceUsd: number
+  /** 模板买断价（分）；`null` 表示价格目录取不到。 */
+  priceCents: number | null
   siteName: string
   source: LlmsContentSource
 }
@@ -126,7 +127,7 @@ function sanitizePlaceholders(markdown: string): string {
 
 /** 渲染 llms.txt：站点索引 + 事实要点 + 文档链接清单。 */
 export function renderLlmsIndex(options: LlmsRenderOptions): string {
-  const { config, locale, baseUrl, priceUsd, siteName, source } = options
+  const { config, locale, baseUrl, priceCents, siteName, source } = options
   const t = (text: LocalizedText) => pick(text, locale)
   const lines: string[] = []
 
@@ -154,10 +155,11 @@ export function renderLlmsIndex(options: LlmsRenderOptions): string {
   lines.push('')
   const values = {
     name: siteName,
-    price: `$${priceUsd}`,
+    price: formatUsdAmount(priceCents),
     url: absoluteUrl(baseUrl, locale, '/pricing'),
   }
-  lines.push(`- ${fill(t(config.pricing.template), values)}`)
+  // 价格取不到时只写套餐与定价页链接，不编造金额。
+  if (priceCents !== null) lines.push(`- ${fill(t(config.pricing.template), values)}`)
   lines.push(`- ${fill(t(config.pricing.plans), values)}`)
   lines.push('')
   lines.push(`## ${t(config.sections.quickStart)}`)

@@ -4,7 +4,7 @@ import { isTemplatePriceValid, mergePricingProducts } from '@/payment/price-cata
 
 // 捕获价格选项丢失、按本地周期猜测计费方式，以及重复维护配置的问题。
 describe('扁平套餐目录', () => {
-  it('模板只允许与首页一致的 USD 99 一次性价格', () => {
+  it('模板只允许一次性美元价格，金额以 Stripe 目录为准', () => {
     const price = {
       priceId: 'p_template',
       reference: 'jerbix_template',
@@ -16,7 +16,8 @@ describe('扁平套餐目录', () => {
     } as const
     expect(isTemplatePriceValid(price)).toBe(true)
     expect(isTemplatePriceValid(undefined)).toBe(false)
-    expect(isTemplatePriceValid({ ...price, amount: 16900 })).toBe(false)
+    // 金额不再与配置里的第二份金额比对：目录里的金额就是事实源。
+    expect(isTemplatePriceValid({ ...price, amount: 16900 })).toBe(true)
     expect(isTemplatePriceValid({ ...price, currency: 'eur' })).toBe(false)
     expect(isTemplatePriceValid({ ...price, mode: 'subscription', interval: 'month' })).toBe(false)
     expect(getProducts().find((product) => product.id === 'template')?.prices).toEqual({
