@@ -1,9 +1,13 @@
 name: Deploy
 
-# 只有发布正式 Release 才部署；main 合并和预发布版本只运行 CI。
+# 两条入口，走同一套 Secrets 与部署步骤：
+# - 正式发布：Release（tag 必须与 package.json 版本一致）
+# - 日常部署：手动触发 `gh workflow run deploy.yml`，本地不需要任何 live 密钥
+# main 合并和预发布版本只运行 CI，不部署。
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 concurrency:
   group: deploy-production
@@ -15,7 +19,8 @@ permissions:
 
 jobs:
   verify-release:
-    if: github.event.release.prerelease == false
+    # 手动触发没有 release 可校验，跳过；deploy 会退回部署触发时的提交。
+    if: github.event_name == 'release' && github.event.release.prerelease == false
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.verify.outputs.sha }}
@@ -53,15 +58,32 @@ jobs:
 
   deploy:
     needs: verify-release
+    # needs 被跳过时下游默认不执行；用 always() + 结果判断放行手动触发。
+    if: always() && (needs.verify-release.result == 'success' || needs.verify-release.result == 'skipped')
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 20
     steps:
       # 部署经过校验的不可变 SHA，避免 tag 在校验后被移动。
+      # 手动触发时 verify-release 被跳过，退回触发时的提交。
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ needs.verify-release.outputs.sha }}
+          ref: ${{ needs.verify-release.outputs.sha || github.sha }}
           persist-credentials: false
+      # 手动触发同样要求该提交的 CI 已通过——生产部署不因入口不同而降低门槛。
+      - name: Verify CI (manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          gh run list --workflow ci.yml --branch main --event push --commit "$SHA" --limit 1 \
+            --json status,conclusion | jq -e 'length == 1 and .[0].status == "completed" and .[0].conclusion == "success"' || {
+            echo "::error::该提交的 CI 尚未成功；待 CI 通过后再触发部署"
+            exit 1
+          }
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
