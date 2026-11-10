@@ -61,6 +61,27 @@
   `messages.site_name`（`__root.tsx` 的标题）。二者必须成对替换，否则 `<title>` 与 OG
   站点名不一致。
 
+### 核销型支付
+
+- **核销型支付（collection-code settlement）**：没有托管 Checkout 与 webhook 的收款
+  形态。用户按订单指定金额向收款账户付款；管理员核实到账后，系统才确认付款事实。
+  _避免使用_：「第三方 payment provider」「自动支付」。
+- **订单（order）**：用户购买某个商品与 offer 的业务意图，包含应付金额、状态与有效期；
+  与 `payments` 的资金事实分离。待支付或待核验订单不代表钱已到账。
+  _避免使用_：「待支付 payment」「Checkout reservation」。
+- **金额指纹（amount fingerprint）**：在商品标价上加一个当前有效订单唯一的分位尾数，
+  用「金额 + 时间」缩小人工核验的候选范围；它是辅助匹配线索，不是到账证明。
+  _避免使用_：「验证码」「自动对账」。
+- **收款账户（collection account）**：接收付款的渠道配置，由渠道、币种、收款码或地址与
+  核验方式组成；首期只支持支付宝个人收款码与 CNY。
+  _避免使用_：「支付 provider」「商户号」。
+- **核验（verification）**：独立于付款人申报的到账确认动作。首期由管理员对照收款流水
+  人工执行；用户上传的凭证只能辅助定位，不能作为到账依据。
+  _避免使用_：「用户确认支付成功」「回调」。
+- **结算（settlement）**：核验通过后，把订单转换为不可重复的付款事实，并更新订单状态；
+  不包含源码、下载链接或邮件等履约行为。
+  _避免使用_：「交付」「订单提交」。
+
 ## 关键不变量
 
 - **env 两层模型**：业务代码**不得**直接读 `process.env` / `import.meta.env`，一律经
@@ -79,6 +100,11 @@
 - **生成物禁改**：`src/routeTree.gen.ts`、`src/locale/paraglide/**`、
   `.content-collections/generated/**` 均不得手工编辑。
 - **Workers 运行时**：非 Node.js，含 native binding 的包不可用（见 `docs/adr/0001`）。
+- **订单与付款分离**：`collection_orders` 记录购买意图；`payments` 只记录已核验的资金
+  事实。用户的「我已支付」申报与付款截图均不得直接生成 `payments` 行或授予权益。
+- **金额指纹唯一**：同一收款账户下处于待支付、待核验或结算中的订单，应付金额必须
+  全局唯一；每个标价最多尝试 1–99 共 99 个尾数。订单有效期为 15 分钟，过期才释放尾数。
+  过期后到账或实付金额不符都进入人工异常处理，不自动匹配。
 
 ## 当前范围与状态
 
@@ -87,7 +113,9 @@
   部署（D：E2E / CI / CSP）、品牌化与 Landing 单页、网站源码配置与公共菜单（模块开关、
   菜单契约、服务状态、配置文档）、工作台（`/{locale}/dashboard/*`：资料 / 安全 / 登录设备 /
   通知偏好 / API 密钥 / 用户管理，含 `fetchSession` 守卫）与表单统一（TanStack Form +
-  Zod + shadcn `Field`）。
+  Zod + shadcn `Field`）、核销型支付模块（支付宝个人收款码 + 金额指纹 + 人工核验，
+  见 `docs/adr/0006`、`docs/adr/0007` 与
+  `docs/superpowers/specs/2026-11-05-qrcode-collection-design.md`）。
 - **尚未实现**：文件上传、AI 网关、PWA。`websiteConfig.features` 中对应的开关是能力边界
   标记，不注册路由。
 - **两仓关系（2026-11-02 定）**：本仓是**模板工程**（`Woods30/saas-template`，含 init
@@ -105,6 +133,8 @@
 - `docs/adr/0003-product-config-and-exclusivity.md` —— 套餐配置与账号级订阅。
 - `docs/adr/0004-template-and-official-site-split.md` —— 模板工程与官网工程分仓。
 - `docs/adr/0005-init-replacement-table.md` —— init 用声明式替换表而非占位符 token。
+- `docs/adr/0006-collection-code-settlement.md` —— 个人收款码走订单 + 金额指纹 + 人工核验。
+- `docs/adr/0007-optional-module-not-plugin-system.md` —— 实现为可选业务模块，不建插件机制。
 
 ## 面向 AI 代理的指导
 
@@ -116,7 +146,10 @@
 
 ## 支付模型
 
-- 套餐只在 `src/config/products.ts` 声明一次，prices 映射本站选项到当前 provider 销售引用。
-- 站点按部署选择一个 provider（内置 Stripe 与 Creem）；金额和真实周期来自外部价格目录。
+- 套餐只在 `src/config/products.ts` 声明一次。provider 托管支付的 prices 映射本站选项到
+  当前 provider 销售引用；核销型支付的标价与周期也在同一声明中，不能另存第二份金额。
+- provider 托管支付按部署选择一个 provider（内置 Stripe 与 Creem），金额和真实周期来自
+  外部价格目录；核销型支付是并列的可选模块，不实现 `PaymentProvider`。
 - 账号全局最多一份未终止订阅，一次性商品独立购买，不存在等级互斥或买断接管。
-- 订阅管理交给托管 Portal；Webhook 由适配器转换，通用 events.ts 落库。
+- provider 订阅管理交给托管 Portal，Webhook 由适配器转换；核销型订阅不自动扣款，用户
+  主动续费。两条链路最终都交给通用 `events.ts` 落库。

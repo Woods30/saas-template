@@ -54,6 +54,12 @@ export interface ProviderSubscription {
   customerId: string | null
   priceId: string
   reference: string | null
+  /**
+   * 直接归属：没有销售引用的链路（如核销型支付）用它携带商品与付费方式。
+   * 有值时优先于 `reference` 反查。
+   */
+  productId?: string | null
+  offerId?: string | null
   amount: number | null
   currency: string | null
   interval: string | null

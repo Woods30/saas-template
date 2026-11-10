@@ -104,6 +104,10 @@ scripts/             构建与校验脚本
     （`src/payment/price-catalog.server.ts`）。首页展示、`llms.txt` 与结账收款读**同一份**
     目录；代码与配置里**不得**再存第二份金额——两份金额必然漂移，漂移后结账会被判为
     价格不可用。改价只需在渠道后台（Stripe / Creem）操作。
+    **唯一例外**：核销型支付（collection）不接支付渠道，没有渠道价格目录可读，它的金额
+    事实源是商品配置里的 `collectionPrices`（`src/config/products.ts`）。这是**例外而
+    不是第二份金额**：核销链路的标价只有这一处，见
+    `docs/adr/0006-collection-code-settlement.md` 第 8 条。
 
 ## 工作方式
 

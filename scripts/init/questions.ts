@@ -34,6 +34,21 @@ export async function askConfig(defaults: InitConfig): Promise<InitConfig> {
 
   const modules = await askModules()
 
+  // 收款码链路要的是使用者自己的支付宝收款码与人民币标价，脚本无从代填，
+  // 也不该编造金额。只提示去哪里改，不生成占位收款码或假金额。
+  if (modules.includes('collection')) {
+    console.log(
+      [
+        '',
+        '已启用收款码（collection）模块，请手工补齐两处配置：',
+        '  1. src/config/products.ts —— 给要收款的付费方式加 collectionPrices（金额单位：分）',
+        '  2. src/config/website.ts —— 在 collection.accounts 里填你的收款码地址与显示名',
+        '未配置时服务状态会显示 incomplete，页面与接口不会放行。',
+        '',
+      ].join('\n'),
+    )
+  }
+
   return resolveConfig({ name, slug, domain, email, modules }, process.cwd())
 }
 

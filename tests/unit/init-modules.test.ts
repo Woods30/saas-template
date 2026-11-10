@@ -3,6 +3,7 @@ import {
   buildPlan,
   type InitConfig,
   MODULE_NAMES,
+  setCheckoutMode,
   setFeatureEnabled,
   setModuleEnabled,
 } from '../../scripts/init/plan'
@@ -37,6 +38,9 @@ const WEBSITE = `export function createWebsiteConfig(env: PublicEnv): WebsiteCon
     },
     notification: { enabled: false, provider: 'discord' },
     analytics: { enabled: true, providers: ['ga'] },
+    // 收款码链路：结账模式与模块开关成对出现，init 两个都要改写。
+    checkout: { mode: 'provider' },
+    collection: { enabled: false, verificationSlaHours: 24, accounts: [] },
     // auth 默认开启：模板自带登录 / 注册，关闭时对应页面与 API 一律 404。
     auth: { enabled: true, requireEmailVerification: true },
     social: {},
@@ -94,6 +98,20 @@ describe('setModuleEnabled', () => {
   })
 })
 
+describe('setCheckoutMode', () => {
+  it('切换结账模式', () => {
+    expect(setCheckoutMode(WEBSITE, 'collection')).toContain("checkout: { mode: 'collection' }")
+  })
+
+  it('切回托管支付', () => {
+    expect(setCheckoutMode(WEBSITE, 'provider')).toContain("checkout: { mode: 'provider' }")
+  })
+
+  it('找不到结账模式时报错', () => {
+    expect(() => setCheckoutMode('const a = 1', 'collection')).toThrow(/结账模式/)
+  })
+})
+
 describe('setFeatureEnabled', () => {
   it('关闭能力开关', () => {
     const result = setFeatureEnabled(WEBSITE, 'enableApiKeys', false)
@@ -119,6 +137,19 @@ describe('buildPlan 的模块默认值', () => {
     expect(enabledOf(withDocs ?? '', 'docs')).toBe(true)
     expect(enabledOf(withDocs ?? '', 'blog')).toBe(true)
     expect(enabledOf(withDocs ?? '', 'payment')).toBe(false)
+  })
+
+  it('启用收款码模块时把结账模式切到 collection', () => {
+    const withCollection = buildPlan({ ...CONFIG, modules: ['collection'] })
+      .files.find((entry) => entry.path === 'src/config/website.ts')
+      ?.transform(WEBSITE)
+
+    expect(enabledOf(withCollection ?? '', 'collection')).toBe(true)
+    expect(withCollection).toContain("checkout: { mode: 'collection' }")
+  })
+
+  it('不启用收款码模块时结账模式仍是 provider', () => {
+    expect(result).toContain("checkout: { mode: 'provider' }")
   })
 
   it('关闭能力开关（api keys / admin）', () => {

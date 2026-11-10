@@ -40,6 +40,9 @@ export async function applyPaymentEvent(
       const userId = previous?.userId ?? sub.userId
       if (!userId) throw new Error('Subscription owner missing')
       const offer = sub.reference ? findOfferByReference(sub.reference) : undefined
+      // 直接归属优先：核销型支付没有销售引用，只能靠事件自带商品与付费方式。
+      const productId = sub.productId ?? offer?.productId ?? null
+      const offerId = sub.offerId ?? offer?.offerId ?? null
       const values = {
         userId,
         provider: event.provider,
@@ -47,8 +50,8 @@ export async function applyPaymentEvent(
         customerId: sub.customerId,
         status: sub.status,
         priceId: sub.priceId,
-        productId: offer?.productId ?? null,
-        offerId: offer?.offerId ?? null,
+        productId,
+        offerId,
         amount: sub.amount,
         currency: sub.currency,
         interval: sub.interval,

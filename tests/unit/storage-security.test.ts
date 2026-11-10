@@ -112,6 +112,35 @@ describe('R2StorageProvider — 安全加固', () => {
       expect(calledKey).not.toContain(' ')
       expect(calledKey).toMatch(/^uploads\/user1\/\d+-file_with_spaces\.png$/)
     })
+
+    it('folder 为 collection-qrcodes（核销收款码，白名单内）→ 正常工作', async () => {
+      const bucket = createMockBucket()
+      const provider = new R2StorageProvider(bucket)
+      const file = new ArrayBuffer(8)
+
+      await provider.uploadFile(file, 'acct-main.png', 'image/png', {
+        folder: 'collection-qrcodes',
+        visibility: 'private',
+      })
+
+      const calledKey = bucket.put.mock.calls[0][0] as string
+      expect(calledKey).toMatch(/^collection-qrcodes\/\d+-acct-main\.png$/)
+    })
+
+    it('folder 为 collection-receipts（核销付款凭证，白名单内）→ 正常工作', async () => {
+      const bucket = createMockBucket()
+      const provider = new R2StorageProvider(bucket)
+      const file = new ArrayBuffer(8)
+
+      await provider.uploadFile(file, 'order-1.png', 'image/png', {
+        folder: 'collection-receipts',
+        userId: 'user1',
+        visibility: 'private',
+      })
+
+      const calledKey = bucket.put.mock.calls[0][0] as string
+      expect(calledKey).toMatch(/^collection-receipts\/user1\/\d+-order-1\.png$/)
+    })
   })
 
   describe('Finding 2: listUserFiles userId 路径遍历校验', () => {

@@ -13,8 +13,11 @@ import {
   IconPlugConnected,
   IconShieldLock,
 } from '@tabler/icons-react'
+import { useNavigate } from '@tanstack/react-router'
 import { createElement, useId, useState } from 'react'
 import { useSession } from '@/auth/client'
+import { collectionOrderErrorMessage, createCollectionOrder } from '@/collection/client'
+import { formatMoneyAmount } from '@/collection/pricing'
 import { SourceProductDemo } from '@/components/marketing/SourceProductDemo'
 import { Cta, Faq, Features } from '@/components/sections'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -266,9 +269,11 @@ function Workflow() {
 }
 
 /**
- * 模板买断价（分）；`null` 表示价格目录取不到。
+ * 模板买断价。
  *
- * 金额由 Stripe 的价格目录给出（见 `fetchPriceCatalog`），代码里不存第二份。
+ * `price` 已由外层按结账模式格式化：`provider` 模式来自渠道价格目录
+ * （见 `fetchPriceCatalog`），`collection` 模式来自 `collectionPrices`（分），
+ * 经 `formatMoneyAmount()` 按币种格式化，不硬编码美元。
  */
 function TemplatePricing({ price }: { price: string | null }) {
   const id = useId()
@@ -276,13 +281,40 @@ function TemplatePricing({ price }: { price: string | null }) {
   const [pending, setPending] = useState(false)
   const [notice, setNotice] = useState('')
   const locale = getLocale()
+  const navigate = useNavigate()
   const loginUrl = `/${locale}/auth/login?redirect=${encodeURIComponent(`/${locale}/#pricing`)}`
-  const enabled = websiteConfig.auth.enabled && websiteConfig.payment.enabled
+  const collectionMode = websiteConfig.checkout.mode === 'collection'
+  const enabled = websiteConfig.auth.enabled && (collectionMode || websiteConfig.payment.enabled)
 
   async function buy() {
     if (pending) return
     setPending(true)
     setNotice('')
+    // 两条链路互斥：collection 模式创建核销订单并站内导航，不调 provider 结账。
+    if (collectionMode) {
+      const result = await createCollectionOrder({
+        productId: websiteConfig.landingOffer.productId,
+        offerId: websiteConfig.landingOffer.offerId,
+      })
+      if (result.kind === 'redirect') {
+        await navigate({
+          to: '/{-$locale}/dashboard/orders/$orderId',
+          params: { locale, orderId: result.orderId },
+        })
+        return
+      }
+      if (result.kind === 'unauthenticated') {
+        window.location.assign(loginUrl)
+        return
+      }
+      setPending(false)
+      setNotice(
+        result.kind === 'not-configured'
+          ? m.payment_checkout_not_configured()
+          : collectionOrderErrorMessage(result.code),
+      )
+      return
+    }
     const result = await startCheckout({
       productId: websiteConfig.landingOffer.productId,
       offerId: websiteConfig.landingOffer.offerId,
@@ -597,10 +629,24 @@ function CapabilityFeatures() {
   )
 }
 
-export function LandingPage({ priceCents }: { priceCents: number | null }) {
+export function LandingPage({
+  priceCents,
+  collectionPrice = null,
+}: {
+  priceCents: number | null
+  collectionPrice?: { amount: number; currency: string } | null
+}) {
   const [motionRunning, setMotionRunning] = useState(true)
-  // 价格事实源是 Stripe 的价格目录；取不到时降级为「价格暂不可用」，不编造金额。
-  const price = priceCents === null ? null : formatUsdAmount(priceCents)
+  // collection 模式的价格事实源是 collectionPrices；provider 模式是渠道价格目录。
+  // 都取不到时降级为「价格暂不可用」，不编造金额。
+  const collectionMode = websiteConfig.checkout.mode === 'collection'
+  const price = collectionMode
+    ? collectionPrice
+      ? formatMoneyAmount(collectionPrice.amount, collectionPrice.currency, getLocale())
+      : null
+    : priceCents === null
+      ? null
+      : formatUsdAmount(priceCents)
   return (
     <div className="landing-lab" data-motion={motionRunning ? 'running' : 'paused'}>
       <section className="lab-hero !bg-none mx-auto grid max-w-6xl items-center gap-12 px-6 py-16 md:py-24 lg:grid-cols-[0.95fr_1.05fr]">

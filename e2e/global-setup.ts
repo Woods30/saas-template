@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -45,6 +46,25 @@ async function startTestServer() {
     MAIL_FROM: 'e2e@example.invalid',
     BETTER_AUTH_URL: base.origin,
     VITE_BASE_URL: base.origin,
+    /**
+     * 核销链路（collection.spec）需要的结账环境：模块白名单 + 结账模式 +
+     * 源码兜底收款账户（出厂 `accounts: []`，账户清单只能来自源码或 env）。
+     *
+     * 二维码是站内静态占位图——测试断言 `<img>` 存在与地址，不扫内容；
+     * 真实收款码永远不进仓库。`VITE_MODULES` 是白名单语义：列出 E2E 其余
+     * spec 依赖的全部模块，否则它们会被白名单关掉。
+     */
+    VITE_MODULES: 'docs,blog,changelog,mail,payment,analytics,auth,collection',
+    VITE_CHECKOUT_MODE: 'collection',
+    VITE_COLLECTION_ACCOUNTS: JSON.stringify([
+      {
+        id: 'alipay-e2e',
+        channel: 'alipay',
+        displayName: 'E2E 收款账户',
+        currency: 'cny',
+        qrImageUrl: '/app-icon-512.png',
+      },
+    ]),
   })
   const sdkPath = fileURLToPath(import.meta.resolve('resend'))
   const transportModule = '\0e2e:resend-transport'
@@ -151,6 +171,20 @@ export default async function globalSetup() {
   if (!['localhost', '127.0.0.1'].includes(new URL(base).hostname)) {
     throw new Error('E2E fixture 仅允许本地 server')
   }
+
+  // 核销订单占尾数池（每账户活跃金额唯一），上次运行残留的活跃订单会让本轮
+  // 下单撞 AMOUNT_POOL_EXHAUSTED。本地重复运行必须幂等；CI 每次全新库，删除
+  // 是无害空操作。只动本地 D1，且只清 E2E 造的核销订单行。
+  try {
+    execFileSync(
+      'wrangler',
+      ['d1', 'execute', 'DB', '--local', '--command', 'DELETE FROM collection_orders'],
+      { stdio: 'pipe' },
+    )
+  } catch {
+    // 表不存在（未跑迁移）等情形不算致命，后续用例会给出真正的原因。
+  }
+
   const ctx = await request.newContext({ baseURL: base })
   let ready = false
   for (let i = 0; i < 90; i++) {

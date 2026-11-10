@@ -232,3 +232,76 @@ export const webhookEvents = sqliteTable(
     sourceTypeIdx: index('webhook_events_source_type_idx').on(table.source, table.type),
   }),
 )
+
+/**
+ * 核销型支付的收款账户：只存运营对源码配置的覆盖，不复制源码默认值。
+ * 没有这一行时，账户解析回退到 `websiteConfig.collection.accounts`。
+ */
+export const collectionAccounts = sqliteTable('collection_accounts', {
+  id: text('id').primaryKey(),
+  channel: text('channel').notNull(),
+  displayName: text('display_name').notNull(),
+  currency: text('currency').notNull(),
+  qrImageKey: text('qr_image_key'),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  updatedBy: text('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+})
+
+/**
+ * 核销型支付的购买意图与核验状态：只表达「先有意图、后由人确认」，
+ * 已核验的资金事实仍只写 `payments` / `subscriptions`。
+ */
+export const collectionOrders = sqliteTable(
+  'collection_orders',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // 收款账户快照 ID，不设外键：账户可能只存在于源码配置里。
+    accountId: text('account_id').notNull(),
+    channel: text('channel').notNull(),
+    qrImageUrl: text('qr_image_url'),
+    qrImageKey: text('qr_image_key'),
+    productId: text('product_id').notNull(),
+    offerId: text('offer_id').notNull(),
+    kind: text('kind').notNull(),
+    interval: text('interval'),
+    intervalCount: integer('interval_count'),
+    baseAmount: integer('base_amount').notNull(),
+    fingerprint: integer('fingerprint').notNull(),
+    payableAmount: integer('payable_amount').notNull(),
+    currency: text('currency').notNull(),
+    status: text('status').notNull(),
+    payerNote: text('payer_note'),
+    receiptKey: text('receipt_key'),
+    submittedAt: integer('submitted_at', { mode: 'timestamp' }),
+    observedAmount: integer('observed_amount'),
+    externalReference: text('external_reference'),
+    reviewNote: text('review_note'),
+    reviewedBy: text('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+    reviewedAt: integer('reviewed_at', { mode: 'timestamp' }),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+    settledAt: integer('settled_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    userStatusIdx: index('collection_orders_user_status_idx').on(table.userId, table.status),
+    statusExpiresIdx: index('collection_orders_status_expires_idx').on(
+      table.status,
+      table.expiresAt,
+    ),
+    // 金额唯一性按收款账户而非「商品 + offer」约束：两个商品价格区间重叠时，
+    // 仍可能出现同一收款码、同一时段、同一实付金额，人工无法区分。
+    activeAmountUnique: uniqueIndex('collection_orders_active_amount_unique')
+      .on(table.accountId, table.payableAmount)
+      .where(sql`status IN ('pending_payment','pending_verification','settling')`),
+    // 同一账号只允许一个结算临界区。
+    settlingUserUnique: uniqueIndex('collection_orders_settling_user_unique')
+      .on(table.userId)
+      .where(sql`status = 'settling'`),
+  }),
+)

@@ -64,6 +64,13 @@
       "when": 1793184143667,
       "tag": "0008_payment_simplification",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794127471903,
+      "tag": "0009_pale_pandemic",
+      "breakpoints": true
     }
   ]
 }

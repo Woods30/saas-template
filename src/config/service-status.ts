@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { resolveCollectionPrice } from '@/collection/pricing'
 import type { PublicEnv } from '@/env/public'
 import type { ServerEnv } from '@/env/server'
 import { productConfigErrors, resolvePriceReference } from './products'
@@ -174,6 +175,72 @@ export function getServiceStatuses(input: {
     // 重复产品 ID 或价格引用会让价格归属判定出错，
     // 属于「配置矛盾」：字段都在，但组合起来是错的。
     validateProductConfig(),
+  )
+
+  // 核销型支付与 provider 托管支付互不依赖，各自独立判定。
+  // 完整性只看三件事：目标商品有没有本地标价、有没有可用收款账户、
+  // 以及结账模式与模块开关是否一致（二维码存不存对象存储不影响完整性）。
+  const collectionAccounts = config.collection.accounts
+  const collectionAccountIds = new Set<string>()
+  const collectionAccountDuplicates: ConfigIssue[] = []
+  for (const account of collectionAccounts) {
+    if (collectionAccountIds.has(account.id)) {
+      collectionAccountDuplicates.push({
+        key: 'collection.accounts',
+        location: 'src/config/website.ts',
+        conflict: true,
+        reason: `收款账户 ID ${account.id} 重复，账户解析会取到不确定的那一个`,
+      })
+    }
+    collectionAccountIds.add(account.id)
+  }
+  const collectionQrIssues: ConfigIssue[] = collectionAccounts
+    .filter(
+      (account) =>
+        !isRootOrProtocolRelativePath(account.qrImageUrl) && !isSafeHttpsUrl(account.qrImageUrl),
+    )
+    .map((account) => ({
+      key: 'collection.accounts',
+      location: 'src/config/website.ts',
+      conflict: true,
+      reason: `收款账户 ${account.id} 的收款码地址必须是站内根路径或无凭据的 HTTPS 地址`,
+    }))
+
+  check(
+    'collection',
+    [
+      [
+        'collection.products',
+        resolveCollectionPrice(config.landingOffer.productId, config.landingOffer.offerId) !==
+          undefined,
+        'src/config/products.ts',
+        '首页要卖的商品没有核销型本地标价（收款码链路收不了单）',
+      ],
+      [
+        'collection.accounts',
+        collectionAccounts.length > 0,
+        'src/config/website.ts',
+        '没有可用的收款账户，用户付款后无处可付',
+      ],
+    ],
+    [],
+    [
+      ...collectionAccountDuplicates,
+      ...collectionQrIssues,
+      // 结账模式选了核销型但模块没开（或反过来）：配置互相矛盾，
+      // 用户要么看不到购买入口，要么点了进不去。
+      ...(config.checkout.mode === 'collection' && !config.collection.enabled
+        ? [
+            {
+              key: 'checkout.mode',
+              location: 'src/config/website.ts' as const,
+              conflict: true,
+              reason:
+                '结账模式是 collection 但核销型支付模块未启用；请启用该模块，或把结账模式改回 provider',
+            },
+          ]
+        : []),
+    ],
   )
 
   // 只校验当前选中 provider 对应的 webhook：配了 Discord 却选 feishu 仍是 incomplete。

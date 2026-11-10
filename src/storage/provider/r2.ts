@@ -1,8 +1,19 @@
 import type { R2Bucket } from '@cloudflare/workers-types'
 import type { FileInfo, UploadOptions, UploadResult } from '../types'
 
-/** 允许的 folder 前缀白名单 */
-const ALLOWED_FOLDER_PREFIXES = ['uploads', 'avatars', 'documents'] as const
+/**
+ * 允许的 folder 前缀白名单
+ *
+ * `collection-qrcodes` / `collection-receipts` 是核销型支付的两个专用目录：
+ * 收款码与付款凭证都以私有可见性存放，只能经授权端点读取。
+ */
+const ALLOWED_FOLDER_PREFIXES = [
+  'uploads',
+  'avatars',
+  'documents',
+  'collection-qrcodes',
+  'collection-receipts',
+] as const
 type AllowedFolder = (typeof ALLOWED_FOLDER_PREFIXES)[number]
 
 /**

@@ -4,6 +4,7 @@ import {
   IconCreditCard,
   IconDeviceLaptop,
   IconKey,
+  IconReceipt,
   IconShieldLock,
   IconUser,
   IconUsers,
@@ -22,6 +23,8 @@ export type SettingsSection =
   | 'notifications'
   | 'api-keys'
   | 'billing'
+  /** 核销型支付（collection）的用户订单列表。 */
+  | 'orders'
   | 'admin'
   /** 管理分组下的子页面：路径含两段，与其它板块的单段不同。 */
   | 'admin/revenue'
@@ -94,6 +97,18 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
         },
         {
           kind: 'link',
+          id: 'orders',
+          title: m['collection.nav_orders'](),
+          icon: IconReceipt,
+          // 核销型支付与 payment 是平级模块：模块关闭时入口消失，页面另有门禁。
+          visibility: { module: 'collection' },
+          destination: {
+            kind: 'internal',
+            options: linkOptions({ to: '/{-$locale}/dashboard/orders', params: { locale } }),
+          },
+        },
+        {
+          kind: 'link',
           id: 'api-keys',
           title: m.settings_nav_api_keys(),
           icon: IconKey,
@@ -133,6 +148,22 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
           destination: {
             kind: 'internal',
             options: linkOptions({ to: '/{-$locale}/dashboard/admin/revenue', params: { locale } }),
+          },
+        },
+        {
+          kind: 'link',
+          id: 'admin-orders',
+          title: m['collection_admin.nav_orders'](),
+          icon: IconReceipt,
+          // 三重约束：角色、功能开关、核销模块。页面与服务端接口各自再校验，
+          // 这里只控制入口是否显示。
+          visibility: { roles: ['admin'], feature: 'enableAdmin', module: 'collection' },
+          destination: {
+            kind: 'internal',
+            options: linkOptions({
+              to: '/{-$locale}/dashboard/admin/orders',
+              params: { locale },
+            }),
           },
         },
       ],
@@ -192,6 +223,12 @@ export function getSettingsSectionMeta(section: string):
         description: m.settings_billing_description(),
         icon: IconCreditCard,
       }
+    case 'orders':
+      return {
+        title: m['collection.order_list_title'](),
+        description: m['collection.order_list_description'](),
+        icon: IconReceipt,
+      }
     case 'admin':
       return {
         title: m.settings_admin_title(),
@@ -203,6 +240,12 @@ export function getSettingsSectionMeta(section: string):
         title: m.admin_revenue_title(),
         description: m.admin_revenue_description(),
         icon: IconChartBar,
+      }
+    case 'admin/orders':
+      return {
+        title: m['collection_admin.title_orders'](),
+        description: m['collection_admin.description_orders'](),
+        icon: IconReceipt,
       }
   }
 }

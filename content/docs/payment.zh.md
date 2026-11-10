@@ -4,10 +4,10 @@ description: 套餐声明、买家流程与账单页
 locale: zh
 order: 13
 group: payment
-updated: 2026-11-03
+updated: 2026-11-10
 ---
 
-套餐在 `src/config/products.ts` 声明一次，provider（Stripe 或 Creem）决定怎么收款。站内不存金额：展示价与扣款价都读 provider 的价格目录。
+套餐在 `src/config/products.ts` 声明一次，收款方式二选一：托管 provider（Stripe 或 Creem）托管整个付款流程，或收款码核销（个人二维码 + 人工核验）。两条链路互斥，由 `VITE_CHECKOUT_MODE` 切换，站内不存渠道价格：托管链路的金额读 provider 的价格目录，核销链路的金额在商品配置的 `collectionPrices`。
 
 ## 套餐配置
 
@@ -58,4 +58,4 @@ provider 由 `websiteConfig.payment.provider` 选，可用环境变量 `VITE_PAY
 
 「管理订阅」按钮把用户送到 provider 的自助 Portal（取消续费、换支付方式、发票都在那边）。客户 ID 由服务端按登录用户查，客户端不能指定别人的。
 
-接着读：[Stripe](./payment-stripe) 或 [Creem](./payment-creem)。
+接着读：[Stripe](./payment-stripe)、[Creem](./payment-creem) 或 [收款码核销](./payment-collection)。

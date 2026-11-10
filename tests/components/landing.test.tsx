@@ -6,7 +6,10 @@ import { websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale, setLocale } from '@/locale/paraglide/runtime.js'
 
+const routerMocks = vi.hoisted(() => ({ navigate: vi.fn() }))
 vi.mock('@tanstack/react-router', () => ({
+  // collection 模式的购买按钮创建订单后站内导航；provider 模式的用例不触达它。
+  useNavigate: () => routerMocks.navigate,
   Link: ({
     children,
     to,
@@ -26,6 +29,18 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }))
 
+const collectionMocks = vi.hoisted(() => ({ createOrder: vi.fn() }))
+vi.mock('@/collection/server', () => ({
+  createCollectionOrderFn: collectionMocks.createOrder,
+  submitCollectionOrderFn: vi.fn(),
+  cancelCollectionOrderFn: vi.fn(),
+  fetchCollectionOrderFn: vi.fn(),
+  fetchMyCollectionOrdersFn: vi.fn(),
+  fetchAdminCollectionOrdersFn: vi.fn(),
+  reviewCollectionOrderFn: vi.fn(),
+  fetchCollectionAccountsFn: vi.fn(),
+  saveCollectionAccountFn: vi.fn(),
+}))
 const auth = vi.hoisted(() => ({ session: null as { user: { id: string } } | null }))
 vi.mock('@/auth/client', () => ({ useSession: () => ({ data: auth.session, isPending: false }) }))
 
@@ -398,5 +413,61 @@ describe('LandingPage', () => {
     expect(summary.closest('details')).toHaveAttribute('open')
     expect(summary.closest('details')).toHaveTextContent('D1（SQLite）')
     expect(container).not.toHaveTextContent(/三天上线 MVP|100ms|用户怎么说/)
+  })
+})
+
+describe('LandingPage collection 分流', () => {
+  beforeEach(() => {
+    websiteConfig.checkout.mode = 'collection'
+    websiteConfig.collection.enabled = true
+    auth.session = { user: { id: 'user_1' } }
+    setLocale('zh', { reload: false })
+  })
+
+  afterEach(() => {
+    routerMocks.navigate.mockReset()
+    collectionMocks.createOrder.mockReset()
+  })
+
+  function pricing() {
+    return within(screen.getByRole('region', { name: '一次购买，持续创造。' }))
+  }
+
+  it('collection 模式按本地价格展示人民币金额，不显示美元', () => {
+    const { container } = render(
+      <LandingPage priceCents={9900} collectionPrice={{ amount: 18000, currency: 'cny' }} />,
+    )
+    expect(container.querySelector('#pricing')).toHaveTextContent('¥180.00')
+    expect(container.querySelector('#pricing')).not.toHaveTextContent('$99')
+  })
+
+  it('collection 模式 CTA 创建订单并站内导航，不调用 provider 结账', async () => {
+    collectionMocks.createOrder.mockResolvedValue({ id: 'ord_route_test' })
+    const request = vi.fn().mockResolvedValue(new Response('Unavailable', { status: 400 }))
+    vi.stubGlobal('fetch', request)
+    render(<LandingPage priceCents={9900} collectionPrice={{ amount: 18000, currency: 'cny' }} />)
+    fireEvent.click(pricing().getByRole('button', { name: '立即购买' }))
+    await waitFor(() =>
+      expect(collectionMocks.createOrder).toHaveBeenCalledWith({
+        data: { productId: websiteConfig.landingOffer.productId, offerId: 'once' },
+      }),
+    )
+    await waitFor(() =>
+      expect(routerMocks.navigate).toHaveBeenCalledWith({
+        to: '/{-$locale}/dashboard/orders/$orderId',
+        params: { locale: 'zh', orderId: 'ord_route_test' },
+      }),
+    )
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('collection 模式未登录先引导登录，不创建订单', () => {
+    auth.session = null
+    render(<LandingPage priceCents={9900} collectionPrice={{ amount: 18000, currency: 'cny' }} />)
+    expect(pricing().getByRole('link', { name: '立即购买' })).toHaveAttribute(
+      'href',
+      '/zh/auth/login?redirect=%2Fzh%2F%23pricing',
+    )
+    expect(collectionMocks.createOrder).not.toHaveBeenCalled()
   })
 })

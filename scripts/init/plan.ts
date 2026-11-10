@@ -27,6 +27,7 @@ export const MODULE_NAMES = [
   'contact',
   'newsletter',
   'payment',
+  'collection',
   'notification',
   'analytics',
   'auth',
@@ -121,6 +122,13 @@ export function buildPlan(config: InitConfig): InitPlan {
               (module) => (source: string) =>
                 setModuleEnabled(source, module, config.modules.includes(module)),
             ),
+            // 选了收款码链路就把结账模式切过去：两条链路互斥，模块开着却不切换
+            // 仍然是走托管支付，使用者会以为没生效。
+            (source: string) =>
+              setCheckoutMode(
+                source,
+                config.modules.includes('collection') ? 'collection' : 'provider',
+              ),
             ...FEATURE_NAMES.map(
               (feature) => (source: string) =>
                 setFeatureEnabled(source, feature, (config.features ?? []).includes(feature)),
@@ -192,6 +200,18 @@ export function setModuleEnabled(source: string, module: ModuleName, enabled: bo
   const pattern = new RegExp(`(\\b${module}: \\{[^}]*?enabled: )(true|false)`)
   if (!pattern.test(source)) throw new Error(`配置里找不到模块 ${module} 的 enabled 开关`)
   return source.replace(pattern, `$1${enabled}`)
+}
+
+/**
+ * 改写结账模式。
+ *
+ * 只认 `checkout: { mode: '...' }` 这一处配置值：类型声明里的 `mode` 也可能出现，
+ * 但它不带引号，不匹配。
+ */
+export function setCheckoutMode(source: string, mode: 'provider' | 'collection'): string {
+  const pattern = /(\bcheckout: \{[^}]*?mode: )'(provider|collection)'/
+  if (!pattern.test(source)) throw new Error('配置里找不到结账模式 checkout.mode')
+  return source.replace(pattern, `$1'${mode}'`)
 }
 
 /**

@@ -4,7 +4,7 @@ description: Public and server env vars
 locale: en
 order: 4
 group: config
-updated: 2026-11-03
+updated: 2026-11-10
 ---
 
 Environment variables come in two layers, each validated by its own Zod schema. Business code
@@ -27,6 +27,8 @@ anyone who opens the page can read it. A secret must never carry the `VITE_` pre
 |---|---|---|
 | `VITE_BASE_URL` | `http://localhost:3000` | Site root URL for canonical tags, OG, and the sitemap |
 | `VITE_PAYMENT_PROVIDER` | — | Payment channel: `stripe` or `creem`; empty keeps the configured default |
+| `VITE_CHECKOUT_MODE` | — | Checkout mode: `provider` (hosted) or `collection` (QR-code verification); the two are mutually exclusive |
+| `VITE_COLLECTION_ACCOUNTS` | — | JSON array of collection accounts, overriding the source fallback in `src/config/website.ts`; an invalid value is ignored entirely |
 | `VITE_MODULES` | — | Comma-separated module allowlist, overriding the module switches in config |
 | `VITE_FEATURES` | — | Comma-separated feature allowlist, overriding `features` in config |
 | `VITE_DOCS_AS_HOME` | — | `true` makes the root path open the docs home directly |

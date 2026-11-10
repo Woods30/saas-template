@@ -4,7 +4,7 @@ description: 两层 env 模型、变量清单与生产配置
 locale: zh
 order: 4
 group: config
-updated: 2026-11-03
+updated: 2026-11-10
 ---
 
 环境变量分两层，由两个 Zod schema 分别校验。业务代码**不得**直接读 `process.env` /
@@ -25,6 +25,8 @@ secret 绝不能带 `VITE_` 前缀：`pnpm check:client-bundle` 会扫描 `dist/
 |---|---|---|
 | `VITE_BASE_URL` | `http://localhost:3000` | 站点根地址，用于 canonical、OG 与 sitemap |
 | `VITE_PAYMENT_PROVIDER` | — | 支付渠道：`stripe` 或 `creem`；留空沿用配置里的默认值 |
+| `VITE_CHECKOUT_MODE` | — | 结账模式：`provider`（托管）或 `collection`（收款码核销）；两条链路互斥 |
+| `VITE_COLLECTION_ACCOUNTS` | — | 核销收款账户 JSON 数组，覆盖 `src/config/website.ts` 的源码兜底；非法值整体忽略 |
 | `VITE_MODULES` | — | 逗号分隔的模块白名单，覆盖配置里的模块开关 |
 | `VITE_FEATURES` | — | 逗号分隔的功能开关白名单，覆盖配置里的 `features` |
 | `VITE_DOCS_AS_HOME` | — | `true` 时根路径直接进文档首页 |

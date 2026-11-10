@@ -1,3 +1,4 @@
+import type { CollectionPrice } from '@/collection/types'
 import { m } from '@/locale/paraglide/messages.js'
 import type { PricingInterval, ProductDefinition } from '@/types/pricing'
 
@@ -40,6 +41,11 @@ export function getProducts(): ProductDefinition[] {
       // 价格引用：Stripe 下换成一次性价格的 lookup_key；Creem 下用 CREEM_PRODUCTS 映射。
       // 金额只存在于支付渠道，代码里不存第二份。
       prices: { once: 'one_time' },
+      // 核销型链路的本地价格：金额单位是分。这是收款码链路的唯一金额事实源，
+      // 与上面的渠道销售引用互不影响。
+      collectionPrices: {
+        once: { amount: 18_000, currency: 'cny', kind: 'one_time' },
+      },
     },
   ]
 }
@@ -79,6 +85,74 @@ export function productConfigErrors(products = getProducts()): string[] {
       if (!offer.trim() || !reference.trim()) errors.push(`emptyPrice.${product.id}.${offer}`)
       if (refs.has(reference)) errors.push(`duplicatePrice.${reference}`)
       refs.add(reference)
+    }
+  }
+  return errors
+}
+
+/**
+ * 核销型价格是否合法。
+ *
+ * 规则来自 spec：金额是正整数分、币种固定人民币、一次性价格不声明周期、
+ * 订阅价格声明周期与正的周期数。
+ */
+function isValidCollectionPrice(price: CollectionPrice): boolean {
+  if (!Number.isInteger(price.amount) || price.amount <= 0) return false
+  if (price.currency !== 'cny') return false
+  if (price.kind === 'one_time')
+    return price.interval === undefined && price.intervalCount === undefined
+  if (price.kind === 'subscription') {
+    return (
+      (price.interval === 'month' || price.interval === 'year') &&
+      Number.isInteger(price.intervalCount) &&
+      (price.intervalCount ?? 0) > 0
+    )
+  }
+  return false
+}
+
+/**
+ * 取某个商品某个付费方式在核销型链路下的本地价格。
+ *
+ * 金额只存在 `collectionPrices` 这一处，单位是分；非法配置返回 `undefined`，
+ * 不让坏金额流进下单链路。
+ */
+export function resolveCollectionPrice(
+  productId: string,
+  offerId: string,
+): CollectionPrice | undefined {
+  const prices = getProducts().find((product) => product.id === productId)?.collectionPrices
+  if (!prices || !Object.hasOwn(prices, offerId)) return undefined
+  const price = prices[offerId]
+  if (!price) return undefined
+  return isValidCollectionPrice(price) ? price : undefined
+}
+
+/**
+ * 校验核销型价格配置。
+ *
+ * 错误键格式与 `productConfigErrors` 一致：`前缀.商品.付费方式`，
+ * 例如 `invalidCollectionAmount.template.once`。
+ */
+export function collectionConfigErrors(products = getProducts()): string[] {
+  const errors: string[] = []
+  for (const product of products) {
+    for (const [offer, price] of Object.entries(product.collectionPrices ?? {})) {
+      const key = `${product.id}.${offer}`
+      if (!Number.isInteger(price.amount) || price.amount <= 0)
+        errors.push(`invalidCollectionAmount.${key}`)
+      if (price.currency !== 'cny') errors.push(`invalidCollectionCurrency.${key}`)
+      if (price.kind === 'one_time') {
+        if (price.interval !== undefined) errors.push(`invalidCollectionInterval.${key}`)
+        if (price.intervalCount !== undefined) errors.push(`invalidCollectionIntervalCount.${key}`)
+      } else if (price.kind === 'subscription') {
+        if (price.interval !== 'month' && price.interval !== 'year')
+          errors.push(`invalidCollectionInterval.${key}`)
+        if (!Number.isInteger(price.intervalCount) || (price.intervalCount ?? 0) <= 0)
+          errors.push(`invalidCollectionIntervalCount.${key}`)
+      } else {
+        errors.push(`invalidCollectionKind.${key}`)
+      }
     }
   }
   return errors

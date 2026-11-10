@@ -101,7 +101,7 @@ export function findUserIdByEmail(email: string, persistTo?: string): string | n
 }
 
 /** 单引号转义：SQL 字符串字面量里 `'` 写成两个。 */
-function escapeSql(value: string): string {
+export function escapeSql(value: string): string {
   return value.split("'").join("''")
 }
 

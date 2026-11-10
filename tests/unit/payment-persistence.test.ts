@@ -250,6 +250,76 @@ describe('支付持久化', () => {
     expect(sqlite.prepare('SELECT price_id FROM subscriptions').get()?.price_id).toBe('p_year')
     sqlite.close()
   })
+  it('订阅事件带直接归属字段时优先于销售引用反查', async () => {
+    const { db, sqlite } = database()
+    await applyPaymentEvent(db, {
+      id: 'direct_attribution',
+      provider: 'collection',
+      type: 'collection.settled',
+      created: 100,
+      subscription: {
+        ...subscription,
+        reference: null,
+        productId: 'direct-pro',
+        offerId: 'direct-offer',
+      },
+    })
+    expect(sqlite.prepare('SELECT product_id, offer_id FROM subscriptions').get()).toMatchObject({
+      product_id: 'direct-pro',
+      offer_id: 'direct-offer',
+    })
+    sqlite.close()
+  })
+  it('没有直接归属字段时仍按销售引用反查商品归属', async () => {
+    const { db, sqlite } = database()
+    await applyPaymentEvent(db, {
+      id: 'reference_attribution',
+      provider: 'stripe',
+      type: 'paid',
+      created: 100,
+      subscription,
+    })
+    expect(sqlite.prepare('SELECT product_id, offer_id FROM subscriptions').get()).toMatchObject({
+      product_id: 'pro',
+      offer_id: 'monthly',
+    })
+    sqlite.close()
+  })
+  it('付款记录继承关联订阅行的直接归属', async () => {
+    const { db, sqlite } = database()
+    await applyPaymentEvent(db, {
+      id: 'direct_payment',
+      provider: 'collection',
+      type: 'collection.settled',
+      created: 100,
+      subscription: {
+        ...subscription,
+        id: 'user:u1',
+        reference: null,
+        productId: 'direct-pro',
+        offerId: 'direct-offer',
+      },
+      payment: {
+        id: 'order-1',
+        invoiceId: null,
+        chargeId: null,
+        customerId: null,
+        userId: 'u1',
+        productId: 'pro',
+        offerId: 'monthly',
+        subscriptionId: 'user:u1',
+        type: 'subscription',
+        amount: 1000,
+        currency: 'cny',
+        status: 'paid',
+      },
+    })
+    expect(sqlite.prepare('SELECT product_id, offer_id FROM payments').get()).toMatchObject({
+      product_id: 'direct-pro',
+      offer_id: 'direct-offer',
+    })
+    sqlite.close()
+  })
   it('部分退款幂等保留原付款金额', async () => {
     const { db, sqlite } = database()
     await applyPaymentEvent(db, {

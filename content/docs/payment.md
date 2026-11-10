@@ -4,12 +4,14 @@ description: Plan declarations, the buyer flow, and the billing page
 locale: en
 order: 13
 group: payment
-updated: 2026-11-03
+updated: 2026-11-10
 ---
 
-Declare your plans once in `src/config/products.ts`; the provider (Stripe or Creem) decides how
-you get paid. The site stores no amounts — displayed prices and charged prices both come from
-the provider's price catalog.
+Declare your plans once in `src/config/products.ts`, then pick how you get paid: a hosted
+provider (Stripe or Creem) that runs the whole checkout, or QR-code verification (a personal
+QR code plus manual verification). The two paths are mutually exclusive and switched by
+`VITE_CHECKOUT_MODE`. The site stores no provider prices — hosted amounts come from the
+provider's price catalog, and verification amounts live in `collectionPrices` on the product.
 
 ## Plan configuration
 
@@ -78,4 +80,5 @@ The "Manage subscription" button sends the user to the provider's self-service p
 renewal, change payment method, invoices). The server resolves the customer ID from the
 signed-in user; the client cannot name another customer.
 
-Read next: [Stripe](./payment-stripe) or [Creem](./payment-creem).
+Read next: [Stripe](./payment-stripe), [Creem](./payment-creem), or
+[QR Code Verification](./payment-collection).

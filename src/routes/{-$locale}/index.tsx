@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
+import { resolveCollectionPrice } from '@/collection/pricing'
 import { LandingPage } from '@/components/marketing/LandingPage'
 import { MarketingLayout } from '@/components/marketing/MarketingLayout'
 import { websiteConfig } from '@/config/website'
@@ -9,6 +10,17 @@ import { getLocale } from '@/locale/paraglide/runtime.js'
 import { findCatalogAmount } from '@/payment/price-catalog'
 import { fetchPriceCatalog } from '@/payment/pricing'
 
+/**
+ * 首页展示价按结账模式分流：
+ *
+ * - `provider` 模式：金额来自所选渠道的价格目录（同一个缓存键，展示与结账不会
+ *   各说各话）；
+ * - `collection` 模式：核销链路不接渠道，金额的事实源是 `collectionPrices`（分），
+ *   经 `formatMoneyAmount()` 按币种格式化，不再硬编码美元。
+ *
+ * 取价失败只降级为「价格暂不可用」——价格是销售页的关键信息，但不该因为它
+ * 拿不到就让整页 500。
+ */
 export const Route = createFileRoute('/{-$locale}/')({
   beforeLoad: () => {
     // 文档站部署在独立域时，根路径直接进文档首页。
@@ -24,30 +36,35 @@ export const Route = createFileRoute('/{-$locale}/')({
       pageType: 'WebPage',
     }),
   loader: async () => {
-    // 展示价与结账收款读同一份价格目录（同一个缓存键），不会各说各话。
-    // 取价失败只降级为「价格暂不可用」——价格是销售页的关键信息，
-    // 但不该因为它拿不到就让整页 500。
+    const offer = {
+      productId: websiteConfig.landingOffer.productId,
+      offerId: websiteConfig.landingOffer.offerId,
+    }
+    if (websiteConfig.checkout.mode === 'collection') {
+      const price = resolveCollectionPrice(offer.productId, offer.offerId)
+      return {
+        priceCents: null,
+        collectionPrice: price ? { amount: price.amount, currency: price.currency } : null,
+      }
+    }
     try {
       const catalog = await fetchPriceCatalog()
       return {
-        priceCents: findCatalogAmount(
-          catalog,
-          websiteConfig.landingOffer.productId,
-          websiteConfig.landingOffer.offerId,
-        ),
+        priceCents: findCatalogAmount(catalog, offer.productId, offer.offerId),
+        collectionPrice: null,
       }
     } catch {
-      return { priceCents: null }
+      return { priceCents: null, collectionPrice: null }
     }
   },
   component: HomePage,
 })
 
 function HomePage() {
-  const { priceCents } = Route.useLoaderData()
+  const { priceCents, collectionPrice } = Route.useLoaderData()
   return (
     <MarketingLayout>
-      <LandingPage priceCents={priceCents} />
+      <LandingPage priceCents={priceCents} collectionPrice={collectionPrice} />
     </MarketingLayout>
   )
 }
