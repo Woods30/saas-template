@@ -17,7 +17,12 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { defaultSettings, type SettingsGroups } from '../src/core/config/settings'
-import { type DatabaseProvider, resolveDatabaseProvider } from '../src/core/db/provider'
+import {
+  type DatabaseProvider,
+  type Dialect,
+  dialectOf,
+  resolveDatabaseProvider,
+} from '../src/core/db/provider'
 
 /** 命令行覆盖项：把出厂值换成使用者的。 */
 export interface SeedOverrides {
@@ -82,16 +87,23 @@ function sqlString(value: string): string {
  *
  * 默认只补缺失的（`DO NOTHING`）：种子是「让站点能跑起来」，不是「把后台改过的
  * 配置冲掉」。要覆盖用 `--force`。
+ *
+ * 时间戳表达式随方言走：SQLite 系用 `strftime('%s','now')`（列是整数秒），
+ * PostgreSQL 用 `now()`（列是 timestamptz）。写成一边通用的写法会在另一边直接报错。
+ *
+ * `EXCLUDED` 只在 `DO UPDATE SET` 里合法，VALUES 里不能用——所以时间戳在两处
+ * 都直接写表达式。
  */
-export function buildSeedSql(settings: SettingsGroups, force: boolean): string {
+export function buildSeedSql(settings: SettingsGroups, force: boolean, dialect: Dialect): string {
+  const now = dialect === 'postgresql' ? 'now()' : "strftime('%s','now')"
   const conflict = force
-    ? 'ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at'
+    ? `ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = ${now}`
     : 'ON CONFLICT (key) DO NOTHING'
   const lines = Object.entries(settings).map(
     ([key, value]) =>
       `INSERT INTO settings (key, value, updated_at) VALUES (${sqlString(key)}, ${sqlString(
         JSON.stringify(value),
-      )}, ${force ? 'EXCLUDED.updated_at' : "strftime('%s','now')"}) ${conflict};`,
+      )}, ${now}) ${conflict};`,
   )
   return `${lines.join('\n')}\n`
 }
@@ -132,8 +144,17 @@ export async function run(argv: string[] = process.argv.slice(2)): Promise<numbe
   const target = argv.includes('--remote') ? 'remote' : argv.includes('--pg') ? 'pg' : 'local'
   const overrides = parseSeedOverrides(argv)
 
+  // provider 是 postgres 时只写 PG：`db:seed` 走的是 D1，SQL 方言对不上。
+  if (provider === 'postgres' && target !== 'pg') {
+    console.error('DATABASE_PROVIDER=postgres 时请用 pnpm db:seed:pg')
+    return 1
+  }
+
+  // 方言由写入目标决定：写到 PG 用 PG 方言，写到 D1 用 sqlite 方言。
+  const dialect: Dialect = target === 'pg' ? 'postgresql' : dialectOf(provider)
+
   const settings = applySeedOverrides(defaultSettings(), overrides)
-  const sql = buildSeedSql(settings, force)
+  const sql = buildSeedSql(settings, force, dialect)
   console.log(`写入种子数据（provider=${provider} 目标=${target}${force ? ' 覆盖' : ''}）`)
   const code = await applySeed(sql, provider, target)
   if (code === 0) console.log('✅ 种子数据写入完成')

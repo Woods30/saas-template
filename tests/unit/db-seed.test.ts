@@ -55,27 +55,44 @@ describe('覆盖落到配置上', () => {
 
 describe('种子 SQL', () => {
   it('默认只补缺失的，不覆盖后台改过的值', () => {
-    const sql = buildSeedSql(defaultSettings(), false)
+    const sql = buildSeedSql(defaultSettings(), false, 'sqlite')
     expect(sql).toContain('ON CONFLICT (key) DO NOTHING')
     expect(sql).not.toContain('DO UPDATE')
   })
 
   it('--force 时覆盖已存在的值', () => {
-    const sql = buildSeedSql(defaultSettings(), true)
+    const sql = buildSeedSql(defaultSettings(), true, 'sqlite')
     expect(sql).toContain('DO UPDATE SET value = EXCLUDED.value')
   })
 
+  it('EXCLUDED 只出现在 DO UPDATE 里，VALUES 里用不合法', () => {
+    const sql = buildSeedSql(defaultSettings(), true, 'sqlite')
+    const valuesPart = sql.slice(0, sql.indexOf('ON CONFLICT'))
+    expect(valuesPart).not.toContain('EXCLUDED')
+  })
+
   it('每个分组一条 INSERT', () => {
-    const sql = buildSeedSql(defaultSettings(), false)
+    const sql = buildSeedSql(defaultSettings(), false, 'sqlite')
     expect(sql.trim().split('\n')).toHaveLength(6)
     expect(sql).toContain("'brand'")
     expect(sql).toContain("'modules'")
   })
 
+  it('sqlite 方言用秒级时间戳', () => {
+    const sql = buildSeedSql(defaultSettings(), false, 'sqlite')
+    expect(sql).toContain("strftime('%s','now')")
+  })
+
+  it('postgres 方言用 now()，不能用 sqlite 的 strftime', () => {
+    const sql = buildSeedSql(defaultSettings(), false, 'postgresql')
+    expect(sql).toContain('now()')
+    expect(sql).not.toContain('strftime')
+  })
+
   it('单引号被转义，不会截断 SQL', () => {
     const settings = defaultSettings()
     settings.brand.name = "O'Brien"
-    const sql = buildSeedSql(settings, false)
+    const sql = buildSeedSql(settings, false, 'sqlite')
     // JSON 里的单引号在 SQL 字符串字面量中要写成两个
     expect(sql).toContain("O''Brien")
     expect(sql).not.toContain("'O'Brien'")
