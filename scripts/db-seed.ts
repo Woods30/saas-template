@@ -5,6 +5,8 @@
  * - `pnpm db:seed`         本地 D1
  * - `pnpm db:seed:remote`  远端 D1
  * - `pnpm db:seed:pg`      PostgreSQL（读 `DATABASE_URL`）
+ * - `--brand <名>`         把品牌名换成自己的（替代已废弃的 `pnpm run init --name`）
+ * - `--email <地址>`       把支持邮箱换成自己的
  * - `--force`              覆盖已有值（默认只补缺失的，不动后台改过的配置）
  *
  * 种子内容：站点配置的六组默认值。后续里程碑的 RBAC 权限点、分类等也在这里追加。
@@ -16,6 +18,59 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { defaultSettings, type SettingsGroups } from '../src/core/config/settings'
 import { type DatabaseProvider, resolveDatabaseProvider } from '../src/core/db/provider'
+
+/** 命令行覆盖项：把出厂值换成使用者的。 */
+export interface SeedOverrides {
+  brandName?: string
+  brandTagline?: string
+  supportEmail?: string
+}
+
+/**
+ * 解析覆盖项。
+ *
+ * 只认三个带值的参数，其余参数（`--local` / `--remote` / `--pg` / `--force`）
+ * 由调用方处理。
+ */
+export function parseSeedOverrides(argv: string[]): SeedOverrides {
+  const overrides: SeedOverrides = {}
+  const flags: Array<[string, keyof SeedOverrides]> = [
+    ['--brand', 'brandName'],
+    ['--tagline', 'brandTagline'],
+    ['--email', 'supportEmail'],
+  ]
+
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index]
+    if (arg === undefined) continue
+    const match = flags.find(([name]) => name === arg)
+    if (!match) continue
+    const value = argv[index + 1]
+    if (value === undefined) throw new Error(`${match[0]} 缺少取值`)
+    overrides[match[1]] = value
+    index++
+  }
+  return overrides
+}
+
+/** 把覆盖项落到配置上；未覆盖的字段保持出厂值。 */
+export function applySeedOverrides(
+  settings: SettingsGroups,
+  overrides: SeedOverrides,
+): SettingsGroups {
+  return {
+    ...settings,
+    brand: {
+      ...settings.brand,
+      ...(overrides.brandName !== undefined ? { name: overrides.brandName } : {}),
+      ...(overrides.brandTagline !== undefined ? { tagline: overrides.brandTagline } : {}),
+    },
+    mail: {
+      ...settings.mail,
+      ...(overrides.supportEmail !== undefined ? { supportEmail: overrides.supportEmail } : {}),
+    },
+  }
+}
 
 /** SQL 字符串字面量转义。 */
 function sqlString(value: string): string {
@@ -75,8 +130,10 @@ export async function run(argv: string[] = process.argv.slice(2)): Promise<numbe
   const provider = resolveDatabaseProvider(process.env.DATABASE_PROVIDER)
   const force = argv.includes('--force')
   const target = argv.includes('--remote') ? 'remote' : argv.includes('--pg') ? 'pg' : 'local'
+  const overrides = parseSeedOverrides(argv)
 
-  const sql = buildSeedSql(defaultSettings(), force)
+  const settings = applySeedOverrides(defaultSettings(), overrides)
+  const sql = buildSeedSql(settings, force)
   console.log(`写入种子数据（provider=${provider} 目标=${target}${force ? ' 覆盖' : ''}）`)
   const code = await applySeed(sql, provider, target)
   if (code === 0) console.log('✅ 种子数据写入完成')
