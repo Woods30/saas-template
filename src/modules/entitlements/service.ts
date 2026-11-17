@@ -13,7 +13,7 @@
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { type DB, schema } from '@/core/db'
 import { atomic } from '@/core/db/atomic'
-import { ACTIVE_SUBSCRIPTION_STATUSES } from '@/core/payment/plan-state'
+import { ACTIVE_SUBSCRIPTION_STATUSES } from '@/modules/subscriptions/service'
 import {
   type EntitlementCatalogItem,
   EntitlementNotFoundError,
