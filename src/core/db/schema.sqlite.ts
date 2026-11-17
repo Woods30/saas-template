@@ -253,3 +253,216 @@ export const settings = sqliteTable('settings', {
   value: text('value').notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 })
+
+// ---------------------------------------------------------------------------
+// 计费组：积分账本 / 用量 / 权益
+//
+// 表放在共享 schema 里（业务逻辑在 `src/modules/*`）：drizzle-kit 要能从**一个**
+// 入口拿到全部表才能生成迁移，模块各自带一份方言定义会让「双 schema 漂移」的
+// 面积翻倍。模块之间不互相读表，要跨模块取数据就走对方的 `service.ts`。
+// ---------------------------------------------------------------------------
+
+/** 积分余额：每个用户一行。余额只由账本事务改，别处不直接写。 */
+export const creditBalances = sqliteTable('credit_balances', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  balance: integer('balance').notNull().default(0),
+  totalGranted: integer('total_granted').notNull().default(0),
+  totalConsumed: integer('total_consumed').notNull().default(0),
+  totalRefunded: integer('total_refunded').notNull().default(0),
+  /**
+   * 最近一次改动余额的幂等键。
+   *
+   * 同一键重放时靠它挡住第二次扣减——它与 `credit_transactions.idempotency_key`
+   * 是两道闸：流水表挡住「任何一次重放」，这一列挡住「流水表写入前就崩了」的窗口。
+   */
+  lastTxKey: text('last_tx_key'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+})
+
+/**
+ * 积分批次：一次发放是一个桶。
+ *
+ * 消费按到期时间**先进先出**扣桶；桶到期后剩余量作废（`expire` 事务）。
+ * 没有批次就无法回答「这些积分什么时候过期」，也就没法按期退款。
+ */
+export const creditGrants = sqliteTable(
+  'credit_grants',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    amount: integer('amount').notNull(),
+    /** 还没被消费掉的余额。 */
+    remaining: integer('remaining').notNull(),
+    /** 发放来源：`purchase` / `admin` / `bonus` / `refund` / `adjust`。 */
+    source: text('source').notNull(),
+    /** 外部引用：订单号、支付流水号等。 */
+    reference: text('reference'),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    userIdx: index('credit_grants_user_idx').on(table.userId),
+    /** 消费顺序：先到期先扣，没有到期的排最后。 */
+    fifoIdx: index('credit_grants_fifo_idx').on(table.userId, table.expiresAt),
+  }),
+)
+
+/** 积分流水：只追加，账本的事实源。 */
+export const creditTransactions = sqliteTable(
+  'credit_transactions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** `grant` / `consume` / `refund` / `expire` / `adjust`。 */
+    type: text('type').notNull(),
+    /** 有符号：发放为正，消费为负，退款为正。 */
+    amount: integer('amount').notNull(),
+    balanceAfter: integer('balance_after').notNull(),
+    reference: text('reference'),
+    /** 幂等键：同一个键重复提交只生效一次。 */
+    idempotencyKey: text('idempotency_key').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    userIdx: index('credit_transactions_user_idx').on(table.userId, table.createdAt),
+    idempotencyUnique: uniqueIndex('credit_transactions_idempotency_unique').on(
+      table.idempotencyKey,
+    ),
+  }),
+)
+
+/** 消费与发放批次的对应关系：退款要按原批次退回。 */
+export const creditAllocations = sqliteTable(
+  'credit_allocations',
+  {
+    id: text('id').primaryKey(),
+    transactionId: text('transaction_id')
+      .notNull()
+      .references(() => creditTransactions.id, { onDelete: 'cascade' }),
+    grantId: text('grant_id')
+      .notNull()
+      .references(() => creditGrants.id, { onDelete: 'cascade' }),
+    amount: integer('amount').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    transactionIdx: index('credit_allocations_transaction_idx').on(table.transactionId),
+    grantIdx: index('credit_allocations_grant_idx').on(table.grantId),
+  }),
+)
+
+/** 用量流水：一次计量一行；积分消耗记在 `credits` 里。 */
+export const usageRecords = sqliteTable(
+  'usage_records',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** 计量项：`api_call` / `image` / `token`… */
+    metric: text('metric').notNull(),
+    quantity: integer('quantity').notNull(),
+    unit: text('unit').notNull().default('count'),
+    /** 本次消耗的积分，可为 0。 */
+    credits: integer('credits').notNull().default(0),
+    requestId: text('request_id'),
+    /** 幂等键：同一个键重复上报只记一次。 */
+    idempotencyKey: text('idempotency_key'),
+    /** 附加信息（JSON 文本）。 */
+    metadata: text('metadata'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    userIdx: index('usage_records_user_idx').on(table.userId, table.createdAt),
+    metricIdx: index('usage_records_metric_idx').on(table.metric),
+    idempotencyUnique: uniqueIndex('usage_records_idempotency_unique').on(table.idempotencyKey),
+  }),
+)
+
+/** 权益目录：产品能授予的功能与额度。 */
+export const entitlements = sqliteTable('entitlements', {
+  key: text('key').primaryKey(),
+  name: text('name').notNull(),
+  /** `boolean`（开关）/ `quota`（额度）。 */
+  type: text('type').notNull(),
+  /** quota 类型的默认额度；boolean 类型忽略。 */
+  defaultLimit: integer('default_limit'),
+  /** 额度周期：`none`（永久）/ `month` / `year`。 */
+  period: text('period').notNull().default('none'),
+  description: text('description'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+})
+
+/** 套餐：把一组权益打包，可由订阅或手动开通授予。 */
+export const plans = sqliteTable('plans', {
+  key: text('key').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  /** 关联代码里的商品（`src/config/products.ts` 的 productId / offerId）。 */
+  productId: text('product_id'),
+  offerId: text('offer_id'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+})
+
+/** 套餐包含哪些权益、给多少额度。 */
+export const planEntitlements = sqliteTable(
+  'plan_entitlements',
+  {
+    id: text('id').primaryKey(),
+    planKey: text('plan_key')
+      .notNull()
+      .references(() => plans.key, { onDelete: 'cascade' }),
+    entitlementKey: text('entitlement_key')
+      .notNull()
+      .references(() => entitlements.key, { onDelete: 'cascade' }),
+    /** 该套餐下的额度；null 表示沿用目录默认值。 */
+    limitValue: integer('limit_value'),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  },
+  (table) => ({
+    planUnique: uniqueIndex('plan_entitlements_plan_entitlement_unique').on(
+      table.planKey,
+      table.entitlementKey,
+    ),
+  }),
+)
+
+/** 用户实际生效的权益：额度与已用量的记账。 */
+export const userEntitlements = sqliteTable(
+  'user_entitlements',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    entitlementKey: text('entitlement_key')
+      .notNull()
+      .references(() => entitlements.key, { onDelete: 'cascade' }),
+    /** null 表示沿用目录 / 套餐的额度。 */
+    limitValue: integer('limit_value'),
+    used: integer('used').notNull().default(0),
+    periodStart: integer('period_start', { mode: 'timestamp' }),
+    periodEnd: integer('period_end', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    userUnique: uniqueIndex('user_entitlements_user_entitlement_unique').on(
+      table.userId,
+      table.entitlementKey,
+    ),
+  }),
+)

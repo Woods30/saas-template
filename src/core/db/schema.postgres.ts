@@ -269,3 +269,189 @@ export const settings = pgTable('settings', {
   value: text('value').notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 })
+
+// ---------------------------------------------------------------------------
+// 计费组：积分账本 / 用量 / 权益
+//
+// 与 SQLite 版逐表逐列对齐，由 `tests/unit/schema-parity.test.ts` 盯着漂移。
+// 表放在共享 schema 里（业务逻辑在 `src/modules/*`）：drizzle-kit 要能从**一个**
+// 入口拿到全部表才能生成迁移。
+// ---------------------------------------------------------------------------
+
+/** 积分余额：每个用户一行。余额只由账本事务改，别处不直接写。 */
+export const creditBalances = pgTable('credit_balances', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  balance: integer('balance').notNull().default(0),
+  totalGranted: integer('total_granted').notNull().default(0),
+  totalConsumed: integer('total_consumed').notNull().default(0),
+  totalRefunded: integer('total_refunded').notNull().default(0),
+  /** 最近一次改动余额的幂等键：与流水表的幂等键一起挡住重复扣减。 */
+  lastTxKey: text('last_tx_key'),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+})
+
+/** 积分批次：一次发放是一个桶；消费按到期时间先进先出扣桶。 */
+export const creditGrants = pgTable(
+  'credit_grants',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    amount: integer('amount').notNull(),
+    remaining: integer('remaining').notNull(),
+    source: text('source').notNull(),
+    reference: text('reference'),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index('credit_grants_user_idx').on(table.userId),
+    fifoIdx: index('credit_grants_fifo_idx').on(table.userId, table.expiresAt),
+  }),
+)
+
+/** 积分流水：只追加，账本的事实源。 */
+export const creditTransactions = pgTable(
+  'credit_transactions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    amount: integer('amount').notNull(),
+    balanceAfter: integer('balance_after').notNull(),
+    reference: text('reference'),
+    idempotencyKey: text('idempotency_key').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index('credit_transactions_user_idx').on(table.userId, table.createdAt),
+    idempotencyUnique: uniqueIndex('credit_transactions_idempotency_unique').on(
+      table.idempotencyKey,
+    ),
+  }),
+)
+
+/** 消费与发放批次的对应关系：退款要按原批次退回。 */
+export const creditAllocations = pgTable(
+  'credit_allocations',
+  {
+    id: text('id').primaryKey(),
+    transactionId: text('transaction_id')
+      .notNull()
+      .references(() => creditTransactions.id, { onDelete: 'cascade' }),
+    grantId: text('grant_id')
+      .notNull()
+      .references(() => creditGrants.id, { onDelete: 'cascade' }),
+    amount: integer('amount').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    transactionIdx: index('credit_allocations_transaction_idx').on(table.transactionId),
+    grantIdx: index('credit_allocations_grant_idx').on(table.grantId),
+  }),
+)
+
+/** 用量流水：一次计量一行；积分消耗记在 `credits` 里。 */
+export const usageRecords = pgTable(
+  'usage_records',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    metric: text('metric').notNull(),
+    quantity: integer('quantity').notNull(),
+    unit: text('unit').notNull().default('count'),
+    credits: integer('credits').notNull().default(0),
+    requestId: text('request_id'),
+    idempotencyKey: text('idempotency_key'),
+    metadata: text('metadata'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index('usage_records_user_idx').on(table.userId, table.createdAt),
+    metricIdx: index('usage_records_metric_idx').on(table.metric),
+    idempotencyUnique: uniqueIndex('usage_records_idempotency_unique').on(table.idempotencyKey),
+  }),
+)
+
+/** 权益目录：产品能授予的功能与额度。 */
+export const entitlements = pgTable('entitlements', {
+  key: text('key').primaryKey(),
+  name: text('name').notNull(),
+  type: text('type').notNull(),
+  defaultLimit: integer('default_limit'),
+  period: text('period').notNull().default('none'),
+  description: text('description'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+})
+
+/** 套餐：把一组权益打包，可由订阅或手动开通授予。 */
+export const plans = pgTable('plans', {
+  key: text('key').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  productId: text('product_id'),
+  offerId: text('offer_id'),
+  active: boolean('active').notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+})
+
+/** 套餐包含哪些权益、给多少额度。 */
+export const planEntitlements = pgTable(
+  'plan_entitlements',
+  {
+    id: text('id').primaryKey(),
+    planKey: text('plan_key')
+      .notNull()
+      .references(() => plans.key, { onDelete: 'cascade' }),
+    entitlementKey: text('entitlement_key')
+      .notNull()
+      .references(() => entitlements.key, { onDelete: 'cascade' }),
+    limitValue: integer('limit_value'),
+    enabled: boolean('enabled').notNull().default(true),
+  },
+  (table) => ({
+    planUnique: uniqueIndex('plan_entitlements_plan_entitlement_unique').on(
+      table.planKey,
+      table.entitlementKey,
+    ),
+  }),
+)
+
+/** 用户实际生效的权益：额度与已用量的记账。 */
+export const userEntitlements = pgTable(
+  'user_entitlements',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    entitlementKey: text('entitlement_key')
+      .notNull()
+      .references(() => entitlements.key, { onDelete: 'cascade' }),
+    limitValue: integer('limit_value'),
+    used: integer('used').notNull().default(0),
+    periodStart: timestamp('period_start', { withTimezone: true, mode: 'date' }),
+    periodEnd: timestamp('period_end', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userUnique: uniqueIndex('user_entitlements_user_entitlement_unique').on(
+      table.userId,
+      table.entitlementKey,
+    ),
+  }),
+)
