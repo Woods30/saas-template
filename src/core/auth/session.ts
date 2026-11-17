@@ -1,4 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
+import type { DB } from '@/core/db'
 
 /** 个人中心守卫所需的会话信息（只取页面要用的字段，不回传整个 session）。 */
 export interface SessionInfo {
@@ -73,6 +74,31 @@ export const fetchSession = createServerFn({ method: 'GET' }).handler(
     }
   },
 )
+
+/**
+ * 取当前请求的管理员身份与数据库连接。
+ *
+ * server function 是**可直接调用的 HTTP 端点**：菜单隐藏与路由 `beforeLoad`
+ * 都拦不住别人直接打这个端点，所以权限必须在服务端再校验一次。
+ *
+ * 非管理员一律 403，不回空数据——把「被拒绝」伪装成「没有记录」会让管理员
+ * 以为数据丢了。
+ *
+ * 动态 import：客户端导航时没有 ALS / env，本模块顶层不能引入服务端依赖。
+ */
+export async function requireAdminDb(): Promise<{ db: DB; adminId: string }> {
+  const [{ getServerContext }, { getAuth }, { getRequestHeaders }, { createDbFromEnv }] =
+    await Promise.all([
+      import('@/lib/server-context'),
+      import('@/core/auth/auth'),
+      import('@tanstack/react-start/server'),
+      import('@/core/db'),
+    ])
+  const env = getServerContext().env
+  const session = await getAuth(env).api.getSession({ headers: getRequestHeaders() })
+  if (session?.user.role !== 'admin') throw new Response(null, { status: 403 })
+  return { db: createDbFromEnv(env), adminId: session.user.id }
+}
 
 /**
  * 一次取回会话列表与当前 token。
