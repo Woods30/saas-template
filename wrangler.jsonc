@@ -14,7 +14,7 @@
   // 自定义域名：域名区域与本 Worker 同属一个 Cloudflare 账号，
   // Cloudflare 会在部署时自动创建 DNS 记录并签发证书。
   //
-  // 本仓自己的部署：模板的文档站。`pnpm run init` 会把它换成你的域名；
+  // 本仓自己的部署：模板的文档站。克隆后把它换成你的域名；
   // 不想要自定义域名时删掉这一行，Worker 只发布到
   // `<name>.<账号 workers.dev 子域>.workers.dev`。
   "routes": [{ "pattern": "docs.jerbix.site", "custom_domain": true }],

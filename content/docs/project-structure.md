@@ -24,7 +24,8 @@ This page is a map. When you cannot find something, look here first, then read t
 | `src/components/dashboard/` | Dashboard shell and user card |
 | `src/components/auth/` | Form pieces: field adapter, submit button, hydration hook |
 | `src/core/auth/` | Auth config, sessions, email verification |
-| `src/core/db/` | Drizzle schema and migrations |
+| `src/core/db/` | Drizzle schema (two hand-written dialects + a generated entry) and migrations |
+| `src/core/config/` | Site configuration: group shapes, merge rules, reads and cache |
 | `src/core/env/` | Two-layer env validation: `public.ts` and `server.ts` |
 | `src/lib/` | Pure logic: locale, SEO, module gates, rate limiting, theme parsing |
 | `src/locale/` | Paraglide output and locale middleware |
@@ -40,7 +41,7 @@ Repository root:
 | `content/` | Docs / blog / changelog / legal; Chinese copies get a `.zh` suffix |
 | `messages/` | UI copy in `zh.json` / `en.json` |
 | `public/` | Static assets, including `public/docs/screenshots/` |
-| `scripts/` | Build and validation scripts; `scripts/init/` is the setup wizard |
+| `scripts/` | Build and validation scripts: `db-setup.ts` generates the schema, `db-seed.ts` writes the seed |
 | `tests/` | Unit / component / workers tests |
 | `e2e/` | Playwright specs |
 
@@ -48,7 +49,7 @@ Repository root:
 
 | Want to change | Go to |
 |---|---|
-| Site name, logo, module and feature switches | `src/config/website.ts` |
+| Site name, SEO, module and feature switches | The admin settings page (stored in the database); the factory values live in `src/config/website.ts` |
 | Plans and purchase options | `src/config/products.ts` |
 | Navbar and footer links | `src/config/navbar-config.ts`, `src/config/footer-config.ts` |
 | Menu item shapes and visibility rules | `src/config/navigation.ts` |
@@ -58,7 +59,7 @@ Repository root:
 | Home / about / pricing copy | The route component, e.g. `src/routes/{-$locale}/index.tsx` |
 | Colors, fonts, radii, shadows | `src/styles/globals.css` |
 | Docs content | `content/docs/*.md` |
-| Database table | `src/core/db/schema.ts`, then `pnpm db:generate` |
+| Database table | Edit both `src/core/db/schema.sqlite.ts` and `schema.postgres.ts`, then `pnpm db:setup` |
 | Add a page | Create a file under `src/routes/`; the router picks it up |
 | Add an API route | `src/routes/api/<name>/$.ts` |
 | Add a UI control | `pnpm dlx shadcn@latest add <component> -y`, which lands in `src/components/ui/` |

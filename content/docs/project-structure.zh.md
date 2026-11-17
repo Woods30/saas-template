@@ -24,7 +24,8 @@ updated: 2026-11-03
 | `src/components/dashboard/` | 工作台骨架与用户卡片 |
 | `src/components/auth/` | 表单件：字段适配层、提交按钮、水合检测 |
 | `src/core/auth/` | Better Auth 配置、会话、邮箱验证 |
-| `src/core/db/` | Drizzle schema 与迁移文件 |
+| `src/core/db/` | Drizzle schema（两份手写 + 生成物）与迁移 |
+| `src/core/config/` | 站点配置：分组形状、合并规则、读写与缓存 |
 | `src/core/env/` | 两层 env 校验：`public.ts` 与 `server.ts` |
 | `src/lib/` | 纯逻辑：locale、SEO、模块门禁、限流、主题解析 |
 | `src/locale/` | Paraglide 产物与 locale 中间件 |
@@ -40,7 +41,7 @@ updated: 2026-11-03
 | `content/` | 文档 / 博客 / 更新日志 / 法务，中文稿加 `.zh` 后缀 |
 | `messages/` | 界面文案 `zh.json` / `en.json` |
 | `public/` | 静态资源，含 `public/docs/screenshots/` |
-| `scripts/` | 构建与校验脚本，`scripts/init/` 是初始化向导 |
+| `scripts/` | 构建与校验脚本：`db-setup.ts` 生成 schema、`db-seed.ts` 写种子 |
 | `tests/` | 单元 / 组件 / Workers 测试 |
 | `e2e/` | Playwright 用例 |
 
@@ -48,7 +49,7 @@ updated: 2026-11-03
 
 | 想改什么 | 去哪里 |
 |---|---|
-| 站点名、Logo、模块与功能开关 | `src/config/website.ts` |
+| 站点名、SEO、模块与功能开关 | 后台「系统设置」页（存数据库），出厂值在 `src/config/website.ts` |
 | 套餐与购买选项 | `src/config/products.ts` |
 | 导航栏、页脚链接 | `src/config/navbar-config.ts`、`src/config/footer-config.ts` |
 | 菜单项形状与显隐规则 | `src/config/navigation.ts` |
@@ -58,7 +59,7 @@ updated: 2026-11-03
 | 首页 / 关于 / 定价页的段落 | 对应路由组件，如 `src/routes/{-$locale}/index.tsx` |
 | 颜色、字体、圆角、阴影 | `src/styles/globals.css` |
 | 文档内容 | `content/docs/*.md` |
-| 数据库表 | `src/core/db/schema.ts`，然后 `pnpm db:generate` |
+| 数据库表 | `src/core/db/schema.sqlite.ts` 与 `schema.postgres.ts` 两份都改，然后 `pnpm db:setup` |
 | 新增页面 | 在 `src/routes/` 下建文件，路由自动生成 |
 | 新增 API | `src/routes/api/<name>/$.ts` |
 | 新增 UI 控件 | `pnpm dlx shadcn@latest add <component> -y`，装到 `src/components/ui/` |
@@ -67,5 +68,7 @@ updated: 2026-11-03
 ## 生成物
 
 `src/routeTree.gen.ts`（路由插件）、`src/locale/paraglide/**`（`pnpm locale:compile`）、`.content-collections/generated/**`（`pnpm content:build`）都在构建时重写，手改会被覆盖。
+
+`src/core/db/schema.ts`（`pnpm db:setup`）与 `src/core/db/migrations/**`（`pnpm db:generate`）同样是生成物，不入库——库结构的事实源是手写 schema。
 
 配色与字体见 [设计系统](./design-system)，新增表单见 [表单约定](./forms)。

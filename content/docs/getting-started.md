@@ -1,13 +1,13 @@
 ---
 title: Quick Start
-description: Six steps from clone to live
+description: Seven steps from clone to live
 locale: en
 order: 1
 group: start
-updated: 2026-11-03
+updated: 2026-11-18
 ---
 
-Six steps take you from a fresh clone to a live site. Every step comes with a command, and every step leaves you with something you can look at.
+Seven steps take you from a fresh clone to a live site. Every step comes with a command, and every step leaves you with something you can look at.
 
 ## Prerequisites
 
@@ -16,6 +16,7 @@ Six steps take you from a fresh clone to a live site. Every step comes with a co
 | Node.js 22 / 24 | `package.json` `engines` allows `^22.12.0`, `^24.0.0`, and newer |
 | pnpm | Version pinned by `packageManager` in `package.json` (currently `pnpm@12.4.2`) — do not use another |
 | Cloudflare account | Optional. You can run locally without one; it is needed for deploys and for creating resources |
+| PostgreSQL | Optional. Only needed if you want PostgreSQL in production — see [Database](./database) |
 
 ## Steps
 
@@ -25,31 +26,23 @@ Six steps take you from a fresh clone to a live site. Every step comes with a co
    pnpm install
    ```
 
-2. **Make it your own project.**
+2. **Pick a database shape and generate the schema.**
+
+   The shape is decided by `DATABASE_PROVIDER` in `.env`. It defaults to `sqlite` (a local SQLite
+   file):
 
    ```bash
-   pnpm run init
+   # .env
+   DATABASE_PROVIDER=sqlite   # sqlite | d1 | postgres
    ```
-
-   The script asks for a site name, a short name, a production domain, a support email, and which
-   modules to enable, then rewrites in one pass: the package name in `package.json`, the brand copy
-   in `messages/zh.json` and `messages/en.json`, the site name in `public/manifest.json`, the name /
-   wordmark accent / support email / module and feature switches in `src/config/website.ts`, the
-   one-time product name in `src/config/products.ts`, the Worker name / domain / resource names in
-   `wrangler.jsonc`, and the empty `BETTER_AUTH_SECRET` and site URL in `.env`. To skip the prompts,
-   pass everything at once:
 
    ```bash
-   pnpm run init -- --name "<your-site-name>" --slug <your-slug> \
-     --domain <your-domain.com> --email <your-support-email> --modules docs,auth
+   pnpm db:setup
    ```
 
-   `--dry-run` prints the planned changes without writing them; `--non-interactive` never asks anything.
-
-   > The initializer **turns every module off by default** — `docs`, `blog`, `mail`, `payment` and
-   > the rest stay off unless you list them in `--modules`. The template ships with them on, but
-   > each one needs credentials, so a clone with nothing configured would fail production
-   > validation. Turn on what you need — see [Site Configuration](./configuration).
+   It generates two things: `src/core/db/schema.ts` (the schema entry for the current dialect) and
+   the first baseline migration for that dialect. Both are **generated artifacts, not committed** —
+   run it again after switching dialects. See [Database](./database).
 
 3. **Create the Cloudflare resources and write your local env.**
 
@@ -57,8 +50,7 @@ Six steps take you from a fresh clone to a live site. Every step comes with a co
    pnpm run setup
    ```
 
-   How `setup` differs from `init`: `init` only touches code and copy, never the cloud; `setup`
-   creates (or reuses) a D1 database and a KV namespace in your account, writes their IDs back into
+   It creates (or reuses) a D1 database and a KV namespace in your account, writes their IDs back into
    `wrangler.jsonc`, writes `CLOUDFLARE_DATABASE_ID` and `BETTER_AUTH_SECRET` into `.env`, and
    applies a local migration while it is at it. It also asks whether you want Stripe or Creem, which
    email provider, and whether to send Discord notifications — whatever you answer lands in `.env`.
@@ -75,7 +67,20 @@ Six steps take you from a fresh clone to a live site. Every step comes with a co
    pnpm exec wrangler login
    ```
 
-4. **Start the dev server.**
+4. **Write the seed configuration.**
+
+   ```bash
+   pnpm db:seed -- --brand "Acme" --email <your-support-email>
+   ```
+
+   The seed is the six default configuration groups (brand, SEO, social, payment, mail, module
+   switches). `--brand` and `--email` replace the factory values with yours; leave them out to keep
+   the template defaults — you can also change them later in the admin settings page.
+
+   The seed **only fills in what is missing** and never overwrites what you changed in the admin
+   panel; add `--force` to overwrite.
+
+5. **Start the dev server.**
 
    ```bash
    pnpm dev
@@ -87,10 +92,17 @@ Six steps take you from a fresh clone to a live site. Every step comes with a co
    pnpm run db:migrate:local
    ```
 
-5. **Customize the site.** Name, logo, theme colors, module switches, and social links all live in
-   `src/config/website.ts` — field by field in [Site Configuration](./configuration).
+6. **Make it your own.** Configuration lives in two places: the factory values in code and the live
+   configuration in the database.
 
-6. **Deploy.**
+   - What the database owns (site name, SEO, social links, payment provider, mail, module switches):
+     sign in, open **Settings → Admin → System settings**, save — it takes effect immediately.
+   - What stays in code: the package name in `package.json`, the PWA app name in
+     `public/manifest.json`, the brand strings in `messages/zh.json` and `messages/en.json`, your
+     products in `src/config/products.ts`, and the logo / theme asset paths in
+     `src/config/website.ts`. Field by field in [Site Configuration](./configuration).
+
+7. **Deploy.**
 
    ```bash
    pnpm deploy
@@ -113,6 +125,8 @@ Six steps take you from a fresh clone to a live site. Every step comes with a co
   [Environment Variables](./environment).
 - Before deploying, set `VITE_BASE_URL` in `.env.production` to a real HTTPS domain:
   `pnpm check:env:prod` rejects `localhost` and placeholder domains.
+- **Migrations are not committed**: after changing the schema, run `pnpm db:generate` locally and
+  apply the result to the target database by hand. Production never follows the code on its own.
 
 Once it is configured, continue with [Site Configuration](./configuration) and
 [Deploy to Cloudflare](./cloudflare).

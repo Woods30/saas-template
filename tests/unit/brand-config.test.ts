@@ -7,7 +7,7 @@ import { m } from '@/locale/paraglide/messages.js'
 describe('websiteConfig 品牌信息', () => {
   it('站点名与 site_name 消息一致', () => {
     // 品牌名是配置项：`website.ts` 与 `messages/*.json` 各存一份，改一处不改另一处
-    // 这里就会红。断言取相对值 —— 品牌改名（`pnpm run init` 之后就是改名）不用改测试。
+    // 这里就会红。断言取相对值 —— 品牌改名（改过配置就是改名）不用改测试。
     expect(websiteConfig.metadata.name).toBe(m.site_name({}, { locale: 'zh' }))
     expect(m.site_name({}, { locale: 'en' })).toBe(websiteConfig.metadata.name)
   })
@@ -39,7 +39,7 @@ describe('websiteConfig 品牌信息', () => {
   })
 
   it('配置里的固定项不随模块开关变化', () => {
-    // 模块与能力的开关是部署场景的决定（各仓不同，`pnpm run init` 之后全关），
+    // 模块与能力的开关是部署场景的决定（各仓不同，可全关），
     // 这里只钉住与场景无关的固定项。
     const config = createWebsiteConfig(parsePublicEnv({}))
     expect(config.mail.provider).toBe('resend')

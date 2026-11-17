@@ -24,7 +24,7 @@ afterEach(() => {
 /**
  * 模板场景的完整配置（docs/blog/changelog 开，contact 关）。
  *
- * 开关逐项写死：各仓的默认开关不同（官网不提供文档站，`pnpm run init` 之后全关），
+ * 开关逐项写死：各仓的默认开关不同（官网不提供文档站，可全关），
  * 依赖默认值会让这里的断言随部署场景静默失效。
  */
 function createConfig(): WebsiteConfig {

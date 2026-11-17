@@ -4,17 +4,41 @@ description: websiteConfig 的全部字段与开关语义
 locale: zh
 order: 2
 group: config
-updated: 2026-11-03
+updated: 2026-11-18
 ---
 
-`src/config/website.ts` 是站点配置的唯一入口：站名、Logo、主题、模块开关、社交链接都在这里。
-改完这个文件，导航、页面与 API 会一起跟着变。
+站点配置分两层：
+
+| 层 | 位置 | 改它的方式 |
+|---|---|---|
+| **出厂值** | `src/config/website.ts` | 改代码，发版生效；是数据库里没有对应分组时的兜底 |
+| **生效配置** | 数据库 `settings` 表 | 后台「系统设置」页保存，**即时生效**，不用发版 |
+
+生效配置 = 出厂值 + 数据库里的分组，合并规则在 `src/core/config/settings.ts`。全站读
+`websiteConfig` 拿到的永远是生效的那份，调用点不用关心配置从哪来。
+
+数据库里的配置分六组，每组独立校验——某组坏了只丢那一组，其余照常用：
+
+| 分组 | 内容 | 后台分区 |
+|---|---|---|
+| `brand` | 站名、字标强调色、标语 | 品牌 |
+| `seo` | 默认 SEO 文案 + 分语言覆盖 | SEO |
+| `social` | 社交链接 | 社交链接 |
+| `payment` | 支付渠道与开关 | 支付 |
+| `mail` | 邮件渠道、开关与支持邮箱 | 邮件 |
+| `modules` | 服务模块与能力开关 | 模块 |
+
+**密钥不进数据库**：支付与邮件的凭据仍只在环境变量里，数据库只存渠道选择与公开参数。
+
+保存后进程内快照立即刷新；但多 isolate 部署时，其它 isolate 最长 30 秒后才刷新到新值。
+
+下面的字段表列的是**出厂值**——即数据库里没有对应分组时生效的值。
 
 ## 站点信息
 
 | 字段 | 默认值 | 说明 |
 |---|---|---|
-| `metadata.name` | 模板默认品牌名 | 站点名，出现在页面标题、OG 标签与 manifest；`pnpm run init` 会换成你的 |
+| `metadata.name` | 模板默认品牌名 | 站点名，出现在页面标题、OG 标签与 JSON-LD；后台「品牌」分区可改 |
 | `metadata.logoAccent` | 品牌名末字母 | 字标末尾用强调色渲染的字符；纯单色字标留空串 |
 | `metadata.images.ogImage` | `/logo.png` | 社交分享图，建议 1200×630 |
 | `metadata.images.logoLight` / `logoDark` | `/logo-horizontal-transparent.svg` / `/logo-horizontal-dark.svg` | 浅色 / 深色主题的横向 Logo |
@@ -61,6 +85,10 @@ updated: 2026-11-03
 模块开启但必要配置缺失时，API 返回 `503 SERVICE_UNAVAILABLE`，页面与导航入口照常显示。
 `getServiceStatuses()` 把每个模块标成 `disabled` / `incomplete` / `configured`，
 `pnpm check` 会打印缺配置的服务模块，`pnpm check:env:prod` 在 `incomplete` 时直接失败。
+
+这些开关同时是数据库里的 `modules` 分组，后台「模块」分区可改，改完即时生效。
+`VITE_MODULES` / `VITE_FEATURES` 白名单仍可用，它决定**出厂值**——同一份构建产物发两处时
+用它区分场景，见[环境变量](./environment)。
 
 `auth.requireEmailVerification` 是**安全控制**，不是邮件开关：下游把邮箱当身份依据
 （支付渠道的 `customerEmail`、`ADMIN_EMAILS`）。要求验证但邮件未配齐时，`auth` 报
@@ -110,5 +138,6 @@ social: {
 }
 ```
 
-只渲染无凭据的 HTTPS 地址，非法链接静默丢弃。模块与功能开关也可用 `VITE_MODULES` /
-`VITE_FEATURES` 覆盖，见[环境变量](./environment)。
+只渲染无凭据的 HTTPS 地址，非法链接静默丢弃。社交链接同时是数据库里的 `social` 分组，
+后台「社交链接」分区可改。模块与功能开关也可用 `VITE_MODULES` / `VITE_FEATURES` 覆盖出厂值，
+见[环境变量](./environment)。

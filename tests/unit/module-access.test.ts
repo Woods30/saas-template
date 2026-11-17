@@ -76,7 +76,7 @@ const SUPPORT_EMAIL = ['support', 'jerbix.dev'].join('@')
 /**
  * 完整默认配置（docs/blog/changelog/auth 开，服务关）。
  *
- * 开关逐项写死：各仓的默认开关不同（官网不提供文档站，`pnpm run init` 之后全关），
+ * 开关逐项写死：各仓的默认开关不同（官网不提供文档站，可全关），
  * 依赖默认值会让这里的断言随部署场景静默失效。
  */
 function makeConfig(overrides: Partial<WebsiteConfig> = {}): WebsiteConfig {

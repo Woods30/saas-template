@@ -7,12 +7,12 @@
 ## 项目定位
 
 `saas-template`（示例品牌 **Jerbix**）是一个构建在 **Cloudflare Workers** 上的
-**TanStack Start** SaaS 起步模板。目标流程：`git clone` → `pnpm run init`
-（或手动改 `src/config/website.ts`）→ 部署。
+**TanStack Start** SaaS 起步模板。目标流程：`git clone` → `pnpm install` →
+`pnpm db:setup` → `pnpm db:seed` → 部署；品牌与 SEO 在后台「系统设置」页改，不发版。
 
 技术栈：TanStack Start / Router / Query、React 19、TypeScript strict、Tailwind CSS v4、
 shadcn/ui（Base UI 基座 / Tabler 图标）、Paraglide JS（zh / en）、Zod、
-Drizzle ORM + D1、Vitest + Playwright。
+Drizzle ORM（多方言：SQLite / D1 / PostgreSQL）、Vitest + Playwright。
 
 ## 版本与发布
 
@@ -134,10 +134,11 @@ scripts/             构建与校验脚本
 - **先找现成组件**，没有才手写。新增 shadcn 组件用
   `pnpm dlx shadcn@latest add <component> -y`。
 - **行为修改先写失败测试**；结构整理与行为修改分开提交。
-- **测试不依赖出厂配置**：模块开关、能力开关与品牌名都是配置项，`pnpm run init` 会把它们
-  改写成使用者自己的值。断言要么显式摆出自己要的配置（`makeConfig({ blog: { enabled: true } })`），
-  要么取相对值（`websiteConfig.metadata.name`、`m.site_name(...)`），不写死出厂值与品牌字面量 ——
-  写死的话，初始化之后的项目跑 `pnpm test` 会集体变红。组件测试读的是全局 `websiteConfig`，
+- **测试不依赖出厂配置**：模块开关、能力开关与品牌名都是配置项，使用者会把它们改成自己的
+  值（数据库里的生效配置或 `src/config/website.ts` 的出厂值）。断言要么显式摆出自己要的配置
+  （`makeConfig({ blog: { enabled: true } })`），要么取相对值（`websiteConfig.metadata.name`、
+  `m.site_name(...)`），不写死出厂值与品牌字面量 —— 写死的话，改过配置的项目跑 `pnpm test`
+  会集体变红。组件测试读的是全局 `websiteConfig`，
   它的场景由 `vitest.config.ts` 的 `testScenarioEnv` 固定（`VITE_MODULES` / `VITE_FEATURES` 覆盖），
   与 `website.ts` 的出厂值无关。
 - 提交前 `pnpm check` 与 `pnpm test` 必须全绿。提交消息写清改了什么、为什么。

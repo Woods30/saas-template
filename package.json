@@ -40,7 +40,6 @@
     "db:admin:local": "tsx scripts/set-admin.ts --local",
     "db:admin:remote": "tsx scripts/set-admin.ts --remote",
     "setup": "tsx scripts/setup.ts",
-    "init": "tsx scripts/init/index.ts",
     "content:build": "content-collections build && tsx scripts/normalize-content-collections.ts",
     "email:dev": "email dev --dir src/core/email/templates --port 3001",
     "postinstall": "node --env-file-if-exists=.env --import tsx scripts/db-setup.ts",

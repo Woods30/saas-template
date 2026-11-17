@@ -1,13 +1,13 @@
 ---
 title: 快速开始
-description: 从克隆到上线的六个步骤
+description: 从克隆到上线的七个步骤
 locale: zh
 order: 1
 group: start
-updated: 2026-11-03
+updated: 2026-11-18
 ---
 
-从克隆仓库到线上可访问，一共六步。每一步都给命令，跑完就能看到结果。
+从克隆仓库到线上可访问，一共七步。每一步都给命令，跑完就能看到结果。
 
 ## 前提
 
@@ -16,6 +16,7 @@ updated: 2026-11-03
 | Node.js 22 / 24 | `package.json` 的 `engines` 允许 `^22.12.0`、`^24.0.0` 及更高 |
 | pnpm | 版本由 `package.json` 的 `packageManager` 指定（当前 `pnpm@12.4.2`），不要用别的版本 |
 | Cloudflare 账号 | 可选。没有也能先在本地跑通，部署与建资源时才需要 |
+| PostgreSQL | 可选。生产想用 PostgreSQL 才需要，见[数据库](./database) |
 
 ## 步骤
 
@@ -25,28 +26,21 @@ updated: 2026-11-03
    pnpm install
    ```
 
-2. **把它变成你自己的项目。**
+2. **选数据库形态，生成 schema。**
+
+   数据库形态由 `.env` 里的 `DATABASE_PROVIDER` 决定，缺省是 `sqlite`（本地 SQLite 文件）：
 
    ```bash
-   pnpm run init
+   # .env
+   DATABASE_PROVIDER=sqlite   # sqlite | d1 | postgres
    ```
-
-   脚本问站点名、短名、生产域名、支持邮箱，以及要开哪些模块，然后一次性改好：`package.json`
-   的包名、`messages/zh.json` 与 `messages/en.json` 的品牌文案、`public/manifest.json` 的站点名、
-   `src/config/website.ts` 的站名 / 字标强调色 / 支持邮箱 / 模块与功能开关、
-   `src/config/products.ts` 的一次性商品名、`wrangler.jsonc` 的 Worker 名 / 域名 / 资源名，
-   以及 `.env` 里空着的 `BETTER_AUTH_SECRET` 与站点地址。不想交互就一次给全：
 
    ```bash
-   pnpm run init -- --name "<your-site-name>" --slug <your-slug> \
-     --domain <your-domain.com> --email <your-support-email> --modules docs,auth
+   pnpm db:setup
    ```
 
-   `--dry-run` 只打印将要改动的文件，`--non-interactive` 不提问。
-
-   > 初始化脚本**默认把所有模块关掉**（`docs`、`blog`、`mail`、`payment` 等不在
-   > `--modules` 名单里就是关的）。模板出厂时这些模块是开的，而它们各自要凭据，
-   > 全开会让什么都没配的克隆者卡在生产校验上。按需再开，见[网站配置](./configuration)。
+   它生成两样东西：`src/core/db/schema.ts`（当前方言的 schema 入口）与该方言的首份基线迁移。
+   两者都是**生成物，不入库**——换方言时重新跑一次即可。详见[数据库](./database)。
 
 3. **创建 Cloudflare 资源并写好本地环境变量。**
 
@@ -54,10 +48,9 @@ updated: 2026-11-03
    pnpm run setup
    ```
 
-   `setup` 与 `init` 的分工：`init` 只改代码与文案，不碰云端；`setup` 在你的账号下建（或复用）
-   D1 数据库与 KV namespace，把资源 ID 写回 `wrangler.jsonc`，把 `CLOUDFLARE_DATABASE_ID` 与
-   `BETTER_AUTH_SECRET` 写进 `.env`，并顺手应用一次本地迁移。它还会问你要不要 Stripe / Creem、
-   哪种邮件 provider、要不要 Discord 通知，填了就一并写进 `.env`。
+   它在你的账号下建（或复用）D1 数据库与 KV namespace，把资源 ID 写回 `wrangler.jsonc`，
+   把 `CLOUDFLARE_DATABASE_ID` 与 `BETTER_AUTH_SECRET` 写进 `.env`，并顺手应用一次本地迁移。
+   它还会问你要不要 Stripe / Creem、哪种邮件 provider、要不要 Discord 通知，填了就一并写进 `.env`。
 
    已有的 `.env` 值不会被覆盖：重跑一次 `setup` 不会换掉你的 `BETTER_AUTH_SECRET`，也不会把
    已登录的人踢下线。
@@ -70,7 +63,18 @@ updated: 2026-11-03
    pnpm exec wrangler login
    ```
 
-4. **启动开发服务器。**
+4. **写入种子配置。**
+
+   ```bash
+   pnpm db:seed -- --brand "Acme" --email hi@acme.dev
+   ```
+
+   种子是站点配置的六组默认值（品牌、SEO、社交、支付、邮件、模块开关）。`--brand` 与
+   `--email` 把出厂值换成你自己的；不传就用模板默认值，之后在后台「系统设置」页改也行。
+
+   种子**只补缺失的**，不覆盖后台改过的值；要覆盖加 `--force`。
+
+5. **启动开发服务器。**
 
    ```bash
    pnpm dev
@@ -82,10 +86,15 @@ updated: 2026-11-03
    pnpm run db:migrate:local
    ```
 
-5. **改站点信息。** 站名、Logo、主题配色、模块开关、社交链接都在 `src/config/website.ts`，
-   逐项见[网站配置](./configuration)。
+6. **改成你自己的项目。** 配置分两处：代码里的出厂值与数据库里的生效配置。
 
-6. **部署。**
+   - 数据库能改的（品牌名、SEO、社交链接、支付渠道、邮件、模块开关）：登录后进
+     **设置 → 管理 → 系统设置**，保存后即时生效。
+   - 代码里要改的：`package.json` 的包名、`public/manifest.json` 的 PWA 应用名、
+     `messages/zh.json` 与 `messages/en.json` 里的品牌字样、`src/config/products.ts` 的商品、
+     `src/config/website.ts` 的 Logo 与主题色素材路径。逐项见[网站配置](./configuration)。
+
+7. **部署。**
 
    ```bash
    pnpm deploy
@@ -106,5 +115,7 @@ updated: 2026-11-03
   Environment 或 `wrangler secret put`），见[环境变量](./environment)。
 - 部署前把 `.env.production` 的 `VITE_BASE_URL` 改成真实 HTTPS 域名，
   `pnpm check:env:prod` 会拒绝 `localhost` 与占位域名。
+- **迁移不入库**：改了 schema 要在本地 `pnpm db:generate` 生成迁移，再手工 apply 到目标库。
+  线上库不会自动跟着代码走。
 
 配好后可以接着看[网站配置](./configuration)与[部署到 Cloudflare](./cloudflare)。

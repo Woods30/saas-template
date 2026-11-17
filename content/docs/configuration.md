@@ -4,16 +4,46 @@ description: websiteConfig fields explained
 locale: en
 order: 2
 group: config
-updated: 2026-11-03
+updated: 2026-11-18
 ---
 
-`src/config/website.ts` is the single entry point for site configuration: name, logo, theme, module switches, and social links all live there. Change that file and navigation, pages, and the API all follow.
+Site configuration has two layers:
+
+| Layer | Where | How to change it |
+|---|---|---|
+| **Factory values** | `src/config/website.ts` | Edit the code and deploy; they are the fallback when the database has no matching group |
+| **Live configuration** | The `settings` table in the database | Save in the admin settings page — **takes effect immediately**, no deploy needed |
+
+The live configuration = factory values + the groups in the database, merged in
+`src/core/config/settings.ts`. Everything in the app reads `websiteConfig`, which always returns
+the live one — call sites never need to know where it came from.
+
+The database holds six groups, each validated on its own: a broken group only loses that group,
+the rest keep working.
+
+| Group | Contents | Admin section |
+|---|---|---|
+| `brand` | Site name, wordmark accent, tagline | Brand |
+| `seo` | Default SEO copy + per-locale overrides | SEO |
+| `social` | Social links | Social links |
+| `payment` | Payment provider and switch | Payment |
+| `mail` | Mail provider, switch, support email | Mail |
+| `modules` | Service modules and capability switches | Modules |
+
+**Secrets never go into the database**: payment and mail credentials stay in environment
+variables; the database only holds the provider choice and public parameters.
+
+Saving refreshes the in-process snapshot immediately; on a multi-isolate deployment the other
+isolates pick it up within 30 seconds.
+
+The field tables below list the **factory values** — what applies when the database has no
+matching group.
 
 ## Site identity
 
 | Field | Default | Purpose |
 |---|---|---|
-| `metadata.name` | Template's default brand | Site name in page titles, OG tags, and the manifest; `pnpm run init` replaces it with yours |
+| `metadata.name` | Template's default brand | Site name in page titles, OG tags, and JSON-LD; editable in the admin "Brand" section |
 | `metadata.logoAccent` | Last letter of the brand | Trailing part of the wordmark rendered in the accent color; leave empty for a single-color wordmark |
 | `metadata.images.ogImage` | `/logo.png` | Social share image, 1200×630 recommended |
 | `metadata.images.logoLight` / `logoDark` | `/logo-horizontal-transparent.svg` / `/logo-horizontal-dark.svg` | Horizontal logo for the light / dark theme |
@@ -55,6 +85,8 @@ Config **never stores an amount**: prices live only in the payment provider's ca
 | `auth.requireEmailVerification` | `true` | New accounts must verify their email before signing in |
 
 **Gating semantics**: with a module off, its pages and its API return 404 together (the API answers `404 MODULE_DISABLED`); with a module on but its required configuration missing, the API returns `503 SERVICE_UNAVAILABLE` while the page and the navigation entry stay visible. `getServiceStatuses()` labels each module `disabled` / `incomplete` / `configured`, `pnpm check` prints the services missing configuration, and `pnpm check:env:prod` fails outright on `incomplete`.
+
+These switches are also the `modules` group in the database, editable in the admin "Modules" section and effective immediately. The `VITE_MODULES` / `VITE_FEATURES` whitelists still decide the **factory values** — use them to tell two deployment targets apart from one build — see [Environment Variables](./environment).
 
 `auth.requireEmailVerification` is a **security control**, not an email switch: downstream code treats the email as an identity claim (the payment provider's `customerEmail`, `ADMIN_EMAILS`). Requiring verification while email is not configured makes `auth` report `incomplete` and the auth API return 503 — it never silently degrades to unverified sign-in.
 
@@ -101,4 +133,4 @@ social: {
 }
 ```
 
-Only credential-free HTTPS URLs render; anything else is dropped silently. Module and feature switches can also be overridden with `VITE_MODULES` / `VITE_FEATURES` — see [Environment Variables](./environment).
+Only credential-free HTTPS URLs render; anything else is dropped silently. Social links are also the `social` group in the database, editable in the admin "Social links" section. Module and feature switches can still override the factory values with `VITE_MODULES` / `VITE_FEATURES` — see [Environment Variables](./environment).

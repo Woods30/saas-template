@@ -244,7 +244,7 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       docs: { enabled: true },
       blog: { enabled: true },
       changelog: { enabled: true },
-      // 支持收件邮箱：出厂是占位地址，`pnpm run init` 会换成你自己的。
+      // 支持收件邮箱：出厂是占位地址，后台「邮件」分区可改。
       mail: { enabled: true, provider: 'resend', supportEmail: 'support@example.com' },
       contact: { enabled: false },
       newsletter: { enabled: false, provider: 'resend' },

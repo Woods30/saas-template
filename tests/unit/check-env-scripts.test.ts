@@ -70,7 +70,7 @@ const scrubKeys = [...dotenvKeys, ...EXTRA_ENV_KEYS]
 /**
  * 启用中的服务模块（`VITE_MODULES` 白名单）。
  *
- * 模块开关随部署场景变化（各仓出厂值不同，`pnpm run init` 之后全关），校验脚本
+ * 模块开关随部署场景变化（各仓出厂值不同，可全关），校验脚本
  * 读的是仓库的 `website.ts`，因此这里显式指定，让用例只测校验逻辑本身。
  */
 const ENABLED_MODULES = 'mail,payment,analytics'

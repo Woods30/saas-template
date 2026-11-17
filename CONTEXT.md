@@ -6,7 +6,8 @@
 ## 项目定位
 
 `saas-template`（默认品牌 **Jerbix**）是一个构建在 **Cloudflare Workers** 上的
-**TanStack Start** SaaS 起步模板。目标流程：`git clone` → `pnpm run init` → 部署。
+**TanStack Start** SaaS 起步模板。目标流程：`git clone` → `pnpm install` → `pnpm db:setup`
+→ `pnpm db:seed` → 部署。
 架构取舍见 `docs/adr/`。
 
 ## 术语表
@@ -62,17 +63,16 @@
 - **AuthFormMessages**：`src/core/auth/validation.ts` 的校验文案契约。schema 工厂接收文案而非
   自己调 `m.*()`，使校验逻辑不依赖 Paraglide 运行时、可脱离组件单测；页面用
   `authFormMessages()` 求值。
-- **模板工程**：本仓 `Woods30/saas-template`，含模板源码、技术文档与 init 脚本。默认品牌
-  为 Jerbix。**唯一源码源**。
+- **模板工程**：本仓 `Woods30/saas-template`，含模板源码与技术文档。默认品牌为 Jerbix。
+  **唯一源码源**。
 - **官网工程**：另一个仓 `Woods30/jerbix`，定位为模板的官网 + 支付 + 商业条款文档。
   保留完整代码副本，通过 `git merge template/main` 跟进本仓。
-- **实例项目**：开发者用 init 脚本从模板工程生成的项目。
-- **init 脚本**：模板工程内的 `pnpm run init`，把模板改造成实例项目。
-- **替换表**：init 脚本内声明式的「文件 → 改什么」清单。分三类条目：品牌字面量替换、
-  占位符填充、显式排除。
-- **两个品牌源**：`websiteConfig.metadata.name`（footer / OG / JSON-LD）与
-  `messages.site_name`（`__root.tsx` 的标题）。二者必须成对替换，否则 `<title>` 与 OG
-  站点名不一致。
+- **实例项目**：使用者从模板工程克隆后改造成的自己的项目。
+- **出厂值 / 生效配置**：出厂值是 `src/config/website.ts` 里的代码默认值；生效配置是出厂值加上
+  数据库 `settings` 表里的分组。后台改的是生效配置。
+- **两个品牌源**：`websiteConfig.metadata.name`（footer / OG / JSON-LD，可后台改）与
+  `messages.site_name`（营销文案里的品牌字样，编译期）。二者不同步时页面标题与文案里的品牌名
+  会不一致。
 
 ## 关键不变量
 
@@ -103,8 +103,8 @@
   Zod + shadcn `Field`）。
 - **尚未实现**：文件上传、AI 网关、PWA。`websiteConfig.features` 中对应的开关是能力边界
   标记，不注册路由。
-- **两仓关系（2026-11-02 定）**：本仓是**模板工程**（`Woods30/saas-template`，含 init
-  脚本与技术文档），**官网工程**是另一个仓（`Woods30/jerbix`，官网 + 支付 + 商业条款
+- **两仓关系（2026-11-02 定）**：本仓是**模板工程**（`Woods30/saas-template`，模板源码与
+  技术文档），**官网工程**是另一个仓（`Woods30/jerbix`，官网 + 支付 + 商业条款
   文档），保留完整代码副本并靠 `git merge template/main` 跟进本仓。拆分取舍见
   `docs/adr/0004`、`docs/adr/0005`。
 - **Node 下限**：`package.json` 的 `engines.node` 为 `^22.12.0 || ^24.0.0 || >=26.0.0`（`vitest@5`
@@ -117,7 +117,7 @@
 - `docs/adr/0002-shadcn-label-pattern.md` —— shadcn/ui 的 Label 组合模式。
 - `docs/adr/0003-product-config-and-exclusivity.md` —— 套餐配置与账号级订阅。
 - `docs/adr/0004-template-and-official-site-split.md` —— 模板工程与官网工程分仓。
-- `docs/adr/0005-init-replacement-table.md` —— init 用声明式替换表而非占位符 token。
+- `docs/adr/0005-init-replacement-table.md` —— init 用声明式替换表而非占位符 token（已随 init 废弃）。
 - `docs/adr/0008-core-modules-routes-layering.md` —— 三层分层与模块公开入口。
 - `docs/adr/0009-multi-dialect-database-and-config.md` —— 多方言数据库与配置入库。
 

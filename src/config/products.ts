@@ -33,7 +33,7 @@ export function getProducts(): ProductDefinition[] {
     },
     {
       id: 'template',
-      // 显示名：模板出厂是默认品牌，`pnpm run init` 会换成你自己的。
+      // 显示名：模板出厂是默认品牌，换成你自己的。
       name: 'Jerbix',
       description: m.home_pricing_description(),
       features: [m.home_pricing_source(), m.home_pricing_support(), m.home_pricing_updates()],
