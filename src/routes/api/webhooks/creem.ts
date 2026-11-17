@@ -2,9 +2,9 @@ import { createFileRoute } from '@tanstack/react-router'
 import { websiteConfig } from '@/config/website'
 import { createDbFromEnv } from '@/core/db'
 import { getPaymentProvider } from '@/core/payment'
-import { applyPaymentEvent } from '@/core/payment/events'
 import { CreemSignatureError } from '@/core/payment/provider/creem'
 import { getServerContext } from '@/lib/server-context'
+import { applyPaymentEvent } from '@/modules/subscriptions/service'
 
 /**
  * Creem Webhook。

@@ -1,9 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import {
-  type AdminPaymentRow,
-  type RevenueSummary,
-  summarizeRevenue,
-} from '@/core/payment/admin-billing-query'
+import { type AdminPaymentRow, type RevenueSummary, summarizeRevenue } from './admin-query'
 
 /**
  * 管理台账单总览的 server function。

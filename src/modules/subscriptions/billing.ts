@@ -1,8 +1,8 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
-import type { PaymentRecord, SubscriptionRecord } from './billing-query'
+import type { PaymentRecord, SubscriptionRecord } from './query'
 
-export type { PaymentRecord, SubscriptionRecord } from './billing-query'
+export type { PaymentRecord, SubscriptionRecord } from './query'
 export interface BillingOverview {
   subscriptions: SubscriptionRecord[]
   payments: PaymentRecord[]

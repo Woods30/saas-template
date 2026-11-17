@@ -11,12 +11,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { type AdminBillingResult, fetchAdminBilling } from '@/core/auth/admin-billing'
-import { productNameForProductId, subscriptionStatusMessageKey } from '@/core/payment/billing-query'
 import { getRequestLocale } from '@/lib/locale'
 import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
+import {
+  type AdminBillingResult,
+  fetchAdminBilling,
+  productNameForProductId,
+  subscriptionStatusMessageKey,
+} from '@/modules/subscriptions/service'
 
 /**
  * 管理台营收与订阅总览。

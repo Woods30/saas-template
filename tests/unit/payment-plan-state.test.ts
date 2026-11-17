@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { occupiesSubscriptionSlot } from '@/core/payment/plan-state'
+import { occupiesSubscriptionSlot } from '@/modules/subscriptions/service'
 
 describe('账号订阅名额', () => {
   it.each(['active', 'trialing', 'past_due', 'unpaid', 'paused', 'incomplete'])(

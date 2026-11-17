@@ -3,7 +3,7 @@ import { findOfferByReference, findProduct } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import { type DB, schema } from '@/core/db'
 import { notify } from '@/core/notify/service'
-import type { PaymentEvent, ProviderSubscription } from './types'
+import type { PaymentEvent, ProviderSubscription } from '@/core/payment/types'
 
 type Db = DB
 

@@ -7,9 +7,8 @@ const notifications = vi.hoisted(() => ({ notify: vi.fn().mockResolvedValue(true
 vi.mock('@/core/notify/service', () => ({ notify: notifications.notify }))
 
 import { websiteConfig } from '@/config/website'
-import { beginCheckout } from '@/core/payment/checkout'
-import { applyPaymentEvent } from '@/core/payment/events'
 import type { PaymentEvent, PaymentProvider } from '@/core/payment/types'
+import { applyPaymentEvent, beginCheckout } from '@/modules/subscriptions/service'
 
 function database() {
   const sqlite = new DatabaseSync(':memory:')

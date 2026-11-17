@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { createDbFromEnv } from '@/core/db'
 import { getPaymentProvider } from '@/core/payment'
-import { applyPaymentEvent } from '@/core/payment/events'
 import { getServerContext } from '@/lib/server-context'
+import { applyPaymentEvent } from '@/modules/subscriptions/service'
 
 export const Route = createFileRoute('/api/webhooks/stripe')({
   server: {

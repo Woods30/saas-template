@@ -6,13 +6,13 @@ import { websiteConfig } from '@/config/website'
 import { getAuth } from '@/core/auth/auth'
 import { createDbFromEnv } from '@/core/db'
 import { getPaymentProvider } from '@/core/payment'
-import { beginCheckout, findCustomerId } from '@/core/payment/checkout'
 import { isOneTimePriceValid, LANDING_PRICE_CURRENCY } from '@/core/payment/price-catalog'
 import { getPriceCatalog } from '@/core/payment/price-catalog.server'
 import { getModuleUnavailableResponse } from '@/lib/module-access.server'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getServerContext } from '@/lib/server-context'
 import { safeSameOriginUrl } from '@/lib/urls'
+import { beginCheckout, findCustomerId } from '@/modules/subscriptions/service'
 
 const checkoutBody = z.object({
   productId: z.string(),

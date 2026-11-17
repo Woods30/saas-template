@@ -1,8 +1,8 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import { type DB, schema } from '@/core/db'
+import type { CheckoutParams, CheckoutResult, PaymentProvider } from '@/core/payment/types'
 import { applyPaymentEvent } from './events'
 import { ACTIVE_SUBSCRIPTION_STATUSES, occupiesSubscriptionSlot } from './plan-state'
-import type { CheckoutParams, CheckoutResult, PaymentProvider } from './types'
 
 type Db = DB
 const RESERVATION_SECONDS = 24 * 60 * 60
