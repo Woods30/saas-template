@@ -1,7 +1,8 @@
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core'
 import { describe, expect, it } from 'vitest'
-import { buildUserWhere, escapeLike } from '@/core/auth/admin-users-query'
+import { buildUserWhere } from '@/core/auth/admin-users-query'
 import { schema } from '@/core/db'
+import { escapeLike } from '@/core/db/sql'
 
 /**
  * 用户列表筛选条件的 SQL 生成：`%` / `_` 须按字面匹配；`banned` 可空，「正常」要含

@@ -73,7 +73,9 @@ export function createDb(source: D1Database | DbSource): DB {
       if (!resolved.binding) {
         throw new Error(`DATABASE_PROVIDER=${resolved.provider} 需要 D1 binding（env.DB）`)
       }
-      return drizzleD1(resolved.binding, { schema })
+      // `DB` 的类型跟着生成物的方言走；本分支只有生成物是 sqlite 时才会被调用，
+      // 但类型检查不区分生成物，故此处收窄一次。
+      return drizzleD1(resolved.binding, { schema }) as unknown as DB
     }
   }
 }

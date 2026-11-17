@@ -9,8 +9,11 @@ import * as schema from '../../src/core/db/schema'
  * 所以连接建立前就拦下。
  */
 describe('assertSchemaMatchesProvider', () => {
-  const matching = schema.SCHEMA_DIALECT === 'sqlite' ? 'sqlite' : 'postgres'
-  const mismatching = schema.SCHEMA_DIALECT === 'sqlite' ? 'postgres' : 'sqlite'
+  // 显式标注为 `string`：生成物的方言是字面量类型，直接比较会被 TS 判成
+  // 「永不相等」而报错——生成物确实是 postgres 时，测试仍要能跑。
+  const dialect: string = schema.SCHEMA_DIALECT
+  const matching = dialect === 'sqlite' ? 'sqlite' : 'postgres'
+  const mismatching = dialect === 'sqlite' ? 'postgres' : 'sqlite'
 
   it('方言一致时放行', () => {
     expect(() => assertSchemaMatchesProvider(matching)).not.toThrow()

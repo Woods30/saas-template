@@ -1,11 +1,20 @@
 import { and, eq, like, or, sql } from 'drizzle-orm'
-import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
+import type { schema } from '@/core/db'
+import { escapeLike } from '@/core/db/sql'
 
 /**
  * 管理员用户列表的筛选条件与类型。
  *
  * 单独成模块：只依赖 drizzle，服务端与测试共用同一实现。
  */
+
+/**
+ * `users` 表的类型。
+ *
+ * 取自**生成物**的 schema，而不是写死 `SQLiteColumn`：表定义按方言各有一份，
+ * 写死 sqlite 的列类型会让 PostgreSQL 那份表定义传不进来。
+ */
+type UsersTable = (typeof schema)['users']
 
 /** `users` 表里本页要用的字段。`role` 可空：非 admin 插件写入前可能为空。 */
 export interface AdminUser {
@@ -40,27 +49,11 @@ export interface AdminUsersResult {
 }
 
 /**
- * LIKE 通配符转义。
- *
- * `contains` 等辅助函数不转义 `%` / `_`：搜 `a_b` 会命中 `axb`，搜 `%` 几乎命中所有行。
- */
-export function escapeLike(input: string): string {
-  return input.replace(/([%_\\])/g, '\\$1')
-}
-
-/**
  * 拼 `where` 条件；三个筛选缺省时返回 `undefined`。
  *
  * 每个条件独立可空，最后用 `and` 组合，任何组合都走同一条路径。
  */
-export function buildUserWhere(
-  users: {
-    email: SQLiteColumn
-    role: SQLiteColumn
-    banned: SQLiteColumn
-  },
-  query: AdminUsersQuery,
-) {
+export function buildUserWhere(users: UsersTable, query: AdminUsersQuery) {
   const needle = query.search?.trim()
   const conditions = [
     needle
