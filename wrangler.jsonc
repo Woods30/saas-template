@@ -25,7 +25,7 @@
       "binding": "DB",
       "database_name": "saas-template-docs-db",
       "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "./src/db/migrations"
+      "migrations_dir": "./src/core/db/migrations/sqlite"
     }
   ],
   // R2 对象存储（用户上传文件）。

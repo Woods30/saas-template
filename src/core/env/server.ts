@@ -4,6 +4,20 @@ import { treatEmptyAsUndefined } from './normalize'
 const schema = z.object({
   BETTER_AUTH_SECRET: z.string().min(32, 'BETTER_AUTH_SECRET 必须 ≥ 32 字符').optional(),
   /**
+   * 数据库 provider：`sqlite`（默认）/ `d1` / `postgres`。
+   *
+   * 决定两件事：运行时连什么库，以及**构建期生成哪份 schema**
+   * （`pnpm db:setup` 按它复制手写 schema 成生成物）。改了它必须重新跑
+   * `pnpm db:setup`，否则运行期会因方言不匹配直接报错。
+   */
+  DATABASE_PROVIDER: z.enum(['sqlite', 'd1', 'postgres']).optional(),
+  /**
+   * PostgreSQL 连接串（`DATABASE_PROVIDER=postgres` 时必填）。
+   *
+   * 跑在 Workers 上时可改用 Hyperdrive binding——那条路径不经过本变量。
+   */
+  DATABASE_URL: z.string().optional(),
+  /**
    * Better Auth 的站点根地址，用于生成回调与重定向的**绝对** URL。
    *
    * 未设时从请求 origin 推断，单域名部署等价；**多域名或接了 OAuth / 邮件验证时必须

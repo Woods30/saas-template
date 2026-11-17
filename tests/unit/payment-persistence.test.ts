@@ -4,19 +4,19 @@ import { drizzle } from 'drizzle-orm/sqlite-proxy'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const notifications = vi.hoisted(() => ({ notify: vi.fn().mockResolvedValue(true) }))
-vi.mock('@/notification', () => ({ notify: notifications.notify }))
+vi.mock('@/core/notify/service', () => ({ notify: notifications.notify }))
 
 import { websiteConfig } from '@/config/website'
-import { beginCheckout } from '@/payment/checkout'
-import { applyPaymentEvent } from '@/payment/events'
-import type { PaymentEvent, PaymentProvider } from '@/payment/types'
+import { beginCheckout } from '@/core/payment/checkout'
+import { applyPaymentEvent } from '@/core/payment/events'
+import type { PaymentEvent, PaymentProvider } from '@/core/payment/types'
 
 function database() {
   const sqlite = new DatabaseSync(':memory:')
-  for (const name of readdirSync('src/db/migrations')
+  for (const name of readdirSync('src/core/db/migrations/sqlite')
     .filter((f) => f.endsWith('.sql'))
     .sort())
-    sqlite.exec(readFileSync(`src/db/migrations/${name}`, 'utf8'))
+    sqlite.exec(readFileSync(`src/core/db/migrations/sqlite/${name}`, 'utf8'))
   sqlite.exec(
     "INSERT INTO users(id,name,email,created_at,updated_at) VALUES ('u1','User','u1@example.com',1,1),('u2','Other','u2@example.com',1,1)",
   )

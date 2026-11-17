@@ -18,15 +18,15 @@ export const fetchBillingOverview = createServerFn({ method: 'GET' })
       { getServerContext },
       { getAuth },
       { getRequestHeaders },
-      { createDb, schema },
+      { createDbFromEnv, schema },
       { eq, desc },
       { findCustomerId },
       { websiteConfig },
     ] = await Promise.all([
       import('@/lib/server-context'),
-      import('@/auth/auth'),
+      import('@/core/auth/auth'),
       import('@tanstack/react-start/server'),
-      import('@/db'),
+      import('@/core/db'),
       import('drizzle-orm'),
       import('./checkout'),
       import('@/config/website'),
@@ -34,7 +34,7 @@ export const fetchBillingOverview = createServerFn({ method: 'GET' })
     const env = getServerContext().env
     const session = await getAuth(env).api.getSession({ headers: getRequestHeaders() })
     if (!session) throw new Response('Unauthorized', { status: 401 })
-    const db = createDb(env.DB)
+    const db = createDbFromEnv(env)
     const [subscriptions, payments, customerId] = await Promise.all([
       db
         .select()
@@ -58,21 +58,21 @@ export const fetchCurrentPlan = createServerFn({ method: 'GET' }).handler(
       { getServerContext },
       { getAuth },
       { getRequestHeaders },
-      { createDb, schema },
+      { createDbFromEnv, schema },
       { and, eq, inArray },
       { ACTIVE_SUBSCRIPTION_STATUSES },
     ] = await Promise.all([
       import('@/lib/server-context'),
-      import('@/auth/auth'),
+      import('@/core/auth/auth'),
       import('@tanstack/react-start/server'),
-      import('@/db'),
+      import('@/core/db'),
       import('drizzle-orm'),
       import('./plan-state'),
     ])
     const env = getServerContext().env
     const session = await getAuth(env).api.getSession({ headers: getRequestHeaders() })
     if (!session) return null
-    const [row] = await createDb(env.DB)
+    const [row] = await createDbFromEnv(env)
       .select()
       .from(schema.subscriptions)
       .where(

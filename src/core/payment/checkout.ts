@@ -1,10 +1,10 @@
 import { and, eq, inArray } from 'drizzle-orm'
-import { type createDb, schema } from '@/db'
+import { type DB, schema } from '@/core/db'
 import { applyPaymentEvent } from './events'
 import { ACTIVE_SUBSCRIPTION_STATUSES, occupiesSubscriptionSlot } from './plan-state'
 import type { CheckoutParams, CheckoutResult, PaymentProvider } from './types'
 
-type Db = ReturnType<typeof createDb>
+type Db = DB
 const RESERVATION_SECONDS = 24 * 60 * 60
 
 export async function findCustomerId(

@@ -110,7 +110,7 @@ describe('init 端到端', () => {
     expect(wrangler).toContain('REPLACE_ME')
     // 注释是运维前提，不能被抹掉。
     expect(wrangler).toContain('//')
-    expect(wrangler).toContain('"migrations_dir": "./src/db/migrations"')
+    expect(wrangler).toContain('"migrations_dir": "./src/core/db/migrations/sqlite"')
   })
 
   it('生成 .env：补 auth secret 与发件地址，保留原有注释', () => {

@@ -1,40 +1,61 @@
-import { sql } from 'drizzle-orm'
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import {
+  bigint,
+  boolean,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core'
+
+/**
+ * 本文件所属的方言。
+ *
+ * 生成物 `schema.ts` 重导出本文件，运行期据此校验「生成时的方言」与
+ * 「运行时声明的 provider」是否一致——两者不一致时 SQL 会静默跑错方言，
+ * 必须当场报错而不是等到写数据才暴露。
+ */
+export const SCHEMA_DIALECT = 'postgresql' as const
+
+// PostgreSQL 版 schema：与 `schema.sqlite.ts` 逐表逐列对齐，由
+// `tests/unit/schema-parity.test.ts` 盯着漂移。
+//
+// 与 SQLite 版的差异只有两处，且都被收敛在列定义里：
+// - 时间戳：SQLite 用 `integer(mode: 'timestamp')`，PG 用 `timestamp(mode: 'date')`；
+//   两者都映射成 JS `Date`，业务代码无感。
+// - 布尔：SQLite 用 `integer(mode: 'boolean')`，PG 用原生 `boolean`。
 
 // Better Auth 表：需与 better-auth CLI 输出保持一致。
-export const users = sqliteTable('users', {
+export const users = pgTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
-  emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
+  emailVerified: boolean('email_verified').notNull().default(false),
   name: text('name'),
   image: text('image'),
   role: text('role').notNull().default('user'),
-  banned: integer('banned', { mode: 'boolean' }).default(false),
+  banned: boolean('banned').default(false),
   banReason: text('ban_reason'),
-  banExpires: integer('ban_expires', { mode: 'timestamp' }),
-  // 没有软删除列：admin 插件的 `removeUser` 是硬删除，写软删除字段不会有人读；
-  // 需要「可恢复删除」应改用自定义插件，而不是留一个永远为 null 的列。
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  banExpires: timestamp('ban_expires', { withTimezone: true, mode: 'date' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 })
 
-export const sessions = sqliteTable('sessions', {
+export const sessions = pgTable('sessions', {
   id: text('id').primaryKey(),
   userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   token: text('token').notNull().unique(),
-  expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
-  // better-auth admin 插件：记录「被谁 impersonate」的管理员 id（可空）。
   impersonatedBy: text('impersonated_by'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-  // 缺列会让 drizzle 适配器在运行时报 `SchemaMismatchError: Missing columns: session.updatedAt`。
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 })
 
-export const accounts = sqliteTable(
+export const accounts = pgTable(
   'accounts',
   {
     id: text('id').primaryKey(),
@@ -47,11 +68,17 @@ export const accounts = sqliteTable(
     accessToken: text('access_token'),
     refreshToken: text('refresh_token'),
     idToken: text('id_token'),
-    accessTokenExpiresAt: integer('access_token_expires_at', { mode: 'timestamp' }),
-    refreshTokenExpiresAt: integer('refresh_token_expires_at', { mode: 'timestamp' }),
+    accessTokenExpiresAt: timestamp('access_token_expires_at', {
+      withTimezone: true,
+      mode: 'date',
+    }),
+    refreshTokenExpiresAt: timestamp('refresh_token_expires_at', {
+      withTimezone: true,
+      mode: 'date',
+    }),
     scope: text('scope'),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => ({
     providerAccountUnique: uniqueIndex('accounts_provider_account_unique').on(
@@ -61,18 +88,17 @@ export const accounts = sqliteTable(
   }),
 )
 
-export const verifications = sqliteTable('verifications', {
+export const verifications = pgTable('verifications', {
   id: text('id').primaryKey(),
   identifier: text('identifier').notNull(),
   value: text('value').notNull(),
-  expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 })
 
-// 业务表
 /** 服务商订阅按外部 ID 幂等；账号购买名额由 Checkout 预留与状态守卫控制。 */
-export const subscriptions = sqliteTable(
+export const subscriptions = pgTable(
   'subscriptions',
   {
     id: text('id').primaryKey(),
@@ -90,13 +116,13 @@ export const subscriptions = sqliteTable(
     currency: text('currency'),
     interval: text('interval'),
     intervalCount: integer('interval_count'),
-    currentPeriodStart: integer('current_period_start', { mode: 'timestamp' }),
-    currentPeriodEnd: integer('current_period_end', { mode: 'timestamp' }),
-    cancelAtPeriodEnd: integer('cancel_at_period_end', { mode: 'boolean' }).default(false),
+    currentPeriodStart: timestamp('current_period_start', { withTimezone: true, mode: 'date' }),
+    currentPeriodEnd: timestamp('current_period_end', { withTimezone: true, mode: 'date' }),
+    cancelAtPeriodEnd: boolean('cancel_at_period_end').default(false),
     snapshotVersion: integer('snapshot_version').notNull().default(0),
-    eventCreated: integer('event_created').notNull().default(0),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    eventCreated: bigint('event_created', { mode: 'number' }).notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => ({
     userIdx: index('subscriptions_user_idx').on(table.userId),
@@ -107,7 +133,7 @@ export const subscriptions = sqliteTable(
   }),
 )
 
-export const payments = sqliteTable(
+export const payments = pgTable(
   'payments',
   {
     id: text('id').primaryKey(),
@@ -126,10 +152,10 @@ export const payments = sqliteTable(
     productId: text('product_id'),
     offerId: text('offer_id'),
     customerId: text('customer_id'),
-    eventCreated: integer('event_created').notNull().default(0),
-    paidAt: integer('paid_at', { mode: 'timestamp' }),
-    refundedAt: integer('refunded_at', { mode: 'timestamp' }),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    eventCreated: bigint('event_created', { mode: 'number' }).notNull().default(0),
+    paidAt: timestamp('paid_at', { withTimezone: true, mode: 'date' }),
+    refundedAt: timestamp('refunded_at', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => ({
     externalUnique: uniqueIndex('payments_provider_external_unique').on(
@@ -142,7 +168,7 @@ export const payments = sqliteTable(
 )
 
 /** 订阅 Checkout 每账号一个预留；一次性购买不占用。 */
-export const checkoutReservations = sqliteTable('checkout_reservations', {
+export const checkoutReservations = pgTable('checkout_reservations', {
   userId: text('user_id')
     .primaryKey()
     .references(() => users.id, { onDelete: 'cascade' }),
@@ -156,7 +182,7 @@ export const checkoutReservations = sqliteTable('checkout_reservations', {
   expiresAt: integer('expires_at').notNull(),
 })
 
-export const files = sqliteTable('files', {
+export const files = pgTable('files', {
   id: text('id').primaryKey(),
   userId: text('user_id')
     .notNull()
@@ -167,12 +193,11 @@ export const files = sqliteTable('files', {
   size: integer('size').notNull(),
   folder: text('folder'),
   visibility: text('visibility').notNull().default('private'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 })
 
-// `@better-auth/api-key` 插件生成的表，列以插件内置的 `apiKeySchema` 为唯一依据：
-// 21 个声明字段 + 自动 id = 22 列；索引均为普通索引（非 unique）。
-export const apikey = sqliteTable(
+// `@better-auth/api-key` 插件生成的表，列以插件内置的 `apiKeySchema` 为唯一依据。
+export const apikey = pgTable(
   'apikey',
   {
     id: text('id').primaryKey(),
@@ -182,20 +207,19 @@ export const apikey = sqliteTable(
     referenceId: text('reference_id').notNull(),
     prefix: text('prefix'),
     key: text('key').notNull(),
-    enabled: integer('enabled', { mode: 'boolean' }),
+    enabled: boolean('enabled'),
     refillInterval: integer('refill_interval'),
     refillAmount: integer('refill_amount'),
-    lastRefillAt: integer('last_refill_at', { mode: 'timestamp' }),
-    rateLimitEnabled: integer('rate_limit_enabled', { mode: 'boolean' }),
+    lastRefillAt: timestamp('last_refill_at', { withTimezone: true, mode: 'date' }),
+    rateLimitEnabled: boolean('rate_limit_enabled'),
     rateLimitTimeWindow: integer('rate_limit_time_window'),
     rateLimitMax: integer('rate_limit_max'),
     requestCount: integer('request_count'),
     remaining: integer('remaining'),
-    lastRequest: integer('last_request', { mode: 'timestamp' }),
-    expiresAt: integer('expires_at', { mode: 'timestamp' }),
-    // 插件 schema 里 createdAt / updatedAt 为 required 且无默认值，故此处 notNull() 不加 default。
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+    lastRequest: timestamp('last_request', { withTimezone: true, mode: 'date' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
     permissions: text('permissions'),
     metadata: text('metadata'),
   },
@@ -206,28 +230,29 @@ export const apikey = sqliteTable(
   }),
 )
 
-export const newsletterSubscriptions = sqliteTable('newsletter_subscriptions', {
+export const newsletterSubscriptions = pgTable('newsletter_subscriptions', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
   provider: text('provider').notNull(),
   providerListId: text('provider_list_id'),
   status: text('status').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 })
 
 // 幂等表：支付事件在业务幂等写入成功后标记 processedAt，失败由源端重投。
-export const webhookEvents = sqliteTable(
+export const webhookEvents = pgTable(
   'webhook_events',
   {
-    id: text('id').primaryKey(), // source event id (e.g. `evt_xxx` for Stripe)
+    id: text('id').primaryKey(),
     source: text('source').notNull(),
     type: text('type').notNull(),
     payload: text('payload').notNull(),
-    receivedAt: integer('received_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
-    processedAt: integer('processed_at', { mode: 'timestamp' }),
+    receivedAt: timestamp('received_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: true, mode: 'date' }),
   },
   (table) => ({
-    // 扫描「已收未处理」的事件（进程在 UPDATE processedAt 前崩溃会留下这类行）。
     processedIdx: index('webhook_events_processed_idx').on(table.processedAt),
     sourceTypeIdx: index('webhook_events_source_type_idx').on(table.source, table.type),
   }),

@@ -2,12 +2,14 @@ import { apiKey } from '@better-auth/api-key'
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import { betterAuth } from 'better-auth/minimal'
 import { admin } from 'better-auth/plugins/admin'
-import { sendAuthEmailForRequest } from '@/auth/emails'
-import { requiresEmailVerification } from '@/auth/flow'
 import { websiteConfig } from '@/config/website'
-import { createDb, schema } from '@/db'
-import { parseServerEnv } from '@/env/server'
-import { sendMail } from '@/mail'
+import { sendAuthEmailForRequest } from '@/core/auth/emails'
+import { requiresEmailVerification } from '@/core/auth/flow'
+import { createDbFromEnv, schema } from '@/core/db'
+import { isPostgresDialect, resolveDatabaseProvider } from '@/core/db/provider'
+import { getRequestScoped } from '@/core/db/request-scope'
+import { sendMail } from '@/core/email'
+import { parseServerEnv } from '@/core/env/server'
 
 /**
  * 已创建的实例，按 D1 binding 复用。
@@ -26,12 +28,12 @@ import { sendMail } from '@/mail'
  * `drizzleAdapter(...)` 必须作为顶层 `database:` 传入；放进 `plugins:` 会让
  * better-auth 静默回退到内存适配器（注册看似成功，实际不落库）。
  *
- * 实例按 D1 binding 复用（见 `getAuth`）。邮件回调统一走 `src/auth/emails.ts`
+ * 实例按 D1 binding 复用（见 `getAuth`）。邮件回调统一走 `src/core/auth/emails.ts`
  * 且绝不抛错——better-auth 经 `runInBackgroundOrAwait` 调用它们，抛错会让注册 / 登录失败。
  */
 export function createAuth(env: Env) {
   const parsed = parseServerEnv(env as unknown as Record<string, unknown>)
-  const db = createDb(env.DB)
+  const db = createDbFromEnv(env)
   const deps = { sendMail, config: websiteConfig, serverEnv: parsed }
 
   /** 邮件失败只记日志：注册 / 登录不应因 SMTP / API 故障而失败。 */
@@ -50,7 +52,9 @@ export function createAuth(env: Env) {
     // 未配置时传 `undefined`，better-auth 退回请求 origin。
     baseURL: parsed.BETTER_AUTH_URL,
     database: drizzleAdapter(db, {
-      provider: 'sqlite',
+      // 适配器的 provider 必须跟 schema 方言一致：生成物按 DATABASE_PROVIDER 产出，
+      // 写死 'sqlite' 会让 PostgreSQL 部署生成 SQLite 方言的 SQL。
+      provider: isPostgresDialect(schema.SCHEMA_DIALECT) ? 'pg' : 'sqlite',
       schema: {
         user: schema.users,
         session: schema.sessions,
@@ -147,13 +151,26 @@ export function createAuth(env: Env) {
 const authInstances = new WeakMap<object, ReturnType<typeof createAuth>>()
 
 /**
- * 取当前部署的 better-auth 实例，同一 D1 binding 复用。
+ * 取当前部署的 better-auth 实例。
  *
- * `getAuth` 会在每次会话校验、每个受保护 server function 里被调用。`betterAuth()`
- * 要合并配置、构建 adapter、注册插件并生成路由表——每次重建实测能让一次请求多花
- * 数百毫秒，而配置在进程内是常量。
+ * - D1 / SQLite：按 D1 binding 复用。`getAuth` 会在每次会话校验、每个受保护
+ *   server function 里被调用，`betterAuth()` 要合并配置、构建 adapter、注册插件并
+ *   生成路由表——每次重建实测能让一次请求多花数百毫秒，而配置在进程内是常量。
+ *   binding 在 isolate 内是稳定对象，`src/server.ts` 每请求新建的 `normalizedEnv`
+ *   不是，所以键取 binding。
+ * - PostgreSQL：按请求作用域复用。Workers 的 isolate 可能在请求之间被冻结，
+ *   跨请求复用的 TCP 连接会失效，因此实例挂在请求作用域上，请求结束即丢弃。
  */
 export function getAuth(env: Env) {
+  const provider = resolveDatabaseProvider(env.DATABASE_PROVIDER)
+  if (provider === 'postgres') {
+    const url = env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL
+    if (!url) {
+      throw new Error('DATABASE_PROVIDER=postgres 需要 DATABASE_URL 或 Hyperdrive binding')
+    }
+    return getRequestScoped(`postgres:auth:${url}`, () => createAuth(env))
+  }
+
   const cacheKey = env.DB as unknown as object
   const cached = authInstances.get(cacheKey)
   if (cached) return cached

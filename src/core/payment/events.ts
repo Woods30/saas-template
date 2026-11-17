@@ -1,11 +1,11 @@
 import { and, eq, sql } from 'drizzle-orm'
 import { findOfferByReference, findProduct } from '@/config/products'
 import { websiteConfig } from '@/config/website'
-import { type createDb, schema } from '@/db'
-import { notify } from '@/notification'
+import { type DB, schema } from '@/core/db'
+import { notify } from '@/core/notify/service'
 import type { PaymentEvent, ProviderSubscription } from './types'
 
-type Db = ReturnType<typeof createDb>
+type Db = DB
 
 /** Stripe/C​​reem 等适配器共用的持久化入口；外部 payload 不进入业务判定。 */
 export async function applyPaymentEvent(

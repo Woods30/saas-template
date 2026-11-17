@@ -4,11 +4,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { websiteConfig } from '@/config/website'
 
 const email = vi.hoisted(() => ({ send: vi.fn().mockResolvedValue({ ok: true }) }))
-vi.mock('@/auth/emails', () => ({ sendAuthEmailForRequest: email.send }))
+vi.mock('@/core/auth/emails', () => ({ sendAuthEmailForRequest: email.send }))
 
-import { getAuth } from '@/auth/auth'
-import { authClient } from '@/auth/client'
-import { schema } from '@/db'
+import { getAuth } from '@/core/auth/auth'
+import { authClient } from '@/core/auth/client'
+import { schema } from '@/core/db'
 
 /**
  * better-auth 数据库接线回归：`drizzleAdapter` 必须作为顶层 `database:` 传入。
@@ -36,10 +36,10 @@ function env() {
 /** 仅替换 D1 传输；SQL、迁移和 Drizzle adapter 均走真实实现。 */
 function memoryD1() {
   const sqlite = new DatabaseSync(':memory:')
-  for (const name of readdirSync('src/db/migrations')
+  for (const name of readdirSync('src/core/db/migrations/sqlite')
     .filter((name) => name.endsWith('.sql'))
     .sort()) {
-    sqlite.exec(readFileSync(`src/db/migrations/${name}`, 'utf8'))
+    sqlite.exec(readFileSync(`src/core/db/migrations/sqlite/${name}`, 'utf8'))
   }
   function prepare(query: string) {
     const statement = sqlite.prepare(query)

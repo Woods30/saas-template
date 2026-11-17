@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   deliverContactNotification: vi.fn().mockResolvedValue(undefined),
   getPaymentProvider: vi.fn(),
   sendMail: vi.fn().mockResolvedValue({ ok: true }),
-  createDb: vi.fn(),
+  createDbFromEnv: vi.fn(),
   getServerContext: vi.fn(),
 }))
 
@@ -18,30 +18,30 @@ vi.mock('@/lib/rate-limit', () => ({
   checkRateLimit: (...args: unknown[]) => mocks.checkRateLimit(...args),
 }))
 
-vi.mock('@/auth/auth', () => ({
+vi.mock('@/core/auth/auth', () => ({
   getAuth: (...args: unknown[]) => mocks.getAuth(...args),
 }))
 
-vi.mock('@/newsletter', () => ({
+vi.mock('@/modules/newsletter/service', () => ({
   checkRateLimit: (...args: unknown[]) => mocks.newsletterCheckRateLimit(...args),
   subscribe: (...args: unknown[]) => mocks.subscribe(...args),
   unsubscribe: (...args: unknown[]) => mocks.unsubscribe(...args),
 }))
 
-vi.mock('@/contact/notifications', () => ({
+vi.mock('@/modules/contact/service', () => ({
   deliverContactNotification: (...args: unknown[]) => mocks.deliverContactNotification(...args),
 }))
 
-vi.mock('@/payment', () => ({
+vi.mock('@/core/payment', () => ({
   getPaymentProvider: (...args: unknown[]) => mocks.getPaymentProvider(...args),
 }))
 
-vi.mock('@/mail', () => ({
+vi.mock('@/core/email', () => ({
   sendMail: (...args: unknown[]) => mocks.sendMail(...args),
 }))
 
-vi.mock('@/db', () => ({
-  createDb: (...args: unknown[]) => mocks.createDb(...args),
+vi.mock('@/core/db', () => ({
+  createDbFromEnv: (...args: unknown[]) => mocks.createDbFromEnv(...args),
   // Webhook 路由读 `schema.webhookEvents.id` 作为幂等冲突目标。
   schema: { webhookEvents: { id: { name: 'webhook_events.id' } } },
 }))
@@ -53,16 +53,16 @@ vi.mock('@/lib/server-context', () => ({
 
 // auth 页面的 `beforeLoad` 会调 server function `fetchAuthProviderAvailability`，测试环境
 // 缺 TanStack Start 请求上下文会抛无关错误、遮住门禁断言，故替换为固定值。
-vi.mock('@/auth/providers', () => ({
+vi.mock('@/core/auth/providers', () => ({
   getAuthProviderAvailability: () => ({ google: false }),
   fetchAuthProviderAvailability: async () => ({ google: false }),
 }))
 
 import { notFound } from '@tanstack/react-router'
 import { createWebsiteConfig, type WebsiteConfig } from '@/config/website'
-import { type PublicEnv, parsePublicEnv } from '@/env/public'
-import type { ServerEnv } from '@/env/server'
-import { parseServerEnv } from '@/env/server'
+import { type PublicEnv, parsePublicEnv } from '@/core/env/public'
+import type { ServerEnv } from '@/core/env/server'
+import { parseServerEnv } from '@/core/env/server'
 import { assertPageEnabled, assertStaticPageEnabled } from '@/lib/module-access'
 import { getModuleUnavailableResponse } from '@/lib/module-access.server'
 import { getSitemapPaths, renderSitemapXml } from '@/routes/sitemap[.]xml'
@@ -590,7 +590,8 @@ async function importRouteWithConfig(
   vi.resetModules()
   vi.doMock('@/config/website', async () => {
     const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
-    const { parsePublicEnv } = await vi.importActual<typeof import('@/env/public')>('@/env/public')
+    const { parsePublicEnv } =
+      await vi.importActual<typeof import('@/core/env/public')>('@/core/env/public')
     const base = actual.createWebsiteConfig(parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' }))
     return { ...actual, websiteConfig: { ...base, ...overrides } }
   })
@@ -686,7 +687,7 @@ describe('API handler 门禁（默认服务全关）', () => {
     const res = await handler({ request })
     expect(res.status).toBe(404)
     expect(mocks.getAuth).not.toHaveBeenCalled()
-    expect(mocks.createDb).not.toHaveBeenCalled()
+    expect(mocks.createDbFromEnv).not.toHaveBeenCalled()
   })
 
   it('email POST 返回 404，且不调用 auth / 不读取 body', async () => {
@@ -848,7 +849,7 @@ describe('Stripe Webhook 不受 payment.enabled 门禁影响', () => {
       onConflictDoNothing,
       onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
     })
-    mocks.createDb.mockReturnValue({ insert, update, select, delete: vi.fn() })
+    mocks.createDbFromEnv.mockReturnValue({ insert, update, select, delete: vi.fn() })
 
     const { Route } = await import('@/routes/api/webhooks/stripe')
     const handler = getHandler(Route, 'POST')
