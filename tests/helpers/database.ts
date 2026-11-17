@@ -32,7 +32,8 @@ export function createTestDatabase(): { sqlite: DatabaseSync; db: DB } {
 
 /** 塞一个用户：账本的行都挂在用户下。 */
 export function seedUser(sqlite: DatabaseSync, id: string): void {
-  sqlite.exec(
-    `INSERT INTO users(id,name,email,created_at,updated_at) VALUES ('${id}','User','${id}@example.com',1,1)`,
-  )
+  // 用参数绑定而不是拼字符串：id 是外部传入的，拼字符串就是 SQL 注入。
+  sqlite
+    .prepare('INSERT INTO users(id,name,email,created_at,updated_at) VALUES (?,?,?,1,1)')
+    .run(id, 'User', `${id}@example.com`)
 }
