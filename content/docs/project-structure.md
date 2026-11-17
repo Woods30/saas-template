@@ -23,12 +23,12 @@ This page is a map. When you cannot find something, look here first, then read t
 | `src/components/docs/` | Docs layout, sidebar, search, table of contents |
 | `src/components/dashboard/` | Dashboard shell and user card |
 | `src/components/auth/` | Form pieces: field adapter, submit button, hydration hook |
-| `src/auth/` | Auth config, sessions, email verification |
-| `src/db/` | Drizzle schema and migrations |
-| `src/env/` | Two-layer env validation: `public.ts` and `server.ts` |
+| `src/core/auth/` | Auth config, sessions, email verification |
+| `src/core/db/` | Drizzle schema and migrations |
+| `src/core/env/` | Two-layer env validation: `public.ts` and `server.ts` |
 | `src/lib/` | Pure logic: locale, SEO, module gates, rate limiting, theme parsing |
 | `src/locale/` | Paraglide output and locale middleware |
-| `src/cache/` `src/storage/` `src/mail/` `src/newsletter/` `src/notification/` `src/payment/` | Service modules: provider registry plus an abstract interface |
+| `src/core/cache/` `src/core/storage/` `src/core/email/` `src/modules/newsletter/` `src/core/notify/` `src/core/payment/` | Service modules: provider registry plus an abstract interface |
 | `src/styles/` | `globals.css` (design tokens), `mdx.css` |
 | `src/hooks/` | Hooks reused across pages |
 | `src/server.ts` / `src/router.tsx` | Server entry (CSP nonce, env injection) / router instance |
@@ -58,11 +58,11 @@ Repository root:
 | Home / about / pricing copy | The route component, e.g. `src/routes/{-$locale}/index.tsx` |
 | Colors, fonts, radii, shadows | `src/styles/globals.css` |
 | Docs content | `content/docs/*.md` |
-| Database table | `src/db/schema.ts`, then `pnpm db:generate` |
+| Database table | `src/core/db/schema.ts`, then `pnpm db:generate` |
 | Add a page | Create a file under `src/routes/`; the router picks it up |
 | Add an API route | `src/routes/api/<name>/$.ts` |
 | Add a UI control | `pnpm dlx shadcn@latest add <component> -y`, which lands in `src/components/ui/` |
-| Add a service module | Mirror `src/mail/`: `types.ts` + `provider/` + `index.ts` |
+| Add a service module | Mirror `src/core/email/`: `types.ts` + `provider/` + `index.ts` |
 
 ## Generated files
 

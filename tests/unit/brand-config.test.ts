@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { createWebsiteConfig, websiteConfig } from '@/config/website'
-import { parsePublicEnv } from '@/env/public'
+import { parsePublicEnv } from '@/core/env/public'
 import { m } from '@/locale/paraglide/messages.js'
 
 describe('websiteConfig 品牌信息', () => {

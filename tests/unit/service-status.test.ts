@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { getMailFrom, getServiceStatuses, validateWebsiteConfig } from '@/config/service-status'
 import { createWebsiteConfig, type WebsiteConfig } from '@/config/website'
-import { parsePublicEnv } from '@/env/public'
-import { parseServerEnv } from '@/env/server'
+import { parsePublicEnv } from '@/core/env/public'
+import { parseServerEnv } from '@/core/env/server'
 import { formatServiceDiagnostics } from '../../scripts/lib/report-issues'
 
 /**

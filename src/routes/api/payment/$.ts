@@ -1,18 +1,18 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
-import { getAuth } from '@/auth/auth'
 import { localeSchema } from '@/config/locale'
 import { resolvePriceReference } from '@/config/products'
 import { websiteConfig } from '@/config/website'
-import { createDb } from '@/db'
+import { getAuth } from '@/core/auth/auth'
+import { createDbFromEnv } from '@/core/db'
+import { getPaymentProvider } from '@/core/payment'
+import { beginCheckout, findCustomerId } from '@/core/payment/checkout'
+import { isOneTimePriceValid, LANDING_PRICE_CURRENCY } from '@/core/payment/price-catalog'
+import { getPriceCatalog } from '@/core/payment/price-catalog.server'
 import { getModuleUnavailableResponse } from '@/lib/module-access.server'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getServerContext } from '@/lib/server-context'
 import { safeSameOriginUrl } from '@/lib/urls'
-import { getPaymentProvider } from '@/payment'
-import { beginCheckout, findCustomerId } from '@/payment/checkout'
-import { isOneTimePriceValid, LANDING_PRICE_CURRENCY } from '@/payment/price-catalog'
-import { getPriceCatalog } from '@/payment/price-catalog.server'
 
 const checkoutBody = z.object({
   productId: z.string(),
@@ -38,7 +38,7 @@ async function authorize(request: Request, action: string) {
     }))
   )
     return new Response('Too Many Requests', { status: 429 })
-  return { session, db: createDb(env.DB) }
+  return { session, db: createDbFromEnv(env) }
 }
 
 export const Route = createFileRoute('/api/payment/$')({

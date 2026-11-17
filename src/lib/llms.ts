@@ -1,6 +1,6 @@
 import type { LlmsConfig, LocalizedText } from '@/config/llms'
 import type { Locale } from '@/config/locale'
-import { formatUsdAmount } from '@/payment/price-catalog'
+import { formatUsdAmount } from '@/core/payment/price-catalog'
 
 /**
  * `llms.txt` / `llms-full.txt` 的渲染。

@@ -5,8 +5,8 @@
 import { ZodError } from 'zod'
 import { getServiceStatuses, validateWebsiteConfig } from '../src/config/service-status'
 import { createWebsiteConfig } from '../src/config/website'
-import { parsePublicEnv } from '../src/env/public'
-import { parseServerEnv } from '../src/env/server'
+import { parsePublicEnv } from '../src/core/env/public'
+import { parseServerEnv } from '../src/core/env/server'
 import { resolveRawEnv } from './lib/env-file'
 import { formatServiceDiagnostics, formatZodIssues } from './lib/report-issues'
 

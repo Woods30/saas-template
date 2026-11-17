@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { StripePaymentProvider } from '@/payment/provider/stripe'
+import { StripePaymentProvider } from '@/core/payment/provider/stripe'
 
 const api = vi.hoisted(() => ({
   checkout: vi.fn(),

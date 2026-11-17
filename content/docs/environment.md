@@ -13,8 +13,8 @@ modules.
 
 | File | Contents |
 |---|---|
-| `src/env/public.ts` | `VITE_` prefix, inlined into the client bundle at build time |
-| `src/env/server.ts` | Server secrets, read only at Workers runtime |
+| `src/core/env/public.ts` | `VITE_` prefix, inlined into the client bundle at build time |
+| `src/core/env/server.ts` | Server secrets, read only at Workers runtime |
 
 **A `VITE_` variable ends up in the browser.** It is baked into the client JS at build time and
 anyone who opens the page can read it. A secret must never carry the `VITE_` prefix:

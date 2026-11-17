@@ -9,13 +9,6 @@ import {
 import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useCallback, useEffect, useState } from 'react'
 import {
-  type AdminUser,
-  type AdminUserRoleFilter,
-  type AdminUserStatusFilter,
-  fetchAdminUsers,
-} from '@/auth/admin-users'
-import { authClient } from '@/auth/client'
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -74,6 +67,13 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
+import {
+  type AdminUser,
+  type AdminUserRoleFilter,
+  type AdminUserStatusFilter,
+  fetchAdminUsers,
+} from '@/core/auth/admin-users'
+import { authClient } from '@/core/auth/client'
 import { getRequestLocale } from '@/lib/locale'
 import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'

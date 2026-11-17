@@ -17,7 +17,7 @@ import { getRouter } from '@/router'
 
 // 首页价格来自 Stripe 的价格目录（server function）。测试环境里 server function
 // 不可执行，loader 会降级为「价格暂不可用」——这里 mock 出目录，页面才显示真实价格。
-vi.mock('@/payment/pricing', () => ({
+vi.mock('@/core/payment/pricing', () => ({
   fetchPriceCatalog: vi.fn().mockResolvedValue({
     one_time: {
       reference: 'one_time',

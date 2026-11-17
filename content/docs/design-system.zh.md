@@ -84,7 +84,7 @@ updated: 2026-11-03
 2. 逐对校验对比度（正文 ≥ 4.5:1，非文本图形 ≥ 3:1），不过关的按 `DESIGN.md` 的修正表处理。
 3. 新增 token 在 `:root` 与 `@theme inline` **两处**都声明，只写一半会让某主题取值为空。
 4. 同步四处：`src/config/website.ts` 的 `ui.themeColor`、`public/manifest.json`、
-   `src/mail/components/EmailLayout.tsx` 的 `EMAIL_THEME`、`content/docs/configuration*.md`。
+   `src/core/email/components/EmailLayout.tsx` 的 `EMAIL_THEME`、`content/docs/configuration*.md`。
 5. 跑 `pnpm test`，`theme-colors.test.ts` 与 `theme-tokens.test.ts` 会守住漂移。
 
 ## 换品牌 Logo

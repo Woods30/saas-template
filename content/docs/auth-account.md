@@ -33,7 +33,7 @@ The `beforeLoad` in `src/routes/{-$locale}/_layout/dashboard.tsx` does two thing
 The session cookie is httpOnly, so the client cannot read it — the session has to be read server-side:
 
 ```ts
-// src/auth/session.ts
+// src/core/auth/session.ts
 const session = await getAuth(env).api.getSession({ headers: getRequestHeaders() })
 ```
 

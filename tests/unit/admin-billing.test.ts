@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { summarizeRevenue } from '@/payment/admin-billing-query'
+import { summarizeRevenue } from '@/core/payment/admin-billing-query'
 
 /**
  * 管理台营收聚合。

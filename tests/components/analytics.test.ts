@@ -129,7 +129,7 @@ describe('initAnalytics', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.doUnmock('@/config/website')
-    vi.doUnmock('@/env/public')
+    vi.doUnmock('@/core/env/public')
     vi.resetModules()
     vi.stubEnv('PROD', false)
   })
@@ -139,7 +139,7 @@ describe('initAnalytics', () => {
   }
 
   function mockPublicEnv(env: Record<string, unknown>) {
-    vi.doMock('@/env/public', () => ({ publicEnv: env }))
+    vi.doMock('@/core/env/public', () => ({ publicEnv: env }))
   }
 
   /** jsdom 的 `document.readyState` 恒为 `complete`，需显式覆盖才能测「load 尚未触发」分支。 */

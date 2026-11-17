@@ -1,7 +1,7 @@
 import { getServiceStatuses } from '@/config/service-status'
 import { type ServiceModule, websiteConfig } from '@/config/website'
-import { publicEnv } from '@/env/public'
-import { parseServerEnv } from '@/env/server'
+import { publicEnv } from '@/core/env/public'
+import { parseServerEnv } from '@/core/env/server'
 import { getServerContext } from '@/lib/server-context'
 
 /**

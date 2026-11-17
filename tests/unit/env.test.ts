@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { parsePublicEnv } from '@/env/public'
-import { parseServerEnv, validateProdServerEnv } from '@/env/server'
+import { parsePublicEnv } from '@/core/env/public'
+import { parseServerEnv, validateProdServerEnv } from '@/core/env/server'
 
 describe('parsePublicEnv', () => {
   it('使用默认 VITE_BASE_URL', () => {

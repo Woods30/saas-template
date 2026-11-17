@@ -11,7 +11,7 @@ import {
 } from '@/config/navigation'
 import { getSocialLinks, isSafeSocialUrl } from '@/config/social-config'
 import { createWebsiteConfig, type WebsiteConfig } from '@/config/website'
-import { parsePublicEnv } from '@/env/public'
+import { parsePublicEnv } from '@/core/env/public'
 import type { Locale } from '@/lib/locale'
 import { getLocale, overwriteGetLocale } from '@/locale/paraglide/runtime.js'
 

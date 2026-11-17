@@ -1,4 +1,4 @@
-import type { AuthFormMessages } from '@/auth/validation'
+import type { AuthFormMessages } from '@/core/auth/validation'
 import { m } from '@/locale/paraglide/messages.js'
 
 /**

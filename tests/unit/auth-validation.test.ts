@@ -9,7 +9,7 @@ import {
   createRegisterSchema,
   createResetSchema,
   MIN_PASSWORD_LENGTH,
-} from '@/auth/validation'
+} from '@/core/auth/validation'
 
 /**
  * 认证表单的 Zod schema 工厂：接收文案而非自调 `m.*()`，不依赖 Paraglide 运行时；

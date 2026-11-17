@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { R2StorageProvider } from '@/storage/provider/r2'
+import { R2StorageProvider } from '@/core/storage/provider/r2'
 
 // 最小化 mock R2Bucket，只记录 put/delete/get/head/list 调用；`as any` 绕过重载方法
 // 与 vi.fn 的类型不兼容。

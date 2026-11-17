@@ -1,10 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { websiteConfig } from '@/config/website'
-import { createDb } from '@/db'
+import { createDbFromEnv } from '@/core/db'
+import { getPaymentProvider } from '@/core/payment'
+import { applyPaymentEvent } from '@/core/payment/events'
+import { CreemSignatureError } from '@/core/payment/provider/creem'
 import { getServerContext } from '@/lib/server-context'
-import { getPaymentProvider } from '@/payment'
-import { applyPaymentEvent } from '@/payment/events'
-import { CreemSignatureError } from '@/payment/provider/creem'
 
 /**
  * Creem Webhook。
@@ -35,7 +35,7 @@ export const Route = createFileRoute('/api/webhooks/creem')({
         try {
           const provider = getPaymentProvider('creem')
           const event = await provider.parseWebhookEvent(raw, signature)
-          await applyPaymentEvent(createDb(env.DB), event)
+          await applyPaymentEvent(createDbFromEnv(env), event)
           return new Response('ok')
         } catch (error) {
           if (error instanceof CreemSignatureError)

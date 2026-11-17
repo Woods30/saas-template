@@ -14,15 +14,15 @@ import {
   IconShieldLock,
 } from '@tabler/icons-react'
 import { createElement, useId, useState } from 'react'
-import { useSession } from '@/auth/client'
 import { SourceProductDemo } from '@/components/marketing/SourceProductDemo'
 import { Cta, Faq, Features } from '@/components/sections'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { websiteConfig } from '@/config/website'
+import { useSession } from '@/core/auth/client'
+import { startCheckout } from '@/core/payment/checkout-client'
+import { formatUsdAmount } from '@/core/payment/price-catalog'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
-import { startCheckout } from '@/payment/checkout-client'
-import { formatUsdAmount } from '@/payment/price-catalog'
 
 /**
  * 首页的文档入口：外部文档站优先，其次站内 `/docs`，最后回退首页锚点。

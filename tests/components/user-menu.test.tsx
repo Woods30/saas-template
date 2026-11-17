@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   signOutAndRedirect: vi.fn(),
 }))
 
-vi.mock('@/auth/client', () => ({
+vi.mock('@/core/auth/client', () => ({
   authClient: {
     useSession: (...args: unknown[]) => mocks.useSession(...args),
     signOut: (...args: unknown[]) => mocks.signOut(...args),
@@ -22,7 +22,7 @@ vi.mock('@/auth/client', () => ({
   signOut: (...args: unknown[]) => mocks.signOut(...args),
 }))
 
-vi.mock('@/auth/sign-out', () => ({
+vi.mock('@/core/auth/sign-out', () => ({
   signOutAndRedirect: (...args: unknown[]) => mocks.signOutAndRedirect(...args),
 }))
 

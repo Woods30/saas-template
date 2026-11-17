@@ -1,8 +1,6 @@
 import { IconKey } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useCallback, useMemo, useState } from 'react'
-import { type ApiKeyEntry, fetchApiKeys } from '@/auth/api-keys'
-import { authClient } from '@/auth/client'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,6 +35,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
+import { type ApiKeyEntry, fetchApiKeys } from '@/core/auth/api-keys'
+import { authClient } from '@/core/auth/client'
 import { getRequestLocale } from '@/lib/locale'
 import { assertFeatureEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'

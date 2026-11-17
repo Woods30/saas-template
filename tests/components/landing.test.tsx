@@ -27,7 +27,9 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 const auth = vi.hoisted(() => ({ session: null as { user: { id: string } } | null }))
-vi.mock('@/auth/client', () => ({ useSession: () => ({ data: auth.session, isPending: false }) }))
+vi.mock('@/core/auth/client', () => ({
+  useSession: () => ({ data: auth.session, isPending: false }),
+}))
 
 const originalConfig = structuredClone(websiteConfig)
 let motion: MediaQueryList

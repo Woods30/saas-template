@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
-import { fetchSession } from '@/auth/session'
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout'
+import { fetchSession } from '@/core/auth/session'
 import { getRequestLocale } from '@/lib/locale'
 import { assertPageEnabled } from '@/lib/module-access'
 

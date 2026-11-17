@@ -11,18 +11,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { useCheckoutNotice } from '@/hooks/use-checkout-notice'
-import { getRequestLocale } from '@/lib/locale'
-import { assertPageEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
-import { m } from '@/locale/paraglide/messages.js'
-import { type BillingOverview, fetchBillingOverview } from '@/payment/billing'
+import { type BillingOverview, fetchBillingOverview } from '@/core/payment/billing'
 import {
   paymentStatusMessageKey,
   productNameForProductId,
   splitBillingDisplay,
   subscriptionStatusMessageKey,
-} from '@/payment/billing-query'
+} from '@/core/payment/billing-query'
+import { useCheckoutNotice } from '@/hooks/use-checkout-notice'
+import { getRequestLocale } from '@/lib/locale'
+import { assertPageEnabled } from '@/lib/module-access'
+import { seo } from '@/lib/seo'
+import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/dashboard/billing')({
   beforeLoad: () => assertPageEnabled('payment'),

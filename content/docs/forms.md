@@ -76,7 +76,7 @@ export function ExampleForm() {
    `Referer` header. Feed `pending` from `form.Subscribe`'s `isSubmitting` rather than
    opening a separate `useState` for submit state.
 3. **Validation messages are injected by the schema factory.** The factories in
-   `src/auth/validation.ts` **take the messages as an argument** (`AuthFormMessages`)
+   `src/core/auth/validation.ts` **take the messages as an argument** (`AuthFormMessages`)
    instead of calling `m.*()` themselves, so validation stays free of the Paraglide
    runtime and unit-testable without components; pages evaluate `authFormMessages()`, so
    error messages follow the language automatically.

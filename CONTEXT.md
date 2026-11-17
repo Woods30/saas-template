@@ -11,11 +11,17 @@
 
 ## 术语表
 
+- **core / modules / routes**：三层依赖关系。`core` 是基础设施（db、env、auth、payment、
+  storage、email、cache、notify、i18n），可被依赖但不得依赖业务；`modules` 是业务能力，
+  只依赖 core 与自身；`routes` 是页面与接口，可依赖前两层。方向由
+  `scripts/check-boundaries.ts` 强制，见 ADR-0008。
+- **模块公开入口**：`src/modules/<id>/service.ts`。模块根路径与内部文件都不算入口；
+  跨模块与路由一律经由 `@/modules/<id>/service`。
 - **websiteConfig**：`src/config/website.ts` 导出的站点集中配置，承载语言无关的元数据、
   UI 默认值、模块开关、provider 选择与社交链接；需随请求语言变化的文案不放在这里。
 - **createWebsiteConfig(env)**：显式接收 `PublicEnv` 的配置工厂，使脚本与单测可构造独立
   配置，不依赖模块单例。
-- **publicEnv / serverEnv**：`src/env/public.ts`、`src/env/server.ts` 导出的两层已校验环境
+- **publicEnv / serverEnv**：`src/core/env/public.ts`、`src/core/env/server.ts` 导出的两层已校验环境
   变量对象，是所有 env 读取的唯一出口。
 - **locale**：受支持语言，当前为 `zh`、`en`，默认 `zh`；`zh` 为消息源语言。
 - **message**：`messages/{zh,en}.json` 中的文案键值，经 Paraglide 编译为类型化访问器 `m.*()`。
@@ -40,13 +46,13 @@
   语言无关 slug 的函数，是文档站与 legal 路由「切换语言不 404」的基础。
 - **ServerContext**：`src/lib/server-context.ts` 的每请求上下文，含归一化 env、CSP nonce、
   主题与四个 provider 注册表。
-- **fetchSession()**：`src/auth/session.ts` 的 server function，读当前请求会话并只返回页面
+- **fetchSession()**：`src/core/auth/session.ts` 的 server function，读当前请求会话并只返回页面
   需要的字段。受保护路由在 `beforeLoad` 用它判会话；必须是 server function，因为会话
   cookie 是 httpOnly 且 `getAuth` 需要每请求 env。
 - **受保护路由**：`src/routes/{-$locale}/_layout/dashboard.tsx` 确立的模式——pathless layout
   的 `beforeLoad` 先 `assertPageEnabled('auth')`，再用 `fetchSession()` 判会话，未登录
   `redirect` 到登录页并带上 locale 参数。
-- **AuthFormMessages**：`src/auth/validation.ts` 的校验文案契约。schema 工厂接收文案而非
+- **AuthFormMessages**：`src/core/auth/validation.ts` 的校验文案契约。schema 工厂接收文案而非
   自己调 `m.*()`，使校验逻辑不依赖 Paraglide 运行时、可脱离组件单测；页面用
   `authFormMessages()` 求值。
 - **模板工程**：本仓 `Woods30/saas-template`，含模板源码、技术文档与 init 脚本。默认品牌
@@ -64,7 +70,7 @@
 ## 关键不变量
 
 - **env 两层模型**：业务代码**不得**直接读 `process.env` / `import.meta.env`，一律经
-  `src/env/public.ts`、`src/env/server.ts`。
+  `src/core/env/public.ts`、`src/core/env/server.ts`。
 - **`VITE_` 前缀 = 公开**：`VITE_` 变量在构建时进入客户端 bundle，任何人可见，**不得**存放
   secret。
 - **服务端 secret**：仅从 Workers binding 或服务端读取，**绝不能**设成 `VITE_` 前缀

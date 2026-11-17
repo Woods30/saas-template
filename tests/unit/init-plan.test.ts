@@ -42,7 +42,7 @@ const WRANGLER = `{
       "binding": "DB",
       "database_name": "saas-template-db",
       "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "./src/db/migrations"
+      "migrations_dir": "./src/core/db/migrations"
     }
   ],
   "kv_namespaces": [{ "binding": "CACHE", "id": "00000000000000000000000000000000" }]
@@ -177,7 +177,7 @@ describe('buildPlan', () => {
 
     expect(result).toContain('// Worker 名决定线上地址。')
     expect(result).toContain('// ID 由 `wrangler d1 create` 产出后手工回填。')
-    expect(result).toContain('"migrations_dir": "./src/db/migrations"')
+    expect(result).toContain('"migrations_dir": "./src/core/db/migrations"')
   })
 })
 

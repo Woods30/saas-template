@@ -79,7 +79,7 @@ still confirmed in Resend.
 pnpm email:dev
 ```
 
-Previews the four templates in `src/mail/templates/` (verification, password reset,
+Previews the four templates in `src/core/email/templates/` (verification, password reset,
 contact message, welcome) on port 3001, with live hot reload.
 
 ## Notes

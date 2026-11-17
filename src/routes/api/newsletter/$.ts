@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
 import { websiteConfig } from '@/config/website'
 import { getModuleUnavailableResponse } from '@/lib/module-access.server'
-import { checkRateLimit, checkStatus, subscribe, unsubscribe } from '@/newsletter'
+import { checkRateLimit, checkStatus, subscribe, unsubscribe } from '@/modules/newsletter/service'
 
 const subscribeBodySchema = z.object({
   email: z.string().min(3).max(320),

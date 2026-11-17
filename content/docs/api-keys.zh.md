@@ -62,7 +62,7 @@ if (!result.valid) return new Response('Unauthorized', { status: 401 })
 | `keyExpiration.defaultExpiresIn` | `null` | 客户端不传时的兜底（单位是秒）；`null` 表示不过期 |
 
 有效期只在**创建那一刻**有意义：插件把它换算成 `expiresAt` 落库，列表读的是那个时间戳，所以创建后
-无法在界面上续期，只能删了重建。改上下限要同时改 `src/auth/auth.ts` 的 `apiKey({ keyExpiration })`
+无法在界面上续期，只能删了重建。改上下限要同时改 `src/core/auth/auth.ts` 的 `apiKey({ keyExpiration })`
 和 `src/routes/{-$locale}/_layout/dashboard/api-keys.tsx` 的 `EXPIRY_OPTIONS`，否则用户能选到一个
 必然被服务端拒绝的值。
 

@@ -23,12 +23,12 @@ updated: 2026-11-03
 | `src/components/docs/` | 文档站布局、侧栏、搜索、目录 |
 | `src/components/dashboard/` | 工作台骨架与用户卡片 |
 | `src/components/auth/` | 表单件：字段适配层、提交按钮、水合检测 |
-| `src/auth/` | Better Auth 配置、会话、邮箱验证 |
-| `src/db/` | Drizzle schema 与迁移文件 |
-| `src/env/` | 两层 env 校验：`public.ts` 与 `server.ts` |
+| `src/core/auth/` | Better Auth 配置、会话、邮箱验证 |
+| `src/core/db/` | Drizzle schema 与迁移文件 |
+| `src/core/env/` | 两层 env 校验：`public.ts` 与 `server.ts` |
 | `src/lib/` | 纯逻辑：locale、SEO、模块门禁、限流、主题解析 |
 | `src/locale/` | Paraglide 产物与 locale 中间件 |
-| `src/cache/` `src/storage/` `src/mail/` `src/newsletter/` `src/notification/` `src/payment/` | 各服务模块：provider 注册表 + 抽象接口 |
+| `src/core/cache/` `src/core/storage/` `src/core/email/` `src/modules/newsletter/` `src/core/notify/` `src/core/payment/` | 各服务模块：provider 注册表 + 抽象接口 |
 | `src/styles/` | `globals.css`（设计 token）、`mdx.css` |
 | `src/hooks/` | 跨页面复用的 hook |
 | `src/server.ts` / `src/router.tsx` | 服务入口（CSP nonce、env 注入）/ 路由实例 |
@@ -58,11 +58,11 @@ updated: 2026-11-03
 | 首页 / 关于 / 定价页的段落 | 对应路由组件，如 `src/routes/{-$locale}/index.tsx` |
 | 颜色、字体、圆角、阴影 | `src/styles/globals.css` |
 | 文档内容 | `content/docs/*.md` |
-| 数据库表 | `src/db/schema.ts`，然后 `pnpm db:generate` |
+| 数据库表 | `src/core/db/schema.ts`，然后 `pnpm db:generate` |
 | 新增页面 | 在 `src/routes/` 下建文件，路由自动生成 |
 | 新增 API | `src/routes/api/<name>/$.ts` |
 | 新增 UI 控件 | `pnpm dlx shadcn@latest add <component> -y`，装到 `src/components/ui/` |
-| 新增服务模块 | 照 `src/mail/` 的结构：`types.ts` + `provider/` + `index.ts` |
+| 新增服务模块 | 照 `src/core/email/` 的结构：`types.ts` + `provider/` + `index.ts` |
 
 ## 生成物
 

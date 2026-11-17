@@ -1,8 +1,8 @@
 import { render, screen, within } from '@testing-library/react'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SessionInfo } from '@/auth/session'
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout'
+import type { SessionInfo } from '@/core/auth/session'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
 /** 个人中心外壳：面包屑导航、收起态侧栏、侧栏底部用户卡片、内容区宽度。 */

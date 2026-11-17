@@ -17,11 +17,11 @@ const flow = vi.hoisted(() => ({
   login: vi.fn().mockResolvedValue({ error: null }),
   social: vi.fn(),
 }))
-vi.mock('@/auth/client', () => ({
+vi.mock('@/core/auth/client', () => ({
   signIn: { social: flow.social, email: flow.login },
   signUp: { email: flow.signup },
 }))
-vi.mock('@/auth/providers', () => ({ fetchAuthProviderAvailability: vi.fn() }))
+vi.mock('@/core/auth/providers', () => ({ fetchAuthProviderAvailability: vi.fn() }))
 vi.mock('@/lib/analytics/events', () => ({ trackSignUp: vi.fn(), trackLogin: vi.fn() }))
 
 const verificationRequired = websiteConfig.auth.requireEmailVerification

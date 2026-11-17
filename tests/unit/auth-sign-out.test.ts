@@ -9,11 +9,11 @@ const mocks = vi.hoisted(() => ({
   signOut: vi.fn(),
 }))
 
-vi.mock('@/auth/client', () => ({
+vi.mock('@/core/auth/client', () => ({
   signOut: (...args: unknown[]) => mocks.signOut(...args),
 }))
 
-import { signOutAndRedirect } from '@/auth/sign-out'
+import { signOutAndRedirect } from '@/core/auth/sign-out'
 
 afterEach(() => {
   vi.clearAllMocks()

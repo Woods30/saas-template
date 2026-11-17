@@ -1,4 +1,4 @@
-import { publicEnv } from '@/env/public'
+import { publicEnv } from '@/core/env/public'
 
 /** 站点基址（已去除尾部斜杠），例如 `https://example.com`。 */
 export function getBaseUrl(): string {

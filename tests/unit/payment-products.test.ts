@@ -4,7 +4,7 @@ import {
   isOneTimePriceValid,
   LANDING_PRICE_CURRENCY,
   mergePricingProducts,
-} from '@/payment/price-catalog'
+} from '@/core/payment/price-catalog'
 
 // 捕获价格选项丢失、按本地周期猜测计费方式，以及重复维护配置的问题。
 describe('扁平套餐目录', () => {

@@ -126,7 +126,7 @@ const WRANGLER = `{
       "binding": "DB",
       "database_name": "saas-template-db",
       "database_id": "old-db-id",
-      "migrations_dir": "./src/db/migrations"
+      "migrations_dir": "./src/core/db/migrations"
     }
   ],
   // R2 暂未启用：必须先在 Dashboard 开通一次。
@@ -160,7 +160,7 @@ describe('applyResourceBindings', () => {
     expect(result).toContain('// ID 由 `wrangler d1 create` 产出后手工回填')
     expect(result).toContain('// R2 暂未启用')
     expect(result).toContain('"name": "jerbix"')
-    expect(result).toContain('"migrations_dir": "./src/db/migrations"')
+    expect(result).toContain('"migrations_dir": "./src/core/db/migrations"')
   })
 
   it('不启用 R2：注释掉的 r2_buckets 保持注释状态', () => {

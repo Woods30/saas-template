@@ -31,7 +31,7 @@ vi.mock('@/lib/server-context', () => ({
 }))
 
 // Mock cache。
-vi.mock('@/cache', () => ({
+vi.mock('@/core/cache', () => ({
   createCacheKey: (prefix: string, ...parts: string[]) => `${prefix}:${parts.join(':')}`,
   deleteCache: vi.fn().mockResolvedValue(undefined),
   getOrSetCache: vi
@@ -62,7 +62,7 @@ vi.mock('resend', () => ({
 }))
 
 // 被测模块，必须在 mock 之后导入。
-import { parseServerEnv } from '@/env/server'
+import { parseServerEnv } from '@/core/env/server'
 import {
   BeehiivNewsletterProvider,
   buildNewsletterProviderRegistry,
@@ -71,7 +71,7 @@ import {
   ResendNewsletterProvider,
   subscribe,
   unsubscribe,
-} from '@/newsletter'
+} from '@/modules/newsletter/service'
 import { Route as NewsletterRoute } from '@/routes/api/newsletter/$'
 
 // ResendNewsletterProvider。
@@ -318,7 +318,7 @@ describe('subscribe / unsubscribe / checkStatus', () => {
     expect(result).toBe(true)
     expect(mockProvider.subscribe).toHaveBeenCalledWith({ email: 'test@example.com' })
 
-    const { deleteCache } = await import('@/cache')
+    const { deleteCache } = await import('@/core/cache')
     expect(deleteCache).toHaveBeenCalledWith('newsletter:status:test@example.com')
   })
 
@@ -333,7 +333,7 @@ describe('subscribe / unsubscribe / checkStatus', () => {
     expect(result).toBe(true)
     expect(mockProvider.unsubscribe).toHaveBeenCalledWith({ email: 'test@example.com' })
 
-    const { deleteCache } = await import('@/cache')
+    const { deleteCache } = await import('@/core/cache')
     expect(deleteCache).toHaveBeenCalledWith('newsletter:status:test@example.com')
   })
 
@@ -344,7 +344,7 @@ describe('subscribe / unsubscribe / checkStatus', () => {
     }
     mockNewsletterProviderRegistry.resend = () => mockProvider as never
 
-    const { getOrSetCache } = await import('@/cache')
+    const { getOrSetCache } = await import('@/core/cache')
     vi.mocked(getOrSetCache).mockResolvedValueOnce(true)
 
     const result = await checkStatus('resend', { email: 'test@example.com' })

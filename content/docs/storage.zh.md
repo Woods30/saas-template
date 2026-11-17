@@ -8,7 +8,7 @@ updated: 2026-11-03
 ---
 
 用户上传的文件存在 **Cloudflare R2**，经 Workers 的 `BUCKET` binding 访问，零 egress 费用。
-代码在 `src/storage/`。
+代码在 `src/core/storage/`。
 
 > 存储层已经实现，但仓库里**没有上传路由**：`features.enableFileUpload` 默认 `false`，
 > `src/routes/api/` 下也没有 `/api/files`。这页讲的是「要用时怎么接」。不接 R2 不影响模板运行。

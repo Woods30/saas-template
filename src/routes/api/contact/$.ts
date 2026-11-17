@@ -1,9 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
-import { deliverContactNotification } from '@/contact/notifications'
-import type { ContactInput } from '@/contact/schema'
 import { getModuleUnavailableResponse } from '@/lib/module-access.server'
 import { checkRateLimit } from '@/lib/rate-limit'
+import type { ContactInput } from '@/modules/contact/service'
+import { deliverContactNotification } from '@/modules/contact/service'
 
 const contactBodySchema = z.object({
   name: z.string().min(1).max(100),

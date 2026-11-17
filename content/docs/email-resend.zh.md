@@ -71,7 +71,7 @@ pnpm run check:env
 pnpm email:dev
 ```
 
-在 3001 端口预览 `src/mail/templates/` 下的四个模板（验证、重置密码、联系消息、欢迎），
+在 3001 端口预览 `src/core/email/templates/` 下的四个模板（验证、重置密码、联系消息、欢迎），
 改模板即时热更新。
 
 ## 注意事项

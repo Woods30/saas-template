@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { createDb } from '@/db'
+import { createDbFromEnv } from '@/core/db'
+import { getPaymentProvider } from '@/core/payment'
+import { applyPaymentEvent } from '@/core/payment/events'
 import { getServerContext } from '@/lib/server-context'
-import { getPaymentProvider } from '@/payment'
-import { applyPaymentEvent } from '@/payment/events'
 
 export const Route = createFileRoute('/api/webhooks/stripe')({
   server: {
@@ -17,7 +17,7 @@ export const Route = createFileRoute('/api/webhooks/stripe')({
           const provider = getPaymentProvider('stripe')
           const event = await provider.parseWebhookEvent(raw, signature)
           await applyPaymentEvent(
-            createDb(env.DB),
+            createDbFromEnv(env),
             event,
             event.subscriptionId && event.type !== 'customer.subscription.deleted'
               ? () => provider.retrieveSubscription(event.subscriptionId as string)

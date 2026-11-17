@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { authClient, signIn, signUp, useSession } from '@/auth/client'
+import { authClient, signIn, signUp, useSession } from '@/core/auth/client'
 
 // Smoke：auth client 导出预期 API。
 describe('auth client API', () => {

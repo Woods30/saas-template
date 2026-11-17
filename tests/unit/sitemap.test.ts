@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createWebsiteConfig } from '@/config/website'
-import { parsePublicEnv } from '@/env/public'
+import { parsePublicEnv } from '@/core/env/public'
 import { getSitemapPaths, renderSitemapXml } from '@/routes/sitemap[.]xml'
 
 /**

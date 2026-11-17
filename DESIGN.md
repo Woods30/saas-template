@@ -53,7 +53,7 @@
   （排除 `ui/` 与 `mail/`），发现色值字面量即失败；`theme-colors.test.ts` 校验
   `website.ts` 的 `themeColor` 与 `globals.css` 等价。新增例外要在测试里写明原因。
 - **邮件是唯一例外**：邮件客户端不执行站点 CSS，颜色集中在
-  `src/mail/components/EmailLayout.tsx` 的 `EMAIL_THEME`，改主题时同步。
+  `src/core/email/components/EmailLayout.tsx` 的 `EMAIL_THEME`，改主题时同步。
 
 ### 对比度修正（不要「还原」）
 
@@ -186,7 +186,7 @@ Logo 分成**图形标记**与**站名**两部分：
    |---|---|
    | `src/config/website.ts` | `ui.themeColor`（浏览器地址栏，页面外渲染，读不到 CSS） |
    | `public/manifest.json` | `background_color` / `theme_color` |
-   | `src/mail/components/EmailLayout.tsx` | `EMAIL_THEME`（邮件不执行站点 CSS） |
+   | `src/core/email/components/EmailLayout.tsx` | `EMAIL_THEME`（邮件不执行站点 CSS） |
    | `content/docs/configuration*.md` | 文档里的示例值 |
 
 5. 跑 `pnpm test`——`theme-colors.test.ts` 与 `theme-tokens.test.ts` 会守住漂移。

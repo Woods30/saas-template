@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { getAuthProviderAvailability } from '@/auth/providers'
-import { parseServerEnv } from '@/env/server'
+import { getAuthProviderAvailability } from '@/core/auth/providers'
+import { parseServerEnv } from '@/core/env/server'
 
 /**
  * 社交登录可见性判定。Google 凭据是服务端 env，客户端读不到，故按钮可见性须在服务端

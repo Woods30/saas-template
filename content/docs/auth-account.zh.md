@@ -35,7 +35,7 @@ updated: 2026-11-03
 会话 cookie 是 httpOnly，客户端读不到，所以只能由 server function 在服务端读：
 
 ```ts
-// src/auth/session.ts
+// src/core/auth/session.ts
 const session = await getAuth(env).api.getSession({ headers: getRequestHeaders() })
 ```
 

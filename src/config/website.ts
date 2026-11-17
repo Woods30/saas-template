@@ -1,4 +1,4 @@
-import { type PublicEnv, publicEnv } from '@/env/public'
+import { type PublicEnv, publicEnv } from '@/core/env/public'
 
 export type PaymentProviderName = 'stripe' | 'creem'
 export type AnalyticsName = 'ga' | 'plausible' | 'umami' | 'clarity'
@@ -107,7 +107,7 @@ export interface WebsiteConfig {
    *
    * 「卖什么、怎么卖」不在这里，而在 `src/config/products.ts`：产品与销售引用都在
    * 那儿定义。真正的价格 ID 与金额由所选渠道在运行时给出（见
-   * `src/payment/price-catalog.ts`）。
+   * `src/core/payment/price-catalog.ts`）。
    */
   payment: {
     enabled: boolean

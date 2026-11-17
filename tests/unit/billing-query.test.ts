@@ -4,7 +4,7 @@ import {
   splitBillingDisplay,
   subscriptionIntervalMessageKey,
   subscriptionStatusMessageKey,
-} from '@/payment/billing-query'
+} from '@/core/payment/billing-query'
 
 describe('账单展示', () => {
   it('取消的历史订阅不伪装成当前方案', () => {

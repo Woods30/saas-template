@@ -5,7 +5,7 @@ import {
   productConfigErrors,
   resolvePriceReference,
 } from '@/config/products'
-import { buildProductIdByPriceId } from '@/payment/price-catalog'
+import { buildProductIdByPriceId } from '@/core/payment/price-catalog'
 
 describe('套餐销售引用', () => {
   it('产品与选项共同限制可购买引用，不能选择未知选项或对象原型', () => {

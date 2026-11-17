@@ -79,7 +79,7 @@ pnpm run check:env
 pnpm email:dev
 ```
 
-在 3001 端口预览 `src/mail/templates/` 下的模板。
+在 3001 端口预览 `src/core/email/templates/` 下的模板。
 
 ## 注意事项
 

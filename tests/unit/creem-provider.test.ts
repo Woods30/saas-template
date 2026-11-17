@@ -5,7 +5,7 @@ import {
   normalizeCreemEvent,
   parseCreemProducts,
   verifyCreemSignature,
-} from '@/payment/provider/creem'
+} from '@/core/payment/provider/creem'
 
 /**
  * Creem 适配器：业务层只消费归一化后的 `PaymentEvent` / `ProviderSubscription`，

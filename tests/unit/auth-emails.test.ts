@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { sendAuthEmail, sendAuthEmailForRequest } from '@/auth/emails'
 import type { WebsiteConfig } from '@/config/website'
 import { createWebsiteConfig } from '@/config/website'
-import type { ServerEnv } from '@/env/server'
-import type { SendTemplateParams } from '@/mail/types'
+import { sendAuthEmail, sendAuthEmailForRequest } from '@/core/auth/emails'
+import type { SendTemplateParams } from '@/core/email/types'
+import type { ServerEnv } from '@/core/env/server'
 
 /**
- * `src/auth/emails.ts`：better-auth 回调与 mail registry 之间的桥梁。依赖注入、无需 ALS；
+ * `src/core/auth/emails.ts`：better-auth 回调与 mail registry 之间的桥梁。依赖注入、无需 ALS；
  * 邮件关闭或发件人缺失时不发送并返回 `{ ok: false }`，不让注册 / 登录因邮件失败。
  */
 

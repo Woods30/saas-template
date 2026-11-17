@@ -51,7 +51,7 @@ under `mail`.
 pnpm email:dev
 ```
 
-Previews the templates in `src/mail/templates/` on port 3001, with hot reload.
+Previews the templates in `src/core/email/templates/` on port 3001, with hot reload.
 
 ## Notes
 

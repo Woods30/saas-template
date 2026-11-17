@@ -6,17 +6,15 @@
  * 每个请求相互隔离。
  */
 import { AsyncLocalStorage } from 'node:async_hooks'
-import type { KVCacheProvider } from '@/cache/provider/kv'
-import type { ServerEnv } from '@/env/server'
+import type { KVCacheProvider } from '@/core/cache/provider/kv'
+import type { MailProvider } from '@/core/email/types'
+import type { ServerEnv } from '@/core/env/server'
+import type { NotificationChannel, NotificationProvider } from '@/core/notify/service'
+import type { PaymentProviderName } from '@/core/payment'
+import type { PaymentProvider } from '@/core/payment/types'
+import type { R2StorageProvider } from '@/core/storage/provider/r2'
 import { defaultTheme, type Theme } from '@/lib/theme'
-import type { MailProvider } from '@/mail/types'
-import type { NewsletterProviderName } from '@/newsletter'
-import type { NewsletterProvider } from '@/newsletter/types'
-import type { NotificationChannel } from '@/notification'
-import type { NotificationProvider } from '@/notification/types'
-import type { PaymentProviderName } from '@/payment'
-import type { PaymentProvider } from '@/payment/types'
-import type { R2StorageProvider } from '@/storage/provider/r2'
+import type { NewsletterProvider, NewsletterProviderName } from '@/modules/newsletter/service'
 
 interface ServerContext {
   /**

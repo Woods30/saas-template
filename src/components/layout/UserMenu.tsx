@@ -1,8 +1,6 @@
 import { IconLogout, IconSettings, IconUser } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
-import { useSession } from '@/auth/client'
-import { signOutAndRedirect } from '@/auth/sign-out'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -13,6 +11,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useSession } from '@/core/auth/client'
+import { signOutAndRedirect } from '@/core/auth/sign-out'
 import { getRequestLocale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
 

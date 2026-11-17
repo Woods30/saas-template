@@ -7,7 +7,7 @@ group: deploy
 updated: 2026-11-03
 ---
 
-User uploads live in **Cloudflare R2**, reached through the Workers `BUCKET` binding with zero egress fees. The code is in `src/storage/`.
+User uploads live in **Cloudflare R2**, reached through the Workers `BUCKET` binding with zero egress fees. The code is in `src/core/storage/`.
 
 > The storage layer is implemented, but the repository ships **no upload route**: `features.enableFileUpload` is `false` by default and there is no `/api/files` route under `src/routes/api/`. This page covers how to wire it up when you need it. Not connecting R2 does not affect the template.
 

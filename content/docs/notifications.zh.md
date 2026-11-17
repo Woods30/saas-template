@@ -49,8 +49,8 @@ updated: 2026-11-03
 
 | 事件 | 内容 | 位置 |
 |---|---|---|
-| 付款成功 | 套餐名、金额、用户 ID、购买类型 | `src/payment/events.ts` |
-| 联系表单提交 | 访客姓名、邮箱、主题、正文 | `src/contact/notifications.ts` |
+| 付款成功 | 套餐名、金额、用户 ID、购买类型 | `src/core/payment/events.ts` |
+| 联系表单提交 | 访客姓名、邮箱、主题、正文 | `src/modules/contact/notifications.ts` |
 
 联系表单的邮件通道与 webhook 通道**互为备份**：任一条成功就算送达，两条都失败才返回失败。
 

@@ -45,7 +45,7 @@ updated: 2026-11-03
 pnpm email:dev
 ```
 
-在 3001 端口预览模板（`src/mail/templates/`），改模板即时热更新。
+在 3001 端口预览模板（`src/core/email/templates/`），改模板即时热更新。
 
 ## 注意事项
 

@@ -1,7 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import { type ReactNode, useState } from 'react'
-import { authClient } from '@/auth/client'
-import type { SessionInfo } from '@/auth/session'
 import { DashboardUserCard } from '@/components/dashboard/DashboardUserCard'
 import { BrandLogo } from '@/components/layout/BrandLogo'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
@@ -31,6 +29,8 @@ import {
 } from '@/components/ui/sidebar'
 import { getSettingsSectionMeta, getSettingsSections } from '@/config/settings'
 import { websiteConfig } from '@/config/website'
+import { authClient } from '@/core/auth/client'
+import type { SessionInfo } from '@/core/auth/session'
 import type { Locale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
 

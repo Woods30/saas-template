@@ -2,12 +2,12 @@ import { createFileRoute, redirect } from '@tanstack/react-router'
 import { LandingPage } from '@/components/marketing/LandingPage'
 import { MarketingLayout } from '@/components/marketing/MarketingLayout'
 import { websiteConfig } from '@/config/website'
+import { findCatalogAmount } from '@/core/payment/price-catalog'
+import { fetchPriceCatalog } from '@/core/payment/pricing'
 import { getRequestLocale } from '@/lib/locale'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
-import { findCatalogAmount } from '@/payment/price-catalog'
-import { fetchPriceCatalog } from '@/payment/pricing'
 
 export const Route = createFileRoute('/{-$locale}/')({
   beforeLoad: () => {

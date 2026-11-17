@@ -86,7 +86,7 @@ submission and confirm the message is actually delivered.
 pnpm email:dev
 ```
 
-Previews the templates in `src/mail/templates/` on port 3001.
+Previews the templates in `src/core/email/templates/` on port 3001.
 
 ## Notes
 

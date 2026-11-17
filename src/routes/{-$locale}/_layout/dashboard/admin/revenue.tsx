@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { type AdminBillingResult, fetchAdminBilling } from '@/auth/admin-billing'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,11 +11,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { type AdminBillingResult, fetchAdminBilling } from '@/core/auth/admin-billing'
+import { productNameForProductId, subscriptionStatusMessageKey } from '@/core/payment/billing-query'
 import { getRequestLocale } from '@/lib/locale'
 import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
-import { productNameForProductId, subscriptionStatusMessageKey } from '@/payment/billing-query'
 
 /**
  * 管理台营收与订阅总览。

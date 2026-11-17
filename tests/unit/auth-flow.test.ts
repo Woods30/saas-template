@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { requiresEmailVerification, signUpOutcome } from '@/auth/flow'
 import { createWebsiteConfig, type WebsiteConfig } from '@/config/website'
+import { requiresEmailVerification, signUpOutcome } from '@/core/auth/flow'
 
 /**
  * 注册流程的两个派生判定。邮箱验证是安全控制而非邮件开关，必须由显式配置

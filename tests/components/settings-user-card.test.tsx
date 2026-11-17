@@ -1,10 +1,10 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SessionInfo } from '@/auth/session'
 import { DashboardUserCard } from '@/components/dashboard/DashboardUserCard'
 import { Sidebar, SidebarFooter, SidebarProvider } from '@/components/ui/sidebar'
 import { websiteConfig } from '@/config/website'
+import type { SessionInfo } from '@/core/auth/session'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
 /**
@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   signOutAndRedirect: vi.fn(),
 }))
 
-vi.mock('@/auth/sign-out', () => ({
+vi.mock('@/core/auth/sign-out', () => ({
   signOutAndRedirect: (...args: unknown[]) => mocks.signOutAndRedirect(...args),
 }))
 

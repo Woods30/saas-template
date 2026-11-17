@@ -53,8 +53,8 @@ environment variable → switch the provider.
 
 | Event | Contents | Location |
 |---|---|---|
-| Successful payment | Plan name, amount, user ID, purchase type | `src/payment/events.ts` |
-| Contact form submission | Visitor name, email, subject, body | `src/contact/notifications.ts` |
+| Successful payment | Plan name, amount, user ID, purchase type | `src/core/payment/events.ts` |
+| Contact form submission | Visitor name, email, subject, body | `src/modules/contact/notifications.ts` |
 
 The contact form's email channel and webhook channel **back each other up**: either one
 succeeding counts as delivered; only when both fail is the submission reported as failed.

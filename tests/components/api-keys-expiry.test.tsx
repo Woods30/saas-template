@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   delete: vi.fn(),
 }))
 
-vi.mock('@/auth/client', () => ({
+vi.mock('@/core/auth/client', () => ({
   authClient: {
     apiKey: {
       create: (...args: unknown[]) => mocks.create(...args),

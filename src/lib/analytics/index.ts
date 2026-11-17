@@ -1,5 +1,5 @@
 import { websiteConfig } from '@/config/website'
-import { publicEnv } from '@/env/public'
+import { publicEnv } from '@/core/env/public'
 import { ClarityAnalyticsProvider } from './clarity'
 import { createGtag, GAAnalyticsProvider, type GtagCommand } from './ga'
 import { PlausibleAnalyticsProvider } from './plausible'

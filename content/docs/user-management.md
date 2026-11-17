@@ -11,7 +11,7 @@ User management is built on Better Auth's admin plugin. Admins use the dashboard
 
 ## Roles
 
-`users.role` is a plain text column (`src/db/schema.ts`) defaulting to `'user'`. This repo uses exactly two values:
+`users.role` is a plain text column (`src/core/db/schema.ts`) defaulting to `'user'`. This repo uses exactly two values:
 
 | Value | Meaning |
 |---|---|

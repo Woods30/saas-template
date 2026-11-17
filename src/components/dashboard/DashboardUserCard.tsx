@@ -1,8 +1,6 @@
 import { IconDotsVertical, IconLogout, IconSettings } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
-import type { SessionInfo } from '@/auth/session'
-import { signOutAndRedirect } from '@/auth/sign-out'
 import { THEME_ICON, ThemeMenuItems, useTheme } from '@/components/theme/ThemeToggle'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -23,6 +21,8 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import type { SessionInfo } from '@/core/auth/session'
+import { signOutAndRedirect } from '@/core/auth/sign-out'
 import { getRequestLocale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
 

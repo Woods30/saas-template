@@ -20,18 +20,21 @@ vi.mock('@/lib/server-context', () => ({
   },
 }))
 
-vi.mock('@/mail', () => ({
+vi.mock('@/core/email', () => ({
   sendMail: (...args: unknown[]) => mockSendTemplate(...args),
 }))
 
-vi.mock('@/notification', () => ({
+vi.mock('@/core/notify/service', () => ({
   notify: (...args: unknown[]) => mockNotify(...args),
 }))
 
 import { websiteConfig } from '@/config/website'
-import { deliverContactNotification } from '@/contact/notifications'
 // 被测模块，必须在 mock 之后导入。
-import { type ContactInput, contactSchema } from '@/contact/schema'
+import {
+  type ContactInput,
+  contactSchema,
+  deliverContactNotification,
+} from '@/modules/contact/service'
 
 // contactSchema。
 describe('contactSchema', () => {
@@ -115,7 +118,7 @@ describe('deliverContactNotification', () => {
     vi.doMock('@/config/website', async () => {
       const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
       const { parsePublicEnv } =
-        await vi.importActual<typeof import('@/env/public')>('@/env/public')
+        await vi.importActual<typeof import('@/core/env/public')>('@/core/env/public')
       const base = actual.createWebsiteConfig(
         parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' }),
       )
@@ -127,7 +130,7 @@ describe('deliverContactNotification', () => {
         },
       }
     })
-    return import('@/contact/notifications')
+    return import('@/modules/contact/service')
   }
 
   it('calls sendMail with configured provider and contactMessage template', async () => {
@@ -208,15 +211,15 @@ describe('deliverContactNotification', () => {
         }),
       },
     }))
-    vi.doMock('@/mail', () => ({
+    vi.doMock('@/core/email', () => ({
       sendMail: (...args: unknown[]) => mockSendTemplate(...args),
     }))
-    vi.doMock('@/notification', () => ({
+    vi.doMock('@/core/notify/service', () => ({
       notify: (...args: unknown[]) => mockNotify(...args),
     }))
 
     const { deliverContactNotification: reimportedDeliver } = await import(
-      '@/contact/notifications'
+      '@/modules/contact/service'
     )
 
     mockNotificationProviderRegistry.discord = () => ({ send: async () => true })
@@ -258,15 +261,15 @@ describe('deliverContactNotification', () => {
         }),
       },
     }))
-    vi.doMock('@/mail', () => ({
+    vi.doMock('@/core/email', () => ({
       sendMail: (...args: unknown[]) => mockSendTemplate(...args),
     }))
-    vi.doMock('@/notification', () => ({
+    vi.doMock('@/core/notify/service', () => ({
       notify: (...args: unknown[]) => mockNotify(...args),
     }))
 
     const { deliverContactNotification: reimportedDeliverMixed } = await import(
-      '@/contact/notifications'
+      '@/modules/contact/service'
     )
 
     // 通知失败但邮件成功仍算已送达，不抛错。
@@ -297,15 +300,15 @@ describe('deliverContactNotification', () => {
         }),
       },
     }))
-    vi.doMock('@/mail', () => ({
+    vi.doMock('@/core/email', () => ({
       sendMail: (...args: unknown[]) => mockSendTemplate(...args),
     }))
-    vi.doMock('@/notification', () => ({
+    vi.doMock('@/core/notify/service', () => ({
       notify: (...args: unknown[]) => mockNotify(...args),
     }))
 
     const { deliverContactNotification: reimportedDeliver } = await import(
-      '@/contact/notifications'
+      '@/modules/contact/service'
     )
 
     mockNotificationProviderRegistry.discord = () => ({ send: async () => true })
@@ -345,15 +348,15 @@ describe('deliverContactNotification', () => {
         }),
       },
     }))
-    vi.doMock('@/mail', () => ({
+    vi.doMock('@/core/email', () => ({
       sendMail: (...args: unknown[]) => mockSendTemplate(...args),
     }))
-    vi.doMock('@/notification', () => ({
+    vi.doMock('@/core/notify/service', () => ({
       notify: (...args: unknown[]) => mockNotify(...args),
     }))
 
     const { deliverContactNotification: reimportedDeliver } = await import(
-      '@/contact/notifications'
+      '@/modules/contact/service'
     )
 
     mockNotificationProviderRegistry.discord = () => ({ send: async () => true })
@@ -393,15 +396,15 @@ describe('deliverContactNotification', () => {
         }),
       },
     }))
-    vi.doMock('@/mail', () => ({
+    vi.doMock('@/core/email', () => ({
       sendMail: (...args: unknown[]) => mockSendTemplate(...args),
     }))
-    vi.doMock('@/notification', () => ({
+    vi.doMock('@/core/notify/service', () => ({
       notify: (...args: unknown[]) => mockNotify(...args),
     }))
 
     const { deliverContactNotification: reimportedDeliver } = await import(
-      '@/contact/notifications'
+      '@/modules/contact/service'
     )
 
     mockNotificationProviderRegistry.feishu = () => ({ send: async () => true })

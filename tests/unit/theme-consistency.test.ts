@@ -5,13 +5,13 @@ import { describe, expect, it } from 'vitest'
 /**
  * 硬编码配色守卫：颜色必须来自 globals.css 的语义 token，写死色阶或 hex 会让换主题时
  * 不跟随，且不会让任何功能测试失败。排除 `src/components/ui/`（上游原件）与
- * `src/mail/`（邮件不执行站点 CSS，由 `EMAIL_THEME` 集中管理）。
+ * `src/core/email/`（邮件不执行站点 CSS，由 `EMAIL_THEME` 集中管理）。
  */
 
 const ROOT = new URL('../../src', import.meta.url).pathname
 
 /** 允许出现字面量颜色的目录（相对 `src/`）。 */
-const EXEMPT_DIRS = ['components/ui/', 'mail/']
+const EXEMPT_DIRS = ['components/ui/', 'core/email/']
 
 /**
  * 允许出现字面量颜色的单个文件：国旗是法定识别色；`ui.themeColor` 由浏览器在页面之外
@@ -76,7 +76,7 @@ describe('配色只走主题 token', () => {
  */
 describe('邮件配色与主题同步', () => {
   const globals = readFileSync(join(ROOT, 'styles/globals.css'), 'utf-8')
-  const layout = readFileSync(join(ROOT, 'mail/components/EmailLayout.tsx'), 'utf-8')
+  const layout = readFileSync(join(ROOT, 'core/email/components/EmailLayout.tsx'), 'utf-8')
 
   /** 从 globals.css 取 token 的浅色档 hex。 */
   function lightHex(token: string): string {

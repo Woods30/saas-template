@@ -16,13 +16,13 @@ vi.mock('@/lib/server-context', () => ({
 }))
 
 // 被测模块，必须在 mock 之后导入。
-import { parseServerEnv } from '@/env/server'
+import { parseServerEnv } from '@/core/env/server'
 import {
   buildNotificationProviderRegistry,
   DiscordNotificationProvider,
   FeishuNotificationProvider,
   notify,
-} from '@/notification'
+} from '@/core/notify/service'
 
 // DiscordNotificationProvider。
 describe('DiscordNotificationProvider', () => {

@@ -7,7 +7,7 @@ group: deploy
 updated: 2026-11-03
 ---
 
-Server-side caching uses **Cloudflare KV** through the `CACHE` binding. The code is in `src/cache/`.
+Server-side caching uses **Cloudflare KV** through the `CACHE` binding. The code is in `src/core/cache/`.
 
 It fits read-heavy, write-light data where brief staleness is acceptable: third-party status lookups, public lists, slow endpoints. It does not fit data that needs strong consistency or frequent writes — KV writes propagate with a delay.
 
@@ -48,7 +48,7 @@ await deleteCache(createCacheKey('newsletter:status', email))   // single key
 await deleteCacheByPrefix(createCacheKey('products', 'list'))    // by prefix
 ```
 
-**Always build keys with `createCacheKey()`**: it replaces `:` inside each part with `_` and joins the parts with `:`, so a colon in an argument cannot pollute the key levels and cause a prefix invalidation to delete the wrong entries. Use the TTL constants from `src/cache/constants.ts` instead of writing numbers at the call site:
+**Always build keys with `createCacheKey()`**: it replaces `:` inside each part with `_` and joins the parts with `:`, so a colon in an argument cannot pollute the key levels and cause a prefix invalidation to delete the wrong entries. Use the TTL constants from `src/core/cache/constants.ts` instead of writing numbers at the call site:
 
 | Constant | Seconds | Used for |
 |---|---|---|
@@ -63,9 +63,9 @@ Only `newsletterStatus` and `priceCatalog` have callers today; the other two are
 
 | Location | Purpose |
 |---|---|
-| `src/newsletter/index.ts` | Caches subscription status, invalidated after subscribe and unsubscribe |
+| `src/modules/newsletter/index.ts` | Caches subscription status, invalidated after subscribe and unsubscribe |
 | `src/lib/rate-limit.ts` | Builds rate limit keys with `createCacheKey` |
-| `src/payment/price-catalog.server.ts` | Caches the payment price catalog |
+| `src/core/payment/price-catalog.server.ts` | Caches the payment price catalog |
 
 Rate limiting and caching share the same `CACHE` namespace.
 

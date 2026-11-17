@@ -1,12 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
-import { getAuth } from '@/auth/auth'
 import { localeSchema } from '@/config/locale'
 import { getMailFrom } from '@/config/service-status'
 import { websiteConfig } from '@/config/website'
+import { getAuth } from '@/core/auth/auth'
+import { sendMail } from '@/core/email'
 import { getModuleUnavailableResponse } from '@/lib/module-access.server'
 import { getServerContext } from '@/lib/server-context'
-import { sendMail } from '@/mail'
 
 /**
  * Mail API 路由。

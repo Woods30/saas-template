@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   getAuth: vi.fn(),
 }))
 
-vi.mock('@/auth/auth', () => ({
+vi.mock('@/core/auth/auth', () => ({
   getAuth: (...args: unknown[]) => {
     mocks.getAuth(...args)
     return { handler: mocks.handler }
@@ -41,7 +41,8 @@ async function importAuthRouteWithAdminFlag(enableAdmin: boolean): Promise<{ Rou
   vi.resetModules()
   vi.doMock('@/config/website', async () => {
     const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
-    const { parsePublicEnv } = await vi.importActual<typeof import('@/env/public')>('@/env/public')
+    const { parsePublicEnv } =
+      await vi.importActual<typeof import('@/core/env/public')>('@/core/env/public')
     const base = actual.createWebsiteConfig(parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' }))
     return {
       ...actual,

@@ -12,8 +12,8 @@ updated: 2026-11-03
 
 | 文件 | 内容 |
 |---|---|
-| `src/env/public.ts` | `VITE_` 前缀，构建时内联进客户端 bundle |
-| `src/env/server.ts` | 服务端 secret，只在 Workers 运行时读取 |
+| `src/core/env/public.ts` | `VITE_` 前缀，构建时内联进客户端 bundle |
+| `src/core/env/server.ts` | 服务端 secret，只在 Workers 运行时读取 |
 
 **`VITE_` 变量会出现在浏览器里。** 它在构建时被写死进客户端 JS，任何访客打开页面都能看到。
 secret 绝不能带 `VITE_` 前缀：`pnpm check:client-bundle` 会扫描 `dist/client` 的文本产物，

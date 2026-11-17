@@ -30,14 +30,14 @@ export const Route = createFileRoute('/api/auth/$')({
       GET: async ({ request }) => {
         const blocked = gate(request)
         if (blocked) return blocked
-        const { getAuth } = await import('@/auth/auth')
+        const { getAuth } = await import('@/core/auth/auth')
         const env = getServerContext().env
         return getAuth(env).handler(request)
       },
       POST: async ({ request }) => {
         const blocked = gate(request)
         if (blocked) return blocked
-        const { getAuth } = await import('@/auth/auth')
+        const { getAuth } = await import('@/core/auth/auth')
         const env = getServerContext().env
         return getAuth(env).handler(request)
       },

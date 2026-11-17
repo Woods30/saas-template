@@ -19,11 +19,11 @@ vi.mock('@/lib/server-context', () => ({
   },
 }))
 
-vi.mock('@/mail', () => ({
+vi.mock('@/core/email', () => ({
   sendMail: vi.fn().mockResolvedValue({ ok: true }),
 }))
 
-vi.mock('@/notification', () => ({
+vi.mock('@/core/notify/service', () => ({
   notify: vi.fn().mockResolvedValue(true),
 }))
 
@@ -73,7 +73,7 @@ describe('POST /api/contact 门禁', () => {
     vi.doMock('@/config/website', async () => {
       const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
       const { parsePublicEnv } =
-        await vi.importActual<typeof import('@/env/public')>('@/env/public')
+        await vi.importActual<typeof import('@/core/env/public')>('@/core/env/public')
       const base = actual.createWebsiteConfig(
         parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' }),
       )
@@ -113,7 +113,7 @@ describe('POST /api/contact 门禁', () => {
     vi.doMock('@/config/website', async () => {
       const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
       const { parsePublicEnv } =
-        await vi.importActual<typeof import('@/env/public')>('@/env/public')
+        await vi.importActual<typeof import('@/core/env/public')>('@/core/env/public')
       const base = actual.createWebsiteConfig(
         parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' }),
       )
@@ -164,7 +164,7 @@ describe('submitContact — 投递失败', () => {
     vi.doMock('@/config/website', async () => {
       const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
       const { parsePublicEnv } =
-        await vi.importActual<typeof import('@/env/public')>('@/env/public')
+        await vi.importActual<typeof import('@/core/env/public')>('@/core/env/public')
       const base = actual.createWebsiteConfig(
         parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' }),
       )
@@ -182,8 +182,8 @@ describe('submitContact — 投递失败', () => {
 
   it('邮件与通知都失败时返回 503，而不是假装成功', async () => {
     const { submitContact: submit } = await enableNotification()
-    const { sendMail } = await import('@/mail')
-    const { notify } = await import('@/notification')
+    const { sendMail } = await import('@/core/email')
+    const { notify } = await import('@/core/notify/service')
     vi.mocked(sendMail).mockResolvedValueOnce({ ok: false, error: 'SMTP down' })
     vi.mocked(notify).mockResolvedValueOnce(false)
 
@@ -194,8 +194,8 @@ describe('submitContact — 投递失败', () => {
 
   it('邮件失败但通知成功时仍返回 ok', async () => {
     const { submitContact: submit } = await enableNotification()
-    const { sendMail } = await import('@/mail')
-    const { notify } = await import('@/notification')
+    const { sendMail } = await import('@/core/email')
+    const { notify } = await import('@/core/notify/service')
     vi.mocked(sendMail).mockResolvedValueOnce({ ok: false, error: 'SMTP down' })
     vi.mocked(notify).mockResolvedValueOnce(true)
 

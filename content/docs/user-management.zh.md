@@ -12,7 +12,7 @@ updated: 2026-11-03
 
 ## 角色
 
-`users.role` 是普通文本列（`src/db/schema.ts`），默认 `'user'`。本仓只用两个取值：
+`users.role` 是普通文本列（`src/core/db/schema.ts`），默认 `'user'`。本仓只用两个取值：
 
 | 取值 | 含义 |
 |---|---|

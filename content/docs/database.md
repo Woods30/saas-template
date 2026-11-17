@@ -7,7 +7,7 @@ group: deploy
 updated: 2026-11-03
 ---
 
-Data lives in **Cloudflare D1** (SQLite), accessed through **Drizzle ORM**. The schema is in `src/db/schema.ts`, the migrations in `src/db/migrations/`.
+Data lives in **Cloudflare D1** (SQLite), accessed through **Drizzle ORM**. The schema is in `src/core/db/schema.ts`, the migrations in `src/core/db/migrations/`.
 
 ## Steps
 
@@ -26,7 +26,7 @@ Data lives in **Cloudflare D1** (SQLite), accessed through **Drizzle ORM**. The 
          "binding": "DB",
          "database_name": "<your-db-name>",
          "database_id": "<your-database-id>",
-         "migrations_dir": "./src/db/migrations"
+         "migrations_dir": "./src/core/db/migrations"
        }
      ]
    }
@@ -41,7 +41,7 @@ Data lives in **Cloudflare D1** (SQLite), accessed through **Drizzle ORM**. The 
    pnpm run db:migrate:remote   # remote production database
    ```
 
-3. **Change the schema.** After editing `src/db/schema.ts`, generate a migration and apply it:
+3. **Change the schema.** After editing `src/core/db/schema.ts`, generate a migration and apply it:
 
    ```bash
    pnpm run db:generate
@@ -53,13 +53,13 @@ Data lives in **Cloudflare D1** (SQLite), accessed through **Drizzle ORM**. The 
 The Drizzle instance comes from `createDb(env.DB)` per D1 binding, not from a global singleton:
 
 ```ts
-// src/db/index.ts
+// src/core/db/index.ts
 export function createDb(d1: D1Database) {
   return drizzle(d1, { schema })
 }
 ```
 
-`src/auth/auth.ts` calls `createDb(env.DB)` inside `createAuth(env)` and reuses the instance per binding, so concurrent requests on Workers never share state.
+`src/core/auth/auth.ts` calls `createDb(env.DB)` inside `createAuth(env)` and reuses the instance per binding, so concurrent requests on Workers never share state.
 
 ## Verify
 

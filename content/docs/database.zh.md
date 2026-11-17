@@ -7,8 +7,8 @@ group: deploy
 updated: 2026-11-03
 ---
 
-数据存在 **Cloudflare D1**（SQLite），经 **Drizzle ORM** 访问。表结构在 `src/db/schema.ts`，
-迁移文件在 `src/db/migrations/`。
+数据存在 **Cloudflare D1**（SQLite），经 **Drizzle ORM** 访问。表结构在 `src/core/db/schema.ts`，
+迁移文件在 `src/core/db/migrations/`。
 
 ## 步骤
 
@@ -28,7 +28,7 @@ updated: 2026-11-03
          "binding": "DB",
          "database_name": "<your-db-name>",
          "database_id": "<your-database-id>",
-         "migrations_dir": "./src/db/migrations"
+         "migrations_dir": "./src/core/db/migrations"
        }
      ]
    }
@@ -45,7 +45,7 @@ updated: 2026-11-03
    pnpm run db:migrate:remote   # 远程生产库
    ```
 
-3. **改表结构。** 改完 `src/db/schema.ts` 先生成迁移，再应用：
+3. **改表结构。** 改完 `src/core/db/schema.ts` 先生成迁移，再应用：
 
    ```bash
    pnpm run db:generate
@@ -57,13 +57,13 @@ updated: 2026-11-03
 Drizzle 实例由 `createDb(env.DB)` 按 D1 binding 创建，不读全局单例：
 
 ```ts
-// src/db/index.ts
+// src/core/db/index.ts
 export function createDb(d1: D1Database) {
   return drizzle(d1, { schema })
 }
 ```
 
-`src/auth/auth.ts` 的 `createAuth(env)` 里调 `createDb(env.DB)`，实例按 binding 复用，保证
+`src/core/auth/auth.ts` 的 `createAuth(env)` 里调 `createDb(env.DB)`，实例按 binding 复用，保证
 Workers 的多请求并发下不串数据。
 
 ## 验证

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { MenuItem, MenuLinkItem } from '@/config/navigation'
 import { getSettingsSectionMeta, getSettingsSections } from '@/config/settings'
 import { createWebsiteConfig } from '@/config/website'
-import { parsePublicEnv } from '@/env/public'
+import { parsePublicEnv } from '@/core/env/public'
 import { getLocale, overwriteGetLocale } from '@/locale/paraglide/runtime.js'
 
 const originalGetLocale = getLocale

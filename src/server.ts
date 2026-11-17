@@ -13,11 +13,16 @@ import {
   defaultStreamHandler,
   type HandlerCallback,
 } from '@tanstack/react-start/server'
-import { KVCacheProvider } from './cache/provider/kv'
 import { getMailFrom } from './config/service-status'
 import { websiteConfig } from './config/website'
-import { publicEnv } from './env/public'
-import { parseServerEnv, type ServerEnv } from './env/server'
+import { KVCacheProvider } from './core/cache/provider/kv'
+import { CloudflareEmailProvider } from './core/email'
+import { ResendMailProvider } from './core/email/provider/resend'
+import { publicEnv } from './core/env/public'
+import { parseServerEnv, type ServerEnv } from './core/env/server'
+import { buildNotificationProviderRegistry } from './core/notify/service'
+import { buildPaymentProviderRegistry } from './core/payment'
+import { R2StorageProvider } from './core/storage/provider/r2'
 import { DOCS_SIDEBAR_COOKIE_NAME, parseSidebarCollapsed, setServerSidebarGetter } from './lib/docs'
 import { docsLegacyRedirect } from './lib/docs-path'
 import { LOCALE_COOKIE_NAME, readCookieValue, readLocaleCookie } from './lib/locale'
@@ -31,12 +36,7 @@ import { als, getServerContext } from './lib/server-context'
 import { defaultTheme, parseTheme, setServerThemeGetter, THEME_COOKIE_NAME } from './lib/theme'
 import { registerServerLocaleStrategy } from './locale/middleware'
 import { paraglideMiddleware } from './locale/paraglide/server.js'
-import { CloudflareEmailProvider } from './mail'
-import { ResendMailProvider } from './mail/provider/resend'
-import { buildNewsletterProviderRegistry } from './newsletter'
-import { buildNotificationProviderRegistry } from './notification'
-import { buildPaymentProviderRegistry } from './payment'
-import { R2StorageProvider } from './storage/provider/r2'
+import { buildNewsletterProviderRegistry } from './modules/newsletter/service'
 
 // 模块加载期注册，早于任何请求进入 paraglideMiddleware。
 registerServerLocaleStrategy()
@@ -130,8 +130,8 @@ export default {
  */
 function buildMailProviderRegistry(
   env: Env & ServerEnv,
-): Record<string, (() => import('./mail').MailProvider) | undefined> {
-  const registry: Record<string, (() => import('./mail').MailProvider) | undefined> = {}
+): Record<string, (() => import('./core/email').MailProvider) | undefined> {
+  const registry: Record<string, (() => import('./core/email').MailProvider) | undefined> = {}
   const mailFrom = getMailFrom(websiteConfig, env)
   if (env.EMAIL && mailFrom) {
     const email = env.EMAIL

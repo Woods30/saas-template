@@ -53,7 +53,7 @@ if (!result.valid) return new Response('Unauthorized', { status: 401 })
 | `keyExpiration.disableCustomExpiresTime` | `false` | When `true`, client values are ignored |
 | `keyExpiration.defaultExpiresIn` | `null` | Fallback when the client omits a value (in seconds); `null` means no expiry |
 
-Expiry only matters **at creation time**: the plugin converts it into an `expiresAt` timestamp, and the list reads that one timestamp, so there is no way to extend a key in the UI afterwards — delete it and create a new one. When you change the bounds, change `apiKey({ keyExpiration })` in `src/auth/auth.ts` and `EXPIRY_OPTIONS` in `src/routes/{-$locale}/_layout/dashboard/api-keys.tsx` together, or users can pick a value the server is bound to reject.
+Expiry only matters **at creation time**: the plugin converts it into an `expiresAt` timestamp, and the list reads that one timestamp, so there is no way to extend a key in the UI afterwards — delete it and create a new one. When you change the bounds, change `apiKey({ keyExpiration })` in `src/core/auth/auth.ts` and `EXPIRY_OPTIONS` in `src/routes/{-$locale}/_layout/dashboard/api-keys.tsx` together, or users can pick a value the server is bound to reject.
 
 ## Notes
 

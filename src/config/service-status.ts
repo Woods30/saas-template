@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import type { PublicEnv } from '@/env/public'
-import type { ServerEnv } from '@/env/server'
+import type { PublicEnv } from '@/core/env/public'
+import type { ServerEnv } from '@/core/env/server'
 import { productConfigErrors, resolvePriceReference } from './products'
 import type { ServiceModule, WebsiteConfig } from './website'
 

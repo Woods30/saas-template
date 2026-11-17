@@ -64,12 +64,20 @@ src/
 │   ├── dashboard/   工作台骨架
 │   ├── layout/      跨页面布局件（Logo / 语言切换 / 用户菜单）
 │   └── ui/          shadcn 上游原件，不本地修改
-├── auth/ cache/ contact/ mail/ newsletter/ notification/ payment/ storage/
-│                    服务模块：每个目录一个 provider 注册表 + 抽象接口
-├── db/              Drizzle schema 与迁移
-├── env/             两层 env 校验（public / server），读 env 的唯一出口
+├── core/            基础设施：模块可依赖，反向不可
+│   ├── auth/          better-auth 接线、会话与插件
+│   ├── cache/         缓存契约 + KV 实现
+│   ├── db/            Drizzle schema、迁移、dal
+│   ├── email/         邮件契约 + Resend / Cloudflare / SMTP
+│   ├── env/           两层 env 校验（public / server），读 env 的唯一出口
+│   ├── notify/        通知渠道（Discord / 飞书）
+│   ├── payment/       支付契约 + Stripe / Creem
+│   └── storage/       对象存储契约 + R2 / S3
+├── modules/         业务能力：只能依赖 core 与自身
+│   ├── contact/       联系表单
+│   └── newsletter/    订阅邮件
 ├── lib/             纯逻辑：locale、seo、llms、module-access、rate-limit…
-├── locale/          Paraglide 生成物 + middleware
+├── locale/          Paraglide 生成物 + middleware（生成物不手改）
 └── styles/          globals.css（设计 token）、mdx.css
 
 content/             文档 / 博客 / 更新日志 / 法务（Markdown，`.zh.md` 为中文）
@@ -86,7 +94,7 @@ scripts/             构建与校验脚本
 违反以下任一条即为缺陷：
 
 1. **env 两层模型**：业务代码不得直接读 `process.env` / `import.meta.env`，一律经
-   `src/env/public.ts`、`src/env/server.ts`。
+   `src/core/env/public.ts`、`src/core/env/server.ts`。
 2. **`VITE_` 前缀 = 公开**：构建时进入客户端 bundle，任何人可见，**不得**存放 secret。
 3. **服务端 secret** 只经 Workers binding 读取，绝不能设成 `VITE_` 前缀。
 4. **消息键配对**：新增消息键必须在所有 locale 文件中同时存在，改完跑 `pnpm locale:sort`。
@@ -101,9 +109,14 @@ scripts/             构建与校验脚本
 10. **llms 文件由配置生成**：`/llms*.txt` 的内容来自 `src/config/llms.ts` 与 `content/`，
     不手写正文、不硬编码链接——链接按语言前缀拼装。
 11. **价格只存一份**：金额的事实源是所选支付渠道的价格目录
-    （`src/payment/price-catalog.server.ts`）。首页展示、`llms.txt` 与结账收款读**同一份**
+    （`src/core/payment/price-catalog.server.ts`）。首页展示、`llms.txt` 与结账收款读**同一份**
     目录；代码与配置里**不得**再存第二份金额——两份金额必然漂移，漂移后结账会被判为
     价格不可用。改价只需在渠道后台（Stripe / Creem）操作。
+12. **三层依赖方向**：`core` 不得依赖 `modules` 或 `routes`；`modules` 不得依赖 `routes`。
+    由 `scripts/check-boundaries.ts` 强制，`pnpm check` 与 CI 都会跑。理由与取舍见
+    `docs/adr/0008-core-modules-routes-layering.md`。
+13. **模块只暴露 `service.ts`**：跨模块与路由一律 `@/modules/<id>/service`；模块根路径
+    （`@/modules/<id>`）与模块内部文件都不算入口，需要对外的东西从 `service.ts` 导出。
 
 ## 工作方式
 
