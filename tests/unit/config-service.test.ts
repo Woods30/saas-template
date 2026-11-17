@@ -119,6 +119,23 @@ describe('配置服务', () => {
     expect(getSettingsVersion()).toBe(before + 1)
   })
 
+  it('库里的分组被删掉后回落到出厂值，不留上一次的值', async () => {
+    const { db } = fakeDb([
+      {
+        key: 'brand',
+        value: JSON.stringify({ name: 'Acme', logoAccent: 'e', tagline: '' }),
+        updatedAt: new Date(),
+      },
+    ])
+    await loadSettings(db, 1_000)
+    expect(getResolvedConfig().metadata.name).toBe('Acme')
+
+    // 分组被删掉（后台清空、迁移丢了）后，下一次刷新必须回到出厂值，
+    // 不能把上一轮读到的值当成默认值留下。
+    await loadSettings(fakeDb().db, 1_000 + 31_000)
+    expect(getResolvedConfig().metadata.name).toBe(baseConfig.metadata.name)
+  })
+
   it('保存非法值直接抛错且不落库', async () => {
     const { db, state } = fakeDb()
     await expect(saveSettings(db, 'brand', { name: 123 })).rejects.toThrow()

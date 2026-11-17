@@ -13,7 +13,7 @@
  * 让一个坏字段把整组配置带崩——后台存的是 JSON，坏了不该让站点打不开。
  */
 import { z } from 'zod'
-import { websiteConfig } from '@/config/website'
+import { baseConfig, type WebsiteConfig } from '@/config/website'
 
 export const SETTINGS_KEYS = ['brand', 'seo', 'social', 'payment', 'mail', 'modules'] as const
 
@@ -100,11 +100,14 @@ export interface SettingsGroups {
 /**
  * 代码默认值。
  *
- * 取自 `websiteConfig`——那是 clone 后即可运行的出厂配置，数据库里没有对应
- * 分组时用它兜底。
+ * 取自 `baseConfig`——那是**不随数据库变化**的出厂配置（已套用 env 白名单），
+ * 数据库里没有对应分组时用它兜底。
+ *
+ * 刻意不读 `websiteConfig`：那是「当前生效配置」，读它会让上一轮的值变成这一轮的
+ * 默认值——库里的分组被删掉后回不到出厂值。
  */
 export function defaultSettings(): SettingsGroups {
-  const config = websiteConfig
+  const config = baseConfig
   return {
     brand: {
       name: config.metadata.name,
@@ -164,9 +167,9 @@ export function mergeSettings(
  * 这里只负责把数据库里的分组翻译成它。
  */
 export function applySettingsToConfig(
-  config: typeof websiteConfig,
+  config: WebsiteConfig,
   settings: SettingsGroups,
-): typeof websiteConfig {
+): WebsiteConfig {
   return {
     ...config,
     metadata: {
