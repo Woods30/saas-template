@@ -45,7 +45,10 @@
     "email:dev": "email dev --dir src/core/email/templates --port 3001",
     "postinstall": "node --env-file-if-exists=.env --import tsx scripts/db-setup.ts",
     "db:setup": "node --env-file-if-exists=.env --import tsx scripts/db-setup.ts",
-    "db:migrate:pg": "node --env-file-if-exists=.env --import tsx scripts/db-migrate-pg.ts"
+    "db:migrate:pg": "node --env-file-if-exists=.env --import tsx scripts/db-migrate-pg.ts",
+    "db:seed": "node --env-file-if-exists=.env --import tsx scripts/db-seed.ts --local",
+    "db:seed:remote": "node --env-file-if-exists=.env --import tsx scripts/db-seed.ts --remote",
+    "db:seed:pg": "node --env-file-if-exists=.env --import tsx scripts/db-seed.ts --pg"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1149.0",

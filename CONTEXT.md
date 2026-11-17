@@ -21,6 +21,13 @@
   UI 默认值、模块开关、provider 选择与社交链接；需随请求语言变化的文案不放在这里。
 - **createWebsiteConfig(env)**：显式接收 `PublicEnv` 的配置工厂，使脚本与单测可构造独立
   配置，不依赖模块单例。
+- **生效配置**：当前真正在用的站点配置 = 出厂配置（`baseConfig`）+ 数据库里的分组。
+  全站读 `websiteConfig` 拿到的就是它（Proxy 转发），不需要在调用点区分来源。
+- **配置分组**：站点配置在数据库里的六个分区——`brand`、`seo`、`social`、
+  `payment`、`mail`、`modules`。每组独立校验，坏一组只丢那一组。
+- **DATABASE_PROVIDER**：数据库形态（`sqlite` / `d1` / `postgres`），同时决定运行时连接
+  与构建期生成哪份 schema。见 ADR-0009。
+- **方言**：schema 与迁移 SQL 的形态（`sqlite` / `postgresql`）。D1 属于 sqlite 方言。
 - **publicEnv / serverEnv**：`src/core/env/public.ts`、`src/core/env/server.ts` 导出的两层已校验环境
   变量对象，是所有 env 读取的唯一出口。
 - **locale**：受支持语言，当前为 `zh`、`en`，默认 `zh`；`zh` 为消息源语言。
@@ -111,6 +118,8 @@
 - `docs/adr/0003-product-config-and-exclusivity.md` —— 套餐配置与账号级订阅。
 - `docs/adr/0004-template-and-official-site-split.md` —— 模板工程与官网工程分仓。
 - `docs/adr/0005-init-replacement-table.md` —— init 用声明式替换表而非占位符 token。
+- `docs/adr/0008-core-modules-routes-layering.md` —— 三层分层与模块公开入口。
+- `docs/adr/0009-multi-dialect-database-and-config.md` —— 多方言数据库与配置入库。
 
 ## 面向 AI 代理的指导
 

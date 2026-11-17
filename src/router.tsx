@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query'
 import { createRouter as createTanStackRouter } from '@tanstack/react-router'
 import { websiteConfig } from './config/website'
+import { installSiteConfigFromDocument } from './core/config/client'
 import { rewriteDocsInput, rewriteDocsOutput } from './lib/docs-path'
 import { routeTree } from './routeTree.gen'
 
@@ -29,6 +30,10 @@ function docsRewrite(asHome: boolean) {
     },
   }
 }
+
+// 客户端在 hydration 前把 SSR 写进 HTML 的站点配置装回来：路由表与页面读到的
+// 必须和服务端渲染时一致，否则会 hydration 错位。
+installSiteConfigFromDocument()
 
 // 框架经虚拟模块 `#tanstack-router-entry` 消费本文件，只认具名导出 `getRouter`。
 export function getRouter() {

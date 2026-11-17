@@ -44,7 +44,9 @@ Drizzle ORM + D1、Vitest + Playwright。
 | `pnpm check:env` / `pnpm check:env:prod` | 开发 / 生产环境变量校验 |
 | `pnpm check:client-bundle` | 检查客户端 bundle 不含服务端 secret |
 | `pnpm deploy` | 生产 env 校验 → 构建 → bundle 检查 → `wrangler deploy` |
+| `pnpm db:setup` | 按 `DATABASE_PROVIDER` 生成 schema 生成物与首份基线迁移 |
 | `pnpm db:generate` / `pnpm db:migrate:local` | Drizzle 迁移 |
+| `pnpm db:seed` | 写入种子数据（配置默认值等） |
 | `pnpm content:build` | 生成 `.content-collections/`（构建前置） |
 
 > `pnpm test` 会先跑 `locale:compile`，在非交互环境可能被提问卡住。CI 里用
@@ -67,7 +69,8 @@ src/
 ├── core/            基础设施：模块可依赖，反向不可
 │   ├── auth/          better-auth 接线、会话与插件
 │   ├── cache/         缓存契约 + KV 实现
-│   ├── db/            Drizzle schema、迁移、dal
+│   ├── config/        站点配置：分组形状、合并规则、读写与缓存
+│   ├── db/            Drizzle schema（两份手写 + 生成物）、连接、事务
 │   ├── email/         邮件契约 + Resend / Cloudflare / SMTP
 │   ├── env/           两层 env 校验（public / server），读 env 的唯一出口
 │   ├── notify/        通知渠道（Discord / 飞书）
@@ -117,6 +120,12 @@ scripts/             构建与校验脚本
     `docs/adr/0008-core-modules-routes-layering.md`。
 13. **模块只暴露 `service.ts`**：跨模块与路由一律 `@/modules/<id>/service`；模块根路径
     （`@/modules/<id>`）与模块内部文件都不算入口，需要对外的东西从 `service.ts` 导出。
+14. **provider 与 schema 方言必须一致**：`DATABASE_PROVIDER` 决定连什么库，也决定生成
+    哪份 schema。改完必须重新 `pnpm db:setup`；运行期不一致会直接抛错（见 ADR-0009）。
+15. **迁移不入库**：库结构的事实源是手写 schema，迁移在本地生成后手工 apply。
+    `src/core/db/schema.ts` 与 `src/core/db/migrations/` 都是生成物，不提交。
+16. **配置进库，品牌与 SEO 走 `core/config`**：全站读 `websiteConfig` 拿到的永远是当前
+    生效配置（出厂值 + 数据库分组）。密钥不进库——支付 / 邮件凭据仍只在 env。
 
 ## 工作方式
 

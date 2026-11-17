@@ -4,6 +4,7 @@ import {
   IconCreditCard,
   IconDeviceLaptop,
   IconKey,
+  IconSettings,
   IconShieldLock,
   IconUser,
   IconUsers,
@@ -125,6 +126,21 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
         },
         {
           kind: 'link',
+          id: 'admin-settings',
+          title: m.settings_nav_admin_settings(),
+          icon: IconSettings,
+          // 与用户管理同一套约束：角色 + 功能开关都满足才显示。
+          visibility: { roles: ['admin'], feature: 'enableAdmin' },
+          destination: {
+            kind: 'internal',
+            options: linkOptions({
+              to: '/{-$locale}/dashboard/admin/settings',
+              params: { locale },
+            }),
+          },
+        },
+        {
+          kind: 'link',
           id: 'admin-revenue',
           title: m.settings_nav_admin_revenue(),
           icon: IconChartBar,
@@ -203,6 +219,12 @@ export function getSettingsSectionMeta(section: string):
         title: m.admin_revenue_title(),
         description: m.admin_revenue_description(),
         icon: IconChartBar,
+      }
+    case 'admin/settings':
+      return {
+        title: m.admin_settings_title(),
+        description: m.admin_settings_description(),
+        icon: IconSettings,
       }
   }
 }

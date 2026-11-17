@@ -16,6 +16,7 @@ import {
 import { getMailFrom } from './config/service-status'
 import { websiteConfig } from './config/website'
 import { KVCacheProvider } from './core/cache/provider/kv'
+import { loadSettings, settingsCacheFresh } from './core/config/service'
 import { CloudflareEmailProvider } from './core/email'
 import { ResendMailProvider } from './core/email/provider/resend'
 import { publicEnv } from './core/env/public'
@@ -87,6 +88,12 @@ export default {
       parseTheme(readCookieValue(request.headers.get('cookie'), THEME_COOKIE_NAME)) ?? defaultTheme
     // secret 只经 `parseServerEnv` 校验后才进入 registry；资源 binding 保留原始对象。
     const parsedEnv = parseServerEnv(env as unknown as Record<string, unknown>)
+    // 站点配置来自数据库（品牌、模块开关等）：30 秒 TTL 内复用缓存，
+    // 过期才查库。读不到配置不该让请求失败，退回出厂配置继续服务。
+    if (!settingsCacheFresh()) {
+      const { createDbFromEnv } = await import('./core/db')
+      await loadSettings(createDbFromEnv(env as unknown as Env))
+    }
     // 显式覆盖两个 `string` enum 字段以满足 `ServerEnv`，其余字段由 `...parsedEnv` 提供。
     const normalizedEnv: Env & ServerEnv = {
       ...env,

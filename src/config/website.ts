@@ -129,6 +129,16 @@ export interface WebsiteConfig {
     requireEmailVerification: boolean
   }
   social: Partial<Record<SocialPlatform, string>>
+  /**
+   * 默认 SEO 文案。
+   *
+   * 品牌与 SEO 是**唯一**进数据库的两组配置：后台改完即时生效，其余文案仍编译期。
+   * `locales` 是分语言覆盖，缺省用 `default`。
+   */
+  seo: {
+    default: { title: string; description: string; keywords: string[] }
+    locales: Record<string, { title?: string; description?: string; keywords?: string[] }>
+  }
   features: {
     enableI18n: boolean
     enableFileUpload: boolean
@@ -248,6 +258,10 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       // auth 默认开启：模板自带登录 / 注册，关闭时对应页面与 API 一律 404。
       auth: { enabled: true, requireEmailVerification: true },
       social: {},
+      seo: {
+        default: { title: 'Jerbix', description: '', keywords: [] },
+        locales: {},
+      },
       features: {
         enableI18n: true,
         enableFileUpload: false,
@@ -260,4 +274,42 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
   )
 }
 
-export const websiteConfig = createWebsiteConfig(publicEnv)
+/**
+ * 出厂配置（代码里的默认值，已套用 env 白名单）。
+ *
+ * 与 `websiteConfig` 的区别：它是**不随数据库配置变化**的那一份，
+ * 数据库里没有对应分组时回落到这里。
+ */
+export const baseConfig = createWebsiteConfig(publicEnv)
+
+/**
+ * 当前生效的配置。
+ *
+ * 数据库配置装上来之前是出厂配置；`setResolvedConfig` 之后是合并后的结果。
+ * 服务端在每个请求入口刷新它，客户端在 hydration 前从注入的 JSON 装上它——
+ * 两边拿到同一份，SSR 与 hydration 不会因为配置不同而错位。
+ */
+let resolvedConfig: WebsiteConfig | undefined
+
+/** 装上生效配置（服务端读到数据库配置后调用）。 */
+export function setResolvedConfig(config: WebsiteConfig): void {
+  resolvedConfig = config
+}
+
+/** 当前生效配置；未装载时等于出厂配置。 */
+export function getResolvedConfig(): WebsiteConfig {
+  return resolvedConfig ?? baseConfig
+}
+
+/**
+ * 全站读配置的入口。
+ *
+ * 用 Proxy 而不是让每个调用点改成 `getResolvedConfig()`：调用点有几十处，
+ * 逐个改会把「配置从哪来」这件事散到全仓；而 Proxy 让**取值时机**统一由
+ * `getResolvedConfig()` 决定，读到的永远是当前生效的那份。
+ */
+export const websiteConfig: WebsiteConfig = new Proxy(baseConfig, {
+  get(_target, property, receiver) {
+    return Reflect.get(getResolvedConfig(), property, receiver)
+  },
+})

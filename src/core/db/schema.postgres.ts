@@ -257,3 +257,15 @@ export const webhookEvents = pgTable(
     sourceTypeIdx: index('webhook_events_source_type_idx').on(table.source, table.type),
   }),
 )
+
+/**
+ * 站点配置：按分组存 JSON（`brand` / `seo` / `social` / `payment` / `mail` /
+ * `modules`），后台改完即时生效。
+ *
+ * 只存**公开参数**与开关；支付 / 邮件的密钥仍只在 env 里——配置表不是密钥库。
+ */
+export const settings = pgTable('settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+})
