@@ -1,13 +1,7 @@
-import {
-  IconChevronLeft,
-  IconChevronRight,
-  IconDevices,
-  IconDots,
-  IconLayoutColumns,
-  IconUsers,
-} from '@tabler/icons-react'
+import { IconDevices, IconDots, IconLayoutColumns, IconUsers } from '@tabler/icons-react'
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { DataTable, type DataTableColumn } from '@/components/data-table/data-table'
 import { LocalDateTime } from '@/components/local-date'
 import {
   AlertDialog,
@@ -39,10 +33,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination'
 import {
   Popover,
   PopoverContent,
@@ -58,15 +50,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Spinner } from '@/components/ui/spinner'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
 import { adminRoutes } from '@/config/routes'
 import {
@@ -76,36 +59,70 @@ import {
   fetchAdminUsers,
 } from '@/core/auth/admin-users'
 import { authClient } from '@/core/auth/client'
+import { DEFAULT_PAGE_SIZE } from '@/core/db/paging'
+import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { getRequestLocale, type Locale } from '@/lib/locale'
 import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 
-/** 分页用 offset/limit，`listUsers` 只认 offset。 */
-const PAGE_SIZE = 20
-
 /** `banExpiresIn` 的单位是**秒**，界面上按天输入。 */
 const SECONDS_PER_DAY = 86_400
-
-/** 搜索防抖：每次按键都打接口既慢又会打乱分页。 */
-const SEARCH_DEBOUNCE_MS = 300
 
 /**
  * 用户管理页（admin 专用）。
  *
- * 门禁必须与侧栏可见性（`src/config/settings.ts`）和 `/api/auth/admin/*` 三处一致，
- * 缺一即可绕过；不满足时抛 `notFound()`，不泄漏页面存在。
- * 写操作后需 `load()` + `router.invalidate()`，否则管理员改到自己角色时侧栏不更新。
+ * 门禁由 `_layout/admin` 的 `beforeLoad` 统一负责；写操作后需
+ * `router.invalidate()`，否则管理员改到自己角色时侧栏不更新。
  */
 export const Route = createFileRoute('/{-$locale}/_layout/admin/users')({
+  // 属性声明为可选：`MakeRequiredSearchParams` 会把「必填的 search 参数」算进
+  // 链接类型，导致侧栏里的 linkOptions 必须带 search，导航项就没法只写路径。
+  validateSearch: (search: Record<string, unknown>): AdminUsersSearch => {
+    const parsed = Number(search.page)
+    const page = Number.isInteger(parsed) && parsed > 1 ? parsed : undefined
+    const q = typeof search.q === 'string' && search.q ? search.q : undefined
+    const role = search.role === 'user' || search.role === 'admin' ? search.role : undefined
+    const status =
+      search.status === 'active' || search.status === 'banned' ? search.status : undefined
+    return { page, q, role, status }
+  },
+  loaderDeps: ({ search }) => ({
+    page: search.page ?? 1,
+    q: search.q ?? '',
+    role: search.role ?? 'all',
+    status: search.status ?? 'all',
+  }),
+  loader: ({ deps }) =>
+    fetchAdminUsers({
+      data: {
+        search: deps.q || undefined,
+        role: deps.role,
+        status: deps.status,
+        limit: DEFAULT_PAGE_SIZE,
+        offset: (deps.page - 1) * DEFAULT_PAGE_SIZE,
+      },
+    }),
   head: () => adminHead(adminRoutes.users),
   component: AdminUsersPage,
 })
 
+interface AdminUsersSearch {
+  page?: number
+  q?: string
+  role?: AdminUserRoleFilter
+  status?: AdminUserStatusFilter
+}
+
 /** 本页只处理插件默认的两个角色。 */
 type UserRole = 'user' | 'admin'
 
-/** 列显隐开关；邮箱与操作列不可隐藏，否则表格失去用途。 */
-interface VisibleColumns {
+/**
+ * 列显隐开关；邮箱与操作列不可隐藏，否则表格失去用途。
+ *
+ * 用类型别名而非 `interface`：`DataTable` 的 `columnVisibility` 是
+ * `Record<string, boolean>`，interface 没有索引签名，不能直接赋给它。
+ */
+type VisibleColumns = {
   role: boolean
   status: boolean
   registeredAt: boolean
@@ -151,16 +168,13 @@ function statusFilterItems() {
 
 function AdminUsersPage() {
   const router = useRouter()
+  const data = Route.useLoaderData()
+  const { page = 1, q = '', role = 'all', status = 'all' } = Route.useSearch()
+  const navigate = Route.useNavigate()
   const locale = getRequestLocale()
-  const [users, setUsers] = useState<AdminUser[] | null>(null)
-  const [total, setTotal] = useState(0)
-  const [offset, setOffset] = useState(0)
-  const [error, setError] = useState<string | null>(null)
 
-  const [searchInput, setSearchInput] = useState('')
-  const [search, setSearch] = useState('')
-  const [roleFilter, setRoleFilter] = useState<AdminUserRoleFilter>('all')
-  const [statusFilter, setStatusFilter] = useState<AdminUserStatusFilter>('all')
+  const [error, setError] = useState<string | null>(null)
+  const [searchInput, setSearchInput] = useState(q)
   const [visibleColumns, setVisibleColumns] = useState<VisibleColumns>(DEFAULT_COLUMNS)
 
   const [roleTarget, setRoleTarget] = useState<AdminUser | null>(null)
@@ -170,62 +184,47 @@ function AdminUsersPage() {
   const [sessionsTarget, setSessionsTarget] = useState<AdminUser | null>(null)
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearch(searchInput.trim())
-      setOffset(0)
-    }, SEARCH_DEBOUNCE_MS)
-    return () => clearTimeout(timer)
-  }, [searchInput])
+  const debouncedSearch = useDebouncedValue(searchInput)
 
-  const load = useCallback(async () => {
-    try {
-      const result = await fetchAdminUsers({
-        data: {
-          search: search || undefined,
-          role: roleFilter,
-          status: statusFilter,
-          limit: PAGE_SIZE,
-          offset,
-        },
-      })
-      setError(null)
-      setUsers(result.users)
-      setTotal(result.total)
-    } catch (loadError) {
-      // 异常可能是 `Response`（403）或 Error，只取一行文案。
-      const message = loadError instanceof Error ? loadError.message.split('\n')[0] : ''
-      setError(message || m.settings_error_generic())
-    }
-  }, [offset, search, roleFilter, statusFilter])
+  // URL 是查询条件的事实来源：前进 / 后退时输入框要跟着回到对应关键词。
+  useEffect(() => {
+    setSearchInput(q)
+  }, [q])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    const trimmed = debouncedSearch.trim()
+    if (trimmed === q) return
+    void navigate({
+      search: (previous) => ({ ...previous, q: trimmed || undefined, page: undefined }),
+      replace: true,
+    })
+  }, [debouncedSearch, q, navigate])
 
   /**
    * 写操作共用收尾：报错留在页面上（用户要知道哪个操作失败），成功走 toast。
    */
-  async function run(
-    action: () => Promise<{ error?: { message?: string } | null }>,
-    successMessage?: string,
-  ) {
-    setBusy(true)
-    setError(null)
-    const { error: actionError } = await action()
-    setBusy(false)
-    if (actionError) {
-      setError(actionError.message?.split('\n')[0] ?? m.settings_error_generic())
-      return false
-    }
-    await load()
-    void router.invalidate()
-    if (successMessage) toast.add({ type: 'success', title: successMessage })
-    return true
-  }
+  const run = useCallback(
+    async (
+      action: () => Promise<{ error?: { message?: string } | null }>,
+      successMessage?: string,
+    ) => {
+      setBusy(true)
+      setError(null)
+      const { error: actionError } = await action()
+      setBusy(false)
+      if (actionError) {
+        setError(actionError.message?.split('\n')[0] ?? m.settings_error_generic())
+        return false
+      }
+      await router.invalidate()
+      if (successMessage) toast.add({ type: 'success', title: successMessage })
+      return true
+    },
+    [router],
+  )
 
   /** 模拟登录：插件会切换 cookie，必须整页跳转，否则侧栏与门禁仍按旧会话。 */
-  async function impersonate(user: AdminUser) {
+  const impersonate = useCallback(async (user: AdminUser) => {
     setBusy(true)
     setError(null)
     const { error: impersonateError } = await authClient.admin.impersonateUser({ userId: user.id })
@@ -235,336 +234,284 @@ function AdminUsersPage() {
       return
     }
     window.location.assign(`/${getRequestLocale()}`)
-  }
+  }, [])
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const currentPage = Math.floor(offset / PAGE_SIZE) + 1
+  const columns = useMemo<DataTableColumn<AdminUser>[]>(() => {
+    function openRoleDialog(user: AdminUser) {
+      setRoleTarget(user)
+      setRoleValue(user.role === 'admin' ? 'admin' : 'user')
+    }
+
+    function toggleBan(user: AdminUser) {
+      if (user.banned) {
+        void run(
+          () => authClient.admin.unbanUser({ userId: user.id }),
+          m.admin_users_unbanned_toast(),
+        )
+        return
+      }
+      setBanTarget(user)
+    }
+
+    return [
+      {
+        // 身份块。表格是 auto 布局，邮箱无断点会顶宽整列，故限制最大宽度。
+        id: 'email',
+        header: m.admin_users_col_email(),
+        className: 'whitespace-normal',
+        cell: (user) => (
+          <div className="flex items-center gap-3">
+            <Avatar className="size-8">
+              {user.image && <AvatarImage src={user.image} alt="" />}
+              <AvatarFallback>{userInitial(user)}</AvatarFallback>
+            </Avatar>
+            <div className="grid min-w-0 gap-0.5 leading-tight">
+              <span className="truncate font-medium">{user.name || '—'}</span>
+              <span className="max-w-64 truncate text-xs text-muted-foreground">{user.email}</span>
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: 'role',
+        header: m.admin_users_col_role(),
+        className: 'hidden sm:table-cell',
+        cell: (user) => (
+          <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
+            {user.role === 'admin' ? m.admin_users_role_admin() : m.admin_users_role_user()}
+          </Badge>
+        ),
+      },
+      {
+        id: 'status',
+        header: m.admin_users_col_status(),
+        className: 'hidden sm:table-cell',
+        cell: (user) => (
+          // 用圆点而非实心 Badge，避免与角色 Badge 抢注意力。
+          <div className="grid gap-0.5">
+            <span className="inline-flex items-center gap-2">
+              {/* 走语义 token，不写 `emerald-500`：后者不随明暗主题调整。 */}
+              <span
+                aria-hidden
+                className={`size-2 rounded-full ${user.banned ? 'bg-destructive' : 'bg-success'}`}
+              />
+              {user.banned ? m.admin_users_status_banned() : m.admin_users_status_active()}
+            </span>
+            {/* 封禁原因挂在状态下方：单开一列会留下整列 `—`。
+                截断后放进 `Popover`：原生 `title` 在触屏不出现且不换行。 */}
+            {user.banned && user.banReason && (
+              <Popover>
+                <PopoverTrigger className="block max-w-48 truncate pl-4 text-left text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground">
+                  {user.banReason}
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-64">
+                  <PopoverHeader>
+                    <PopoverTitle>{m.admin_users_ban_reason_label()}</PopoverTitle>
+                    {/* 保留原始断行并允许长词折行，避免长 URL 撑破弹层。 */}
+                    <PopoverDescription className="break-words whitespace-pre-wrap">
+                      {user.banReason}
+                    </PopoverDescription>
+                  </PopoverHeader>
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
+        ),
+      },
+      {
+        id: 'registeredAt',
+        header: m.admin_users_col_registered_at(),
+        className: 'hidden lg:table-cell',
+        cell: (user) => <LocalDateTime value={user.createdAt} locale={locale} />,
+      },
+      {
+        id: 'banExpiresAt',
+        header: m.admin_users_col_ban_expires_at(),
+        className: 'hidden xl:table-cell',
+        cell: (user) => <BanExpiry user={user} locale={locale} />,
+      },
+      {
+        id: 'actions',
+        header: m.admin_users_col_actions(),
+        className: 'text-right',
+        // 宽屏平铺操作按钮，窄屏收进 `DropdownMenu`（复用同一批 handler）。
+        cell: (user) => (
+          <>
+            <AdminUserActionsMenu
+              user={user}
+              busy={busy}
+              onSetRole={() => openRoleDialog(user)}
+              onToggleBan={() => toggleBan(user)}
+              onImpersonate={() => void impersonate(user)}
+              onSessions={() => setSessionsTarget(user)}
+              onDelete={() => setDeleteTarget(user)}
+            />
+            <div className="hidden justify-end gap-2 lg:flex">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => openRoleDialog(user)}
+              >
+                {m.admin_users_set_role()}
+              </Button>
+              {user.banned ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(
+                      () => authClient.admin.unbanUser({ userId: user.id }),
+                      m.admin_users_unbanned_toast(),
+                    )
+                  }
+                >
+                  {m.admin_users_unban()}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setBanTarget(user)}
+                >
+                  {m.admin_users_ban()}
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy || user.role === 'admin'}
+                title={user.role === 'admin' ? m.admin_users_impersonate_admin_hint() : undefined}
+                onClick={() => void impersonate(user)}
+              >
+                {m.admin_users_impersonate()}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSessionsTarget(user)}
+              >
+                {m.admin_users_sessions_title()}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleteTarget(user)}
+              >
+                {m.admin_users_delete()}
+              </Button>
+            </div>
+          </>
+        ),
+      },
+    ]
+  }, [busy, impersonate, locale, run])
 
   return (
     <div className="space-y-6">
-      {/* 表格不外套 `Card`：`Table` 的边框与圆角已由 globals.css 统一提供。 */}
-      <div className="space-y-4">
-        {/* 工具行：左侧查询控件，右侧列显隐；布局照 shadcn `dashboard-01`。 */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder={m.admin_users_search_placeholder()}
-            aria-label={m.admin_users_search_placeholder()}
-            className="min-w-48 max-w-sm flex-1"
-          />
-          {/* 两个筛选都走服务端，切换即重取并把页码归零。 */}
-          <Select
-            value={roleFilter}
-            onValueChange={(value) => {
-              setRoleFilter(value as AdminUserRoleFilter)
-              setOffset(0)
-            }}
-            items={roleFilterItems()}
-          >
-            <SelectTrigger size="sm" aria-label={m.admin_users_filter_role()}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{m.admin_users_filter_all_roles()}</SelectItem>
-              <SelectItem value="user">{m.admin_users_role_user()}</SelectItem>
-              <SelectItem value="admin">{m.admin_users_role_admin()}</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={statusFilter}
-            onValueChange={(value) => {
-              setStatusFilter(value as AdminUserStatusFilter)
-              setOffset(0)
-            }}
-            items={statusFilterItems()}
-          >
-            <SelectTrigger size="sm" aria-label={m.admin_users_filter_status()}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{m.admin_users_filter_all_statuses()}</SelectItem>
-              <SelectItem value="active">{m.admin_users_status_active()}</SelectItem>
-              <SelectItem value="banned">{m.admin_users_status_banned()}</SelectItem>
-            </SelectContent>
-          </Select>
-          {/* `ml-auto` 把「列」推到最右：它是呈现设置，与查询控件不同组。 */}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={<Button variant="outline" size="sm" className="ml-auto" />}
+      <DataTable
+        columns={columns}
+        data={data.users}
+        rowKey={(user) => user.id}
+        error={error}
+        emptyIcon={<IconUsers aria-hidden />}
+        emptyTitle={m.admin_users_empty()}
+        columnVisibility={visibleColumns}
+        pagination={{
+          page,
+          pageSize: DEFAULT_PAGE_SIZE,
+          total: data.total,
+          onPageChange: (next) =>
+            void navigate({
+              search: (previous) => ({ ...previous, page: next > 1 ? next : undefined }),
+            }),
+        }}
+        // 工具行：左侧查询控件，右侧列显隐；布局照 shadcn `dashboard-01`。
+        toolbar={
+          <>
+            <Input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder={m.admin_users_search_placeholder()}
+              aria-label={m.admin_users_search_placeholder()}
+              className="min-w-48 max-w-sm flex-1"
+            />
+            {/* 两个筛选都走服务端，切换即重取并把页码归零。 */}
+            <Select
+              value={role}
+              onValueChange={(value) =>
+                void navigate({
+                  search: (previous) => ({
+                    ...previous,
+                    role: value === 'all' ? undefined : (value as AdminUserRoleFilter),
+                    page: undefined,
+                  }),
+                })
+              }
+              items={roleFilterItems()}
             >
-              <IconLayoutColumns data-icon="inline-start" aria-hidden />
-              {m.admin_users_columns()}
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              {columnToggles().map((column) => (
-                <DropdownMenuCheckboxItem
-                  key={column.key}
-                  checked={visibleColumns[column.key]}
-                  onCheckedChange={(checked) =>
-                    setVisibleColumns((current) => ({ ...current, [column.key]: checked }))
-                  }
-                >
-                  {column.label}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
-
-        {users === null ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Spinner />
-          </div>
-        ) : users.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <IconUsers aria-hidden />
-              </EmptyMedia>
-              <EmptyTitle>{m.admin_users_empty()}</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <Table>
-            <TableHeader>
-              {/* 窄屏按断点逐级收起「注册时间」（lg）与「封禁到期」（xl）。
-                  头像并入邮箱列：二者同属身份块，拆开只会多一道分隔线。 */}
-              <TableRow>
-                <TableHead>{m.admin_users_col_email()}</TableHead>
-                {/* 断点与 `visibleColumns` 都满足才渲染；表头与单元格共用同一判定。 */}
-                {visibleColumns.role && (
-                  <TableHead className="hidden sm:table-cell">{m.admin_users_col_role()}</TableHead>
-                )}
-                {visibleColumns.status && (
-                  <TableHead className="hidden sm:table-cell">
-                    {m.admin_users_col_status()}
-                  </TableHead>
-                )}
-                {visibleColumns.registeredAt && (
-                  <TableHead className="hidden lg:table-cell">
-                    {m.admin_users_col_registered_at()}
-                  </TableHead>
-                )}
-                {visibleColumns.banExpiresAt && (
-                  <TableHead className="hidden xl:table-cell">
-                    {m.admin_users_col_ban_expires_at()}
-                  </TableHead>
-                )}
-                <TableHead className="text-right">{m.admin_users_col_actions()}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((user) => (
-                <TableRow key={user.id}>
-                  {/* 身份块。表格是 auto 布局，邮箱无断点会顶宽整列，故加 `max-w-64`。 */}
-                  <TableCell className="whitespace-normal">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="size-8">
-                        {user.image && <AvatarImage src={user.image} alt="" />}
-                        <AvatarFallback>{userInitial(user)}</AvatarFallback>
-                      </Avatar>
-                      <div className="grid min-w-0 gap-0.5 leading-tight">
-                        <span className="truncate font-medium">{user.name || '—'}</span>
-                        <span className="max-w-64 truncate text-xs text-muted-foreground">
-                          {user.email}
-                        </span>
-                      </div>
-                    </div>
-                  </TableCell>
-                  {visibleColumns.role && (
-                    <TableCell className="hidden sm:table-cell">
-                      <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
-                        {user.role === 'admin'
-                          ? m.admin_users_role_admin()
-                          : m.admin_users_role_user()}
-                      </Badge>
-                    </TableCell>
-                  )}
-                  {visibleColumns.status && (
-                    <TableCell className="hidden sm:table-cell">
-                      {/* 用圆点而非实心 Badge，避免与角色 Badge 抢注意力。 */}
-                      <div className="grid gap-0.5">
-                        <span className="inline-flex items-center gap-2">
-                          {/* 走语义 token，不写 `emerald-500`：后者不随明暗主题调整。 */}
-                          <span
-                            aria-hidden
-                            className={`size-2 rounded-full ${
-                              user.banned ? 'bg-destructive' : 'bg-success'
-                            }`}
-                          />
-                          {user.banned
-                            ? m.admin_users_status_banned()
-                            : m.admin_users_status_active()}
-                        </span>
-                        {/* 封禁原因挂在状态下方：单开一列会留下整列 `—`。
-                            截断后放进 `Popover`：原生 `title` 在触屏不出现且不换行。 */}
-                        {user.banned && user.banReason && (
-                          <Popover>
-                            <PopoverTrigger className="block max-w-48 truncate pl-4 text-left text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground">
-                              {user.banReason}
-                            </PopoverTrigger>
-                            <PopoverContent align="start" className="w-64">
-                              <PopoverHeader>
-                                <PopoverTitle>{m.admin_users_ban_reason_label()}</PopoverTitle>
-                                {/* 保留原始断行并允许长词折行，避免长 URL 撑破弹层。 */}
-                                <PopoverDescription className="break-words whitespace-pre-wrap">
-                                  {user.banReason}
-                                </PopoverDescription>
-                              </PopoverHeader>
-                            </PopoverContent>
-                          </Popover>
-                        )}
-                      </div>
-                    </TableCell>
-                  )}
-                  {visibleColumns.registeredAt && (
-                    <TableCell className="hidden lg:table-cell">
-                      <LocalDateTime value={user.createdAt} locale={locale} />
-                    </TableCell>
-                  )}
-                  {visibleColumns.banExpiresAt && (
-                    <TableCell className="hidden xl:table-cell">
-                      <BanExpiry user={user} locale={locale} />
-                    </TableCell>
-                  )}
-                  {/* 宽屏平铺操作按钮，窄屏收进 `DropdownMenu`（复用同一批 handler）。 */}
-                  <TableCell className="text-right">
-                    <AdminUserActionsMenu
-                      user={user}
-                      busy={busy}
-                      onSetRole={() => {
-                        setRoleTarget(user)
-                        setRoleValue(user.role === 'admin' ? 'admin' : 'user')
-                      }}
-                      onToggleBan={() =>
-                        user.banned
-                          ? void run(
-                              () => authClient.admin.unbanUser({ userId: user.id }),
-                              m.admin_users_unbanned_toast(),
-                            )
-                          : setBanTarget(user)
-                      }
-                      onImpersonate={() => void impersonate(user)}
-                      onSessions={() => setSessionsTarget(user)}
-                      onDelete={() => setDeleteTarget(user)}
-                    />
-                    <div className="hidden justify-end gap-2 lg:flex">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setRoleTarget(user)
-                          setRoleValue(user.role === 'admin' ? 'admin' : 'user')
-                        }}
-                      >
-                        {m.admin_users_set_role()}
-                      </Button>
-                      {user.banned ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={busy}
-                          onClick={() =>
-                            void run(
-                              () => authClient.admin.unbanUser({ userId: user.id }),
-                              m.admin_users_unbanned_toast(),
-                            )
-                          }
-                        >
-                          {m.admin_users_unban()}
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setBanTarget(user)}
-                        >
-                          {m.admin_users_ban()}
-                        </Button>
-                      )}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={busy || user.role === 'admin'}
-                        title={
-                          user.role === 'admin' ? m.admin_users_impersonate_admin_hint() : undefined
-                        }
-                        onClick={() => void impersonate(user)}
-                      >
-                        {m.admin_users_impersonate()}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSessionsTarget(user)}
-                      >
-                        {m.admin_users_sessions_title()}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => setDeleteTarget(user)}
-                      >
-                        {m.admin_users_delete()}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-
-        {users !== null && users.length > 0 && (
-          <div className="flex items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground">
-              {m.admin_users_page({ page: currentPage, total: totalPages })}
-            </p>
-            {/* 页码是客户端状态而非 URL，故用按钮而非链接。 */}
-            <Pagination className="mx-0 w-auto">
-              <PaginationContent>
-                <PaginationItem>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={offset === 0}
-                    onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+              <SelectTrigger size="sm" aria-label={m.admin_users_filter_role()}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{m.admin_users_filter_all_roles()}</SelectItem>
+                <SelectItem value="user">{m.admin_users_role_user()}</SelectItem>
+                <SelectItem value="admin">{m.admin_users_role_admin()}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={status}
+              onValueChange={(value) =>
+                void navigate({
+                  search: (previous) => ({
+                    ...previous,
+                    status: value === 'all' ? undefined : (value as AdminUserStatusFilter),
+                    page: undefined,
+                  }),
+                })
+              }
+              items={statusFilterItems()}
+            >
+              <SelectTrigger size="sm" aria-label={m.admin_users_filter_status()}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{m.admin_users_filter_all_statuses()}</SelectItem>
+                <SelectItem value="active">{m.admin_users_status_active()}</SelectItem>
+                <SelectItem value="banned">{m.admin_users_status_banned()}</SelectItem>
+              </SelectContent>
+            </Select>
+            {/* `ml-auto` 把「列」推到最右：它是呈现设置，与查询控件不同组。 */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<Button variant="outline" size="sm" className="ml-auto" />}
+              >
+                <IconLayoutColumns data-icon="inline-start" aria-hidden />
+                {m.admin_users_columns()}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                {columnToggles().map((column) => (
+                  <DropdownMenuCheckboxItem
+                    key={column.key}
+                    checked={visibleColumns[column.key]}
+                    onCheckedChange={(checked) =>
+                      setVisibleColumns((current) => ({ ...current, [column.key]: checked }))
+                    }
                   >
-                    <IconChevronLeft data-icon="inline-start" aria-hidden />
-                    {m.admin_users_prev()}
-                  </Button>
-                </PaginationItem>
-                <PaginationItem>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={currentPage >= totalPages}
-                    onClick={() => setOffset(offset + PAGE_SIZE)}
-                  >
-                    {m.admin_users_next()}
-                    <IconChevronRight data-icon="inline-end" aria-hidden />
-                  </Button>
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
-        )}
-      </div>
+                    {column.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
+      />
 
       <Dialog open={roleTarget !== null} onOpenChange={(open) => !open && setRoleTarget(null)}>
         <DialogContent>
@@ -797,17 +744,54 @@ function UserSessionsDialog({
     void load(target.id)
   }, [target, load])
 
-  async function revoke(action: () => Promise<{ error?: { message?: string } | null }>) {
-    setBusy(true)
-    const { error } = await action()
-    setBusy(false)
-    if (error) {
-      onError(error.message?.split('\n')[0] ?? m.settings_error_generic())
-      return
-    }
-    if (target) await load(target.id)
-    toast.add({ type: 'success', title: m.admin_users_sessions_revoked_toast() })
-  }
+  const revoke = useCallback(
+    async (action: () => Promise<{ error?: { message?: string } | null }>) => {
+      setBusy(true)
+      const { error } = await action()
+      setBusy(false)
+      if (error) {
+        onError(error.message?.split('\n')[0] ?? m.settings_error_generic())
+        return
+      }
+      if (target) await load(target.id)
+      toast.add({ type: 'success', title: m.admin_users_sessions_revoked_toast() })
+    },
+    [load, onError, target],
+  )
+
+  const columns = useMemo<DataTableColumn<UserSession>[]>(
+    () => [
+      {
+        id: 'createdAt',
+        header: m.settings_sessions_created(),
+        cell: (session) => <LocalDateTime value={session.createdAt} locale={locale} />,
+      },
+      {
+        id: 'expiresAt',
+        header: m.settings_sessions_expires(),
+        cell: (session) => <LocalDateTime value={session.expiresAt} locale={locale} />,
+      },
+      {
+        id: 'revoke',
+        header: m.admin_users_sessions_revoke(),
+        className: 'text-right',
+        cell: (session) => (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() =>
+              void revoke(() => authClient.admin.revokeUserSession({ sessionToken: session.token }))
+            }
+          >
+            {m.admin_users_sessions_revoke()}
+          </Button>
+        ),
+      },
+    ],
+    [busy, locale, revoke],
+  )
 
   return (
     <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>
@@ -818,57 +802,14 @@ function UserSessionsDialog({
             {target?.email} · {m.admin_users_sessions_description()}
           </DialogDescription>
         </DialogHeader>
-        {sessions === null ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Spinner />
-          </div>
-        ) : sessions.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <IconDevices aria-hidden />
-              </EmptyMedia>
-              <EmptyTitle>{m.admin_users_sessions_empty()}</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{m.settings_sessions_created()}</TableHead>
-                <TableHead>{m.settings_sessions_expires()}</TableHead>
-                <TableHead className="text-right">{m.admin_users_sessions_revoke()}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sessions.map((session) => (
-                <TableRow key={session.id}>
-                  <TableCell>
-                    <LocalDateTime value={session.createdAt} locale={locale} />
-                  </TableCell>
-                  <TableCell>
-                    <LocalDateTime value={session.expiresAt} locale={locale} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() =>
-                        void revoke(() =>
-                          authClient.admin.revokeUserSession({ sessionToken: session.token }),
-                        )
-                      }
-                    >
-                      {m.admin_users_sessions_revoke()}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+        <DataTable
+          columns={columns}
+          data={sessions ?? []}
+          rowKey={(session) => session.id}
+          loading={sessions === null}
+          emptyIcon={<IconDevices aria-hidden />}
+          emptyTitle={m.admin_users_sessions_empty()}
+        />
         <DialogFooter>
           <DialogClose render={<Button type="button" variant="outline" />}>
             {m.admin_users_cancel()}

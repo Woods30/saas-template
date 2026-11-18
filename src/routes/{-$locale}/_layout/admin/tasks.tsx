@@ -1,6 +1,7 @@
 import { IconPlayerStop, IconPlus, IconRefresh, IconSparkles } from '@tabler/icons-react'
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { DataTable, type DataTableColumn } from '@/components/data-table/data-table'
 import { LocalDateTime } from '@/components/local-date'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,32 +14,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
 import { adminRoutes } from '@/config/routes'
+import { DEFAULT_PAGE_SIZE } from '@/core/db/paging'
+import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { getRequestLocale } from '@/lib/locale'
 import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import {
+  type AdminAiTaskItem,
   cancelAdminAiTask,
   createDemoAdminAiTask,
   fetchAdminAiTasks,
   refreshAdminAiTask,
 } from '@/modules/ai-tasks/service'
-
-const PAGE_SIZE = 20
-const SEARCH_DEBOUNCE_MS = 300
 
 interface AdminTasksSearch {
   page?: number
@@ -49,9 +41,10 @@ interface AdminTasksSearch {
 export const Route = createFileRoute('/{-$locale}/_layout/admin/tasks')({
   validateSearch: (search: Record<string, unknown>): AdminTasksSearch => {
     const parsed = Number(search.page)
-    const page = Number.isInteger(parsed) && parsed > 0 ? parsed : 1
-    const q = typeof search.q === 'string' ? search.q : ''
-    const status = typeof search.status === 'string' ? search.status : 'all'
+    const page = Number.isInteger(parsed) && parsed > 1 ? parsed : undefined
+    const q = typeof search.q === 'string' && search.q ? search.q : undefined
+    const status =
+      typeof search.status === 'string' && search.status !== 'all' ? search.status : undefined
     return { page, q, status }
   },
   loaderDeps: ({ search }) => ({
@@ -64,8 +57,8 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/tasks')({
       data: {
         search: deps.q || undefined,
         status: deps.status && deps.status !== 'all' ? deps.status : undefined,
-        limit: PAGE_SIZE,
-        offset: (deps.page - 1) * PAGE_SIZE,
+        limit: DEFAULT_PAGE_SIZE,
+        offset: (deps.page - 1) * DEFAULT_PAGE_SIZE,
       },
     }),
   head: () => adminHead(adminRoutes.tasks),
@@ -105,19 +98,19 @@ function AdminAiTasksPage() {
   const [submitting, setSubmitting] = useState(false)
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null)
 
+  const debouncedKeyword = useDebouncedValue(keyword)
+
   useEffect(() => {
     setKeyword(q)
   }, [q])
 
   useEffect(() => {
-    if (keyword === q) return
-    const timer = setTimeout(() => {
-      void navigate({
-        search: (prev) => ({ ...prev, q: keyword || undefined, page: 1 }),
-      })
-    }, SEARCH_DEBOUNCE_MS)
-    return () => clearTimeout(timer)
-  }, [keyword, q, navigate])
+    if (debouncedKeyword === q) return
+    void navigate({
+      search: (prev) => ({ ...prev, q: debouncedKeyword || undefined, page: undefined }),
+      replace: true,
+    })
+  }, [debouncedKeyword, q, navigate])
 
   async function handleCreateDemo(e: React.FormEvent) {
     e.preventDefault()
@@ -143,223 +136,205 @@ function AdminAiTasksPage() {
     }
   }
 
-  async function handleRefreshTask(taskId: string) {
-    setBusyTaskId(taskId)
-    try {
-      await refreshAdminAiTask({ data: { taskId } })
-      await router.invalidate()
-    } catch {
-      toast.add({ type: 'error', title: m.settings_error_generic() })
-    } finally {
-      setBusyTaskId(null)
-    }
-  }
+  const handleRefreshTask = useCallback(
+    async (taskId: string) => {
+      setBusyTaskId(taskId)
+      try {
+        await refreshAdminAiTask({ data: { taskId } })
+        await router.invalidate()
+      } catch {
+        toast.add({ type: 'error', title: m.settings_error_generic() })
+      } finally {
+        setBusyTaskId(null)
+      }
+    },
+    [router],
+  )
 
-  async function handleCancelTask(taskId: string) {
-    setBusyTaskId(taskId)
-    try {
-      await cancelAdminAiTask({ data: { taskId } })
-      await router.invalidate()
-    } catch {
-      toast.add({ type: 'error', title: m.settings_error_generic() })
-    } finally {
-      setBusyTaskId(null)
-    }
-  }
+  const handleCancelTask = useCallback(
+    async (taskId: string) => {
+      setBusyTaskId(taskId)
+      try {
+        await cancelAdminAiTask({ data: { taskId } })
+        await router.invalidate()
+      } catch {
+        toast.add({ type: 'error', title: m.settings_error_generic() })
+      } finally {
+        setBusyTaskId(null)
+      }
+    },
+    [router],
+  )
 
-  const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE))
+  const columns = useMemo<DataTableColumn<AdminAiTaskItem>[]>(
+    () => [
+      {
+        id: 'createdAt',
+        header: m.admin_tasks_col_created_at(),
+        className: 'whitespace-nowrap text-xs text-muted-foreground',
+        cell: (task) => <LocalDateTime value={task.createdAt} locale={locale} />,
+      },
+      {
+        id: 'user',
+        header: m.admin_tasks_col_user(),
+        className: 'text-sm',
+        cell: (task) => task.userEmail ?? task.userId,
+      },
+      {
+        id: 'model',
+        header: m.admin_tasks_col_model(),
+        cell: (task) => (
+          <div className="flex items-center gap-1.5">
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{task.model}</code>
+            <Badge variant="outline" className="text-xs">
+              {task.mediaType}
+            </Badge>
+          </div>
+        ),
+      },
+      {
+        id: 'prompt',
+        header: m.admin_tasks_col_prompt(),
+        className: 'max-w-xs truncate text-sm',
+        cell: (task) => task.prompt,
+      },
+      {
+        id: 'status',
+        header: m.admin_tasks_col_status(),
+        cell: (task) => (
+          <div className="flex flex-col gap-1">
+            <Badge variant={statusBadgeVariant(task.status)} className="w-fit">
+              {task.status}
+            </Badge>
+            {task.errorMessage ? (
+              <span className="max-w-xs truncate text-xs text-destructive">
+                {task.errorMessage}
+              </span>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        id: 'credits',
+        header: m.admin_tasks_col_credits(),
+        className: 'text-sm',
+        cell: (task) => (
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono">{task.costCredits}</span>
+            {task.refundTxId ? (
+              <Badge variant="outline" className="text-xs" data-testid={`task-refunded-${task.id}`}>
+                {m.admin_tasks_refunded_badge()}
+              </Badge>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        id: 'actions',
+        header: m.admin_tasks_col_actions(),
+        className: 'text-right',
+        cell: (task) => {
+          const isRunning = task.status === 'processing' || task.status === 'pending'
+          if (!isRunning) return <span className="text-xs text-muted-foreground">-</span>
+          const isBusy = busyTaskId === task.id
+          return (
+            <div className="flex justify-end gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isBusy}
+                onClick={() => void handleRefreshTask(task.id)}
+                data-testid={`refresh-task-${task.id}`}
+              >
+                {isBusy ? (
+                  <Spinner className="mr-1 size-3.5" />
+                ) : (
+                  <IconRefresh className="mr-1 size-3.5" />
+                )}
+                {m.admin_tasks_refresh()}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={isBusy}
+                onClick={() => void handleCancelTask(task.id)}
+                data-testid={`cancel-task-${task.id}`}
+              >
+                <IconPlayerStop className="mr-1 size-3.5" />
+                {m.admin_tasks_cancel()}
+              </Button>
+            </div>
+          )
+        },
+      },
+    ],
+    [busyTaskId, handleCancelTask, handleRefreshTask, locale],
+  )
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            type="search"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            placeholder={m.admin_tasks_search_placeholder()}
-            aria-label={m.admin_tasks_search_placeholder()}
-            className="w-56"
-            data-testid="tasks-search-input"
-          />
-          <select
-            value={status}
-            onChange={(e) =>
-              void navigate({
-                search: (prev) => ({
-                  ...prev,
-                  status: e.target.value === 'all' ? undefined : e.target.value,
-                  page: 1,
-                }),
-              })
-            }
-            aria-label={m.admin_tasks_col_status()}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-            data-testid="tasks-status-filter"
-          >
-            <option value="all">{m.admin_tasks_filter_all()}</option>
-            <option value="processing">{m.admin_tasks_filter_processing()}</option>
-            <option value="succeeded">{m.admin_tasks_filter_succeeded()}</option>
-            <option value="failed">{m.admin_tasks_filter_failed()}</option>
-            <option value="canceled">{m.admin_tasks_filter_canceled()}</option>
-          </select>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => setCreateOpen(true)}
-            data-testid="create-demo-task-button"
-          >
-            <IconPlus className="mr-1.5 size-4" />
-            {m.admin_tasks_create_demo()}
-          </Button>
-        </div>
-      </div>
-
-      {data.tasks.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <IconSparkles className="size-5" />
-            </EmptyMedia>
-            <EmptyTitle>{m.admin_tasks_empty()}</EmptyTitle>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{m.admin_tasks_col_created_at()}</TableHead>
-                <TableHead>{m.admin_tasks_col_user()}</TableHead>
-                <TableHead>{m.admin_tasks_col_model()}</TableHead>
-                <TableHead>{m.admin_tasks_col_prompt()}</TableHead>
-                <TableHead>{m.admin_tasks_col_status()}</TableHead>
-                <TableHead>{m.admin_tasks_col_credits()}</TableHead>
-                <TableHead className="text-right">{m.admin_tasks_col_actions()}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.tasks.map((item) => {
-                const isRunning = item.status === 'processing' || item.status === 'pending'
-                const isBusy = busyTaskId === item.id
-                return (
-                  <TableRow key={item.id} data-testid={`task-row-${item.id}`}>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      <LocalDateTime value={item.createdAt} locale={locale} />
-                    </TableCell>
-                    <TableCell className="text-sm">{item.userEmail ?? item.userId}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{item.model}</code>
-                        <Badge variant="outline" className="text-xs">
-                          {item.mediaType}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell className="max-w-xs truncate text-sm">{item.prompt}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <Badge variant={statusBadgeVariant(item.status)} className="w-fit">
-                          {item.status}
-                        </Badge>
-                        {item.errorMessage ? (
-                          <span className="max-w-xs truncate text-xs text-destructive">
-                            {item.errorMessage}
-                          </span>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono">{item.costCredits}</span>
-                        {item.refundTxId ? (
-                          <Badge
-                            variant="outline"
-                            className="text-xs"
-                            data-testid={`task-refunded-${item.id}`}
-                          >
-                            {m.admin_tasks_refunded_badge()}
-                          </Badge>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {isRunning ? (
-                        <div className="flex justify-end gap-1.5">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={isBusy}
-                            onClick={() => void handleRefreshTask(item.id)}
-                            data-testid={`refresh-task-${item.id}`}
-                          >
-                            {isBusy ? (
-                              <Spinner className="mr-1 size-3.5" />
-                            ) : (
-                              <IconRefresh className="mr-1 size-3.5" />
-                            )}
-                            {m.admin_tasks_refresh()}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            disabled={isBusy}
-                            onClick={() => void handleCancelTask(item.id)}
-                            data-testid={`cancel-task-${item.id}`}
-                          >
-                            <IconPlayerStop className="mr-1 size-3.5" />
-                            {m.admin_tasks_cancel()}
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {data.total > PAGE_SIZE ? (
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">
-            {m.admin_tasks_page_status({ page: String(page), total: String(totalPages) })}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() =>
+      <DataTable
+        columns={columns}
+        data={data.tasks}
+        rowKey={(task) => task.id}
+        rowTestId={(task) => `task-row-${task.id}`}
+        emptyIcon={<IconSparkles aria-hidden />}
+        emptyTitle={m.admin_tasks_empty()}
+        pagination={{
+          page,
+          pageSize: DEFAULT_PAGE_SIZE,
+          total: data.total,
+          onPageChange: (next) =>
+            void navigate({
+              search: (previous) => ({ ...previous, page: next > 1 ? next : undefined }),
+            }),
+        }}
+        toolbar={
+          <>
+            <Input
+              type="search"
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              placeholder={m.admin_tasks_search_placeholder()}
+              aria-label={m.admin_tasks_search_placeholder()}
+              className="w-56"
+              data-testid="tasks-search-input"
+            />
+            <select
+              value={status}
+              onChange={(event) =>
                 void navigate({
-                  search: (prev) => ({ ...prev, page: Math.max(1, page - 1) }),
+                  search: (prev) => ({
+                    ...prev,
+                    status: event.target.value === 'all' ? undefined : event.target.value,
+                    page: undefined,
+                  }),
                 })
               }
+              aria-label={m.admin_tasks_col_status()}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              data-testid="tasks-status-filter"
             >
-              {m.admin_tasks_page_prev()}
-            </Button>
+              <option value="all">{m.admin_tasks_filter_all()}</option>
+              <option value="processing">{m.admin_tasks_filter_processing()}</option>
+              <option value="succeeded">{m.admin_tasks_filter_succeeded()}</option>
+              <option value="failed">{m.admin_tasks_filter_failed()}</option>
+              <option value="canceled">{m.admin_tasks_filter_canceled()}</option>
+            </select>
             <Button
               type="button"
-              variant="outline"
               size="sm"
-              disabled={page >= totalPages}
-              onClick={() =>
-                void navigate({
-                  search: (prev) => ({ ...prev, page: page + 1 }),
-                })
-              }
+              onClick={() => setCreateOpen(true)}
+              data-testid="create-demo-task-button"
             >
-              {m.admin_tasks_page_next()}
+              <IconPlus className="mr-1.5 size-4" />
+              {m.admin_tasks_create_demo()}
             </Button>
-          </div>
-        </div>
-      ) : null}
+          </>
+        }
+      />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
@@ -374,7 +349,7 @@ function AdminAiTasksPage() {
                 <select
                   id="task-media-type"
                   value={mediaType}
-                  onChange={(e) => setMediaType(e.target.value as typeof mediaType)}
+                  onChange={(event) => setMediaType(event.target.value as typeof mediaType)}
                   className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                 >
                   <option value="image">image</option>
@@ -389,7 +364,7 @@ function AdminAiTasksPage() {
                 <Input
                   id="task-model"
                   value={model}
-                  onChange={(e) => setModel(e.target.value)}
+                  onChange={(event) => setModel(event.target.value)}
                   required
                 />
               </div>
@@ -400,7 +375,7 @@ function AdminAiTasksPage() {
                 <select
                   id="task-mode"
                   value={mode}
-                  onChange={(e) => setMode(e.target.value as typeof mode)}
+                  onChange={(event) => setMode(event.target.value as typeof mode)}
                   className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                   data-testid="task-mode-select"
                 >
@@ -417,7 +392,7 @@ function AdminAiTasksPage() {
                   min={0}
                   max={1000}
                   value={costCredits}
-                  onChange={(e) => setCostCredits(e.target.value)}
+                  onChange={(event) => setCostCredits(event.target.value)}
                   required
                 />
               </div>
@@ -427,7 +402,7 @@ function AdminAiTasksPage() {
               <Input
                 id="task-prompt"
                 value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
+                onChange={(event) => setPrompt(event.target.value)}
                 required
                 data-testid="task-prompt-input"
               />

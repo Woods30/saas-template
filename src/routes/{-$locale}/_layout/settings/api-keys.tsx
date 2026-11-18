@@ -1,6 +1,7 @@
 import { IconKey } from '@tabler/icons-react'
-import { createFileRoute } from '@tanstack/react-router'
-import { useCallback, useMemo, useState } from 'react'
+import { createFileRoute, useRouter } from '@tanstack/react-router'
+import { useEffect, useMemo, useState } from 'react'
+import { DataTable, type DataTableColumn } from '@/components/data-table/data-table'
 import { LocalDateTime } from '@/components/local-date'
 import {
   AlertDialog,
@@ -22,23 +23,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
-import { Spinner } from '@/components/ui/spinner'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
 import { settingsRoutes } from '@/config/routes'
 import { type ApiKeyEntry, fetchApiKeys } from '@/core/auth/api-keys'
 import { authClient } from '@/core/auth/client'
+import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { getRequestLocale } from '@/lib/locale'
 import { assertFeatureEnabled } from '@/lib/module-access'
 import { settingsHead } from '@/lib/page-head'
@@ -47,6 +39,11 @@ import { m } from '@/locale/paraglide/messages.js'
 export const Route = createFileRoute('/{-$locale}/_layout/settings/api-keys')({
   // 功能开关关闭时整页 404：与菜单项消失同源，路由本身始终保留。
   beforeLoad: () => assertFeatureEnabled('enableApiKeys'),
+  validateSearch: (search: Record<string, unknown>): { q?: string } => {
+    const q = typeof search.q === 'string' ? search.q : ''
+    return { q: q || undefined }
+  },
+  loaderDeps: ({ search }) => ({ q: search.q ?? '' }),
   // 数据在路由加载阶段取回：客户端导航时内容随路由一起出现，不会先渲染空壳再补数据。
   loader: async () => {
     try {
@@ -74,11 +71,14 @@ const DEFAULT_EXPIRY_DAYS = 30
 type ExpiryChoice = number | 'never'
 
 function ApiKeysPage() {
+  const router = useRouter()
   const loaded = Route.useLoaderData()
+  const { q = '' } = Route.useSearch()
+  const navigate = Route.useNavigate()
   const locale = getRequestLocale()
-  const [keys, setKeys] = useState<ApiKeyEntry[] | null>(loaded.ok ? loaded.keys : null)
+
   const [error, setError] = useState<string | null>(loaded.ok ? null : m.settings_error_generic())
-  const [searchValue, setSearchValue] = useState('')
+  const [searchInput, setSearchInput] = useState(q)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [name, setName] = useState('')
@@ -88,16 +88,18 @@ function ApiKeysPage() {
 
   const [pendingDelete, setPendingDelete] = useState<ApiKeyEntry | null>(null)
 
-  // 首次数据来自路由 loader，不再在挂载后重复请求；这里只负责增删后的刷新。
-  const load = useCallback(async () => {
-    const { data, error: listError } = await authClient.apiKey.list()
-    if (listError) {
-      setError(listError.message?.split('\n')[0] ?? m.settings_error_generic())
-      return
-    }
-    setError(null)
-    setKeys((data?.apiKeys as ApiKeyEntry[] | undefined) ?? [])
-  }, [])
+  const debouncedSearch = useDebouncedValue(searchInput)
+
+  // URL 是搜索词的事实来源：前进 / 后退时输入框要跟着回到对应关键词。
+  useEffect(() => {
+    setSearchInput(q)
+  }, [q])
+
+  useEffect(() => {
+    const needle = debouncedSearch.trim()
+    if (needle === q) return
+    void navigate({ search: needle ? { q: needle } : {}, replace: true })
+  }, [debouncedSearch, q, navigate])
 
   async function onCreate() {
     setCreating(true)
@@ -118,7 +120,7 @@ function ApiKeysPage() {
     setCreateOpen(false)
     setName('')
     setExpiry(DEFAULT_EXPIRY_DAYS)
-    await load()
+    await router.invalidate()
     toast.add({ type: 'success', title: m.settings_api_keys_created_toast() })
   }
 
@@ -129,108 +131,93 @@ function ApiKeysPage() {
       setError(deleteError.message?.split('\n')[0] ?? m.settings_error_generic())
       return
     }
-    await load()
+    await router.invalidate()
     toast.add({ type: 'success', title: m.settings_api_keys_deleted_toast() })
   }
 
   // `apiKey.list` 无查询参数与分页，只能在本地过滤。
-  const visibleKeys: ApiKeyEntry[] | null = useMemo(() => {
-    const needle = searchValue.trim().toLowerCase()
-    if (keys === null) return null
-    if (!needle) return keys
-    return keys.filter((entry) => (entry.name ?? '').toLowerCase().includes(needle))
-  }, [keys, searchValue])
+  const visibleKeys = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    if (!needle) return loaded.keys
+    return loaded.keys.filter((entry) => (entry.name ?? '').toLowerCase().includes(needle))
+  }, [loaded.keys, q])
+
+  const columns = useMemo<DataTableColumn<ApiKeyEntry>[]>(
+    () => [
+      {
+        id: 'name',
+        header: m.settings_api_keys_table_name(),
+        className: 'w-40 truncate',
+        cell: (entry) => entry.name ?? '—',
+      },
+      {
+        id: 'key',
+        header: m.settings_api_keys_table_key(),
+        // 密钥用等宽：掩码需与前后缀字符对齐。
+        className: 'font-mono',
+        cell: (entry) => maskKey(entry),
+      },
+      {
+        // 窄屏收起时间列：横向滚动会把「删除」推出可视区。
+        id: 'createdAt',
+        header: m.settings_api_keys_table_created_at(),
+        className: 'hidden sm:table-cell',
+        cell: (entry) => <LocalDateTime value={entry.createdAt} locale={locale} />,
+      },
+      {
+        id: 'expiresAt',
+        header: m.settings_api_keys_table_expires_at(),
+        className: 'hidden lg:table-cell',
+        cell: (entry) =>
+          entry.expiresAt ? (
+            <LocalDateTime value={entry.expiresAt} locale={locale} />
+          ) : (
+            m.settings_api_keys_never_expires()
+          ),
+      },
+      {
+        id: 'actions',
+        header: m.settings_api_keys_table_actions(),
+        className: 'text-right',
+        cell: (entry) => (
+          <Button type="button" variant="outline" size="sm" onClick={() => setPendingDelete(entry)}>
+            {m.settings_api_keys_delete()}
+          </Button>
+        ),
+      },
+    ],
+    [locale],
+  )
 
   return (
     <div className="space-y-6">
-      {/* 不外套 `Card`：`Table` 的边框与圆角已由 globals.css 统一提供，套上会成双边框。 */}
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Input
-            value={searchValue}
-            onChange={(event) => setSearchValue(event.target.value)}
-            placeholder={m.settings_api_keys_search_placeholder()}
-            aria-label={m.settings_api_keys_search_placeholder()}
-            className="max-w-sm flex-1"
-          />
+      <DataTable
+        columns={columns}
+        data={visibleKeys}
+        rowKey={(entry) => entry.id}
+        error={error}
+        emptyIcon={<IconKey aria-hidden />}
+        emptyTitle={m.settings_api_keys_empty()}
+        emptyAction={
           <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
             {m.settings_api_keys_create()}
           </Button>
-        </div>
-
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
-
-        {visibleKeys === null ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Spinner />
-          </div>
-        ) : visibleKeys.length === 0 ? (
-          /* 主操作必须放 `EmptyContent`：`Empty` 带 `flex-1`，放外面会被挤到下一行左侧。 */
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <IconKey aria-hidden />
-              </EmptyMedia>
-              <EmptyTitle>{m.settings_api_keys_empty()}</EmptyTitle>
-            </EmptyHeader>
-            <EmptyContent>
-              <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
-                {m.settings_api_keys_create()}
-              </Button>
-            </EmptyContent>
-          </Empty>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {/* 窄屏收起时间列：横向滚动会把「删除」推出可视区。 */}
-                <TableHead>{m.settings_api_keys_table_name()}</TableHead>
-                <TableHead>{m.settings_api_keys_table_key()}</TableHead>
-                <TableHead className="hidden sm:table-cell">
-                  {m.settings_api_keys_table_created_at()}
-                </TableHead>
-                <TableHead className="hidden lg:table-cell">
-                  {m.settings_api_keys_table_expires_at()}
-                </TableHead>
-                <TableHead className="text-right">{m.settings_api_keys_table_actions()}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visibleKeys.map((entry) => (
-                <TableRow key={entry.id}>
-                  {/* 密钥用等宽：掩码需与前后缀字符对齐。 */}
-                  <TableCell className="w-40 truncate">{entry.name ?? '—'}</TableCell>
-                  <TableCell className="font-mono">{maskKey(entry)}</TableCell>
-                  <TableCell className="hidden sm:table-cell">
-                    <LocalDateTime value={entry.createdAt} locale={locale} />
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    {entry.expiresAt ? (
-                      <LocalDateTime value={entry.expiresAt} locale={locale} />
-                    ) : (
-                      m.settings_api_keys_never_expires()
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPendingDelete(entry)}
-                    >
-                      {m.settings_api_keys_delete()}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </div>
+        }
+        toolbar={
+          <>
+            <Input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder={m.settings_api_keys_search_placeholder()}
+              aria-label={m.settings_api_keys_search_placeholder()}
+              className="max-w-sm flex-1"
+            />
+            <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
+              {m.settings_api_keys_create()}
+            </Button>
+          </>
+        }
+      />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>

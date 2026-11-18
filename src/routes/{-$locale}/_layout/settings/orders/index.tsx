@@ -1,21 +1,14 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { useMemo } from 'react'
+import { DataTable, type DataTableColumn } from '@/components/data-table/data-table'
 import { LocalDate } from '@/components/local-date'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { settingsRoutes } from '@/config/routes'
 import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
-import { fetchMyCollectionOrders } from '@/modules/manual-payments/service'
+import { type CollectionOrder, fetchMyCollectionOrders } from '@/modules/manual-payments/service'
 import { productNameForProductId } from '@/modules/subscriptions/service'
 import { collectionOrderStatusMessageKey } from '../orders'
 
@@ -44,74 +37,62 @@ function OrdersPage() {
   const locale = getRequestLocale()
   const rows = loaded.ok ? (loaded.page?.rows ?? []) : []
 
+  const columns = useMemo<DataTableColumn<CollectionOrder>[]>(
+    () => [
+      {
+        id: 'id',
+        header: m['collection.order_col_id'](),
+        className: 'font-mono text-xs',
+        cell: (order) => order.id,
+      },
+      {
+        id: 'product',
+        header: m['collection.order_col_product'](),
+        cell: (order) => productNameForProductId(order.productId) ?? order.productId,
+      },
+      {
+        id: 'amount',
+        header: m['collection.order_col_amount'](),
+        cell: (order) => formatMoney(order.payableAmount, order.currency, locale),
+      },
+      {
+        id: 'status',
+        header: m['collection.order_col_status'](),
+        cell: (order) => <Badge>{m[collectionOrderStatusMessageKey(order.status)]()}</Badge>,
+      },
+      {
+        id: 'createdAt',
+        header: m['collection.order_col_created'](),
+        cell: (order) => <LocalDate value={order.createdAt} locale={locale} />,
+      },
+      {
+        id: 'actions',
+        header: m['collection.order_col_actions'](),
+        className: 'text-right',
+        cell: (order) => (
+          // `nativeButton={false}`：Base UI 的 Button 默认渲染 <button>，
+          // 换成 <a> 后必须关掉，否则开发环境会警告「丢了原生按钮语义」。
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<Link to={settingsRoutes.orderDetail} params={{ locale, orderId: order.id }} />}
+          >
+            {m['collection.order_view_detail']()}
+          </Button>
+        ),
+      },
+    ],
+    [locale],
+  )
+
   return (
-    <div className="space-y-8">
-      {!loaded.ok && (
-        <p role="alert" className="text-destructive">
-          {m.settings_error_generic()}
-        </p>
-      )}
-      {loaded.ok && rows.length === 0 && (
-        <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">
-            {m['collection.order_list_empty']()}
-          </CardContent>
-        </Card>
-      )}
-      {loaded.ok && rows.length > 0 && (
-        <Card>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{m['collection.order_col_id']()}</TableHead>
-                  <TableHead>{m['collection.order_col_product']()}</TableHead>
-                  <TableHead>{m['collection.order_col_amount']()}</TableHead>
-                  <TableHead>{m['collection.order_col_status']()}</TableHead>
-                  <TableHead>{m['collection.order_col_created']()}</TableHead>
-                  <TableHead aria-label={m['collection.order_col_actions']()} />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-mono text-xs">{order.id}</TableCell>
-                    <TableCell>
-                      {productNameForProductId(order.productId) ?? order.productId}
-                    </TableCell>
-                    <TableCell>
-                      {formatMoney(order.payableAmount, order.currency, locale)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge>{m[collectionOrderStatusMessageKey(order.status)]()}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <LocalDate value={order.createdAt} locale={locale} />
-                    </TableCell>
-                    <TableCell>
-                      {/* `nativeButton={false}`：Base UI 的 Button 默认渲染 <button>，
-                          换成 <a> 后必须关掉，否则开发环境会警告「丢了原生按钮语义」。 */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        nativeButton={false}
-                        render={
-                          <Link
-                            to={settingsRoutes.orderDetail}
-                            params={{ locale, orderId: order.id }}
-                          />
-                        }
-                      >
-                        {m['collection.order_view_detail']()}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+    <DataTable
+      columns={columns}
+      data={rows}
+      rowKey={(order) => order.id}
+      error={loaded.ok ? null : m.settings_error_generic()}
+      emptyTitle={m['collection.order_list_empty']()}
+    />
   )
 }

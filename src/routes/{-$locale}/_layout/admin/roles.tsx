@@ -1,6 +1,7 @@
 import { IconPlus, IconShieldLock, IconTrash } from '@tabler/icons-react'
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { DataTable, type DataTableColumn } from '@/components/data-table/data-table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -13,18 +14,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
 import { adminRoutes } from '@/config/routes'
 import { adminHead } from '@/lib/page-head'
@@ -57,12 +49,7 @@ function AdminRolesPage() {
   const router = useRouter()
   const loaderData = Route.useLoaderData()
   const { permissionsCatalog, actorPermissions } = loaderData
-  const [roles, setRoles] = useState<RoleWithPermissions[]>(loaderData.roles)
   const canWriteRoles = matchPermission('admin.roles.write', actorPermissions)
-
-  useEffect(() => {
-    setRoles(loaderData.roles)
-  }, [loaderData.roles])
 
   const [editing, setEditing] = useState<RoleFormState | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -78,7 +65,7 @@ function AdminRolesPage() {
     })
   }
 
-  function openEditDialog(role: RoleWithPermissions) {
+  const openEditDialog = useCallback((role: RoleWithPermissions) => {
     setEditing({
       id: role.id,
       name: role.name,
@@ -87,7 +74,7 @@ function AdminRolesPage() {
       isSystem: role.isSystem,
       permissionCodes: [...role.permissions],
     })
-  }
+  }, [])
 
   function togglePermission(code: string, checked: boolean) {
     setEditing((prev) => {
@@ -107,7 +94,7 @@ function AdminRolesPage() {
     if (!editing) return
     setSubmitting(true)
     try {
-      const saved = await saveAdminRole({
+      await saveAdminRole({
         data: {
           id: editing.id,
           name: editing.name.trim().toLowerCase(),
@@ -116,10 +103,6 @@ function AdminRolesPage() {
           status: 'active',
           permissionCodes: editing.permissionCodes,
         },
-      })
-      setRoles((prev) => {
-        const exists = prev.some((r) => r.id === saved.id)
-        return exists ? prev.map((r) => (r.id === saved.id ? saved : r)) : [...prev, saved]
       })
       toast.add({ type: 'success', title: m.admin_roles_saved_toast() })
       setEditing(null)
@@ -131,133 +114,142 @@ function AdminRolesPage() {
     }
   }
 
-  async function handleDelete(role: RoleWithPermissions) {
-    if (role.isSystem) return
-    setDeletingId(role.id)
-    try {
-      await removeAdminRole({ data: { roleId: role.id } })
-      setRoles((prev) => prev.filter((r) => r.id !== role.id))
-      toast.add({ type: 'success', title: m.admin_roles_deleted_toast() })
-      await router.invalidate()
-    } catch {
-      toast.add({ type: 'error', title: m.settings_error_generic() })
-    } finally {
-      setDeletingId(null)
-    }
-  }
+  const handleDelete = useCallback(
+    async (role: RoleWithPermissions) => {
+      if (role.isSystem) return
+      setDeletingId(role.id)
+      try {
+        await removeAdminRole({ data: { roleId: role.id } })
+        toast.add({ type: 'success', title: m.admin_roles_deleted_toast() })
+        await router.invalidate()
+      } catch {
+        toast.add({ type: 'error', title: m.settings_error_generic() })
+      } finally {
+        setDeletingId(null)
+      }
+    },
+    [router],
+  )
+
+  const columns = useMemo<DataTableColumn<RoleWithPermissions>[]>(
+    () => [
+      {
+        id: 'title',
+        header: m.admin_roles_col_title(),
+        cell: (role) => (
+          <>
+            <div className="font-medium">{role.title}</div>
+            {role.description ? (
+              <div className="text-xs text-muted-foreground">{role.description}</div>
+            ) : null}
+          </>
+        ),
+      },
+      {
+        id: 'name',
+        header: m.admin_roles_col_name(),
+        cell: (role) => (
+          <div className="flex items-center gap-2">
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{role.name}</code>
+            <Badge variant={role.isSystem ? 'secondary' : 'outline'}>
+              {role.isSystem ? m.admin_roles_builtin_badge() : m.admin_roles_custom_badge()}
+            </Badge>
+          </div>
+        ),
+      },
+      {
+        id: 'permissions',
+        header: m.admin_roles_col_permissions(),
+        cell: (role) => (
+          <div className="flex max-w-md flex-wrap gap-1">
+            {role.permissions.map((code) => (
+              <Badge key={code} variant="outline" className="font-mono text-xs">
+                {code}
+              </Badge>
+            ))}
+          </div>
+        ),
+      },
+      {
+        id: 'users',
+        header: m.admin_roles_col_users(),
+        className: 'text-right tabular-nums',
+        cell: (role) => role.userCount,
+      },
+      {
+        id: 'status',
+        header: m.admin_roles_col_status(),
+        cell: (role) => (
+          <Badge variant={role.status === 'active' ? 'default' : 'secondary'}>
+            {role.status === 'active'
+              ? m.admin_roles_status_active()
+              : m.admin_roles_status_disabled()}
+          </Badge>
+        ),
+      },
+      {
+        id: 'actions',
+        header: m.admin_roles_col_actions(),
+        className: 'text-right',
+        cell: (role) =>
+          canWriteRoles ? (
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                disabled={role.name === ROLES.SUPER_ADMIN}
+                onClick={() => openEditDialog(role)}
+                data-testid={`edit-role-${role.name}`}
+              >
+                {m.admin_roles_edit()}
+              </Button>
+              {!role.isSystem ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="xs"
+                  disabled={deletingId === role.id}
+                  onClick={() => void handleDelete(role)}
+                  data-testid={`delete-role-${role.name}`}
+                >
+                  {deletingId === role.id ? (
+                    <Spinner className="size-3.5" />
+                  ) : (
+                    <IconTrash className="size-3.5" />
+                  )}
+                </Button>
+              ) : null}
+            </div>
+          ) : null,
+      },
+    ],
+    [canWriteRoles, deletingId, handleDelete, openEditDialog],
+  )
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        {canWriteRoles ? (
-          <Button
-            type="button"
-            size="sm"
-            onClick={openCreateDialog}
-            data-testid="create-role-button"
-          >
-            <IconPlus className="mr-1.5 size-4" />
-            {m.admin_roles_create()}
-          </Button>
-        ) : null}
-      </div>
-
-      {roles.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <IconShieldLock className="size-5" />
-            </EmptyMedia>
-            <EmptyTitle>{m.admin_roles_empty()}</EmptyTitle>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{m.admin_roles_col_title()}</TableHead>
-                <TableHead>{m.admin_roles_col_name()}</TableHead>
-                <TableHead>{m.admin_roles_col_permissions()}</TableHead>
-                <TableHead className="text-right">{m.admin_roles_col_users()}</TableHead>
-                <TableHead>{m.admin_roles_col_status()}</TableHead>
-                <TableHead className="text-right">{m.admin_roles_col_actions()}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {roles.map((role) => (
-                <TableRow key={role.id} data-testid={`role-row-${role.name}`}>
-                  <TableCell>
-                    <div className="font-medium">{role.title}</div>
-                    {role.description ? (
-                      <div className="text-xs text-muted-foreground">{role.description}</div>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{role.name}</code>
-                      <Badge variant={role.isSystem ? 'secondary' : 'outline'}>
-                        {role.isSystem
-                          ? m.admin_roles_builtin_badge()
-                          : m.admin_roles_custom_badge()}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex max-w-md flex-wrap gap-1">
-                      {role.permissions.map((code) => (
-                        <Badge key={code} variant="outline" className="font-mono text-xs">
-                          {code}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{role.userCount}</TableCell>
-                  <TableCell>
-                    <Badge variant={role.status === 'active' ? 'default' : 'secondary'}>
-                      {role.status === 'active'
-                        ? m.admin_roles_status_active()
-                        : m.admin_roles_status_disabled()}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {canWriteRoles ? (
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="xs"
-                          disabled={role.name === ROLES.SUPER_ADMIN}
-                          onClick={() => openEditDialog(role)}
-                          data-testid={`edit-role-${role.name}`}
-                        >
-                          {m.admin_roles_edit()}
-                        </Button>
-                        {!role.isSystem ? (
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="xs"
-                            disabled={deletingId === role.id}
-                            onClick={() => void handleDelete(role)}
-                            data-testid={`delete-role-${role.name}`}
-                          >
-                            {deletingId === role.id ? (
-                              <Spinner className="size-3.5" />
-                            ) : (
-                              <IconTrash className="size-3.5" />
-                            )}
-                          </Button>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <DataTable
+        columns={columns}
+        data={loaderData.roles}
+        rowKey={(role) => role.id}
+        rowTestId={(role) => `role-row-${role.name}`}
+        emptyIcon={<IconShieldLock aria-hidden />}
+        emptyTitle={m.admin_roles_empty()}
+        toolbar={
+          canWriteRoles ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={openCreateDialog}
+              data-testid="create-role-button"
+            >
+              <IconPlus className="mr-1.5 size-4" />
+              {m.admin_roles_create()}
+            </Button>
+          ) : null
+        }
+      />
 
       <Dialog
         open={editing !== null}

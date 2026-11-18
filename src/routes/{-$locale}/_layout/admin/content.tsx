@@ -1,6 +1,7 @@
 import { IconFileText, IconPlus, IconTrash } from '@tabler/icons-react'
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { DataTable, type DataTableColumn } from '@/components/data-table/data-table'
 import { LocalDateTime } from '@/components/local-date'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,18 +14,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
 import { adminRoutes } from '@/config/routes'
 import { getRequestLocale } from '@/lib/locale'
@@ -96,14 +88,17 @@ function AdminContentPage() {
     }
   }
 
-  async function handleDeletePost(id: string) {
-    try {
-      await removeAdminPost({ data: { id } })
-      await router.invalidate()
-    } catch {
-      toast.add({ type: 'error', title: m.settings_error_generic() })
-    }
-  }
+  const handleDeletePost = useCallback(
+    async (id: string) => {
+      try {
+        await removeAdminPost({ data: { id } })
+        await router.invalidate()
+      } catch {
+        toast.add({ type: 'error', title: m.settings_error_generic() })
+      }
+    },
+    [router],
+  )
 
   async function handleSaveChangelog(e: React.FormEvent) {
     e.preventDefault()
@@ -157,10 +152,103 @@ function AdminContentPage() {
     }
   }
 
+  const postColumns = useMemo<DataTableColumn<(typeof data.posts)[number]>[]>(
+    () => [
+      {
+        id: 'title',
+        header: m.admin_content_col_title(),
+        className: 'font-medium',
+        cell: (post) => post.title,
+      },
+      {
+        id: 'slug',
+        header: m.admin_content_col_slug(),
+        cell: (post) => <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{post.slug}</code>,
+      },
+      {
+        id: 'category',
+        header: m.admin_content_col_category(),
+        className: 'text-xs',
+        cell: (post) => post.categorySlug ?? '-',
+      },
+      {
+        id: 'locale',
+        header: m.admin_content_col_locale(),
+        className: 'text-xs',
+        cell: (post) => post.locale,
+      },
+      {
+        id: 'status',
+        header: m.admin_content_col_status(),
+        cell: (post) => <Badge variant="outline">{post.status}</Badge>,
+      },
+      {
+        id: 'updatedAt',
+        header: m.admin_content_col_updated_at(),
+        className: 'text-xs text-muted-foreground',
+        cell: (post) => <LocalDateTime value={post.updatedAt} locale={locale} />,
+      },
+      {
+        id: 'actions',
+        header: '',
+        className: 'text-right',
+        cell: (post) => (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => void handleDeletePost(post.id)}
+          >
+            <IconTrash className="size-4 text-destructive" />
+          </Button>
+        ),
+      },
+    ],
+    [handleDeletePost, locale],
+  )
+
+  const changelogColumns = useMemo<DataTableColumn<(typeof data.changelogs)[number]>[]>(
+    () => [
+      {
+        id: 'version',
+        header: m.admin_content_col_slug(),
+        cell: (log) => (
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{log.version}</code>
+        ),
+      },
+      {
+        id: 'title',
+        header: m.admin_content_col_title(),
+        className: 'font-medium',
+        cell: (log) => log.title,
+      },
+      {
+        id: 'locale',
+        header: m.admin_content_col_locale(),
+        className: 'text-xs',
+        cell: (log) => log.locale,
+      },
+      {
+        id: 'status',
+        header: m.admin_content_col_status(),
+        cell: (log) => <Badge variant="outline">{log.status}</Badge>,
+      },
+      {
+        id: 'updatedAt',
+        header: m.admin_content_col_updated_at(),
+        className: 'text-xs text-muted-foreground',
+        cell: (log) => <LocalDateTime value={log.updatedAt} locale={locale} />,
+      },
+    ],
+    [locale],
+  )
+
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <div className="flex flex-wrap gap-2">
+      {/* 分类与标签 */}
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-medium">{m.admin_content_section_taxonomies()}</h3>
           <Button
             type="button"
             variant="outline"
@@ -171,31 +259,7 @@ function AdminContentPage() {
             <IconPlus className="mr-1.5 size-4" />
             {m.admin_content_create_taxonomy()}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setChangelogDialogOpen(true)}
-            data-testid="create-changelog-button"
-          >
-            <IconPlus className="mr-1.5 size-4" />
-            {m.admin_content_create_changelog()}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => setPostDialogOpen(true)}
-            data-testid="create-post-button"
-          >
-            <IconPlus className="mr-1.5 size-4" />
-            {m.admin_content_create_post()}
-          </Button>
         </div>
-      </div>
-
-      {/* 分类与标签 */}
-      <section className="space-y-3">
-        <h3 className="text-sm font-medium">{m.admin_content_section_taxonomies()}</h3>
         <div className="flex flex-wrap gap-2">
           {data.taxonomies.map((tax) => (
             <Badge
@@ -212,106 +276,52 @@ function AdminContentPage() {
       {/* 文章列表 */}
       <section className="space-y-3">
         <h3 className="text-sm font-medium">{m.admin_content_section_posts()}</h3>
-        {data.posts.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <IconFileText className="size-5" />
-              </EmptyMedia>
-              <EmptyTitle>{m.admin_content_empty_posts()}</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <div className="rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{m.admin_content_col_title()}</TableHead>
-                  <TableHead>{m.admin_content_col_slug()}</TableHead>
-                  <TableHead>{m.admin_content_col_category()}</TableHead>
-                  <TableHead>{m.admin_content_col_locale()}</TableHead>
-                  <TableHead>{m.admin_content_col_status()}</TableHead>
-                  <TableHead>{m.admin_content_col_updated_at()}</TableHead>
-                  <TableHead className="text-right" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.posts.map((post) => (
-                  <TableRow key={post.id} data-testid={`post-row-${post.slug}`}>
-                    <TableCell className="font-medium">{post.title}</TableCell>
-                    <TableCell>
-                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{post.slug}</code>
-                    </TableCell>
-                    <TableCell className="text-xs">{post.categorySlug ?? '-'}</TableCell>
-                    <TableCell className="text-xs">{post.locale}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{post.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      <LocalDateTime value={post.updatedAt} locale={locale} />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => void handleDeletePost(post.id)}
-                      >
-                        <IconTrash className="size-4 text-destructive" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+        <DataTable
+          columns={postColumns}
+          data={data.posts}
+          rowKey={(post) => post.id}
+          rowTestId={(post) => `post-row-${post.slug}`}
+          emptyIcon={<IconFileText aria-hidden />}
+          emptyTitle={m.admin_content_empty_posts()}
+          toolbar={
+            <Button
+              type="button"
+              size="sm"
+              className="ml-auto"
+              onClick={() => setPostDialogOpen(true)}
+              data-testid="create-post-button"
+            >
+              <IconPlus className="mr-1.5 size-4" />
+              {m.admin_content_create_post()}
+            </Button>
+          }
+        />
       </section>
 
       {/* 更新日志 */}
       <section className="space-y-3">
         <h3 className="text-sm font-medium">{m.admin_content_section_changelogs()}</h3>
-        {data.changelogs.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <IconFileText className="size-5" />
-              </EmptyMedia>
-              <EmptyTitle>{m.admin_content_empty_changelogs()}</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <div className="rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{m.admin_content_col_slug()}</TableHead>
-                  <TableHead>{m.admin_content_col_title()}</TableHead>
-                  <TableHead>{m.admin_content_col_locale()}</TableHead>
-                  <TableHead>{m.admin_content_col_status()}</TableHead>
-                  <TableHead>{m.admin_content_col_updated_at()}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.changelogs.map((log) => (
-                  <TableRow key={log.id} data-testid={`changelog-row-${log.version}`}>
-                    <TableCell>
-                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{log.version}</code>
-                    </TableCell>
-                    <TableCell className="font-medium">{log.title}</TableCell>
-                    <TableCell className="text-xs">{log.locale}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{log.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      <LocalDateTime value={log.updatedAt} locale={locale} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+        <DataTable
+          columns={changelogColumns}
+          data={data.changelogs}
+          rowKey={(log) => log.id}
+          rowTestId={(log) => `changelog-row-${log.version}`}
+          emptyIcon={<IconFileText aria-hidden />}
+          emptyTitle={m.admin_content_empty_changelogs()}
+          toolbar={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-auto"
+              onClick={() => setChangelogDialogOpen(true)}
+              data-testid="create-changelog-button"
+            >
+              <IconPlus className="mr-1.5 size-4" />
+              {m.admin_content_create_changelog()}
+            </Button>
+          }
+        />
       </section>
 
       {/* 新建文章 Dialog */}

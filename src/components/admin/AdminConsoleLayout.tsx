@@ -92,6 +92,7 @@ export function AdminConsoleLayout({
       locale={locale}
       session={session}
       meta={meta}
+      fullWidth
       root={{ label: m.admin_settings_feature_admin(), to: adminRoutes.overview }}
       sidebar={
         <SidebarGroup>

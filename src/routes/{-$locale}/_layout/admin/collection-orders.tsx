@@ -1,5 +1,6 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
+import { createFileRoute, useRouter } from '@tanstack/react-router'
+import { useCallback, useMemo, useState } from 'react'
+import { DataTable, type DataTableColumn } from '@/components/data-table/data-table'
 import { LocalDate } from '@/components/local-date'
 import {
   AlertDialog,
@@ -21,7 +22,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -31,17 +31,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
 import { adminRoutes } from '@/config/routes'
 import { websiteConfig } from '@/config/website'
+import { DEFAULT_PAGE_SIZE } from '@/core/db/paging'
 import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
 import { assertPageEnabled } from '@/lib/module-access'
@@ -99,10 +92,13 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/collection-order
   // 页码与筛选放 URL：刷新与分享链接能停在原处，也符合「URL 即状态」的路由数据流。
   validateSearch: (search: Record<string, unknown>): { page?: number; status?: string } => {
     const parsed = Number(search.page)
-    const out: { page?: number; status?: string } = {}
-    if (Number.isInteger(parsed) && parsed > 0) out.page = parsed
-    if (typeof search.status === 'string' && search.status) out.status = search.status
-    return out
+    const raw = search.status
+    return {
+      page: Number.isInteger(parsed) && parsed > 1 ? parsed : undefined,
+      // 默认筛选是页面兜底的「等待人工核验」，不必写进 URL；
+      // 「全部」与默认结果不同，要保留才能区分。
+      status: typeof raw === 'string' && raw && raw !== 'pending_verification' ? raw : undefined,
+    }
   },
   loaderDeps: ({ search }) => ({
     status: typeof search.status === 'string' ? search.status : undefined,
@@ -112,8 +108,8 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/collection-order
     // 服务端校验角色；普通用户在这里被 403 挡下，页面渲染不出任何数据。
     const result = await listAdminOrders({
       status: deps.status,
-      limit: PAGE_SIZE,
-      offset: (deps.page - 1) * PAGE_SIZE,
+      limit: DEFAULT_PAGE_SIZE,
+      offset: (deps.page - 1) * DEFAULT_PAGE_SIZE,
     })
     const accounts = await fetchCollectionAccountsFn()
     return {
@@ -125,9 +121,6 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/collection-order
   head: () => adminHead(adminRoutes.collectionOrders),
   component: AdminCollectionOrdersComponent,
 })
-
-/** 每页条数；服务端 limit 上限 100，这里取常用值。 */
-const PAGE_SIZE = 20
 
 /** 调用管理员订单列表的 server function。 */
 async function listAdminOrders(query: AdminOrderQuery): Promise<AdminOrderPage | Response> {
@@ -194,59 +187,18 @@ interface AccountView {
 const EMPTY_FORM: ReviewForm = { observedAmount: '', externalReference: '', reviewNote: '' }
 
 function AdminCollectionOrdersComponent() {
+  const router = useRouter()
   const loaded = Route.useLoaderData()
-  const { page: urlPage = 1, status: urlStatus = 'pending_verification' } = Route.useSearch()
+  const { page = 1, status = 'pending_verification' } = Route.useSearch()
   const navigate = Route.useNavigate()
   const locale = getRequestLocale()
 
-  const [rows, setRows] = useState<AdminCollectionOrder[] | null>(loaded.page?.rows ?? null)
-  const [total, setTotal] = useState(loaded.page?.total ?? 0)
-  const [accounts, setAccounts] = useState(loaded.accounts ?? [])
-  const [statusFilter, setStatusFilter] = useState(urlStatus)
-  const [page, setPage] = useState(urlPage)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const [reviewTarget, setReviewTarget] = useState<AdminCollectionOrder | null>(null)
   const [form, setForm] = useState<ReviewForm>(EMPTY_FORM)
   const [exceptionConfirm, setExceptionConfirm] = useState(false)
-
-  /**
-   * 服务端排序后的数据重新加载。
-   *
-   * server function 失败时返回 `Response`（不是抛异常），按稳定错误码分支。
-   */
-  async function load(next: { status: string; page: number }) {
-    setBusy(true)
-    setError(null)
-    const result = await listAdminOrders({
-      status: next.status,
-      limit: PAGE_SIZE,
-      offset: (next.page - 1) * PAGE_SIZE,
-    })
-    if (result instanceof Response) {
-      setBusy(false)
-      setError(m['collection_admin.error_generic']())
-      return
-    }
-    setRows(result.rows)
-    setTotal(result.total)
-    setBusy(false)
-  }
-
-  /** 切换筛选：状态进 URL，页码归一。 */
-  function changeStatus(value: string) {
-    setStatusFilter(value)
-    setPage(1)
-    void navigate({ search: { status: value, page: undefined } })
-    void load({ status: value, page: 1 })
-  }
-
-  function changePage(next: number) {
-    setPage(next)
-    void navigate({ search: { status: statusFilter, page: next } })
-    void load({ status: statusFilter, page: next })
-  }
 
   /** 观察到的到账金额（分）；输入是元，换算回分给服务端。 */
   function observedAmountCents(): number | null {
@@ -278,39 +230,37 @@ function AdminCollectionOrdersComponent() {
       reviewNote: form.reviewNote.trim() || null,
       externalReference: form.externalReference.trim() || null,
     })
+    setBusy(false)
     if (result instanceof Response) {
-      setBusy(false)
       setError(m['collection_admin.error_generic']())
       return
     }
-    setBusy(false)
     setReviewTarget(null)
     setForm(EMPTY_FORM)
     toast.add({ type: 'success', title: m['collection_admin.review_done']() })
-    void load({ status: statusFilter, page })
+    await router.invalidate()
   }
 
-  async function toggleAccount(accountId: string, enabled: boolean, displayName: string) {
-    setBusy(true)
-    setError(null)
-    const result = await saveAccount({ accountId, displayName, enabled })
-    if (result instanceof Response) {
+  const toggleAccount = useCallback(
+    async (accountId: string, enabled: boolean, displayName: string) => {
+      setBusy(true)
+      setError(null)
+      const result = await saveAccount({ accountId, displayName, enabled })
       setBusy(false)
-      setError(m['collection_admin.error_generic']())
-      return
-    }
-    setBusy(false)
-    toast.add({
-      type: 'success',
-      title: enabled
-        ? m['collection_admin.account_enabled']()
-        : m['collection_admin.account_disabled'](),
-    })
-    const refreshed = await fetchCollectionAccountsFn()
-    if (!(refreshed instanceof Response)) setAccounts(refreshed)
-  }
-
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+      if (result instanceof Response) {
+        setError(m['collection_admin.error_generic']())
+        return
+      }
+      toast.add({
+        type: 'success',
+        title: enabled
+          ? m['collection_admin.account_enabled']()
+          : m['collection_admin.account_disabled'](),
+      })
+      await router.invalidate()
+    },
+    [router],
+  )
 
   /**
    * 账户区块的展示视图：源码配置与数据库覆盖合并。
@@ -321,8 +271,8 @@ function AdminCollectionOrdersComponent() {
    * - 数据库里有、配置里没有 → 纯覆盖行，标「数据库覆盖」（配置被移除后
    *   它不再参与解析，但管理员仍要能看到并清理它）。
    */
-  function accountViews(): AccountView[] {
-    const byId = new Map(accounts.map((row) => [row.id, row]))
+  const accountViews = useMemo<AccountView[]>(() => {
+    const byId = new Map(loaded.accounts.map((row) => [row.id, row]))
     const configured = websiteConfig.collection.accounts
     const views: AccountView[] = configured.map((item) => {
       const override = byId.get(item.id)
@@ -335,7 +285,7 @@ function AdminCollectionOrdersComponent() {
         configuredQrImageUrl: item.qrImageUrl,
       }
     })
-    for (const row of accounts) {
+    for (const row of loaded.accounts) {
       if (!configured.some((item) => item.id === row.id)) {
         views.push({
           id: row.id,
@@ -348,215 +298,211 @@ function AdminCollectionOrdersComponent() {
       }
     }
     return views
-  }
+  }, [loaded.accounts])
+
+  const orderColumns = useMemo<DataTableColumn<AdminCollectionOrder>[]>(
+    () => [
+      {
+        id: 'orderId',
+        header: m['collection_admin.col_order_id'](),
+        className: 'font-mono text-xs',
+        cell: (order) => order.id,
+      },
+      {
+        id: 'buyer',
+        header: m['collection_admin.col_buyer'](),
+        className: 'max-w-[220px] truncate',
+        cell: (order) => order.userEmail,
+      },
+      {
+        id: 'product',
+        header: m['collection_admin.col_product'](),
+        cell: (order) => productNameForProductId(order.productId) ?? order.productId,
+      },
+      {
+        id: 'amount',
+        header: m['collection_admin.col_amount'](),
+        cell: (order) => formatMoney(order.payableAmount, order.currency, locale),
+      },
+      {
+        id: 'submittedAt',
+        header: m['collection_admin.col_submitted_at'](),
+        cell: (order) => <LocalDate value={order.submittedAt} locale={locale} />,
+      },
+      {
+        id: 'note',
+        header: m['collection_admin.col_note'](),
+        className: 'max-w-[200px] truncate',
+        cell: (order) => order.payerNote ?? '—',
+      },
+      {
+        id: 'receipt',
+        header: m['collection_admin.col_receipt'](),
+        cell: (order) =>
+          order.receiptKey ? (
+            // key 不出现在 URL：凭证只能走服务端端点读取。
+            <img
+              src={`/api/collection/orders/${order.id}/receipt`}
+              alt={m['collection_admin.receipt_alt']()}
+              className="h-12 w-12 rounded object-cover"
+            />
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {m['collection_admin.receipt_missing']()}
+            </span>
+          ),
+      },
+      {
+        id: 'status',
+        header: m['collection_admin.col_status'](),
+        cell: (order) => (
+          <Badge variant={order.status === 'settled' ? 'default' : 'secondary'}>
+            {m[collectionAdminOrderStatusMessageKey(order.status)]()}
+          </Badge>
+        ),
+      },
+      {
+        id: 'actions',
+        header: m['collection_admin.col_actions'](),
+        cell: (order) => (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setReviewTarget(order)
+              setForm(EMPTY_FORM)
+            }}
+          >
+            {m['collection_admin.review_open']()}
+          </Button>
+        ),
+      },
+    ],
+    [locale],
+  )
+
+  const accountColumns = useMemo<DataTableColumn<AccountView>[]>(
+    () => [
+      {
+        id: 'accountId',
+        header: m['collection_admin.col_account_id'](),
+        className: 'font-mono text-xs',
+        cell: (view) => view.id,
+      },
+      {
+        id: 'accountName',
+        header: m['collection_admin.col_account_name'](),
+        cell: (view) => view.displayName,
+      },
+      {
+        id: 'qr',
+        header: m['collection_admin.col_qr'](),
+        cell: (view) =>
+          view.qrImageKey ? (
+            // 数据库覆盖的二维码走服务端端点读取。
+            <img
+              src={`/api/collection/accounts/${view.id}/qrcode`}
+              alt={m['collection_admin.qr_alt']()}
+              className="h-12 w-12 rounded object-cover"
+            />
+          ) : view.configuredQrImageUrl ? (
+            // 源码配置的地址直接引用：它本来就是站内路径或无凭据 HTTPS。
+            <img
+              src={view.configuredQrImageUrl}
+              alt={m['collection_admin.qr_alt']()}
+              className="h-12 w-12 rounded object-cover"
+            />
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          ),
+      },
+      {
+        id: 'source',
+        header: m['collection_admin.col_source'](),
+        cell: (view) =>
+          view.fromDb ? (
+            <Badge variant="secondary">{m['collection_admin.db_override']()}</Badge>
+          ) : (
+            <Badge variant="outline">{m['collection_admin.source_config']()}</Badge>
+          ),
+      },
+      {
+        id: 'accountActions',
+        header: m['collection_admin.col_actions'](),
+        cell: (view) => (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => void toggleAccount(view.id, !view.enabled, view.displayName)}
+          >
+            {view.enabled ? m['collection_admin.disable']() : m['collection_admin.enable']()}
+          </Button>
+        ),
+      },
+    ],
+    [busy, toggleAccount],
+  )
 
   return (
     <div className="space-y-6">
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
-
       {/* 订单队列 */}
       <section className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={statusFilter}
-            onValueChange={(value) => {
-              if (value) changeStatus(value)
-            }}
-            items={statusFilterItems()}
-          >
-            <SelectTrigger size="sm" aria-label={m['collection_admin.filter_status']()}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pending_verification">
-                {m['collection_admin.status_pending_verification']()}
-              </SelectItem>
-              <SelectItem value="all">{m['collection_admin.filter_all']()}</SelectItem>
-              <SelectItem value="pending_payment">
-                {m['collection_admin.status_pending_payment']()}
-              </SelectItem>
-              <SelectItem value="settling">{m['collection_admin.status_settling']()}</SelectItem>
-              <SelectItem value="settled">{m['collection_admin.status_settled']()}</SelectItem>
-              <SelectItem value="expired">{m['collection_admin.status_expired']()}</SelectItem>
-              <SelectItem value="canceled">{m['collection_admin.status_canceled']()}</SelectItem>
-              <SelectItem value="rejected">{m['collection_admin.status_rejected']()}</SelectItem>
-              <SelectItem value="requires_refund">
-                {m['collection_admin.status_requires_refund']()}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {!rows || rows.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>{m['collection_admin.empty']()}</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{m['collection_admin.col_order_id']()}</TableHead>
-                <TableHead>{m['collection_admin.col_buyer']()}</TableHead>
-                <TableHead>{m['collection_admin.col_product']()}</TableHead>
-                <TableHead>{m['collection_admin.col_amount']()}</TableHead>
-                <TableHead>{m['collection_admin.col_submitted_at']()}</TableHead>
-                <TableHead>{m['collection_admin.col_note']()}</TableHead>
-                <TableHead>{m['collection_admin.col_receipt']()}</TableHead>
-                <TableHead>{m['collection_admin.col_status']()}</TableHead>
-                <TableHead>{m['collection_admin.col_actions']()}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((order) => (
-                <TableRow key={order.id}>
-                  <TableCell className="font-mono text-xs">{order.id}</TableCell>
-                  <TableCell className="max-w-[220px] truncate">{order.userEmail}</TableCell>
-                  <TableCell>
-                    {productNameForProductId(order.productId) ?? order.productId}
-                  </TableCell>
-                  <TableCell>{formatMoney(order.payableAmount, order.currency, locale)}</TableCell>
-                  <TableCell>
-                    <LocalDate value={order.submittedAt} locale={locale} />
-                  </TableCell>
-                  <TableCell className="max-w-[200px] truncate">{order.payerNote ?? '—'}</TableCell>
-                  <TableCell>
-                    {order.receiptKey ? (
-                      // key 不出现在 URL：凭证只能走服务端端点读取。
-                      <img
-                        src={`/api/collection/orders/${order.id}/receipt`}
-                        alt={m['collection_admin.receipt_alt']()}
-                        className="h-12 w-12 rounded object-cover"
-                      />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        {m['collection_admin.receipt_missing']()}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={order.status === 'settled' ? 'default' : 'secondary'}>
-                      {m[collectionAdminOrderStatusMessageKey(order.status)]()}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setReviewTarget(order)
-                        setForm(EMPTY_FORM)
-                      }}
-                    >
-                      {m['collection_admin.review_open']()}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              {m.admin_revenue_page_status({ page, total: totalPages })}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1 || busy}
-                onClick={() => changePage(page - 1)}
-              >
-                {m.admin_revenue_page_prev()}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages || busy}
-                onClick={() => changePage(page + 1)}
-              >
-                {m.admin_revenue_page_next()}
-              </Button>
-            </div>
-          </div>
-        )}
+        <DataTable
+          columns={orderColumns}
+          data={loaded.page?.rows ?? []}
+          rowKey={(order) => order.id}
+          error={error ?? (loaded.ok ? null : m['collection_admin.error_generic']())}
+          emptyTitle={m['collection_admin.empty']()}
+          pagination={{
+            page,
+            pageSize: DEFAULT_PAGE_SIZE,
+            total: loaded.page?.total ?? 0,
+            onPageChange: (next) =>
+              void navigate({
+                search: (previous) => ({ ...previous, page: next > 1 ? next : undefined }),
+              }),
+          }}
+          toolbar={
+            <Select
+              value={status}
+              onValueChange={(value) => {
+                if (!value) return
+                void navigate({
+                  search: (previous) => ({
+                    ...previous,
+                    // 默认筛选不进 URL：与 `validateSearch` 的规范化保持一致。
+                    status: value === 'pending_verification' ? undefined : value,
+                    page: undefined,
+                  }),
+                })
+              }}
+              items={statusFilterItems()}
+            >
+              <SelectTrigger size="sm" aria-label={m['collection_admin.filter_status']()}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {statusFilterItems().map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          }
+        />
       </section>
 
       {/* 收款账户：源码配置账户与数据库覆盖合并展示。 */}
       <section className="space-y-4">
         <h3 className="text-lg font-semibold">{m['collection_admin.accounts_title']()}</h3>
-        {accountViews().length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>{m['collection_admin.accounts_empty']()}</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{m['collection_admin.col_account_id']()}</TableHead>
-                <TableHead>{m['collection_admin.col_account_name']()}</TableHead>
-                <TableHead>{m['collection_admin.col_qr']()}</TableHead>
-                <TableHead>{m['collection_admin.col_source']()}</TableHead>
-                <TableHead>{m['collection_admin.col_actions']()}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {accountViews().map((view) => (
-                <TableRow key={view.id}>
-                  <TableCell className="font-mono text-xs">{view.id}</TableCell>
-                  <TableCell>{view.displayName}</TableCell>
-                  <TableCell>
-                    {view.qrImageKey ? (
-                      // 数据库覆盖的二维码走服务端端点读取。
-                      <img
-                        src={`/api/collection/accounts/${view.id}/qrcode`}
-                        alt={m['collection_admin.qr_alt']()}
-                        className="h-12 w-12 rounded object-cover"
-                      />
-                    ) : view.configuredQrImageUrl ? (
-                      // 源码配置的地址直接引用：它本来就是站内路径或无凭据 HTTPS。
-                      <img
-                        src={view.configuredQrImageUrl}
-                        alt={m['collection_admin.qr_alt']()}
-                        className="h-12 w-12 rounded object-cover"
-                      />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {view.fromDb ? (
-                      <Badge variant="secondary">{m['collection_admin.db_override']()}</Badge>
-                    ) : (
-                      <Badge variant="outline">{m['collection_admin.source_config']()}</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => void toggleAccount(view.id, !view.enabled, view.displayName)}
-                    >
-                      {view.enabled
-                        ? m['collection_admin.disable']()
-                        : m['collection_admin.enable']()}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+        <DataTable
+          columns={accountColumns}
+          data={accountViews}
+          rowKey={(view) => view.id}
+          emptyTitle={m['collection_admin.accounts_empty']()}
+        />
         <p className="text-xs text-muted-foreground">{m['collection_admin.accounts_note']()}</p>
       </section>
 

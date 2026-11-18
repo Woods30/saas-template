@@ -1,19 +1,12 @@
 import { IconChartBar, IconCoins, IconReceipt, IconRepeat } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
+import { useMemo } from 'react'
+import { DataTable, type DataTableColumn } from '@/components/data-table/data-table'
 import { LocalDate } from '@/components/local-date'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { adminRoutes } from '@/config/routes'
+import { DEFAULT_PAGE_SIZE } from '@/core/db/paging'
 import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
 import { adminHead } from '@/lib/page-head'
@@ -37,7 +30,9 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/')({
   // 返回可选字段：首页不带 `?page=1`，菜单链接就不必逐处补 search。
   validateSearch: (search: Record<string, unknown>): { page?: number } => {
     const parsed = Number(search.page)
-    return Number.isInteger(parsed) && parsed > 0 ? { page: parsed } : {}
+    // 返回值**必须带键**（哪怕值是 `undefined`）。返回字面量 `{}` 时路由不会重写
+    // URL，`?page=1` 这类默认值就会一直挂在地址栏上。
+    return { page: Number.isInteger(parsed) && parsed > 1 ? parsed : undefined }
   },
   head: () => adminHead(adminRoutes.overview),
   component: AdminRevenuePage,
@@ -48,19 +43,19 @@ function money(amount: number, currency: string) {
   return formatMoney(amount, currency, getRequestLocale())
 }
 
-/** 每页订阅条数。 */
-const PAGE_SIZE = 20
-
 function AdminRevenuePage() {
   const data = Route.useLoaderData() as AdminBillingResult
   const locale = getRequestLocale()
   const { revenue, subscriptions, activeSubscriptionCount } = data
   const { page = 1 } = Route.useSearch()
   const navigate = Route.useNavigate()
-  const totalPages = Math.max(1, Math.ceil(subscriptions.length / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(subscriptions.length / DEFAULT_PAGE_SIZE))
   // 页码可能因数据变少而越界（如删除了订阅），夹到有效范围而不是渲染空表。
   const currentPage = Math.min(page, totalPages)
-  const pageItems = subscriptions.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const pageItems = subscriptions.slice(
+    (currentPage - 1) * DEFAULT_PAGE_SIZE,
+    currentPage * DEFAULT_PAGE_SIZE,
+  )
   const primaryBucket = revenue.buckets[0]
   const primaryCurrency = primaryBucket?.currency ?? 'usd'
   const totalPayments = revenue.buckets.reduce((sum, b) => sum + b.count, 0)
@@ -91,6 +86,66 @@ function AdminRevenuePage() {
       hint: `${m.admin_revenue_subscriptions_title()} (${subscriptions.length})`,
     },
   ]
+
+  const columns = useMemo<DataTableColumn<(typeof subscriptions)[number]>[]>(
+    () => [
+      {
+        id: 'user',
+        header: m.admin_revenue_col_user(),
+        className: 'max-w-[220px] truncate',
+        cell: (subscription) => subscription.email || subscription.userId,
+      },
+      {
+        id: 'plan',
+        header: m.admin_revenue_col_plan(),
+        cell: (subscription) =>
+          productNameForProductId(subscription.productId) ?? subscription.productId ?? '—',
+      },
+      {
+        id: 'status',
+        header: m.admin_revenue_col_status(),
+        cell: (subscription) => (
+          <div className="flex flex-wrap items-center gap-1">
+            <Badge variant={subscription.status === 'active' ? 'default' : 'secondary'}>
+              {m[subscriptionStatusMessageKey(subscription.status)]()}
+            </Badge>
+            {subscription.cancelAtPeriodEnd && (
+              <Badge variant="outline">{m.admin_revenue_cancel_at_period_end()}</Badge>
+            )}
+          </div>
+        ),
+      },
+      {
+        id: 'amount',
+        header: m.admin_revenue_col_amount(),
+        cell: (subscription) =>
+          subscription.amount != null && subscription.currency
+            ? money(subscription.amount, subscription.currency)
+            : '—',
+      },
+      {
+        id: 'period',
+        header: m.admin_revenue_col_period(),
+        cell: (subscription) =>
+          subscription.interval === 'month'
+            ? m.settings_billing_interval_month()
+            : subscription.interval === 'year'
+              ? m.settings_billing_interval_year()
+              : '—',
+      },
+      {
+        id: 'startedAt',
+        header: m.admin_revenue_col_started_at(),
+        cell: (subscription) => <LocalDate value={subscription.createdAt} locale={locale} />,
+      },
+      {
+        id: 'renewsAt',
+        header: m.admin_revenue_col_renews_at(),
+        cell: (subscription) => <LocalDate value={subscription.currentPeriodEnd} locale={locale} />,
+      },
+    ],
+    [locale],
+  )
 
   return (
     <div className="space-y-8">
@@ -159,97 +214,19 @@ function AdminRevenuePage() {
           </p>
         </div>
 
-        {subscriptions.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>{m.admin_revenue_empty()}</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          // 不再套 `Card`：卡片自带 ring 边框，与 `Table` 自身的分隔线叠成双层外框。
-          // `Table` 已自带横向滚动容器，外层也不需要 `overflow-x-auto`。
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{m.admin_revenue_col_user()}</TableHead>
-                <TableHead>{m.admin_revenue_col_plan()}</TableHead>
-                <TableHead>{m.admin_revenue_col_status()}</TableHead>
-                <TableHead>{m.admin_revenue_col_amount()}</TableHead>
-                <TableHead>{m.admin_revenue_col_period()}</TableHead>
-                <TableHead>{m.admin_revenue_col_started_at()}</TableHead>
-                <TableHead>{m.admin_revenue_col_renews_at()}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pageItems.map((subscription) => (
-                <TableRow key={subscription.id}>
-                  <TableCell className="max-w-[220px] truncate">
-                    {subscription.email || subscription.userId}
-                  </TableCell>
-                  <TableCell>
-                    {productNameForProductId(subscription.productId) ??
-                      subscription.productId ??
-                      '—'}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap items-center gap-1">
-                      <Badge variant={subscription.status === 'active' ? 'default' : 'secondary'}>
-                        {m[subscriptionStatusMessageKey(subscription.status)]()}
-                      </Badge>
-                      {subscription.cancelAtPeriodEnd && (
-                        <Badge variant="outline">{m.admin_revenue_cancel_at_period_end()}</Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {subscription.amount != null && subscription.currency
-                      ? money(subscription.amount, subscription.currency)
-                      : '—'}
-                  </TableCell>
-                  <TableCell>
-                    {subscription.interval === 'month'
-                      ? m.settings_billing_interval_month()
-                      : subscription.interval === 'year'
-                        ? m.settings_billing_interval_year()
-                        : '—'}
-                  </TableCell>
-                  <TableCell>
-                    <LocalDate value={subscription.createdAt} locale={locale} />
-                  </TableCell>
-                  <TableCell>
-                    <LocalDate value={subscription.currentPeriodEnd} locale={locale} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              {m.admin_revenue_page_status({ page: currentPage, total: totalPages })}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage <= 1}
-                onClick={() => void navigate({ search: { page: currentPage - 1 } })}
-              >
-                {m.admin_revenue_page_prev()}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage >= totalPages}
-                onClick={() => void navigate({ search: { page: currentPage + 1 } })}
-              >
-                {m.admin_revenue_page_next()}
-              </Button>
-            </div>
-          </div>
-        )}
+        <DataTable
+          columns={columns}
+          data={pageItems}
+          rowKey={(subscription) => subscription.id}
+          emptyTitle={m.admin_revenue_empty()}
+          pagination={{
+            page: currentPage,
+            pageSize: DEFAULT_PAGE_SIZE,
+            total: subscriptions.length,
+            onPageChange: (next) =>
+              void navigate({ search: { page: next > 1 ? next : undefined } }),
+          }}
+        />
       </section>
     </div>
   )

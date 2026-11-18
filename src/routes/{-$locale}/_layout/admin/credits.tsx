@@ -1,6 +1,7 @@
 import { IconCoins, IconHistory, IconMinus, IconPlus } from '@tabler/icons-react'
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { DataTable, type DataTableColumn } from '@/components/data-table/data-table'
 import { LocalDateTime } from '@/components/local-date'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,20 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Spinner } from '@/components/ui/spinner'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
 import { adminRoutes } from '@/config/routes'
+import { DEFAULT_PAGE_SIZE } from '@/core/db/paging'
+import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { getRequestLocale } from '@/lib/locale'
 import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
@@ -50,8 +43,8 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/credits')({
   // 链接类型，导致侧栏里的 linkOptions 必须带 search，导航项就没法只写路径。
   validateSearch: (search: Record<string, unknown>): AdminCreditsSearch => {
     const parsed = Number(search.page)
-    const page = Number.isInteger(parsed) && parsed > 0 ? parsed : 1
-    const keyword = typeof search.q === 'string' ? search.q : ''
+    const page = Number.isInteger(parsed) && parsed > 1 ? parsed : undefined
+    const keyword = typeof search.q === 'string' && search.q ? search.q : undefined
     return { page, q: keyword }
   },
   loaderDeps: ({ search }) => ({ page: search.page ?? 1, q: search.q ?? '' }),
@@ -59,19 +52,13 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/credits')({
     fetchAdminCredits({
       data: {
         search: deps.q || undefined,
-        limit: PAGE_SIZE,
-        offset: (deps.page - 1) * PAGE_SIZE,
+        limit: DEFAULT_PAGE_SIZE,
+        offset: (deps.page - 1) * DEFAULT_PAGE_SIZE,
       },
     }),
   head: () => adminHead(adminRoutes.credits),
   component: AdminCreditsPage,
 })
-
-/** 每页余额条数。 */
-const PAGE_SIZE = 20
-
-/** 搜索防抖：每次按键都打接口既慢又会打乱分页。 */
-const SEARCH_DEBOUNCE_MS = 300
 
 interface AdminCreditsSearch {
   page?: number
@@ -112,17 +99,21 @@ function AdminCreditsPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const debouncedKeyword = useDebouncedValue(keyword)
+
+  // URL 是搜索词的事实来源：前进 / 后退时输入框要跟着回到对应关键词。
+  useEffect(() => {
+    setKeyword(q)
+  }, [q])
+
   // 关键词变化后重置页码：第 3 页的搜索结果换关键词后往往不存在了。
   useEffect(() => {
-    if (keyword === q) return
-    const timer = setTimeout(() => {
-      void navigate({ search: (previous) => ({ ...previous, q: keyword, page: 1 }) })
-    }, SEARCH_DEBOUNCE_MS)
-    return () => clearTimeout(timer)
-  }, [keyword, q, navigate])
-
-  const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE))
-  const currentPage = Math.min(page, totalPages)
+    if (debouncedKeyword === q) return
+    void navigate({
+      search: (previous) => ({ ...previous, q: debouncedKeyword || undefined, page: undefined }),
+      replace: true,
+    })
+  }, [debouncedKeyword, q, navigate])
 
   /**
    * 调整成功后重新拉列表：余额是物化视图，页面上那份不会自己变。
@@ -161,138 +152,113 @@ function AdminCreditsPage() {
     }
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
-          placeholder={m.admin_credits_search_placeholder()}
-          aria-label={m.admin_credits_search_placeholder()}
-          className="min-w-48 max-w-sm flex-1"
-        />
-      </div>
-
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
-
-      {data.balances.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <IconCoins aria-hidden />
-            </EmptyMedia>
-            <EmptyTitle>{m.admin_credits_empty()}</EmptyTitle>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{m.admin_credits_col_user()}</TableHead>
-              <TableHead>{m.admin_credits_col_balance()}</TableHead>
-              <TableHead className="hidden sm:table-cell">
-                {m.admin_credits_col_granted()}
-              </TableHead>
-              <TableHead className="hidden sm:table-cell">
-                {m.admin_credits_col_consumed()}
-              </TableHead>
-              <TableHead className="hidden lg:table-cell">
-                {m.admin_credits_col_refunded()}
-              </TableHead>
-              <TableHead className="hidden xl:table-cell">
-                {m.admin_credits_col_updated_at()}
-              </TableHead>
-              <TableHead className="text-right">{m.admin_users_col_actions()}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.balances.map((balance: AdminCreditBalance) => (
-              <TableRow key={balance.userId}>
-                <TableCell className="max-w-[220px] truncate">
-                  {balance.email || balance.userId}
-                </TableCell>
-                <TableCell className="font-medium">{balance.balance}</TableCell>
-                <TableCell className="hidden sm:table-cell">{balance.totalGranted}</TableCell>
-                <TableCell className="hidden sm:table-cell">{balance.totalConsumed}</TableCell>
-                <TableCell className="hidden lg:table-cell">{balance.totalRefunded}</TableCell>
-                <TableCell className="hidden xl:table-cell">
-                  <LocalDateTime value={balance.updatedAt} locale={locale} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setAdjustTarget({ balance, mode: 'grant' })}
-                    >
-                      <IconPlus data-icon="inline-start" aria-hidden />
-                      {m.admin_credits_grant()}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={balance.balance <= 0}
-                      onClick={() => setAdjustTarget({ balance, mode: 'deduct' })}
-                    >
-                      <IconMinus data-icon="inline-start" aria-hidden />
-                      {m.admin_credits_deduct()}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setHistoryTarget(balance)}
-                    >
-                      <IconHistory data-icon="inline-start" aria-hidden />
-                      {m.admin_credits_transactions_title()}
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
-
-      {data.total > 0 && (
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            {m.admin_credits_page_status({ page: currentPage, total: totalPages })}
-          </p>
-          <div className="flex gap-2">
+  const columns = useMemo<DataTableColumn<AdminCreditBalance>[]>(
+    () => [
+      {
+        id: 'user',
+        header: m.admin_credits_col_user(),
+        className: 'max-w-[220px] truncate',
+        cell: (balance) => balance.email || balance.userId,
+      },
+      {
+        id: 'balance',
+        header: m.admin_credits_col_balance(),
+        className: 'font-medium',
+        cell: (balance) => balance.balance,
+      },
+      {
+        id: 'granted',
+        header: m.admin_credits_col_granted(),
+        className: 'hidden sm:table-cell',
+        cell: (balance) => balance.totalGranted,
+      },
+      {
+        id: 'consumed',
+        header: m.admin_credits_col_consumed(),
+        className: 'hidden sm:table-cell',
+        cell: (balance) => balance.totalConsumed,
+      },
+      {
+        id: 'refunded',
+        header: m.admin_credits_col_refunded(),
+        className: 'hidden lg:table-cell',
+        cell: (balance) => balance.totalRefunded,
+      },
+      {
+        id: 'updatedAt',
+        header: m.admin_credits_col_updated_at(),
+        className: 'hidden xl:table-cell',
+        cell: (balance) => <LocalDateTime value={balance.updatedAt} locale={locale} />,
+      },
+      {
+        id: 'actions',
+        header: m.admin_users_col_actions(),
+        className: 'text-right',
+        cell: (balance) => (
+          <div className="flex justify-end gap-2">
             <Button
+              type="button"
               variant="outline"
               size="sm"
-              disabled={currentPage <= 1}
-              onClick={() =>
-                void navigate({
-                  search: (previous) => ({ ...previous, page: currentPage - 1 }),
-                })
-              }
+              onClick={() => setAdjustTarget({ balance, mode: 'grant' })}
             >
-              {m.admin_credits_page_prev()}
+              <IconPlus data-icon="inline-start" aria-hidden />
+              {m.admin_credits_grant()}
             </Button>
             <Button
+              type="button"
               variant="outline"
               size="sm"
-              disabled={currentPage >= totalPages}
-              onClick={() =>
-                void navigate({
-                  search: (previous) => ({ ...previous, page: currentPage + 1 }),
-                })
-              }
+              disabled={balance.balance <= 0}
+              onClick={() => setAdjustTarget({ balance, mode: 'deduct' })}
             >
-              {m.admin_credits_page_next()}
+              <IconMinus data-icon="inline-start" aria-hidden />
+              {m.admin_credits_deduct()}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setHistoryTarget(balance)}
+            >
+              <IconHistory data-icon="inline-start" aria-hidden />
+              {m.admin_credits_transactions_title()}
             </Button>
           </div>
-        </div>
-      )}
+        ),
+      },
+    ],
+    [locale],
+  )
+
+  return (
+    <div className="space-y-6">
+      <DataTable
+        columns={columns}
+        data={data.balances}
+        rowKey={(balance) => balance.userId}
+        error={error}
+        emptyIcon={<IconCoins aria-hidden />}
+        emptyTitle={m.admin_credits_empty()}
+        pagination={{
+          page,
+          pageSize: DEFAULT_PAGE_SIZE,
+          total: data.total,
+          onPageChange: (next) =>
+            void navigate({
+              search: (previous) => ({ ...previous, page: next > 1 ? next : undefined }),
+            }),
+        }}
+        toolbar={
+          <Input
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+            placeholder={m.admin_credits_search_placeholder()}
+            aria-label={m.admin_credits_search_placeholder()}
+            className="min-w-48 max-w-sm flex-1"
+          />
+        }
+      />
 
       <AdjustDialog
         target={adjustTarget}
@@ -406,6 +372,43 @@ function TransactionsDialog({
     void load(target.userId)
   }, [target, load])
 
+  const columns = useMemo<DataTableColumn<AdminCreditTransactionRow>[]>(
+    () => [
+      {
+        id: 'type',
+        header: m.admin_credits_transaction_col_type(),
+        cell: (row) => transactionTypeLabel(row.type),
+      },
+      {
+        id: 'amount',
+        header: m.admin_credits_transaction_col_amount(),
+        cell: (row) => (
+          <span className={row.amount < 0 ? 'text-destructive' : undefined}>
+            {row.amount > 0 ? `+${row.amount}` : row.amount}
+          </span>
+        ),
+      },
+      {
+        id: 'balanceAfter',
+        header: m.admin_credits_balance_after(),
+        cell: (row) => row.balanceAfter,
+      },
+      {
+        id: 'reference',
+        header: m.admin_credits_transaction_col_reference(),
+        className: 'hidden max-w-[200px] truncate sm:table-cell',
+        cell: (row) => row.reference ?? '—',
+      },
+      {
+        id: 'createdAt',
+        header: m.admin_credits_transaction_col_created_at(),
+        className: 'hidden lg:table-cell',
+        cell: (row) => <LocalDateTime value={row.createdAt} locale={locale} />,
+      },
+    ],
+    [locale],
+  )
+
   return (
     <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl">
@@ -413,50 +416,13 @@ function TransactionsDialog({
           <DialogTitle>{m.admin_credits_transactions_title()}</DialogTitle>
           <DialogDescription>{target?.email || target?.userId}</DialogDescription>
         </DialogHeader>
-        {rows === null ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Spinner />
-          </div>
-        ) : rows.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>{m.admin_credits_transactions_empty()}</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{m.admin_credits_transaction_col_type()}</TableHead>
-                <TableHead>{m.admin_credits_transaction_col_amount()}</TableHead>
-                <TableHead>{m.admin_credits_balance_after()}</TableHead>
-                <TableHead className="hidden sm:table-cell">
-                  {m.admin_credits_transaction_col_reference()}
-                </TableHead>
-                <TableHead className="hidden lg:table-cell">
-                  {m.admin_credits_transaction_col_created_at()}
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{transactionTypeLabel(row.type)}</TableCell>
-                  <TableCell className={row.amount < 0 ? 'text-destructive' : undefined}>
-                    {row.amount > 0 ? `+${row.amount}` : row.amount}
-                  </TableCell>
-                  <TableCell>{row.balanceAfter}</TableCell>
-                  <TableCell className="hidden max-w-[200px] truncate sm:table-cell">
-                    {row.reference ?? '—'}
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    <LocalDateTime value={row.createdAt} locale={locale} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+        <DataTable
+          columns={columns}
+          data={rows ?? []}
+          rowKey={(row) => row.id}
+          loading={rows === null}
+          emptyTitle={m.admin_credits_transactions_empty()}
+        />
         <DialogFooter>
           <DialogClose render={<Button type="button" variant="outline" />}>
             {m.admin_users_cancel()}

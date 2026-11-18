@@ -1,27 +1,18 @@
 import { IconClipboardList } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { DataTable, type DataTableColumn } from '@/components/data-table/data-table'
 import { LocalDateTime } from '@/components/local-date'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { adminRoutes } from '@/config/routes'
+import { DEFAULT_PAGE_SIZE } from '@/core/db/paging'
+import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { getRequestLocale } from '@/lib/locale'
 import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
-import { fetchAdminAuditLogs } from '@/modules/audit/service'
-
-const PAGE_SIZE = 20
-const SEARCH_DEBOUNCE_MS = 300
+import { type AuditLogItem, fetchAdminAuditLogs } from '@/modules/audit/service'
 
 interface AdminAuditSearch {
   page?: number
@@ -32,9 +23,9 @@ interface AdminAuditSearch {
 export const Route = createFileRoute('/{-$locale}/_layout/admin/audit')({
   validateSearch: (search: Record<string, unknown>): AdminAuditSearch => {
     const parsed = Number(search.page)
-    const page = Number.isInteger(parsed) && parsed > 0 ? parsed : 1
-    const q = typeof search.q === 'string' ? search.q : ''
-    const target = typeof search.target === 'string' ? search.target : ''
+    const page = Number.isInteger(parsed) && parsed > 1 ? parsed : undefined
+    const q = typeof search.q === 'string' && search.q ? search.q : undefined
+    const target = typeof search.target === 'string' && search.target ? search.target : undefined
     return { page, q, target }
   },
   loaderDeps: ({ search }) => ({
@@ -47,8 +38,8 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/audit')({
       data: {
         search: deps.q || undefined,
         targetType: deps.target || undefined,
-        limit: PAGE_SIZE,
-        offset: (deps.page - 1) * PAGE_SIZE,
+        limit: DEFAULT_PAGE_SIZE,
+        offset: (deps.page - 1) * DEFAULT_PAGE_SIZE,
       },
     }),
   head: () => adminHead(adminRoutes.audit),
@@ -62,31 +53,101 @@ function AdminAuditPage() {
   const locale = getRequestLocale()
 
   const [keyword, setKeyword] = useState(q)
+  const debouncedKeyword = useDebouncedValue(keyword)
 
+  // URL 是搜索词的事实来源：外部改动（首页跳转、清空筛选）要回写到输入框。
   useEffect(() => {
     setKeyword(q)
   }, [q])
 
   useEffect(() => {
-    if (keyword === q) return
-    const timer = setTimeout(() => {
-      void navigate({
-        search: (prev) => ({ ...prev, q: keyword || undefined, page: 1 }),
-      })
-    }, SEARCH_DEBOUNCE_MS)
-    return () => clearTimeout(timer)
-  }, [keyword, q, navigate])
+    if (debouncedKeyword === q) return
+    void navigate({
+      search: (prev) => ({ ...prev, q: debouncedKeyword || undefined, page: undefined }),
+      replace: true,
+    })
+  }, [debouncedKeyword, q, navigate])
 
-  const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE))
+  const columns = useMemo<DataTableColumn<AuditLogItem>[]>(
+    () => [
+      {
+        id: 'createdAt',
+        header: m.admin_audit_col_created_at(),
+        className: 'whitespace-nowrap text-xs text-muted-foreground',
+        cell: (log) => <LocalDateTime value={log.createdAt} locale={locale} />,
+      },
+      {
+        id: 'actor',
+        header: m.admin_audit_col_actor(),
+        cell: (log) => (
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm">{log.actorEmail ?? m.admin_audit_system_actor()}</span>
+            <Badge variant="outline" className="text-xs">
+              {log.actorType}
+            </Badge>
+          </div>
+        ),
+      },
+      {
+        id: 'operation',
+        header: m.admin_audit_col_operation(),
+        cell: (log) => (
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{log.operation}</code>
+        ),
+      },
+      {
+        id: 'target',
+        header: m.admin_audit_col_target(),
+        className: 'text-xs',
+        cell: (log) =>
+          log.targetType ? (
+            <span>
+              <span className="text-muted-foreground">{log.targetType}:</span>{' '}
+              <code>{log.targetId ?? '-'}</code>
+            </span>
+          ) : (
+            '-'
+          ),
+      },
+      {
+        id: 'summary',
+        header: m.admin_audit_col_summary(),
+        className: 'max-w-md truncate text-sm',
+        cell: (log) => log.summary ?? '-',
+      },
+      {
+        id: 'ip',
+        header: m.admin_audit_col_ip(),
+        className: 'font-mono text-xs text-muted-foreground',
+        cell: (log) => log.ipAddress ?? '-',
+      },
+    ],
+    [locale],
+  )
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <div className="flex items-center gap-2">
+    <DataTable
+      columns={columns}
+      data={data.logs}
+      rowKey={(log) => log.id}
+      rowTestId={(log) => `audit-row-${log.id}`}
+      emptyIcon={<IconClipboardList aria-hidden />}
+      emptyTitle={m.admin_audit_empty()}
+      pagination={{
+        page,
+        pageSize: DEFAULT_PAGE_SIZE,
+        total: data.total,
+        onPageChange: (next) =>
+          void navigate({
+            search: (previous) => ({ ...previous, page: next > 1 ? next : undefined }),
+          }),
+      }}
+      toolbar={
+        <>
           <Input
             type="search"
             value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
+            onChange={(event) => setKeyword(event.target.value)}
             placeholder={m.admin_audit_search_placeholder()}
             aria-label={m.admin_audit_search_placeholder()}
             className="w-64"
@@ -99,113 +160,15 @@ function AdminAuditPage() {
               size="sm"
               onClick={() =>
                 void navigate({
-                  search: (prev) => ({ ...prev, target: undefined, page: 1 }),
+                  search: (prev) => ({ ...prev, target: undefined, page: undefined }),
                 })
               }
             >
               {m.admin_audit_filter_all()}
             </Button>
           ) : null}
-        </div>
-      </div>
-
-      {data.logs.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <IconClipboardList className="size-5" />
-            </EmptyMedia>
-            <EmptyTitle>{m.admin_audit_empty()}</EmptyTitle>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{m.admin_audit_col_created_at()}</TableHead>
-                <TableHead>{m.admin_audit_col_actor()}</TableHead>
-                <TableHead>{m.admin_audit_col_operation()}</TableHead>
-                <TableHead>{m.admin_audit_col_target()}</TableHead>
-                <TableHead>{m.admin_audit_col_summary()}</TableHead>
-                <TableHead>{m.admin_audit_col_ip()}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.logs.map((item) => (
-                <TableRow key={item.id} data-testid={`audit-row-${item.id}`}>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                    <LocalDateTime value={item.createdAt} locale={locale} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm">
-                        {item.actorEmail ?? m.admin_audit_system_actor()}
-                      </span>
-                      <Badge variant="outline" className="text-xs">
-                        {item.actorType}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{item.operation}</code>
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {item.targetType ? (
-                      <span>
-                        <span className="text-muted-foreground">{item.targetType}:</span>{' '}
-                        <code>{item.targetId ?? '-'}</code>
-                      </span>
-                    ) : (
-                      '-'
-                    )}
-                  </TableCell>
-                  <TableCell className="max-w-md truncate text-sm">{item.summary ?? '-'}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {item.ipAddress ?? '-'}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {data.total > PAGE_SIZE ? (
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">
-            {m.admin_audit_page_status({ page: String(page), total: String(totalPages) })}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() =>
-                void navigate({
-                  search: (prev) => ({ ...prev, page: Math.max(1, page - 1) }),
-                })
-              }
-            >
-              {m.admin_audit_page_prev()}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() =>
-                void navigate({
-                  search: (prev) => ({ ...prev, page: page + 1 }),
-                })
-              }
-            >
-              {m.admin_audit_page_next()}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-    </div>
+        </>
+      }
+    />
   )
 }

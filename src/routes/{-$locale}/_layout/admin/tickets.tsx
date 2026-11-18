@@ -1,6 +1,7 @@
 import { IconMessage2, IconPlus, IconTicket } from '@tabler/icons-react'
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { DataTable, type DataTableColumn } from '@/components/data-table/data-table'
 import { LocalDateTime } from '@/components/local-date'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,18 +14,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
 import { adminRoutes } from '@/config/routes'
 import { getRequestLocale } from '@/lib/locale'
@@ -113,20 +105,23 @@ function AdminTicketsPage() {
     }
   }
 
-  async function handleCloseTicket(ticketId: string) {
-    try {
-      await updateAdminTicket({
-        data: {
-          ticketId,
-          status: 'closed',
-        },
-      })
-      toast.add({ type: 'success', title: m.admin_tickets_saved_toast() })
-      await router.invalidate()
-    } catch {
-      toast.add({ type: 'error', title: m.settings_error_generic() })
-    }
-  }
+  const handleCloseTicket = useCallback(
+    async (ticketId: string) => {
+      try {
+        await updateAdminTicket({
+          data: {
+            ticketId,
+            status: 'closed',
+          },
+        })
+        toast.add({ type: 'success', title: m.admin_tickets_saved_toast() })
+        await router.invalidate()
+      } catch {
+        toast.add({ type: 'error', title: m.settings_error_generic() })
+      }
+    },
+    [router],
+  )
 
   async function handleCreateInvite(e: React.FormEvent) {
     e.preventDefault()
@@ -151,162 +146,165 @@ function AdminTicketsPage() {
     }
   }
 
+  const ticketColumns = useMemo<DataTableColumn<AdminTicketItem>[]>(
+    () => [
+      {
+        id: 'createdAt',
+        header: m.admin_tickets_col_created_at(),
+        className: 'whitespace-nowrap text-xs text-muted-foreground',
+        cell: (ticket) => <LocalDateTime value={ticket.createdAt} locale={locale} />,
+      },
+      {
+        id: 'user',
+        header: m.admin_tickets_col_user(),
+        className: 'text-sm',
+        cell: (ticket) => ticket.userEmail ?? ticket.userId,
+      },
+      {
+        id: 'subject',
+        header: m.admin_tickets_col_subject(),
+        cell: (ticket) => (
+          <div className="space-y-1">
+            <div className="font-medium">{ticket.subject}</div>
+            <div className="text-xs text-muted-foreground">{ticket.content}</div>
+            {ticket.adminReply ? (
+              <div className="rounded bg-muted px-2 py-1 text-xs">{ticket.adminReply}</div>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        id: 'priority',
+        header: m.admin_tickets_col_priority(),
+        cell: (ticket) => <Badge variant="outline">{ticket.priority}</Badge>,
+      },
+      {
+        id: 'status',
+        header: m.admin_tickets_col_status(),
+        cell: (ticket) => (
+          <Badge variant={ticket.status === 'closed' ? 'outline' : 'default'}>
+            {ticket.status}
+          </Badge>
+        ),
+      },
+      {
+        id: 'actions',
+        header: m.admin_tickets_col_actions(),
+        className: 'text-right',
+        cell: (ticket) =>
+          ticket.status !== 'closed' ? (
+            <div className="flex justify-end gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setReplyingTicket(ticket)
+                  setReplyText(ticket.adminReply ?? '')
+                }}
+                data-testid={`reply-ticket-${ticket.id}`}
+              >
+                {m.admin_tickets_reply()}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void handleCloseTicket(ticket.id)}
+                data-testid={`close-ticket-${ticket.id}`}
+              >
+                {m.admin_tickets_close()}
+              </Button>
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground">-</span>
+          ),
+      },
+    ],
+    [handleCloseTicket, locale],
+  )
+
+  const inviteColumns = useMemo<DataTableColumn<(typeof data.inviteCodes)[number]>[]>(
+    () => [
+      {
+        id: 'code',
+        header: m.admin_tickets_invite_col_code(),
+        cell: (invite) => (
+          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{invite.code}</code>
+        ),
+      },
+      {
+        id: 'bonus',
+        header: m.admin_tickets_invite_col_bonus(),
+        className: 'font-mono text-sm',
+        cell: (invite) => `+${invite.bonusCredits}`,
+      },
+      {
+        id: 'usage',
+        header: m.admin_tickets_invite_col_usage(),
+        className: 'font-mono text-xs',
+        cell: (invite) => `${invite.usedCount} / ${invite.maxUses}`,
+      },
+      {
+        id: 'status',
+        header: m.admin_tickets_invite_col_status(),
+        cell: (invite) => <Badge variant="outline">{invite.status}</Badge>,
+      },
+    ],
+    [],
+  )
+
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setCreateInviteOpen(true)}
-            data-testid="create-invite-button"
-          >
-            <IconPlus className="mr-1.5 size-4" />
-            {m.admin_tickets_create_invite()}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => setCreateTicketOpen(true)}
-            data-testid="create-ticket-button"
-          >
-            <IconPlus className="mr-1.5 size-4" />
-            {m.admin_tickets_create_ticket()}
-          </Button>
-        </div>
-      </div>
-
       {/* 客服工单 */}
       <section className="space-y-3">
         <h3 className="text-sm font-medium">{m.admin_tickets_section_tickets()}</h3>
-        {data.tickets.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <IconMessage2 className="size-5" />
-              </EmptyMedia>
-              <EmptyTitle>{m.admin_tickets_empty_tickets()}</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <div className="rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{m.admin_tickets_col_created_at()}</TableHead>
-                  <TableHead>{m.admin_tickets_col_user()}</TableHead>
-                  <TableHead>{m.admin_tickets_col_subject()}</TableHead>
-                  <TableHead>{m.admin_tickets_col_priority()}</TableHead>
-                  <TableHead>{m.admin_tickets_col_status()}</TableHead>
-                  <TableHead className="text-right">{m.admin_tickets_col_actions()}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.tickets.map((tkt) => (
-                  <TableRow key={tkt.id} data-testid={`ticket-row-${tkt.id}`}>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      <LocalDateTime value={tkt.createdAt} locale={locale} />
-                    </TableCell>
-                    <TableCell className="text-sm">{tkt.userEmail ?? tkt.userId}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-medium">{tkt.subject}</div>
-                        <div className="text-xs text-muted-foreground">{tkt.content}</div>
-                        {tkt.adminReply ? (
-                          <div className="rounded bg-muted px-2 py-1 text-xs">{tkt.adminReply}</div>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{tkt.priority}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={tkt.status === 'closed' ? 'outline' : 'default'}>
-                        {tkt.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {tkt.status !== 'closed' ? (
-                        <div className="flex justify-end gap-1.5">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setReplyingTicket(tkt)
-                              setReplyText(tkt.adminReply ?? '')
-                            }}
-                            data-testid={`reply-ticket-${tkt.id}`}
-                          >
-                            {m.admin_tickets_reply()}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => void handleCloseTicket(tkt.id)}
-                            data-testid={`close-ticket-${tkt.id}`}
-                          >
-                            {m.admin_tickets_close()}
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+        <DataTable
+          columns={ticketColumns}
+          data={data.tickets}
+          rowKey={(ticket) => ticket.id}
+          rowTestId={(ticket) => `ticket-row-${ticket.id}`}
+          emptyIcon={<IconMessage2 aria-hidden />}
+          emptyTitle={m.admin_tickets_empty_tickets()}
+          toolbar={
+            <Button
+              type="button"
+              size="sm"
+              className="ml-auto"
+              onClick={() => setCreateTicketOpen(true)}
+              data-testid="create-ticket-button"
+            >
+              <IconPlus className="mr-1.5 size-4" />
+              {m.admin_tickets_create_ticket()}
+            </Button>
+          }
+        />
       </section>
 
       {/* 邀请码管理 */}
       <section className="space-y-3">
         <h3 className="text-sm font-medium">{m.admin_tickets_section_invites()}</h3>
-        {data.inviteCodes.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <IconTicket className="size-5" />
-              </EmptyMedia>
-              <EmptyTitle>{m.admin_tickets_empty_invites()}</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <div className="rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{m.admin_tickets_invite_col_code()}</TableHead>
-                  <TableHead>{m.admin_tickets_invite_col_bonus()}</TableHead>
-                  <TableHead>{m.admin_tickets_invite_col_usage()}</TableHead>
-                  <TableHead>{m.admin_tickets_invite_col_status()}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.inviteCodes.map((inv) => (
-                  <TableRow key={inv.id} data-testid={`invite-row-${inv.code}`}>
-                    <TableCell>
-                      <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-                        {inv.code}
-                      </code>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">+{inv.bonusCredits}</TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {inv.usedCount} / {inv.maxUses}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{inv.status}</Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+        <DataTable
+          columns={inviteColumns}
+          data={data.inviteCodes}
+          rowKey={(invite) => invite.id}
+          rowTestId={(invite) => `invite-row-${invite.code}`}
+          emptyIcon={<IconTicket aria-hidden />}
+          emptyTitle={m.admin_tickets_empty_invites()}
+          toolbar={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-auto"
+              onClick={() => setCreateInviteOpen(true)}
+              data-testid="create-invite-button"
+            >
+              <IconPlus className="mr-1.5 size-4" />
+              {m.admin_tickets_create_invite()}
+            </Button>
+          }
+        />
       </section>
 
       {/* 新建工单 Dialog */}

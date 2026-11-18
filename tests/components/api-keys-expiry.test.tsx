@@ -25,6 +25,12 @@ vi.mock('@/core/auth/client', () => ({
   },
 }))
 
+// 页面在增删后走 `router.invalidate()` 重新取数；组件单独渲染没有 Router 上下文。
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return { ...actual, useRouter: () => ({ invalidate: vi.fn() }) }
+})
+
 const SECONDS_PER_DAY = 86_400
 
 // 页面未单独导出，只能从 `Route.options.component` 取。
@@ -36,6 +42,8 @@ const ApiKeysPage = ApiKeysRoute.options.component as unknown as () => React.JSX
  */
 function stubLoaderData(keys: unknown[] = []) {
   vi.spyOn(ApiKeysRoute, 'useLoaderData').mockReturnValue({ ok: true, keys } as never)
+  vi.spyOn(ApiKeysRoute, 'useSearch').mockReturnValue({} as never)
+  vi.spyOn(ApiKeysRoute, 'useNavigate').mockReturnValue(vi.fn() as never)
 }
 
 /** 渲染页面并打开创建弹窗，返回有效期下拉。 */

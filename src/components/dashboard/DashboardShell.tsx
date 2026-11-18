@@ -71,6 +71,7 @@ export function DashboardShell({
   sidebar,
   footer,
   hidePageHeader = false,
+  fullWidth = false,
   children,
 }: {
   locale: Locale
@@ -82,6 +83,8 @@ export function DashboardShell({
   footer: ReactNode
   /** 详情页自带标题，不再叠加布局标题（避免两个 `<h1>`）。 */
   hidePageHeader?: boolean
+  /** 管理台满宽（表格多列需要横向空间）；个人中心保持收窄阅读宽度。 */
+  fullWidth?: boolean
   children: ReactNode
 }) {
   return (
@@ -150,8 +153,8 @@ export function DashboardShell({
           </div>
         </header>
         {session.impersonating && <ImpersonationBanner />}
-        {/* 用 `max-w-6xl` 而非表单页的 `max-w-3xl`：这里有 5–6 列的表格，3xl 会挤到换行。 */}
-        <div className="mx-auto w-full min-w-0 max-w-6xl px-4 py-6 md:px-6">
+        {/* 管理台满宽，个人中心用 `max-w-6xl` 收窄：后者表单为主，过宽反而难读。 */}
+        <div className={`w-full min-w-0 px-4 py-6 md:px-6 ${fullWidth ? '' : 'mx-auto max-w-6xl'}`}>
           {meta && !hidePageHeader && (
             <div className="mb-6 space-y-1">
               <h1 className="text-2xl font-semibold tracking-tight">{meta.title}</h1>

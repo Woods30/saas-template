@@ -50,6 +50,8 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
       )
     },
     useNavigate: () => routerMocks.navigate,
+    // 页面改动后走 `router.invalidate()` 重新取数，测试里给一个空实现即可。
+    useRouter: () => ({ invalidate: vi.fn() }),
     useRouterState: ({
       select,
     }: {
