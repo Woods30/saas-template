@@ -60,6 +60,14 @@ export const modulesSchema = z.object({
   changelog: z.boolean(),
   contact: z.boolean(),
   newsletter: z.boolean(),
+  /**
+   * 核销型支付模块。
+   *
+   * 带默认值 `false`：这一项是后加的，早于它写入的 `modules` 分组没有这个键。
+   * 不给默认值的话整个分组会因「缺字段」被判非法而整组回落默认值——后台改过的
+   * 其它开关会被一起抹掉。
+   */
+  collection: z.boolean().default(false),
   notification: z.boolean(),
   analytics: z.boolean(),
   auth: z.boolean(),
@@ -131,6 +139,7 @@ export function defaultSettings(): SettingsGroups {
       changelog: config.changelog.enabled,
       contact: config.contact.enabled,
       newsletter: config.newsletter.enabled,
+      collection: config.collection.enabled,
       notification: config.notification.enabled,
       analytics: config.analytics.enabled,
       auth: config.auth.enabled,
@@ -187,6 +196,7 @@ export function applySettingsToConfig(
     changelog: { ...config.changelog, enabled: settings.modules.changelog },
     contact: { ...config.contact, enabled: settings.modules.contact },
     newsletter: { ...config.newsletter, enabled: settings.modules.newsletter },
+    collection: { ...config.collection, enabled: settings.modules.collection },
     notification: { ...config.notification, enabled: settings.modules.notification },
     analytics: { ...config.analytics, enabled: settings.modules.analytics },
     auth: { ...config.auth, enabled: settings.modules.auth },

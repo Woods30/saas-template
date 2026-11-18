@@ -1,7 +1,12 @@
 import { z } from 'zod'
 import type { PublicEnv } from '@/core/env/public'
 import type { ServerEnv } from '@/core/env/server'
-import { productConfigErrors, resolvePriceReference } from './products'
+import {
+  collectionConfigErrors,
+  productConfigErrors,
+  resolveCollectionPrice,
+  resolvePriceReference,
+} from './products'
 import type { ServiceModule, WebsiteConfig } from './website'
 
 /**
@@ -174,6 +179,63 @@ export function getServiceStatuses(input: {
     // 重复产品 ID 或价格引用会让价格归属判定出错，
     // 属于「配置矛盾」：字段都在，但组合起来是错的。
     validateProductConfig(),
+  )
+
+  // 核销型支付（collection）：没有托管渠道，价格与收款账户都得在本地配齐。
+  const collectionAccounts = config.collection.accounts
+  const collectionAccountIds = new Set<string>()
+  const collectionAccountDuplicates: ConfigIssue[] = []
+  for (const account of collectionAccounts) {
+    if (collectionAccountIds.has(account.id)) {
+      collectionAccountDuplicates.push({
+        key: 'collection.accounts',
+        location: 'src/config/website.ts',
+        conflict: true,
+        reason: `收款账户 ID ${account.id} 重复，账户解析会取到不确定的那一个`,
+      })
+    }
+    collectionAccountIds.add(account.id)
+  }
+  const collectionQrIssues: ConfigIssue[] = collectionAccounts
+    .filter(
+      (account) =>
+        !isRootOrProtocolRelativePath(account.qrImageUrl) && !isSafeHttpsUrl(account.qrImageUrl),
+    )
+    .map((account) => ({
+      key: 'collection.accounts',
+      location: 'src/config/website.ts',
+      conflict: true,
+      reason: `收款账户 ${account.id} 的收款码地址必须是站内根路径或无凭据的 HTTPS 地址`,
+    }))
+
+  check(
+    'collection',
+    [
+      [
+        'collection.products',
+        resolveCollectionPrice(config.landingOffer.productId, config.landingOffer.offerId) !==
+          undefined,
+        'src/config/products.ts',
+        '首页要卖的商品没有核销型本地标价（收款码链路收不了单）',
+      ],
+      [
+        'collection.accounts',
+        collectionAccounts.length > 0,
+        'src/config/website.ts',
+        '没有可用的收款账户，用户付款后无处可付',
+      ],
+    ],
+    [],
+    [
+      ...collectionAccountDuplicates,
+      ...collectionQrIssues,
+      ...collectionConfigErrors().map((error) => ({
+        key: `collection.products.${error}`,
+        location: 'src/config/products.ts' as const,
+        conflict: true,
+        reason: '核销型标价的金额、币种或周期不合法，请检查商品配置',
+      })),
+    ],
   )
 
   // 只校验当前选中 provider 对应的 webhook：配了 Discord 却选 feishu 仍是 incomplete。
