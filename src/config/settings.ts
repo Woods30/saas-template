@@ -1,9 +1,12 @@
 import {
   IconBell,
   IconChartBar,
+  IconCoins,
   IconCreditCard,
   IconDeviceLaptop,
   IconKey,
+  IconReceipt,
+  IconRepeat,
   IconSettings,
   IconShieldLock,
   IconUser,
@@ -26,6 +29,9 @@ export type SettingsSection =
   | 'admin'
   /** 管理分组下的子页面：路径含两段，与其它板块的单段不同。 */
   | 'admin/revenue'
+  | 'admin/orders'
+  | 'admin/subscriptions'
+  | 'admin/credits'
 
 /**
  * 个人中心侧边栏的导航项工厂。
@@ -151,6 +157,48 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
             options: linkOptions({ to: '/{-$locale}/dashboard/admin/revenue', params: { locale } }),
           },
         },
+        {
+          kind: 'link',
+          id: 'admin-orders',
+          title: m.settings_nav_admin_orders(),
+          icon: IconReceipt,
+          // 与用户管理同一套约束：角色 + 功能开关都满足才显示。
+          visibility: { roles: ['admin'], feature: 'enableAdmin' },
+          destination: {
+            kind: 'internal',
+            options: linkOptions({ to: '/{-$locale}/dashboard/admin/orders', params: { locale } }),
+          },
+        },
+        {
+          kind: 'link',
+          id: 'admin-subscriptions',
+          title: m.settings_nav_admin_subscriptions(),
+          icon: IconRepeat,
+          // 与用户管理同一套约束：角色 + 功能开关都满足才显示。
+          visibility: { roles: ['admin'], feature: 'enableAdmin' },
+          destination: {
+            kind: 'internal',
+            options: linkOptions({
+              to: '/{-$locale}/dashboard/admin/subscriptions',
+              params: { locale },
+            }),
+          },
+        },
+        {
+          kind: 'link',
+          id: 'admin-credits',
+          title: m.settings_nav_admin_credits(),
+          icon: IconCoins,
+          // 与用户管理同一套约束：角色 + 功能开关都满足才显示。
+          visibility: { roles: ['admin'], feature: 'enableAdmin' },
+          destination: {
+            kind: 'internal',
+            options: linkOptions({
+              to: '/{-$locale}/dashboard/admin/credits',
+              params: { locale },
+            }),
+          },
+        },
       ],
     },
   ]
@@ -219,6 +267,24 @@ export function getSettingsSectionMeta(section: string):
         title: m.admin_revenue_title(),
         description: m.admin_revenue_description(),
         icon: IconChartBar,
+      }
+    case 'admin/orders':
+      return {
+        title: m.admin_orders_title(),
+        description: m.admin_orders_description(),
+        icon: IconReceipt,
+      }
+    case 'admin/subscriptions':
+      return {
+        title: m.admin_subscriptions_title(),
+        description: m.admin_subscriptions_description(),
+        icon: IconRepeat,
+      }
+    case 'admin/credits':
+      return {
+        title: m.admin_credits_title(),
+        description: m.admin_credits_description(),
+        icon: IconCoins,
       }
     case 'admin/settings':
       return {
