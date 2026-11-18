@@ -6,6 +6,7 @@ import {
   ADMIN_ORDER_STATUSES,
   COLLECTION_RATE_LIMITS,
   type CollectionGuardDeps,
+  collectionAccountSchema,
   createOrderSchema,
   DEFAULT_ADMIN_ORDER_STATUS,
   enforceRateLimit,
@@ -13,6 +14,7 @@ import {
   errorStatus,
   failureResponse,
   guardCollectionRequest,
+  isValidAccountQrImageKey,
   rateLimitAction,
   resolveAdminOrderQuery,
   reviewOrderSchema,
@@ -259,6 +261,32 @@ describe('参数校验', () => {
       reviewOrderSchema.safeParse({ orderId: 'o1', action: 'approve', observedAmount: 1.5 })
         .success,
     ).toBe(false)
+  })
+})
+
+describe('收款账户的入参校验', () => {
+  it('账户 ID 不能带路径片段', () => {
+    expect(
+      collectionAccountSchema.safeParse({ accountId: 'acct-main', displayName: '支付宝' }).success,
+    ).toBe(true)
+    expect(
+      collectionAccountSchema.safeParse({ accountId: '../secrets', displayName: '支付宝' }).success,
+    ).toBe(false)
+    expect(
+      collectionAccountSchema.safeParse({ accountId: 'acct/main', displayName: '支付宝' }).success,
+    ).toBe(false)
+  })
+
+  it('收款码 key 必须由服务端派生：只认本账户自己的 key', () => {
+    // 不给 key（清空收款码）合法。
+    expect(isValidAccountQrImageKey('acct-main', null)).toBe(true)
+    expect(isValidAccountQrImageKey('acct-main', undefined)).toBe(true)
+    // 本账户自己的 key 合法。
+    expect(isValidAccountQrImageKey('acct-main', 'collection-qrcodes/acct-main.png')).toBe(true)
+    // 别人的收款码、凭证目录、任意路径都不放行。
+    expect(isValidAccountQrImageKey('acct-main', 'collection-qrcodes/acct-other.png')).toBe(false)
+    expect(isValidAccountQrImageKey('acct-main', 'collection-receipts/o1.png')).toBe(false)
+    expect(isValidAccountQrImageKey('acct-main', 'secrets.png')).toBe(false)
   })
 })
 

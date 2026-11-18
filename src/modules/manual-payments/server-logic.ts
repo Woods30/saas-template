@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isCollectionQrImageKey } from './files'
 import { CollectionError, type CollectionErrorCode, type CollectionOrderStatus } from './types'
 
 /**
@@ -267,11 +268,31 @@ export const reviewOrderSchema = z.object({
 
 /** 收款账户保存的入参校验。 */
 export const collectionAccountSchema = z.object({
-  accountId: z.string().min(1),
+  // 账户 ID 会进 R2 key，只允许安全字符。
+  accountId: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[A-Za-z0-9_-]+$/),
   displayName: z.string().min(1).max(100),
-  qrImageKey: z.string().min(1).nullish(),
+  qrImageKey: z.string().min(1).max(200).nullish(),
   enabled: z.boolean().default(true),
 })
+
+/**
+ * 收款码 key 能不能写进这个账户。
+ *
+ * key 必须由服务端派生（见 `files.ts`）：`collection-qrcodes/<accountId>.<ext>`。
+ * 客户端传任意 key 就能把别的对象挂上来——读二维码时等于泄漏别人的文件，
+ * 所以这里只放行「本账户自己的 key」，不给 key（清空收款码）也合法。
+ */
+export function isValidAccountQrImageKey(
+  accountId: string,
+  key: string | null | undefined,
+): boolean {
+  if (key === null || key === undefined) return true
+  return isCollectionQrImageKey(accountId, key)
+}
 
 /**
  * 解析管理员订单列表的查询参数。

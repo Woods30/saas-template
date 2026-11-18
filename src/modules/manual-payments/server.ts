@@ -10,6 +10,7 @@ import {
   errorResponse,
   failureResponse,
   guardCollectionRequest,
+  isValidAccountQrImageKey,
   orderIdSchema,
   resolveAdminOrderQuery,
   reviewOrderSchema,
@@ -203,6 +204,10 @@ export async function adminSaveAccount(
 
   const parsed = collectionAccountSchema.safeParse(data)
   if (!parsed.success) return errorResponse('INVALID_INPUT')
+  // 收款码 key 必须是服务端派生出来的那个：客户端不能指定任意 R2 对象。
+  if (!isValidAccountQrImageKey(parsed.data.accountId, parsed.data.qrImageKey)) {
+    return errorResponse('INVALID_QRCODE')
+  }
 
   try {
     const { schema } = await import('@/core/db')

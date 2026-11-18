@@ -19,6 +19,41 @@ export const COLLECTION_QRCODE_FOLDER = 'collection-qrcodes'
 /** 付款凭证在 R2 中的目录前缀。 */
 export const COLLECTION_RECEIPT_FOLDER = 'collection-receipts'
 
+/** 收款码 key 的命名空间前缀（含斜杠）。 */
+export const COLLECTION_QRCODE_PREFIX = `${COLLECTION_QRCODE_FOLDER}/`
+
+/** 收款码 key 的扩展名白名单：与 `imageExtension` 的输出一致。 */
+const QR_IMAGE_EXTENSIONS = ['jpg', 'png', 'webp'] as const
+
+/** 账户 ID 的合法字符：字母、数字、下划线与连字符。 */
+const ACCOUNT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
+
+/** 账户 ID 是否合法。 */
+export function isCollectionAccountId(accountId: string): boolean {
+  return ACCOUNT_ID_PATTERN.test(accountId)
+}
+
+/**
+ * 由服务端派生收款码的 R2 key。
+ *
+ * key 只由「账户 ID + 扩展名」决定：客户端不能指定 key，否则就能把任意对象
+ * （包括别的用户的付款凭证）挂到这个账户上，等于开了个任意文件读的口子。
+ */
+export function collectionQrImageKey(accountId: string, extension: string): string {
+  return `${COLLECTION_QRCODE_PREFIX}${accountId}.${extension}`
+}
+
+/**
+ * 这个 key 是不是该账户自己的收款码。
+ *
+ * 只认服务端派生出来的形式：`collection-qrcodes/<accountId>.<jpg|png|webp>`。
+ * 账户 ID 本身也要先过字符检查，否则 key 里会出现路径片段。
+ */
+export function isCollectionQrImageKey(accountId: string, key: string): boolean {
+  if (!isCollectionAccountId(accountId)) return false
+  return QR_IMAGE_EXTENSIONS.some((ext) => collectionQrImageKey(accountId, ext) === key)
+}
+
 /** 允许的图片类型：JPG / PNG / WebP。 */
 export const COLLECTION_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
 

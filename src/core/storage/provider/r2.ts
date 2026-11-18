@@ -2,7 +2,13 @@ import type { R2Bucket } from '@cloudflare/workers-types'
 import type { FileInfo, UploadOptions, UploadResult } from '../types'
 
 /** 允许的 folder 前缀白名单 */
-const ALLOWED_FOLDER_PREFIXES = ['uploads', 'avatars', 'documents'] as const
+const ALLOWED_FOLDER_PREFIXES = [
+  'uploads',
+  'avatars',
+  'documents',
+  'collection-qrcodes',
+  'collection-receipts',
+] as const
 type AllowedFolder = (typeof ALLOWED_FOLDER_PREFIXES)[number]
 
 /**
@@ -26,6 +32,9 @@ export class R2StorageProvider {
         `storage: folder "${folder}" 不在白名单中，仅允许: ${ALLOWED_FOLDER_PREFIXES.join(', ')}`,
       )
     }
+
+    // 调用方自己派生 key：仍要过命名空间白名单与路径检查。
+    if (options.key !== undefined) return this.buildExplicitKey(options.key)
 
     const sanitizedFilename = this._sanitize(filename, 'filename')
     if (!sanitizedFilename) {
@@ -51,6 +60,34 @@ export class R2StorageProvider {
     }
 
     return key
+  }
+
+  /**
+   * 调用方派生的 key：必须落在白名单命名空间内，且不含路径片段。
+   *
+   * 模块拥有自己的命名空间时（收款码、付款凭证）由业务规则派生 key，
+   * 但命名空间与路径检查仍由 provider 兜底——调用方的善意不构成授权。
+   */
+  private buildExplicitKey(key: string): string {
+    if (!key || !/^[A-Za-z0-9._/-]+$/.test(key) || key.includes('..') || key.startsWith('.')) {
+      throw new Error('storage: key 包含非法字符，请提供形如 "<目录>/<文件名>" 的 key')
+    }
+    this.assertNamespace(key)
+    return key
+  }
+
+  /**
+   * 断言 key 落在白名单命名空间内。
+   *
+   * 读取与删除都要过这一关：调用方不能拿着任意 key 来取对象。
+   */
+  private assertNamespace(key: string): void {
+    const namespace = key.split('/')[0] ?? ''
+    if (!ALLOWED_FOLDER_PREFIXES.includes(namespace as AllowedFolder)) {
+      throw new Error(
+        `storage: key "${key}" 不在白名单命名空间内，仅允许: ${ALLOWED_FOLDER_PREFIXES.join(', ')}`,
+      )
+    }
   }
 
   /**
@@ -87,6 +124,7 @@ export class R2StorageProvider {
    * 不检查文件所有权：调用方必须先确认 key 属于当前认证用户，并显式传 `authorized: true`。
    */
   async deleteFile(key: string, authorized?: boolean): Promise<void> {
+    this.assertNamespace(key)
     if (!authorized) {
       throw new Error('storage: deleteFile 需要显式传入 authorized: true，以确认调用方已校验所有权')
     }
@@ -98,6 +136,7 @@ export class R2StorageProvider {
    * 调用方负责先校验 visibility 或所有权。
    */
   async downloadFile(key: string, authorized?: boolean): Promise<ReadableStream | null> {
+    this.assertNamespace(key)
     const obj = await this.bucket.head(key)
     if (!obj) return null
 
@@ -113,6 +152,7 @@ export class R2StorageProvider {
   }
 
   async getFileInfo(key: string): Promise<FileInfo | null> {
+    this.assertNamespace(key)
     const obj = await this.bucket.head(key)
     if (!obj) return null
     return {

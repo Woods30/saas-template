@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest'
 import { type DB, schema } from '@/core/db'
 import {
   COLLECTION_IMAGE_MAX_BYTES,
+  collectionQrImageKey,
   findAccountFileRef,
   findOrderFileRef,
   hasOrderForAccount,
+  isCollectionAccountId,
+  isCollectionQrImageKey,
   setAccountQrImageKey,
   setOrderReceiptKey,
   validateCollectionImage,
@@ -224,6 +227,40 @@ describe('收款账户文件引用', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ id: 'acct-new', enabled: true })
     sqlite.close()
+  })
+})
+
+describe('收款码 key 的派生与校验', () => {
+  it('key 由账户 ID 与扩展名派生，落在收款码目录下', () => {
+    expect(collectionQrImageKey('acct-main', 'png')).toBe('collection-qrcodes/acct-main.png')
+    expect(collectionQrImageKey('acct-main', 'jpg')).toBe('collection-qrcodes/acct-main.jpg')
+    expect(collectionQrImageKey('acct-main', 'webp')).toBe('collection-qrcodes/acct-main.webp')
+  })
+
+  it('只认本账户自己的 key：别人的收款码、其他目录、任意路径都不放行', () => {
+    expect(isCollectionQrImageKey('acct-main', 'collection-qrcodes/acct-main.png')).toBe(true)
+    expect(isCollectionQrImageKey('acct-main', 'collection-qrcodes/acct-main.webp')).toBe(true)
+
+    // 别的账户的收款码
+    expect(isCollectionQrImageKey('acct-main', 'collection-qrcodes/acct-other.png')).toBe(false)
+    // 付款凭证目录
+    expect(isCollectionQrImageKey('acct-main', 'collection-receipts/acct-main.png')).toBe(false)
+    // 目录外的任意对象
+    expect(isCollectionQrImageKey('acct-main', 'secrets/other.png')).toBe(false)
+    expect(isCollectionQrImageKey('acct-main', 'acct-main.png')).toBe(false)
+    // 路径穿越
+    expect(isCollectionQrImageKey('acct-main', 'collection-qrcodes/../secrets.png')).toBe(false)
+    // 扩展名不在白名单
+    expect(isCollectionQrImageKey('acct-main', 'collection-qrcodes/acct-main.svg')).toBe(false)
+  })
+
+  it('账户 ID 只允许安全字符，不能带路径片段', () => {
+    expect(isCollectionAccountId('acct-main')).toBe(true)
+    expect(isCollectionAccountId('alipay_default')).toBe(true)
+    expect(isCollectionAccountId('acct/main')).toBe(false)
+    expect(isCollectionAccountId('../secrets')).toBe(false)
+    expect(isCollectionAccountId('a b')).toBe(false)
+    expect(isCollectionAccountId('')).toBe(false)
   })
 })
 

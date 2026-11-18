@@ -217,9 +217,46 @@ describe('R2StorageProvider — 安全加固', () => {
       ;(bucket.head as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null)
       const provider = new R2StorageProvider(bucket)
 
-      const result = await provider.downloadFile('nonexistent')
+      const result = await provider.downloadFile('uploads/user1/missing.png')
 
       expect(result).toBeNull()
+    })
+  })
+
+  describe('命名空间白名单', () => {
+    it('调用方派生 key 时，key 必须落在白名单目录内', async () => {
+      const bucket = createMockBucket()
+      const provider = new R2StorageProvider(bucket)
+      const file = new ArrayBuffer(8)
+
+      await provider.uploadFile(file, 'acct.png', 'image/png', {
+        key: 'collection-qrcodes/acct-main.png',
+      })
+      expect(bucket.put.mock.calls[0][0]).toBe('collection-qrcodes/acct-main.png')
+
+      await expect(
+        provider.uploadFile(file, 'x.png', 'image/png', { key: 'secrets/x.png' }),
+      ).rejects.toThrow('不在白名单命名空间内')
+
+      await expect(
+        provider.uploadFile(file, 'x.png', 'image/png', { key: 'collection-qrcodes/../x.png' }),
+      ).rejects.toThrow('包含非法字符')
+    })
+
+    it('读取与删除都拒绝白名单命名空间之外的 key', async () => {
+      const bucket = createMockBucket()
+      const provider = new R2StorageProvider(bucket)
+
+      await expect(provider.downloadFile('secrets/x.png', true)).rejects.toThrow(
+        '不在白名单命名空间内',
+      )
+      await expect(provider.deleteFile('secrets/x.png', true)).rejects.toThrow(
+        '不在白名单命名空间内',
+      )
+      await expect(provider.getFileInfo('secrets/x.png')).rejects.toThrow('不在白名单命名空间内')
+      // 一次都没碰过 bucket。
+      expect(bucket.get).not.toHaveBeenCalled()
+      expect(bucket.delete).not.toHaveBeenCalled()
     })
   })
 
