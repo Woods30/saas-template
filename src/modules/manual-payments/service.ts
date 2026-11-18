@@ -1,0 +1,130 @@
+/**
+ * 核销型支付（manual-payments）模块的公开入口。
+ *
+ * 这条链路不接支付渠道：用户按订单金额向收款码付款，管理员核验后结算。
+ * 订单表达购买意图，`payments` / `subscriptions` 只记录已核验的资金事实。
+ *
+ * 跨模块只能从这里取东西——别的模块 import `@/modules/manual-payments/service`，
+ * 不能直接摸 `orders.ts` 或 `settlement.ts`。
+ */
+export {
+  type CollectionAccountSettings,
+  resolveCollectionAccount,
+} from './accounts'
+export {
+  type CollectionCancelOutcome,
+  type CollectionCheckoutOutcome,
+  type CollectionOrderErrorCode,
+  type CollectionOrderListResult,
+  type CollectionOrderResult,
+  cancelCollectionOrder,
+  collectionOrderErrorMessage,
+  collectionOrderNeedsCountdown,
+  collectionOrderNeedsPolling,
+  collectionQrSrc,
+  createCollectionOrder,
+  fetchCollectionOrder,
+  fetchMyCollectionOrders,
+  submitCollectionOrder,
+} from './client'
+export {
+  COLLECTION_IMAGE_MAX_BYTES,
+  COLLECTION_IMAGE_TYPES,
+  COLLECTION_QRCODE_FOLDER,
+  COLLECTION_RECEIPT_FOLDER,
+  type CollectionAccountFileRef,
+  type CollectionImageKind,
+  type CollectionImageRejection,
+  type CollectionImageType,
+  type CollectionImageValidation,
+  findAccountFileRef,
+  findOrderFileRef,
+  hasOrderForAccount,
+  imageExtension,
+  setAccountQrImageKey,
+  setOrderReceiptKey,
+  validateCollectionImage,
+} from './files'
+export {
+  type AdminCollectionOrder,
+  type AdminOrderPage,
+  COLLECTION_ORDER_TTL_SECONDS,
+  type CreateOrderInput,
+  cancelOrder,
+  createOrder,
+  expirePendingOrders,
+  FINGERPRINT_MAX,
+  FINGERPRINT_MIN,
+  getUserOrder,
+  isUniqueConstraintError,
+  listAllOrders,
+  listUserOrders,
+  submitOrder,
+  toCollectionOrder,
+} from './orders'
+export {
+  type AdminActionDeps,
+  adminListOrders,
+  adminReviewOrder,
+  adminSaveAccount,
+  type CallWith,
+  cancelCollectionOrderFn,
+  createCollectionOrderFn,
+  fetchAdminCollectionOrdersFn,
+  fetchCollectionAccountsFn,
+  fetchCollectionOrderFn,
+  fetchMyCollectionOrdersFn,
+  reviewCollectionOrderFn,
+  saveCollectionAccountFn,
+  submitCollectionOrderFn,
+} from './server'
+export {
+  ADMIN_ORDER_STATUSES,
+  adminOrderListSchema,
+  COLLECTION_RATE_LIMITS,
+  type CollectionApiErrorCode,
+  type CollectionGuardDeps,
+  type CollectionGuardOptions,
+  type CollectionGuardResult,
+  type CollectionRateLimitAction,
+  type CollectionSession,
+  cancelOrderSchema,
+  collectionAccountSchema,
+  createOrderSchema,
+  DEFAULT_ADMIN_ORDER_STATUS,
+  enforceRateLimit,
+  errorResponse,
+  errorStatus,
+  failureResponse,
+  guardCollectionRequest,
+  orderIdSchema,
+  type RateLimitChecker,
+  rateLimitAction,
+  resolveAdminOrderQuery,
+  reviewOrderSchema,
+  submitOrderSchema,
+} from './server-logic'
+export {
+  addBillingInterval,
+  COLLECTION_PROVIDER,
+  COLLECTION_SETTLEMENT_EVENT_TYPE,
+  collectionSettlementEventId,
+  collectionSubscriptionId,
+  reviewOrder,
+  settleCollectionOrder,
+} from './settlement'
+export {
+  COLLECTION_PAYER_NOTE_MAX_LENGTH,
+  CollectionError,
+  type CollectionErrorCode,
+  type CollectionOrder,
+  type CollectionOrderDetail,
+  type CollectionOrderStatus,
+  type CollectionReview,
+  type CollectionReviewAction,
+  type ListUserOrdersInput,
+  type ResolvedCollectionAccount,
+  type ReviewOrderInput,
+  type SubmitOrderInput,
+  type UserOrderPage,
+} from './types'
