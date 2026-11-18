@@ -96,6 +96,29 @@ export interface PaymentEvent {
   checkoutId?: string
 }
 
+/** 取消订阅后的快照。取消一律**期末生效**：本周期内仍是有效订阅。 */
+export interface SubscriptionCancellation {
+  status: SubscriptionStatus
+  cancelAtPeriodEnd: boolean
+  currentPeriodEnd: number | null
+}
+
+/** 渠道的退款状态（两家 provider 的取值收敛到这里）。 */
+export type RefundStatus = 'pending' | 'requires_action' | 'succeeded' | 'failed' | 'canceled'
+
+export interface RefundParams {
+  /** Stripe：PaymentIntent id。 */
+  paymentIntentId?: string | null
+  /** Creem：交易号。 */
+  transactionId?: string | null
+  /** 省略表示全额退款。 */
+  amount?: number
+}
+
+export interface RefundResult {
+  status: RefundStatus
+}
+
 export interface PaymentProvider {
   getProviderName(): string
   listPrices(references: string[]): Promise<ProviderPrice[]>
@@ -106,5 +129,9 @@ export interface PaymentProvider {
   }>
   createCustomerPortalLink(params: PortalParams): Promise<PortalResult>
   retrieveSubscription(subscriptionId: string): Promise<ProviderSubscription>
+  /** 期末取消：不立即终止，用户用完已付的周期。 */
+  cancelSubscription(subscriptionId: string): Promise<SubscriptionCancellation>
+  /** 发起退款；返回渠道的受理状态，最终到账以渠道回调为准。 */
+  refundPayment(params: RefundParams): Promise<RefundResult>
   parseWebhookEvent(rawBody: string, signature: string): Promise<PaymentEvent>
 }

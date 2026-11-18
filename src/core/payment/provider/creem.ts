@@ -7,6 +7,10 @@ import type {
   PortalResult,
   ProviderPrice,
   ProviderSubscription,
+  RefundParams,
+  RefundResult,
+  RefundStatus,
+  SubscriptionCancellation,
   SubscriptionStatus,
 } from '../types'
 
@@ -401,6 +405,45 @@ export class CreemPaymentProvider implements PaymentProvider {
   async retrieveSubscription(id: string): Promise<ProviderSubscription> {
     const subscription = await this.request<CreemSubscription>(`/v1/subscriptions/${id}`)
     return toProviderSubscription(subscription, this.referenceOf)
+  }
+
+  /**
+   * 期末取消。
+   *
+   * Creem 的 `mode: 'scheduled'` 表示到期不续费；`immediate` 会立刻终止并可能触发
+   * 按比例退款，不符合「用完已付周期」的语义。
+   */
+  async cancelSubscription(id: string): Promise<SubscriptionCancellation> {
+    await this.request(`/v1/subscriptions/${id}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ mode: 'scheduled' }),
+    })
+    const sub = await this.retrieveSubscription(id)
+    return {
+      status: sub.status,
+      cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      currentPeriodEnd: sub.currentPeriodEnd,
+    }
+  }
+
+  /** Creem 只支持全额退款，按交易号发起；没有金额参数。 */
+  async refundPayment(params: RefundParams): Promise<RefundResult> {
+    if (!params.transactionId) throw new Error('Creem refund requires a transaction id')
+    const refund = await this.request<{ status?: string | null }>('/v1/refunds', {
+      method: 'POST',
+      body: JSON.stringify({ transaction_id: params.transactionId }),
+    })
+    const raw = str(refund.status) ?? 'pending'
+    const normalized = raw === 'requiresAction' ? 'requires_action' : raw
+    const known: readonly RefundStatus[] = [
+      'pending',
+      'requires_action',
+      'succeeded',
+      'failed',
+      'canceled',
+    ]
+    const matched = known.find((value) => value === normalized) ?? 'pending'
+    return { status: matched }
   }
 
   async parseWebhookEvent(raw: string, signature: string): Promise<PaymentEvent> {

@@ -49,7 +49,8 @@ Creem 是 Merchant of Record：以自己名义收款、处理税费与退款，�
 | 取消回跳 | 没有 `cancel_url`，取消只能回 Creem 自己的页面 | 有 `cancel_url`，回到发起购买的页面 |
 | 金额 | 税前价，结账页会加税，展示价与实付可能不同 | 展示价即实付 |
 | 订阅状态 | `expired` 记为 `past_due`（仍可恢复），未知状态记为 `incomplete`，暂不授予权益 | 状态直接取自 Stripe |
-| 退款 | 站内没有退款入口，退款在 Creem 后台发起 | 站内没有退款入口，退款在 Stripe 后台发起，`charge.refunded` 会回传 |
+| 取消 | `POST /v1/subscriptions/{id}/cancel`，`mode: scheduled` 期末生效 | `cancel_at_period_end: true` |
+| 退款 | 后台订单页可退，`POST /v1/refunds` 按交易号，**只支持全额** | 后台订单页可退，按 PaymentIntent，支持部分退款 |
 
 已有的订阅不会随渠道切换迁移：换渠道等于换收款主体，存量要自己处理。
 

@@ -9,8 +9,7 @@
  * - `--email <地址>`       把支持邮箱换成自己的
  * - `--force`              覆盖已有值（默认只补缺失的，不动后台改过的配置）
  *
- * 种子内容：站点配置的逐字段默认值（env 只在这里作初值来源）+ 权益目录与套餐。
- * RBAC 权限点与分类也在这里写入。
+ * 种子内容：站点配置的逐字段默认值（env 只在这里作初值来源）、RBAC 权限点与分类。
  */
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -34,13 +33,6 @@ import {
   dialectOf,
   resolveDatabaseProvider,
 } from '../src/core/db/provider'
-import {
-  DEFAULT_ENTITLEMENTS,
-  DEFAULT_PLANS,
-  type EntitlementSeed,
-  type PlanEntitlementSeed,
-  type PlanSeed,
-} from '../src/modules/entitlements/catalog'
 import {
   DEFAULT_TAXONOMIES,
   type TaxonomySeed,
@@ -141,11 +133,6 @@ function sqlNullableString(value: string | null): string {
   return value === null ? 'NULL' : sqlString(value)
 }
 
-/** 可空整数：null 写成 SQL 的 NULL。 */
-function sqlNullableNumber(value: number | null): string {
-  return value === null ? 'NULL' : String(value)
-}
-
 /**
  * 生成种子 SQL。
  *
@@ -172,61 +159,6 @@ export function buildSeedSql(values: SettingsValues, force: boolean, dialect: Di
       )}, ${now}) ${conflict};`,
   )
   return `${cleanup}\n${lines.join('\n')}\n`
-}
-
-/**
- * 生成权益目录与套餐的种子 SQL。
- *
- * 与站点配置同一套语义：默认只补缺失的（`DO NOTHING`），`--force` 才覆盖
- * 后台改过的值。时间戳随方言走（SQLite 系是秒级整数，PG 是 `now()`）；
- * `plan_entitlements` 没有时间戳列。
- *
- * 布尔值用 `TRUE` / `FALSE` 字面量：SQLite 3.23+ 与 PostgreSQL 都认，
- * 写成 1/0 会在 PG 的 boolean 列上报类型错误。
- */
-export function buildCatalogSql(force: boolean, dialect: Dialect): string {
-  const now = dialect === 'postgresql' ? 'now()' : "strftime('%s','now')"
-  const lines: string[] = []
-
-  // 顺序有讲究：套餐先于套餐权益（外键指向）。
-  for (const item of DEFAULT_ENTITLEMENTS) lines.push(entitlementSql(item, force, now))
-  for (const plan of DEFAULT_PLANS) lines.push(planSql(plan, force, now))
-  for (const plan of DEFAULT_PLANS) {
-    for (const grant of plan.entitlements) {
-      lines.push(planEntitlementSql(plan, grant, force))
-    }
-  }
-
-  return `${lines.join('\n')}\n`
-}
-
-/** 一条权益目录的 INSERT。 */
-function entitlementSql(item: EntitlementSeed, force: boolean, now: string): string {
-  const conflict = force
-    ? `ON CONFLICT (key) DO UPDATE SET name = EXCLUDED.name, type = EXCLUDED.type, default_limit = EXCLUDED.default_limit, period = EXCLUDED.period, description = EXCLUDED.description, sort_order = EXCLUDED.sort_order, updated_at = ${now}`
-    : 'ON CONFLICT (key) DO NOTHING'
-  return `INSERT INTO entitlements (key, name, type, default_limit, period, description, sort_order, created_at, updated_at) VALUES (${sqlString(item.key)}, ${sqlString(item.name)}, ${sqlString(item.type)}, ${sqlNullableNumber(item.defaultLimit)}, ${sqlString(item.period)}, ${sqlNullableString(item.description)}, ${item.sortOrder}, ${now}, ${now}) ${conflict};`
-}
-
-/** 一条套餐的 INSERT。 */
-function planSql(plan: PlanSeed, force: boolean, now: string): string {
-  const conflict = force
-    ? `ON CONFLICT (key) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, product_id = EXCLUDED.product_id, offer_id = EXCLUDED.offer_id, active = EXCLUDED.active, sort_order = EXCLUDED.sort_order, updated_at = ${now}`
-    : 'ON CONFLICT (key) DO NOTHING'
-  return `INSERT INTO plans (key, name, description, product_id, offer_id, active, sort_order, created_at, updated_at) VALUES (${sqlString(plan.key)}, ${sqlString(plan.name)}, ${sqlNullableString(plan.description)}, ${sqlNullableString(plan.productId)}, ${sqlNullableString(plan.offerId)}, ${plan.active ? 'TRUE' : 'FALSE'}, ${plan.sortOrder}, ${now}, ${now}) ${conflict};`
-}
-
-/**
- * 一条套餐权益的 INSERT。
- *
- * `id` 由「套餐 + 权益」派生：同一对永远落在同一行，重复播种不会插出两行。
- */
-function planEntitlementSql(plan: PlanSeed, grant: PlanEntitlementSeed, force: boolean): string {
-  const id = `pe:${plan.key}:${grant.entitlementKey}`
-  const conflict = force
-    ? 'ON CONFLICT (plan_key, entitlement_key) DO UPDATE SET limit_value = EXCLUDED.limit_value, enabled = EXCLUDED.enabled'
-    : 'ON CONFLICT (plan_key, entitlement_key) DO NOTHING'
-  return `INSERT INTO plan_entitlements (id, plan_key, entitlement_key, limit_value, enabled) VALUES (${sqlString(id)}, ${sqlString(plan.key)}, ${sqlString(grant.entitlementKey)}, ${sqlNullableNumber(grant.limitValue)}, ${grant.enabled ? 'TRUE' : 'FALSE'}) ${conflict};`
 }
 
 /**
@@ -337,7 +269,7 @@ export async function run(argv: string[] = process.argv.slice(2)): Promise<numbe
   const dialect: Dialect = target === 'pg' ? 'postgresql' : dialectOf(provider)
 
   const settings = seedValues(process.env, overrides)
-  const sql = `${buildSeedSql(settings, force, dialect)}${buildCatalogSql(force, dialect)}${buildRbacSeedSql(force, dialect)}${buildTaxonomySeedSql(force, dialect)}`
+  const sql = `${buildSeedSql(settings, force, dialect)}${buildRbacSeedSql(force, dialect)}${buildTaxonomySeedSql(force, dialect)}`
   console.log(`写入种子数据（provider=${provider} 目标=${target}${force ? ' 覆盖' : ''}）`)
   const code = await applySeed(sql, provider, target)
   if (code === 0) console.log('✅ 种子数据写入完成')

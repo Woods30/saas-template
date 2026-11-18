@@ -32,8 +32,11 @@ export {
   sortBuckets,
 } from './ledger'
 export {
+  type ClawbackInput,
+  type ClawbackResult,
   type ConsumeInput,
   type CreditBalance,
+  clawbackCredits,
   consumeCredits,
   expireCredits,
   type GrantInput,

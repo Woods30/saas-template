@@ -1,6 +1,6 @@
 import { m } from '@/locale/paraglide/messages.js'
 import type { CollectionPrice } from '@/types/collection'
-import type { PricingInterval, ProductDefinition } from '@/types/pricing'
+import type { OfferCreditGrant, PricingInterval, ProductDefinition } from '@/types/pricing'
 
 /**
  * 套餐只定义一次；prices 的值是当前服务商的销售引用。
@@ -24,6 +24,11 @@ export function getProducts(): ProductDefinition[] {
       features: [m.pricing_pro_feature_1(), m.pricing_pro_feature_2(), m.pricing_pro_feature_3()],
       recommended: true,
       prices: { monthly: 'pro_monthly', yearly: 'pro_yearly' },
+      // 每期成功付款发放一次；有效期覆盖一个计费周期再留一点余量。
+      credits: {
+        monthly: { amount: 1000, durationDays: 31 },
+        yearly: { amount: 12_000, durationDays: 366 },
+      },
     },
     {
       id: 'lifetime',
@@ -31,6 +36,8 @@ export function getProducts(): ProductDefinition[] {
       description: m.pricing_lifetime_description(),
       features: [m.pricing_lifetime_feature_1(), m.pricing_lifetime_feature_2()],
       prices: { once: 'lifetime' },
+      // 买断不按周期续费，积分不过期。
+      credits: { once: { amount: 20_000 } },
     },
     {
       id: 'template',
@@ -46,6 +53,7 @@ export function getProducts(): ProductDefinition[] {
       collectionPrices: {
         once: { amount: 18_000, currency: 'cny', kind: 'one_time' },
       },
+      credits: { once: { amount: 10_000 } },
     },
   ]
 }
@@ -74,6 +82,33 @@ export function findOfferByReference(
   return undefined
 }
 
+/**
+ * 取某个商品某种付费方式的积分发放配置。
+ *
+ * 数量必须是正整数，有效期（若声明）也必须是正整数；非法配置返回 `undefined`，
+ * 不让坏配置在支付事件里发错积分。
+ */
+export function resolveOfferCredits(
+  productId: string,
+  offerId: string,
+): OfferCreditGrant | undefined {
+  const credits = findProduct(productId)?.credits
+  if (!credits || !Object.hasOwn(credits, offerId)) return undefined
+  const grant = credits[offerId]
+  if (!grant) return undefined
+  return isValidCreditGrant(grant) ? grant : undefined
+}
+
+function isValidCreditGrant(grant: OfferCreditGrant): boolean {
+  if (!Number.isInteger(grant.amount) || grant.amount <= 0) return false
+  if (
+    grant.durationDays !== undefined &&
+    (!Number.isInteger(grant.durationDays) || grant.durationDays <= 0)
+  )
+    return false
+  return true
+}
+
 export function productConfigErrors(products = getProducts()): string[] {
   const errors: string[] = []
   const ids = new Set<string>()
@@ -85,6 +120,18 @@ export function productConfigErrors(products = getProducts()): string[] {
       if (!offer.trim() || !reference.trim()) errors.push(`emptyPrice.${product.id}.${offer}`)
       if (refs.has(reference)) errors.push(`duplicatePrice.${reference}`)
       refs.add(reference)
+    }
+    for (const [offer, grant] of Object.entries(product.credits ?? {})) {
+      const key = `${product.id}.${offer}`
+      // 积分配置必须挂在可售的付费方式上，否则永远不会被执行。
+      if (!Object.hasOwn(product.prices, offer)) errors.push(`creditWithoutPrice.${key}`)
+      if (!Number.isInteger(grant.amount) || grant.amount <= 0)
+        errors.push(`invalidCreditAmount.${key}`)
+      if (
+        grant.durationDays !== undefined &&
+        (!Number.isInteger(grant.durationDays) || grant.durationDays <= 0)
+      )
+        errors.push(`invalidCreditDuration.${key}`)
     }
   }
   return errors

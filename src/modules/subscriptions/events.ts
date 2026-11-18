@@ -3,6 +3,7 @@ import { findOfferByReference, findProduct } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import { type DB, schema } from '@/core/db'
 import type { PaymentEvent, ProviderSubscription } from '@/core/payment/types'
+import { clawbackCreditsForRefund, grantCreditsForPayment } from './credits'
 
 type Db = DB
 
@@ -129,8 +130,20 @@ export async function applyPaymentEvent(
         setWhere: sql`${schema.payments.eventCreated} <= ${event.created} AND ${schema.payments.refundedAmount} = 0 AND ${schema.payments.status} != 'paid'`,
       })
       .returning({ id: schema.payments.id })
+    const productId = subscription?.productId ?? payment.productId
+    const offerId = subscription?.offerId ?? payment.offerId
+    // 发放放在 `saved.length` 之外：支付行可能已经落库、但上一次发放失败后 webhook
+    // 重试，此时 upsert 不返回行；账本自身的幂等键保证不会重复发放。
+    if (payment.status === 'paid') {
+      await grantCreditsForPayment(db, {
+        paymentId: `${event.provider}:${payment.id}`,
+        userId,
+        productId: productId ?? null,
+        offerId: offerId ?? null,
+        at: date,
+      })
+    }
     if (saved.length && payment.status === 'paid' && websiteConfig.notification.enabled) {
-      const productId = subscription?.productId ?? payment.productId
       const plan = productId ? (findProduct(productId)?.name ?? productId) : '未知套餐'
       const digits =
         new Intl.NumberFormat('en', {
@@ -162,20 +175,35 @@ export async function applyPaymentEvent(
         ),
       )
     if (!rows.length) throw new Error('Refund payment not yet synchronized')
-    await db
-      .update(schema.payments)
-      .set({
-        refundedAmount: refund.amount,
-        refundedAt: date,
-        status: sql`CASE WHEN ${schema.payments.amount} <= ${refund.amount} THEN 'refunded' ELSE 'partially_refunded' END`,
-      })
-      .where(
-        and(
-          eq(schema.payments.provider, event.provider),
-          eq(schema.payments.chargeId, refund.chargeId),
-          sql`${schema.payments.refundedAmount} <= ${refund.amount}`,
-        ),
-      )
+    for (const row of rows) {
+      // `refund.amount` 是这笔扣款的累计退款额；本次新增的部分才是要反扣的积分基数。
+      const nextRefunded = Math.min(refund.amount, row.amount)
+      const delta = nextRefunded - row.refundedAmount
+      const updated = await db
+        .update(schema.payments)
+        .set({
+          refundedAmount: nextRefunded,
+          refundedAt: date,
+          status: sql`CASE WHEN ${schema.payments.amount} <= ${nextRefunded} THEN 'refunded' ELSE 'partially_refunded' END`,
+        })
+        .where(
+          and(
+            eq(schema.payments.id, row.id),
+            sql`${schema.payments.refundedAmount} <= ${nextRefunded}`,
+          ),
+        )
+        .returning({ id: schema.payments.id })
+      if (updated.length && delta > 0 && row.userId) {
+        await clawbackCreditsForRefund(db, {
+          paymentId: row.id,
+          userId: row.userId,
+          amount: row.amount,
+          deltaRefunded: delta,
+          refundedTotal: nextRefunded,
+          at: date,
+        })
+      }
+    }
   }
   await db
     .insert(schema.webhookEvents)

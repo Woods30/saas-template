@@ -323,6 +323,120 @@ describe('支付持久化', () => {
     ])
     sqlite.close()
   })
+  it('支付成功后按商品配置发放积分，续费再发一次', async () => {
+    const { db, sqlite } = database()
+    const base = {
+      invoiceId: 'inv_1',
+      chargeId: null as string | null,
+      customerId: 'cus_1',
+      userId: 'u1',
+      productId: null,
+      offerId: null,
+      subscriptionId: 'sub_1',
+      type: 'subscription' as const,
+      amount: 1000,
+      currency: 'usd',
+      status: 'paid' as const,
+    }
+    const event: PaymentEvent = {
+      id: 'evt_credit_1',
+      provider: 'stripe',
+      type: 'paid',
+      created: 100,
+      subscription,
+      payment: { ...base, id: 'inv_1' },
+    }
+    await applyPaymentEvent(db, event)
+    // 重放不重复发放。
+    await applyPaymentEvent(db, event)
+    // 续费是新的一期，另一个订单号要再发一次。
+    await applyPaymentEvent(db, {
+      ...event,
+      id: 'evt_credit_2',
+      created: 200,
+      payment: { ...base, id: 'inv_2', invoiceId: 'inv_2' },
+    })
+
+    const grants = sqlite
+      .prepare(
+        'SELECT amount, remaining, source, reference, expires_at FROM credit_grants ORDER BY created_at, id',
+      )
+      .all() as Array<Record<string, unknown>>
+    expect(grants).toHaveLength(2)
+    expect(grants[0]).toMatchObject({
+      amount: 1000,
+      remaining: 1000,
+      source: 'purchase',
+      reference: 'stripe:inv_1',
+    })
+    expect(grants[0]?.expires_at).toBeTypeOf('number')
+    expect(grants[1]).toMatchObject({ amount: 1000, reference: 'stripe:inv_2' })
+    expect(sqlite.prepare('SELECT balance FROM credit_balances').get()?.balance).toBe(2000)
+    sqlite.close()
+  })
+  it('退款按比例反扣积分，余额不足时扣到 0 并记录差额', async () => {
+    const { db, sqlite } = database()
+    await applyPaymentEvent(db, {
+      id: 'paid_lifetime',
+      provider: 'stripe',
+      type: 'payment',
+      created: 100,
+      payment: {
+        id: 'pi_life',
+        invoiceId: null,
+        chargeId: 'pi_life',
+        customerId: 'cus1',
+        userId: 'u1',
+        productId: 'lifetime',
+        offerId: 'once',
+        subscriptionId: null,
+        type: 'one_time',
+        amount: 1000,
+        currency: 'usd',
+        status: 'paid',
+      },
+    })
+    expect(sqlite.prepare('SELECT balance FROM credit_balances').get()?.balance).toBe(20_000)
+
+    // 用掉一部分后再部分退款：按退款比例扣 30%，即 6000。
+    sqlite.exec("UPDATE credit_grants SET remaining = 17000 WHERE reference = 'stripe:pi_life'")
+    sqlite.exec('UPDATE credit_balances SET balance = 17000')
+    await applyPaymentEvent(db, {
+      id: 'refund_partial',
+      provider: 'stripe',
+      type: 'refund',
+      created: 110,
+      refund: { chargeId: 'pi_life', amount: 300 },
+    })
+    expect(sqlite.prepare('SELECT balance FROM credit_balances').get()?.balance).toBe(11_000)
+
+    // 余额只剩 0 时全额退款：只扣到 0，流水记下应扣与实际。
+    sqlite.exec("UPDATE credit_grants SET remaining = 0 WHERE reference = 'stripe:pi_life'")
+    sqlite.exec('UPDATE credit_balances SET balance = 0')
+    await applyPaymentEvent(db, {
+      id: 'refund_full',
+      provider: 'stripe',
+      type: 'refund',
+      created: 120,
+      refund: { chargeId: 'pi_life', amount: 1000 },
+    })
+    expect(sqlite.prepare('SELECT balance FROM credit_balances').get()?.balance).toBe(0)
+    const adjust = sqlite
+      .prepare(
+        "SELECT amount, reference, metadata FROM credit_transactions WHERE type = 'adjust' ORDER BY created_at DESC, id DESC LIMIT 1",
+      )
+      .get() as { amount: number; reference: string; metadata: string | null }
+    expect(adjust.reference).toBe('stripe:pi_life')
+    expect(adjust.amount).toBe(0)
+    expect(JSON.parse(adjust.metadata ?? '{}')).toMatchObject({
+      reason: 'refund',
+      // 本次事件新增的退款是 700/1000，对应 14000 积分。
+      expected: 14_000,
+      deducted: 0,
+      shortfall: 14_000,
+    })
+    sqlite.close()
+  })
   it('终止订阅可重新购买，一次性购买不占用订阅预留', async () => {
     const { db, sqlite } = database()
     await applyPaymentEvent(db, {

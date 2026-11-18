@@ -9,6 +9,10 @@ import type {
   PortalResult,
   ProviderPrice,
   ProviderSubscription,
+  RefundParams,
+  RefundResult,
+  RefundStatus,
+  SubscriptionCancellation,
 } from '../types'
 
 function idOf(value: unknown): string | null {
@@ -205,6 +209,27 @@ export class StripePaymentProvider implements PaymentProvider {
   }
   async retrieveSubscription(id: string): Promise<ProviderSubscription> {
     return snapshot(await this.stripe.subscriptions.retrieve(id, { expand: ['items.data.price'] }))
+  }
+  async cancelSubscription(id: string): Promise<SubscriptionCancellation> {
+    // 期末取消：用户已经付过这个周期，立即终止等于没收剩余权益。
+    const sub = await this.stripe.subscriptions.update(id, { cancel_at_period_end: true })
+    const snap = snapshot(sub)
+    return {
+      status: snap.status,
+      cancelAtPeriodEnd: snap.cancelAtPeriodEnd,
+      currentPeriodEnd: snap.currentPeriodEnd,
+    }
+  }
+  async refundPayment(params: RefundParams): Promise<RefundResult> {
+    if (!params.paymentIntentId) throw new Error('Stripe refund requires a payment intent')
+    const refund = await this.stripe.refunds.create(
+      {
+        payment_intent: params.paymentIntentId,
+        ...(params.amount ? { amount: params.amount } : {}),
+      },
+      { idempotencyKey: `refund:${params.paymentIntentId}:${params.amount ?? 'full'}` },
+    )
+    return { status: (refund.status ?? 'pending') as RefundStatus }
   }
   async parseWebhookEvent(raw: string, signature: string): Promise<PaymentEvent> {
     const event = await this.stripe.webhooks.constructEventAsync(

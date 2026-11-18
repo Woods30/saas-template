@@ -1,8 +1,9 @@
 import { createServerFn } from '@tanstack/react-start'
-import { count, desc, eq } from 'drizzle-orm'
+import { and, count, desc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { type DB, schema } from '@/core/db'
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@/core/db/paging'
+import { clawbackCreditsForRefund } from './credits'
 
 /**
  * 管理台订单列表。
@@ -112,4 +113,137 @@ export const fetchAdminOrders = createServerFn({ method: 'GET' })
     const { requireAdminDb } = await import('@/core/auth/session')
     const { db } = await requireAdminDb()
     return queryAdminOrders(db, data)
+  })
+
+export interface AdminRefundResult {
+  status: 'refunded' | 'partially_refunded'
+  refundedAmount: number
+  /** 该订单应反扣的积分。 */
+  creditsExpected: number
+  /** 实际扣回的积分；积分已被消费时可能更少。 */
+  creditsDeducted: number
+}
+
+const refundSchema = z.object({ orderId: z.string().min(1) })
+
+/**
+ * 后台全额退款。
+ *
+ * 并发保护靠一次**条件状态转移**：把 `paid` / `partially_refunded` 抢成
+ * `refunding`，抢不到就说明另一次退款正在处理。渠道调用失败时把状态改回去，
+ * 用户可以重试；成功后写 `refunded` 并反扣该订单发放的积分。
+ *
+ * 渠道侧的最终到账以 webhook 为准（Stripe `charge.refunded` 会再对一次账），
+ * 这里先按「已受理」落库，避免后台显示长时间停在处理中。
+ */
+export const refundAdminOrder = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => refundSchema.parse(input))
+  .handler(async ({ data }): Promise<AdminRefundResult> => {
+    const [{ requirePermissionDb }, { safeRecordAuditLog }, { getPaymentProvider }] =
+      await Promise.all([
+        import('@/modules/rbac/service'),
+        import('@/modules/audit/service'),
+        import('@/core/payment'),
+      ])
+    const { db, adminId } = await requirePermissionDb('payments.refund')
+
+    const [payment] = await db
+      .select()
+      .from(schema.payments)
+      .where(eq(schema.payments.id, data.orderId))
+      .limit(1)
+    if (!payment) throw new Response('ORDER_NOT_FOUND', { status: 404 })
+    if (
+      payment.status !== 'paid' &&
+      payment.status !== 'partially_refunded' &&
+      payment.status !== 'refunding'
+    ) {
+      throw new Response('ORDER_NOT_REFUNDABLE', { status: 409 })
+    }
+    if (payment.refundedAmount >= payment.amount) {
+      throw new Response('ALREADY_REFUNDED', { status: 409 })
+    }
+    const providerName = payment.provider
+    if (providerName !== 'stripe' && providerName !== 'creem') {
+      throw new Response('REFUND_UNSUPPORTED', { status: 400 })
+    }
+    // Creem 只支持全额退款；已经部分退过的订单不能走 Creem 再退一次。
+    if (providerName === 'creem' && payment.refundedAmount > 0) {
+      throw new Response('REFUND_UNSUPPORTED', { status: 400 })
+    }
+    // Stripe 退款按 PaymentIntent 发起；早期只记录发票号的订单没有可退的标识。
+    if (providerName === 'stripe' && !payment.chargeId) {
+      throw new Response('REFUND_UNSUPPORTED', { status: 400 })
+    }
+
+    const remaining = payment.amount - payment.refundedAmount
+    const claimed = await db
+      .update(schema.payments)
+      .set({ status: 'refunding' })
+      .where(
+        and(
+          eq(schema.payments.id, payment.id),
+          inArray(schema.payments.status, ['paid', 'partially_refunded']),
+          eq(schema.payments.refundedAmount, payment.refundedAmount),
+        ),
+      )
+      .returning({ id: schema.payments.id })
+    if (claimed.length === 0) throw new Response('REFUND_CONFLICT', { status: 409 })
+
+    try {
+      const provider = getPaymentProvider(providerName)
+      const result = await provider.refundPayment({
+        paymentIntentId: payment.chargeId,
+        transactionId: payment.externalId,
+        amount: providerName === 'stripe' ? remaining : undefined,
+      })
+      if (result.status === 'failed' || result.status === 'canceled') {
+        throw new Error('REFUND_REJECTED')
+      }
+
+      const refundedAmount = payment.refundedAmount + remaining
+      const status = refundedAmount >= payment.amount ? 'refunded' : 'partially_refunded'
+      await db
+        .update(schema.payments)
+        .set({ refundedAmount, refundedAt: new Date(), status })
+        .where(eq(schema.payments.id, payment.id))
+
+      const clawback = payment.userId
+        ? await clawbackCreditsForRefund(db, {
+            paymentId: payment.id,
+            userId: payment.userId,
+            amount: payment.amount,
+            deltaRefunded: remaining,
+            refundedTotal: refundedAmount,
+            at: new Date(),
+          })
+        : null
+
+      await safeRecordAuditLog(db, {
+        actorId: adminId,
+        actorType: 'admin',
+        operation: 'payments.refund',
+        targetType: 'payment',
+        targetId: payment.id,
+        summary: `退款 ${remaining} ${payment.currency.toUpperCase()}（${providerName}）${
+          clawback
+            ? `，积分应扣 ${clawback.expected}、实际扣减 ${clawback.deducted}、差额 ${clawback.shortfall}`
+            : '，该订单未发放积分'
+        }`,
+      })
+
+      return {
+        status,
+        refundedAmount,
+        creditsExpected: clawback?.expected ?? 0,
+        creditsDeducted: clawback?.deducted ?? 0,
+      }
+    } catch (error) {
+      // 渠道没受理：把 claim 撤回，订单恢复成可重试的状态。
+      await db
+        .update(schema.payments)
+        .set({ status: payment.status })
+        .where(and(eq(schema.payments.id, payment.id), eq(schema.payments.status, 'refunding')))
+      throw error instanceof Response ? error : new Response('REFUND_FAILED', { status: 502 })
+    }
   })

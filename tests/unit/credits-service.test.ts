@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  clawbackCredits,
   consumeCredits,
   expireCredits,
   getBalance,
@@ -289,5 +290,107 @@ describe('积分账本', () => {
     await expect(
       consumeCredits(db, { userId: 'u1', amount: 1.5, idempotencyKey: 'c' }),
     ).rejects.toThrow()
+  })
+})
+
+describe('退款反扣', () => {
+  it('只扣该订单批次的积分，其余批次不动', async () => {
+    const { sqlite, db } = createTestDatabase()
+    seedUser(sqlite, 'u1')
+    await grantCredits(db, {
+      userId: 'u1',
+      amount: 100,
+      source: 'purchase',
+      reference: 'stripe:pi_1',
+      idempotencyKey: 'grant_order',
+    })
+    await grantCredits(db, {
+      userId: 'u1',
+      amount: 50,
+      source: 'bonus',
+      idempotencyKey: 'grant_bonus',
+    })
+
+    const clawback = await clawbackCredits(db, {
+      userId: 'u1',
+      reference: 'stripe:pi_1',
+      amount: 60,
+      reason: 'refund',
+      idempotencyKey: 'refund-clawback:stripe:pi_1',
+    })
+
+    expect(clawback.expected).toBe(60)
+    expect(clawback.deducted).toBe(60)
+    expect(clawback.shortfall).toBe(0)
+    expect(clawback.transaction.type).toBe('adjust')
+    expect(await getBalance(db, 'u1')).toBe(90)
+
+    // 订单批次剩 40，奖励批次 50 未动。
+    const grants = sqlite
+      .prepare('SELECT remaining FROM credit_grants ORDER BY created_at')
+      .all() as Array<{ remaining: number }>
+    expect(grants.map((row) => row.remaining)).toEqual([40, 50])
+  })
+
+  it('扣到 0 为止，流水记录应扣与实际扣减的差额', async () => {
+    const { sqlite, db } = createTestDatabase()
+    seedUser(sqlite, 'u1')
+    await grantCredits(db, {
+      userId: 'u1',
+      amount: 100,
+      source: 'purchase',
+      reference: 'stripe:pi_1',
+      idempotencyKey: 'grant_order',
+    })
+    await consumeCredits(db, { userId: 'u1', amount: 80, idempotencyKey: 'consume_1' })
+
+    const clawback = await clawbackCredits(db, {
+      userId: 'u1',
+      reference: 'stripe:pi_1',
+      amount: 100,
+      reason: 'refund',
+      idempotencyKey: 'refund-clawback:stripe:pi_1',
+    })
+
+    expect(clawback.deducted).toBe(20)
+    expect(clawback.shortfall).toBe(80)
+    expect(clawback.transaction.amount).toBe(-20)
+    expect(await getBalance(db, 'u1')).toBe(0)
+    expect(JSON.parse(clawback.transaction.metadata ?? '{}')).toMatchObject({
+      reason: 'refund',
+      expected: 100,
+      deducted: 20,
+      shortfall: 80,
+    })
+  })
+
+  it('同一幂等键重复反扣只生效一次', async () => {
+    const { sqlite, db } = createTestDatabase()
+    seedUser(sqlite, 'u1')
+    await grantCredits(db, {
+      userId: 'u1',
+      amount: 100,
+      source: 'purchase',
+      reference: 'stripe:pi_1',
+      idempotencyKey: 'grant_order',
+    })
+
+    const first = await clawbackCredits(db, {
+      userId: 'u1',
+      reference: 'stripe:pi_1',
+      amount: 40,
+      idempotencyKey: 'claw_1',
+    })
+    const second = await clawbackCredits(db, {
+      userId: 'u1',
+      reference: 'stripe:pi_1',
+      amount: 40,
+      idempotencyKey: 'claw_1',
+    })
+
+    expect(first.replayed).toBe(false)
+    expect(second.replayed).toBe(true)
+    expect(await getBalance(db, 'u1')).toBe(60)
+    expect(await listTransactions(db, 'u1')).toHaveLength(2)
   })
 })

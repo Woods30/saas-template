@@ -1,9 +1,20 @@
 import { IconReceipt } from '@tabler/icons-react'
-import { createFileRoute } from '@tanstack/react-router'
-import { useMemo } from 'react'
+import { createFileRoute, useRouter } from '@tanstack/react-router'
+import { useMemo, useState } from 'react'
 import { DataTable, type DataTableColumn } from '@/components/data-table/data-table'
 import { LocalDate } from '@/components/local-date'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -23,6 +34,7 @@ import {
   fetchAdminOrders,
   paymentStatusMessageKey,
   productNameForProductId,
+  refundAdminOrder,
 } from '@/modules/subscriptions/service'
 
 /**
@@ -90,7 +102,27 @@ function AdminOrdersPage() {
   const data = Route.useLoaderData()
   const { page = 1, status = 'all' } = Route.useSearch()
   const navigate = Route.useNavigate()
+  const router = useRouter()
   const locale = getRequestLocale()
+  const [pendingRefund, setPendingRefund] = useState<AdminOrder | null>(null)
+  const [refunding, setRefunding] = useState(false)
+  const [refundError, setRefundError] = useState(false)
+
+  /** 退款是全额操作：部分退过的订单再点一次会退掉剩余部分。 */
+  async function refund() {
+    if (!pendingRefund) return
+    setRefunding(true)
+    setRefundError(false)
+    try {
+      await refundAdminOrder({ data: { orderId: pendingRefund.id } })
+      setPendingRefund(null)
+      await router.invalidate()
+    } catch {
+      setRefundError(true)
+    } finally {
+      setRefunding(false)
+    }
+  }
 
   // 列定义随语言变化；`m.*()` 在渲染期求值，因此依赖里带上 locale。
   const columns = useMemo<DataTableColumn<AdminOrder>[]>(
@@ -140,52 +172,98 @@ function AdminOrdersPage() {
         className: 'hidden xl:table-cell',
         cell: (order) => <LocalDate value={order.createdAt} locale={locale} />,
       },
+      {
+        id: 'actions',
+        header: '',
+        cell: (order) =>
+          (order.status === 'paid' || order.status === 'partially_refunded') &&
+          order.refundedAmount < order.amount ? (
+            <Button variant="outline" size="sm" onClick={() => setPendingRefund(order)}>
+              {m.admin_orders_refund()}
+            </Button>
+          ) : null,
+      },
     ],
     [locale],
   )
 
   return (
-    <DataTable
-      columns={columns}
-      data={data.orders}
-      rowKey={(order) => order.id}
-      emptyIcon={<IconReceipt aria-hidden />}
-      emptyTitle={m.admin_orders_empty()}
-      pagination={{
-        page,
-        pageSize: DEFAULT_PAGE_SIZE,
-        total: data.total,
-        onPageChange: (next) =>
-          void navigate({
-            search: (previous) => ({ ...previous, page: next > 1 ? next : undefined }),
-          }),
-      }}
-      toolbar={
-        <Select
-          value={status}
-          onValueChange={(value) =>
+    <>
+      <DataTable
+        columns={columns}
+        data={data.orders}
+        rowKey={(order) => order.id}
+        emptyIcon={<IconReceipt aria-hidden />}
+        emptyTitle={m.admin_orders_empty()}
+        pagination={{
+          page,
+          pageSize: DEFAULT_PAGE_SIZE,
+          total: data.total,
+          onPageChange: (next) =>
             void navigate({
-              search: (previous) => ({
-                ...previous,
-                status: value === 'all' ? undefined : (value as AdminOrderStatusFilter),
-                page: undefined,
-              }),
-            })
-          }
-          items={statusItems()}
-        >
-          <SelectTrigger size="sm" aria-label={m.admin_orders_col_status()}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {ORDER_STATUSES.map((value) => (
-              <SelectItem key={value} value={value}>
-                {statusItems().find((item) => item.value === value)?.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      }
-    />
+              search: (previous) => ({ ...previous, page: next > 1 ? next : undefined }),
+            }),
+        }}
+        toolbar={
+          <Select
+            value={status}
+            onValueChange={(value) =>
+              void navigate({
+                search: (previous) => ({
+                  ...previous,
+                  status: value === 'all' ? undefined : (value as AdminOrderStatusFilter),
+                  page: undefined,
+                }),
+              })
+            }
+            items={statusItems()}
+          >
+            <SelectTrigger size="sm" aria-label={m.admin_orders_col_status()}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ORDER_STATUSES.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {statusItems().find((item) => item.value === value)?.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
+      />
+      <AlertDialog
+        open={pendingRefund !== null}
+        onOpenChange={(open) => {
+          if (!open && !refunding) setPendingRefund(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{m.admin_orders_refund_confirm_title()}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {m.admin_orders_refund_confirm_description()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {refundError && (
+            <p role="alert" className="text-sm text-destructive">
+              {m.admin_orders_refund_error()}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={refunding}>{m.admin_orders_cancel()}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={refunding}
+              variant="destructive"
+              onClick={(event) => {
+                event.preventDefault()
+                void refund()
+              }}
+            >
+              {refunding ? m.admin_orders_refund_pending() : m.admin_orders_refund_confirm_action()}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }

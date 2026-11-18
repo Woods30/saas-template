@@ -13,7 +13,7 @@
  *
  * FIFO：消费先扣快过期的批次（见 `ledger.ts`），退款按原批次退回。
  */
-import { and, desc, eq, gt, gte, isNotNull, isNull, lte, ne, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, isNotNull, isNull, lte, ne, or, sql } from 'drizzle-orm'
 import { type DB, schema } from '@/core/db'
 import { atomic } from '@/core/db/atomic'
 import { type Allocation, type CreditBucket, planAllocation, planExpiry } from './ledger'
@@ -64,6 +64,27 @@ export interface RefundInput {
   now?: Date
 }
 
+export interface ClawbackInput {
+  userId: string
+  /** 批次引用（通常是 `payments.id`）。只扣这一笔订单发放的积分。 */
+  reference: string
+  /** 希望扣回的积分总量；余额不够时实际扣减更少。 */
+  amount: number
+  /** 写进流水 metadata 的原因，例如 `refund`。 */
+  reason?: string
+  idempotencyKey: string
+  now?: Date
+}
+
+/** 反扣结果：应扣、实际扣减与差额都带出来，便于调用方留审计痕迹。 */
+export interface ClawbackResult {
+  transaction: CreditTransaction
+  expected: number
+  deducted: number
+  shortfall: number
+  replayed: boolean
+}
+
 /** 余额与用量概览。 */
 export interface CreditBalance {
   userId: string
@@ -80,6 +101,14 @@ function newId(prefix: string): string {
 function requirePositiveInteger(amount: number, label: string): number {
   if (!Number.isInteger(amount) || amount <= 0) {
     throw new Error(`${label}必须为正整数，收到 ${amount}`)
+  }
+  return amount
+}
+
+/** 反扣允许为 0：全额退款时该订单的积分可能已经被消费光。 */
+function requireNonNegativeInteger(amount: number, label: string): number {
+  if (!Number.isInteger(amount) || amount < 0) {
+    throw new Error(`${label}必须为非负整数，收到 ${amount}`)
   }
   return amount
 }
@@ -120,6 +149,7 @@ async function findTransaction(
     amount: row.amount,
     balanceAfter: row.balanceAfter,
     reference: row.reference,
+    metadata: row.metadata,
     idempotencyKey: row.idempotencyKey,
     createdAt: row.createdAt,
   }
@@ -133,6 +163,7 @@ interface TransactionValues {
   amount: number
   balanceAfter: number
   reference: string | null
+  metadata: string | null
   idempotencyKey: string
   createdAt: Date
 }
@@ -204,6 +235,7 @@ export async function grantCredits(db: DB, input: GrantInput): Promise<CreditRes
       amount,
       balanceAfter: updated?.balance ?? amount,
       reference: input.reference ?? null,
+      metadata: null,
       idempotencyKey: input.idempotencyKey,
       createdAt: at,
     })
@@ -283,6 +315,7 @@ export async function consumeCredits(db: DB, input: ConsumeInput): Promise<Credi
               amount: -amount,
               balanceAfter: row.balance,
               reference: input.reference ?? null,
+              metadata: null,
               idempotencyKey: input.idempotencyKey,
               createdAt: at,
             }),
@@ -315,6 +348,7 @@ export async function consumeCredits(db: DB, input: ConsumeInput): Promise<Credi
       amount: -amount,
       balanceAfter: updated.balance,
       reference: input.reference ?? null,
+      metadata: null,
       idempotencyKey: input.idempotencyKey,
       createdAt: at,
     })
@@ -380,11 +414,132 @@ export async function refundCredits(db: DB, input: RefundInput): Promise<CreditR
       amount,
       balanceAfter: updated?.balance ?? amount,
       reference: input.reference ?? null,
+      metadata: null,
       idempotencyKey: input.idempotencyKey,
       createdAt: at,
     })
     await tx.insert(schema.creditTransactions).values(transaction)
     return { transaction, replayed: false }
+  })
+}
+
+/**
+ * 反扣积分（退款用）。
+ *
+ * 只扣这一笔订单发放的批次：别的来源（赠送、别的订单）不动。余额不足时扣到 0
+ * 为止——退款不能因为积分不够而失败，也不允许把余额打成负数；差额写进流水的
+ * `metadata`，便于对账。
+ *
+ * 幂等键与发放同构：同一次退款重复回调只扣一次。
+ */
+export async function clawbackCredits(db: DB, input: ClawbackInput): Promise<ClawbackResult> {
+  const expected = requireNonNegativeInteger(input.amount, '反扣积分')
+  const existing = await findTransaction(db, input.idempotencyKey)
+  if (existing) {
+    const deducted = Math.max(0, -existing.amount)
+    return {
+      transaction: existing,
+      expected,
+      deducted,
+      shortfall: Math.max(0, expected - deducted),
+      replayed: true,
+    }
+  }
+
+  return atomic(db, async (tx) => {
+    const at = input.now ?? new Date()
+    await ensureBalanceRow(tx, input.userId, at)
+
+    // 当前余额是扣减上限：批次剩余量理论上不大于余额，这里再兜一次底。
+    const [balanceRow] = await tx
+      .select({ balance: schema.creditBalances.balance })
+      .from(schema.creditBalances)
+      .where(eq(schema.creditBalances.userId, input.userId))
+      .limit(1)
+    let toTake = Math.min(expected, balanceRow?.balance ?? 0)
+
+    const buckets = await tx
+      .select({ id: schema.creditGrants.id, remaining: schema.creditGrants.remaining })
+      .from(schema.creditGrants)
+      .where(
+        and(
+          eq(schema.creditGrants.userId, input.userId),
+          eq(schema.creditGrants.reference, input.reference),
+          gt(schema.creditGrants.remaining, 0),
+        ),
+      )
+      .orderBy(asc(schema.creditGrants.createdAt), asc(schema.creditGrants.id))
+
+    let deducted = 0
+    for (const bucket of buckets) {
+      if (toTake <= 0) break
+      const take = Math.min(bucket.remaining, toTake)
+      // 条件更新：并发消费先把批次扣走时影响行数为 0，跳过这个批次。
+      const cleared = await tx
+        .update(schema.creditGrants)
+        .set({
+          remaining: sql`${schema.creditGrants.remaining} - ${take}`,
+          updatedAt: at,
+        })
+        .where(and(eq(schema.creditGrants.id, bucket.id), gte(schema.creditGrants.remaining, take)))
+        .returning({ id: schema.creditGrants.id })
+      if (cleared.length === 0) continue
+      deducted += take
+      toTake -= take
+    }
+
+    let balanceAfter = balanceRow?.balance ?? 0
+    if (deducted > 0) {
+      const [updated] = await tx
+        .update(schema.creditBalances)
+        .set({
+          balance: sql`${schema.creditBalances.balance} - ${deducted}`,
+          lastTxKey: input.idempotencyKey,
+          updatedAt: at,
+        })
+        .where(
+          and(
+            eq(schema.creditBalances.userId, input.userId),
+            gte(schema.creditBalances.balance, deducted),
+          ),
+        )
+        .returning({ balance: schema.creditBalances.balance })
+      if (updated) {
+        balanceAfter = updated.balance
+      } else {
+        // 并发改动抢先一步：按当前余额重新扣，最多扣到 0。
+        const [current] = await tx
+          .update(schema.creditBalances)
+          .set({
+            balance: sql`max(0, ${schema.creditBalances.balance} - ${deducted})`,
+            lastTxKey: input.idempotencyKey,
+            updatedAt: at,
+          })
+          .where(eq(schema.creditBalances.userId, input.userId))
+          .returning({ balance: schema.creditBalances.balance })
+        balanceAfter = current?.balance ?? 0
+      }
+    }
+
+    const metadata = JSON.stringify({
+      reason: input.reason ?? 'clawback',
+      expected,
+      deducted,
+      shortfall: expected - deducted,
+    })
+    const transaction = toTransaction({
+      id: newId('ctx'),
+      userId: input.userId,
+      type: 'adjust',
+      amount: -deducted,
+      balanceAfter,
+      reference: input.reference,
+      metadata,
+      idempotencyKey: input.idempotencyKey,
+      createdAt: at,
+    })
+    await tx.insert(schema.creditTransactions).values(transaction)
+    return { transaction, expected, deducted, shortfall: expected - deducted, replayed: false }
   })
 }
 
@@ -446,6 +601,7 @@ async function expireBuckets(db: DB, userId: string, at: Date): Promise<CreditRe
       amount: -allocation.amount,
       balanceAfter: updated?.balance ?? 0,
       reference: null,
+      metadata: null,
       idempotencyKey: `expire:${allocation.grantId}`,
       createdAt: at,
     })
@@ -514,6 +670,7 @@ export async function listTransactions(
     amount: row.amount,
     balanceAfter: row.balanceAfter,
     reference: row.reference,
+    metadata: row.metadata,
     idempotencyKey: row.idempotencyKey,
     createdAt: row.createdAt,
   }))

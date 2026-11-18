@@ -2,6 +2,18 @@ import type { CollectionPrice } from './collection'
 
 export type PricingInterval = 'month' | 'year' | 'week' | 'day' | 'one_time'
 
+/**
+ * 一次成功支付发放的积分。
+ *
+ * 数量与有效期写在与产品定义同源的地方（`src/config/products.ts`），
+ * 支付事件只按商品与付费方式查表；有效期按**发放时刻**往后推。
+ */
+export interface OfferCreditGrant {
+  amount: number
+  /** 积分有效期（天）；不写则永不过期。 */
+  durationDays?: number
+}
+
 /** 名称与卖点在请求语言确定后求值，销售引用由当前 provider 解释。 */
 export interface ProductDefinition {
   id: string
@@ -10,6 +22,12 @@ export interface ProductDefinition {
   features: string[]
   recommended?: boolean
   prices: Record<string, string>
+  /**
+   * 每种付费方式成功后发放的积分；键与 `prices` 一致。
+   *
+   * 订阅每次续费（每一期付款）都按同一份配置再发一次。
+   */
+  credits?: Record<string, OfferCreditGrant>
   /**
    * 核销型链路的本地标价（单位：分）。
    *

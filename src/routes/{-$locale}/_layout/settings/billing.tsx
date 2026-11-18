@@ -1,6 +1,16 @@
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { LocalDate } from '@/components/local-date'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -21,6 +31,7 @@ import { settingsHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import {
   type BillingOverview,
+  cancelMySubscription,
   fetchBillingOverview,
   paymentStatusMessageKey,
   productNameForProductId,
@@ -60,6 +71,8 @@ function BillingPage() {
   const [data] = useState<BillingOverview | null>(loaded.data)
   const [error, setError] = useState(!loaded.ok)
   const [managing, setManaging] = useState(false)
+  const [confirmingCancel, setConfirmingCancel] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
   useCheckoutNotice({
     checkout,
     type: checkout === 'success' ? 'success' : 'info',
@@ -95,6 +108,24 @@ function BillingPage() {
     } catch {
       setError(true)
       setManaging(false)
+    }
+  }
+
+  /**
+   * 自助取消：期末生效。取消后重新取一次 loader，页面立刻显示「到期不续费」，
+   * 不必等用户刷新。
+   */
+  async function cancelSubscription() {
+    setCancelling(true)
+    try {
+      await cancelMySubscription()
+      setConfirmingCancel(false)
+      await router.invalidate()
+    } catch {
+      setConfirmingCancel(false)
+      setError(true)
+    } finally {
+      setCancelling(false)
     }
   }
 
@@ -150,6 +181,11 @@ function BillingPage() {
                 {data.canManage && (
                   <Button variant="outline" disabled={managing} onClick={() => void manage()}>
                     {m.settings_billing_manage()}
+                  </Button>
+                )}
+                {current && !current.cancelAtPeriodEnd && (
+                  <Button variant="outline" onClick={() => setConfirmingCancel(true)}>
+                    {m.settings_billing_cancel()}
                   </Button>
                 )}
               </div>
@@ -218,6 +254,33 @@ function BillingPage() {
           </Card>
         </>
       )}
+      <AlertDialog open={confirmingCancel} onOpenChange={setConfirmingCancel}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{m.settings_billing_cancel_confirm_title()}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {m.settings_billing_cancel_confirm_description()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelling}>
+              {m.settings_billing_cancel_dismiss()}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cancelling}
+              onClick={(event) => {
+                // 保持对话框打开直到请求结束，失败时能看到提示。
+                event.preventDefault()
+                void cancelSubscription()
+              }}
+            >
+              {cancelling
+                ? m.settings_billing_cancel_pending()
+                : m.settings_billing_cancel_confirm_action()}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

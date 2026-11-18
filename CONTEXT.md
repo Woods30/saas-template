@@ -21,9 +21,14 @@
 - **credits（积分账本）**：`src/modules/credits/service.ts`。采用双表（批次 `credit_grants` +
   流水 `credit_transactions` + 分配明细 `credit_allocations` + 汇总 `credit_balances`）实现
   FIFO 优先扣减最早到期批次、过期作废与按原消费流水逆向退回（`refundCredits`）。
-- **usage（用量流水）**：`src/modules/usage/service.ts`。记录每次功能调用的计量事件与关联扣费流水。
-- **entitlements（套餐权限与额度）**：`src/modules/entitlements/service.ts`。定义功能开关与配额上限，
-  合并套餐默认权益与用户级覆盖。
+- **权益模型（credits-only）**：套餐之间只差**积分数量与有效期**，没有套餐级功能开关；
+  功能开关是实例级的 modules / features。见 ADR-0011。
+- **购买发积分**：每种付费方式成功后发放多少积分、有效期多少天，写在
+  `src/config/products.ts` 的 offer 上；订阅每期续费再发一次。
+- **退款反扣（clawback）**：退款时只扣该订单开出的批次，扣到 0 为止；应扣、实际扣减与
+  差额写进流水，退款不因积分不足而失败。
+- **期末取消（cancel at period end）**：用户自助取消后本计费周期内仍有效，到期不续费；
+  不立即终止。
 - **manual-payments（核销型收款）**：`src/modules/manual-payments/service.ts`。原 `collection` 模块，
   管理收款码账户、唯一尾数金额锁池、付款凭证上传与后台人工核销。
 - **rbac（角色与权限点）**：`src/modules/rbac/service.ts` 与 `src/core/auth/rbac.ts`。基于 `roles`、

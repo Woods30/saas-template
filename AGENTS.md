@@ -84,9 +84,8 @@ src/
 │   ├── audit/         后台写操作与关键事件审计日志
 │   ├── changelog/     更新日志数据库 CMS
 │   ├── contact/       联系表单
-│   ├── credits/       积分余额账本（FIFO、过期、退款回滚）
+│   ├── credits/       积分余额账本（FIFO、过期、退款回滚与反扣）
 │   ├── docs/          文件型文档站（默认关闭）
-│   ├── entitlements/  套餐功能与配额权益
 │   ├── invite-codes/  邀请码创建与积分兑换
 │   ├── manual-payments/ 核销型收款（原 collection）
 │   ├── newsletter/    订阅邮件
@@ -94,8 +93,7 @@ src/
 │   ├── rbac/          角色与权限点矩阵
 │   ├── subscriptions/ 订阅生命周期与后台查询
 │   ├── taxonomy/      分类与标签
-│   ├── tickets/       客服工单
-│   └── usage/         用量流水计量
+│   └── tickets/       客服工单
 ├── lib/             纯逻辑：locale、seo、llms、module-access、rate-limit…
 ├── locale/          Paraglide 生成物 + middleware（生成物不手改）
 └── styles/          globals.css（设计 token）、mdx.css

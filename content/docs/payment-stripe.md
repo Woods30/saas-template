@@ -51,8 +51,14 @@ an invalid signature, and 500 when processing fails — Stripe retries the latte
   Session → the browser goes to Stripe's hosted payment page → a completed payment returns to
   `/settings/billing`.
 - Management: the "Manage subscription" button on the billing page → Stripe Customer Portal, where
-  renewal cancellation, payment methods, and invoices live. Whether the portal offers plan
+  payment methods and invoices live. Whether the portal offers plan
   switching is decided by your Stripe dashboard configuration.
+- Cancellation: the in-app "Cancel subscription" button calls
+  `subscriptions.update(id, { cancel_at_period_end: true })`, so it **takes effect at period
+  end** and the current period stays usable.
+- Refunds: the admin orders page refunds by PaymentIntent
+  (`refunds.create({ payment_intent })` with an idempotency key); `charge.refunded` reconciles
+  the row afterwards.
 
 ## Price catalog and price changes
 

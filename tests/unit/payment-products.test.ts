@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { getProducts } from '@/config/products'
+import { getProducts, productConfigErrors, resolveOfferCredits } from '@/config/products'
 import {
   isOneTimePriceValid,
   LANDING_PRICE_CURRENCY,
   mergePricingProducts,
 } from '@/core/payment/price-catalog'
+import type { ProductDefinition } from '@/types/pricing'
 
 // 捕获价格选项丢失、按本地周期猜测计费方式，以及重复维护配置的问题。
 describe('扁平套餐目录', () => {
@@ -97,5 +98,53 @@ describe('扁平套餐目录', () => {
         {},
       )[0]?.options,
     ).toEqual([])
+  })
+})
+
+describe('购买发积分的配置', () => {
+  it('授予数量按商品与付费方式解析，非法配置返回 undefined', () => {
+    expect(resolveOfferCredits('pro', 'monthly')).toEqual({ amount: 1000, durationDays: 31 })
+    // 免费商品不发积分。
+    expect(resolveOfferCredits('free', 'monthly')).toBeUndefined()
+    // 没有声明的付费方式不发积分。
+    expect(resolveOfferCredits('pro', 'once')).toBeUndefined()
+    expect(resolveOfferCredits('missing', 'monthly')).toBeUndefined()
+  })
+
+  it('积分数量与有效期写在商品定义上，校验覆盖非法值', () => {
+    const products: ProductDefinition[] = [
+      {
+        id: 'a',
+        name: 'A',
+        features: [],
+        prices: { monthly: 'price_a' },
+        credits: {
+          monthly: { amount: 0 },
+        },
+      },
+      {
+        id: 'b',
+        name: 'B',
+        features: [],
+        prices: { once: 'price_b' },
+        credits: {
+          once: { amount: 100, durationDays: -1 },
+        },
+      },
+      {
+        id: 'c',
+        name: 'C',
+        features: [],
+        prices: { once: 'price_c' },
+        credits: {
+          unknown: { amount: 100 },
+        },
+      },
+    ]
+    expect(productConfigErrors(products)).toEqual([
+      'invalidCreditAmount.a.monthly',
+      'invalidCreditDuration.b.once',
+      'creditWithoutPrice.c.unknown',
+    ])
   })
 })

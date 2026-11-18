@@ -272,7 +272,7 @@ export const settings = pgTable('settings', {
 })
 
 // ---------------------------------------------------------------------------
-// 计费组：积分账本 / 用量 / 权益
+// 计费组：积分账本
 //
 // 与 SQLite 版逐表逐列对齐，由 `tests/unit/schema-parity.test.ts` 盯着漂移。
 // 表放在共享 schema 里（业务逻辑在 `src/modules/*`）：drizzle-kit 要能从**一个**
@@ -328,6 +328,8 @@ export const creditTransactions = pgTable(
     amount: integer('amount').notNull(),
     balanceAfter: integer('balance_after').notNull(),
     reference: text('reference'),
+    /** 附加信息（JSON 文本）：反扣时记录应扣 / 实际扣减 / 差额。 */
+    metadata: text('metadata'),
     idempotencyKey: text('idempotency_key').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
@@ -356,104 +358,6 @@ export const creditAllocations = pgTable(
   (table) => ({
     transactionIdx: index('credit_allocations_transaction_idx').on(table.transactionId),
     grantIdx: index('credit_allocations_grant_idx').on(table.grantId),
-  }),
-)
-
-/** 用量流水：一次计量一行；积分消耗记在 `credits` 里。 */
-export const usageRecords = pgTable(
-  'usage_records',
-  {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    metric: text('metric').notNull(),
-    quantity: integer('quantity').notNull(),
-    unit: text('unit').notNull().default('count'),
-    credits: integer('credits').notNull().default(0),
-    requestId: text('request_id'),
-    idempotencyKey: text('idempotency_key'),
-    metadata: text('metadata'),
-    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
-  },
-  (table) => ({
-    userIdx: index('usage_records_user_idx').on(table.userId, table.createdAt),
-    metricIdx: index('usage_records_metric_idx').on(table.metric),
-    idempotencyUnique: uniqueIndex('usage_records_idempotency_unique').on(table.idempotencyKey),
-  }),
-)
-
-/** 权益目录：产品能授予的功能与额度。 */
-export const entitlements = pgTable('entitlements', {
-  key: text('key').primaryKey(),
-  name: text('name').notNull(),
-  type: text('type').notNull(),
-  defaultLimit: integer('default_limit'),
-  period: text('period').notNull().default('none'),
-  description: text('description'),
-  sortOrder: integer('sort_order').notNull().default(0),
-  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
-})
-
-/** 套餐：把一组权益打包，可由订阅或手动开通授予。 */
-export const plans = pgTable('plans', {
-  key: text('key').primaryKey(),
-  name: text('name').notNull(),
-  description: text('description'),
-  productId: text('product_id'),
-  offerId: text('offer_id'),
-  active: boolean('active').notNull().default(true),
-  sortOrder: integer('sort_order').notNull().default(0),
-  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
-})
-
-/** 套餐包含哪些权益、给多少额度。 */
-export const planEntitlements = pgTable(
-  'plan_entitlements',
-  {
-    id: text('id').primaryKey(),
-    planKey: text('plan_key')
-      .notNull()
-      .references(() => plans.key, { onDelete: 'cascade' }),
-    entitlementKey: text('entitlement_key')
-      .notNull()
-      .references(() => entitlements.key, { onDelete: 'cascade' }),
-    limitValue: integer('limit_value'),
-    enabled: boolean('enabled').notNull().default(true),
-  },
-  (table) => ({
-    planUnique: uniqueIndex('plan_entitlements_plan_entitlement_unique').on(
-      table.planKey,
-      table.entitlementKey,
-    ),
-  }),
-)
-
-/** 用户实际生效的权益：额度与已用量的记账。 */
-export const userEntitlements = pgTable(
-  'user_entitlements',
-  {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    entitlementKey: text('entitlement_key')
-      .notNull()
-      .references(() => entitlements.key, { onDelete: 'cascade' }),
-    limitValue: integer('limit_value'),
-    used: integer('used').notNull().default(0),
-    periodStart: timestamp('period_start', { withTimezone: true, mode: 'date' }),
-    periodEnd: timestamp('period_end', { withTimezone: true, mode: 'date' }),
-    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
-  },
-  (table) => ({
-    userUnique: uniqueIndex('user_entitlements_user_entitlement_unique').on(
-      table.userId,
-      table.entitlementKey,
-    ),
   }),
 )
 

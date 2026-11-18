@@ -22,6 +22,8 @@ export interface CreditTransaction {
   balanceAfter: number
   /** 外部引用：订单号、支付流水号等。 */
   reference: string | null
+  /** 附加信息（JSON 文本）：反扣记录应扣 / 实际扣减 / 差额。 */
+  metadata: string | null
   /** 幂等键：同一个键重复提交只生效一次。 */
   idempotencyKey: string
   createdAt: Date

@@ -15,8 +15,10 @@ export {
   type AdminOrderStatusFilter,
   type AdminOrdersQuery,
   type AdminOrdersResult,
+  type AdminRefundResult,
   fetchAdminOrders,
   queryAdminOrders,
+  refundAdminOrder,
 } from './admin-orders'
 export {
   type AdminPaymentRow,
@@ -34,6 +36,8 @@ export {
 } from './admin-subscriptions'
 export {
   type BillingOverview,
+  type CancelSubscriptionResult,
+  cancelMySubscription,
   fetchBillingOverview,
   fetchCurrentPlan,
 } from './billing'

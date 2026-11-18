@@ -84,8 +84,8 @@ GitHub `production` Environment 的变量与 secrets 配置见 [文档站 · Clo
 
 ## 包含什么
 
-- **三层架构（`core / modules / routes`）**：基础设施在 `src/core/`，18 个业务模块在 `src/modules/`（只暴露 `service.ts`），页面与接口在 `src/routes/`，由 `scripts/check-boundaries.ts` 强制守护
-- **计费与计量三层**：积分账本（`credits`，FIFO 扣减、批次过期与幂等退款回滚）、用量流水（`usage`）、套餐功能与配额（`entitlements`），以及订阅（`subscriptions`）与核销收款（`manual-payments`）
+- **三层架构（`core / modules / routes`）**：基础设施在 `src/core/`，15 个业务模块在 `src/modules/`（只暴露 `service.ts`），页面与接口在 `src/routes/`，由 `scripts/check-boundaries.ts` 强制守护
+- **credits-only 计费闭环**：积分账本（`credits`，FIFO 扣减、批次过期、幂等退款与退款反扣）、订阅（`subscriptions`，购买与续期自动发积分、自助期末取消、后台退款）与核销收款（`manual-payments`）
 - **权限与安全**：细粒度角色与权限点（`rbac`，含权限天花板保护）、业务 API Key 校验（`apikeys`）与操作审计日志（`audit`）
 - **AI 原语**：轻量 `core/ai` 网关（Fal / Replicate / Mock 同步与异步队列适配）与 `ai-tasks`（积分预扣、轮询完成、失败自动退回 revoke）
 - **九类运营后台 + 审计**：用户管理、角色与权限、系统设置、营收看板、订单、订阅、核销队列、积分账本、AI 任务、内容与分类（CMS）、客服工单与邀请码、审计日志

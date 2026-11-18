@@ -100,6 +100,13 @@ export const DEFAULT_PERMISSIONS: readonly PermissionSeed[] = [
     description: '查看全部用户的订阅周期与状态',
   },
   {
+    code: 'payments.refund',
+    resource: 'payments',
+    action: 'refund',
+    title: '订单退款',
+    description: '向支付渠道发起退款并反扣该订单已发放的积分',
+  },
+  {
     code: 'admin.credits.read',
     resource: 'admin.credits',
     action: 'read',

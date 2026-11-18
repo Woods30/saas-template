@@ -1,10 +1,10 @@
 ---
 title: Payments Overview
-description: Plan declarations, the buyer flow, and the billing page
+description: Plan declarations, the buyer flow, cancellation, refunds and the billing page
 locale: en
 order: 13
 group: payment
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 Declare your plans once in `src/config/products.ts`; the provider (Stripe or Creem) decides how
@@ -23,6 +23,11 @@ Edit `getProducts()` in `src/config/products.ts` and nothing else:
   features: [m.pricing_pro_feature_1()],
   recommended: true,
   prices: { monthly: 'pro_monthly', yearly: 'pro_yearly' },
+  // Credits granted after a successful payment; keys match `prices`.
+  credits: {
+    monthly: { amount: 1000, durationDays: 31 },
+    yearly: { amount: 12_000, durationDays: 366 },
+  },
 }
 ```
 
@@ -37,6 +42,9 @@ Edit `getProducts()` in `src/config/products.ts` and nothing else:
 
 - Empty `prices` means a free plan: the card still renders a button, but it leads to sign-up or
   the dashboard instead of checkout.
+- `credits` declares how many credits each payment option grants and for how many days (omit
+  `durationDays` for no expiry). Subscription renewals grant again with the same config;
+  refunds claw credits back proportionally.
 - `recommended` is optional; array order is display order.
 - Copy is evaluated when the function runs — never call `m.*()` at module top level.
 
@@ -58,8 +66,8 @@ soon as you save — no redeploy.
 4. The browser goes to the provider's payment page; a completed payment returns to
    `/settings/billing?checkout=success`, a cancelled one returns to the page that started the
    purchase.
-5. Entitlements are written after the provider's webhook confirms them — the return page never
-   grants access.
+5. Credits are granted after the provider's webhook confirms the payment — the return page never
+   grants anything.
 
 An account keeps at most one **non-terminal** subscription (`active`, `trialing`, `past_due`,
 `unpaid`, `paused`, and `incomplete` all count). A subscription scheduled to cancel at period
@@ -74,8 +82,31 @@ coexist with a subscription; they never cancel or take over an existing subscrip
 - subscription history;
 - payment records: date, plan, amount, status, with partial refunds shown separately.
 
-The "Manage subscription" button sends the user to the provider's self-service portal (cancel
-renewal, change payment method, invoices). The server resolves the customer ID from the
-signed-in user; the client cannot name another customer.
+The "Manage subscription" button sends the user to the provider's self-service portal (change
+payment method, invoices). The server resolves the customer ID from the signed-in user; the
+client cannot name another customer.
+
+The "Cancel subscription" button calls a site endpoint and **takes effect at period end**: the
+user keeps access for the paid period, then renews no more. Stripe uses
+`cancel_at_period_end`, Creem uses `mode: scheduled`. Collection-based payments have no provider
+subscription and do not show the button.
+
+## Refunds and clawback
+
+The admin **Orders** page can issue a **full refund** on a paid order (permission
+`payments.refund`, held by the `admin` role by default):
+
+1. a conditional state transition claims the order as `refunding`, so concurrent clicks can only
+   win once;
+2. the provider is called: Stripe by PaymentIntent, Creem by transaction ID (Creem only supports
+   full refunds);
+3. on success the row becomes `refunded` / `partially_refunded`, and the credit grant issued for
+   **that order** is clawed back;
+4. a provider failure restores the previous status so the operator can retry; every success is
+   written to the audit log.
+
+Clawback stops at zero: credits already consumed never turn the balance negative, and the ledger
+records the expected amount, the amount actually deducted, and the shortfall. Final settlement
+comes from the provider webhook; the admin page records the refund as accepted.
 
 Read next: [Stripe](./payment-stripe) or [Creem](./payment-creem).
