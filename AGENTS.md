@@ -58,12 +58,13 @@ Drizzle ORM（多方言：SQLite / D1 / PostgreSQL）、Vitest + Playwright。
 src/
 ├── routes/          文件路由（`{-$locale}` 是可选的 locale 前缀；文件名里的字面点写成
 │                    `[.]`，否则点会被当成路径分隔符——`llms.zh[.]txt.ts` 会变成 `/llms/zh.txt`）
-├── config/          站点配置：website.ts（总开关）、products.ts（产品与价格锚点）、llms.ts（AI 索引文案）、navigation.ts 等
+├── config/          站点配置：website.ts（总开关）、products.ts（产品与价格锚点）、llms.ts（AI 索引文案）、navigation.ts；routes.ts 是受保护区域路径的唯一来源
 ├── components/
 │   ├── sections/    可复用内容区块（Hero / Features / Pricing…），单文件含类型
 │   ├── marketing/   页面级装配（LandingPage / MarketingLayout / Navbar / Footer）
 │   ├── docs/        文档站布局与侧边栏
-│   ├── dashboard/   工作台骨架
+│   ├── dashboard/   管理台与个人中心共用的外壳（侧栏 / 面包屑 / 统一标题）
+│   ├── data-table/  列表页共享表格（列定义 + 工具栏 + 空态 + 分页 + 列显隐）
 │   ├── layout/      跨页面布局件（Logo / 语言切换 / 用户菜单）
 │   └── ui/          shadcn 上游原件，不本地修改
 ├── core/            基础设施：模块可依赖，反向不可
@@ -84,12 +85,11 @@ src/
 │   ├── changelog/     更新日志数据库 CMS
 │   ├── contact/       联系表单
 │   ├── credits/       积分余额账本（FIFO、过期、退款回滚）
-│   ├── docs/          文件型文档站门面（默认关闭）
+│   ├── docs/          文件型文档站（默认关闭）
 │   ├── entitlements/  套餐功能与配额权益
 │   ├── invite-codes/  邀请码创建与积分兑换
 │   ├── manual-payments/ 核销型收款（原 collection）
 │   ├── newsletter/    订阅邮件
-│   ├── notify/        通知渠道门面
 │   ├── posts/         文章数据库 CMS
 │   ├── rbac/          角色与权限点矩阵
 │   ├── subscriptions/ 订阅生命周期与后台查询

@@ -61,6 +61,14 @@
   让新用户永远无法登录。这是该模块唯一会触发 503 的情形。
 - **模块门禁**：`assertPageEnabled`（页面，抛 `notFound()`）与 `getModuleUnavailableResponse`
   （API，404 `MODULE_DISABLED` / 503 `SERVICE_UNAVAILABLE`）。
+- **管理台 / 个人中心 / 后台**：`/admin/*` 称**管理台**，`/settings/*` 称**个人中心**；
+  **后台**是二者的合称，只在无法拆分时使用。不再使用「工作台」。
+- **路由常量表**：`src/config/routes.ts` 的 `adminRoutes` / `settingsRoutes` 收敛了受保护
+  区域的每条路径。菜单、面包屑、`head()`、页面内跳转与测试断言都引用这里；除路由文件
+  自身的 `createFileRoute(...)` 外不写路径字面量。
+- **列表页**：管理台与个人中心的表格页共用 `src/components/data-table`。数据只来自路由
+  `loader`，搜索词 / 筛选 / 页码放 URL（默认值不写进 URL），写操作后
+  `router.invalidate()` 重新取数，页面不自建缓存。
 - **ServiceStatus**：`getServiceStatuses()` 的返回值，`disabled` / `incomplete` /
   `configured` 三态；只表示配置是否齐备，不代表外部服务已就绪。
 - **menu item**：`src/config/navigation.ts` 的 `MenuItem` 联合（`link` / `group` /
@@ -76,7 +84,8 @@
   `_layout/admin.tsx`（管理台，`/admin/*`）两棵独立子树——pathless layout 的 `beforeLoad`
   先 `assertPageEnabled('auth')`，再用 `fetchSession()` 判会话，未登录 `redirect` 到登录页
   并带上 locale 参数；管理台在此之上再 `assertFeatureEnabled('enableAdmin')` +
-  `assertAdminRole()`。
+  `assertAdminRole()`。外壳（侧栏、面包屑、页面标题）由 `components/dashboard/DashboardShell`
+  统一渲染，页面自己不再写标题块。
 - **AuthFormMessages**：`src/core/auth/validation.ts` 的校验文案契约。schema 工厂接收文案而非
   自己调 `m.*()`，使校验逻辑不依赖 Paraglide 运行时、可脱离组件单测；页面用
   `authFormMessages()` 求值。
@@ -116,8 +125,10 @@
   通知 / D1）、营销页面与内容站（C：8 个营销 blocks + 文档站 / 博客 / 更新日志）、测试与
   部署（D：E2E / CI / CSP）、品牌化与 Landing 单页、网站源码配置与公共菜单（模块开关、
   菜单契约、服务状态、配置文档）、个人中心（`/{locale}/settings/*`：资料 / 安全 / 登录设备 /
-  通知偏好 / API 密钥 / 用户管理，含 `fetchSession` 守卫）与表单统一（TanStack Form +
-  Zod + shadcn `Field`）。
+  通知偏好 / API 密钥 / 用户管理，含 `fetchSession` 守卫）、管理台（`/{locale}/admin/*`：
+  概览 / 用户 / 角色 / 审计 / 订单 / 订阅 / 积分 / 内容 / 工单 / AI 任务 / 核销订单）与表单统一
+  （TanStack Form + Zod + shadcn `Field`）。管理台与个人中心的列表页统一用
+  `components/data-table`。
 - **尚未实现**：文件上传、AI 网关、PWA。`websiteConfig.features` 中对应的开关是能力边界
   标记，不注册路由。
 - **两仓关系（2026-11-02 定）**：本仓是**模板工程**（`Woods30/saas-template`，模板源码与
