@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import {
   bigint,
   boolean,
@@ -453,5 +454,77 @@ export const userEntitlements = pgTable(
       table.userId,
       table.entitlementKey,
     ),
+  }),
+)
+
+// ---------------------------------------------------------------------------
+// 核销型支付（manual-payments）
+//
+// 与 SQLite 版逐表逐列对齐，由 `tests/unit/schema-parity.test.ts` 盯着漂移。
+// ---------------------------------------------------------------------------
+
+/** 核销型支付的收款账户：只存运营对源码配置的覆盖。 */
+export const collectionAccounts = pgTable('collection_accounts', {
+  id: text('id').primaryKey(),
+  channel: text('channel').notNull(),
+  displayName: text('display_name').notNull(),
+  currency: text('currency').notNull(),
+  qrImageKey: text('qr_image_key'),
+  enabled: boolean('enabled').notNull().default(true),
+  updatedBy: text('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+})
+
+/** 核销型支付的购买意图与核验状态。 */
+export const collectionOrders = pgTable(
+  'collection_orders',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    accountId: text('account_id').notNull(),
+    channel: text('channel').notNull(),
+    qrImageUrl: text('qr_image_url'),
+    qrImageKey: text('qr_image_key'),
+    productId: text('product_id').notNull(),
+    offerId: text('offer_id').notNull(),
+    kind: text('kind').notNull(),
+    interval: text('interval'),
+    intervalCount: integer('interval_count'),
+    baseAmount: integer('base_amount').notNull(),
+    fingerprint: integer('fingerprint').notNull(),
+    payableAmount: integer('payable_amount').notNull(),
+    currency: text('currency').notNull(),
+    status: text('status').notNull(),
+    payerNote: text('payer_note'),
+    receiptKey: text('receipt_key'),
+    submittedAt: timestamp('submitted_at', { withTimezone: true, mode: 'date' }),
+    observedAmount: integer('observed_amount'),
+    externalReference: text('external_reference'),
+    reviewNote: text('review_note'),
+    reviewedBy: text('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true, mode: 'date' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+    settledAt: timestamp('settled_at', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userStatusIdx: index('collection_orders_user_status_idx').on(table.userId, table.status),
+    statusExpiresIdx: index('collection_orders_status_expires_idx').on(
+      table.status,
+      table.expiresAt,
+    ),
+    // 金额唯一性按收款账户而非「商品 + offer」约束：两个商品价格区间重叠时，
+    // 仍可能出现同一收款码、同一时段、同一实付金额，人工无法区分。
+    activeAmountUnique: uniqueIndex('collection_orders_active_amount_unique')
+      .on(table.accountId, table.payableAmount)
+      .where(sql`status IN ('pending_payment','pending_verification','settling')`),
+    // 同一账号只允许一个结算临界区。
+    settlingUserUnique: uniqueIndex('collection_orders_settling_user_unique')
+      .on(table.userId)
+      .where(sql`status = 'settling'`),
   }),
 )

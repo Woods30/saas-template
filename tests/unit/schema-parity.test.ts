@@ -67,6 +67,8 @@ describe('sqlite 与 postgres schema 一致性', () => {
       'plans',
       'planEntitlements',
       'userEntitlements',
+      'collectionAccounts',
+      'collectionOrders',
     ]) {
       expect(names).toContain(expected)
     }
