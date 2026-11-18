@@ -101,16 +101,18 @@ export async function ensureDefaultRbac(db: DB): Promise<void> {
     await db.insert(roles).values(missingRoles).onConflictDoNothing()
   }
 
-  if (newRoleNames.size === 0) {
+  if (newRoleNames.size === 0 && missingPerms.length === 0) {
     return
   }
 
+  const newPermCodes = new Set(missingPerms.map((p) => p.code))
   const missingBindings: Array<{ id: string; roleId: string; permissionId: string }> = []
   for (const roleSeed of DEFAULT_ROLES) {
-    if (!newRoleNames.has(roleSeed.name)) continue
+    const isNewRole = newRoleNames.has(roleSeed.name)
     const roleId = roleIdByName.get(roleSeed.name)
     if (!roleId) continue
     for (const code of roleSeed.permissions) {
+      if (!isNewRole && !newPermCodes.has(code)) continue
       const permId = permIdByCode.get(code)
       if (!permId) continue
       missingBindings.push({

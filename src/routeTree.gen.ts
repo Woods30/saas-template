@@ -60,6 +60,7 @@ import { Route as Char123LocaleChar125LayoutDashboardAdminRevenueRouteImport } f
 import { Route as Char123LocaleChar125LayoutDashboardAdminRolesRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/roles'
 import { Route as Char123LocaleChar125LayoutDashboardAdminSettingsRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/settings'
 import { Route as Char123LocaleChar125LayoutDashboardAdminSubscriptionsRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/subscriptions'
+import { Route as Char123LocaleChar125LayoutDashboardAdminTasksRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/tasks'
 import { Route as Char123LocaleChar125LayoutDashboardAdminUsersRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/users'
 import { Route as Char123LocaleChar125LayoutDashboardOrdersIndexRouteImport } from './routes/{-$locale}/_layout/dashboard/orders/index'
 import { Route as Char123LocaleChar125LayoutDashboardOrdersOrderIdRouteImport } from './routes/{-$locale}/_layout/dashboard/orders/$orderId'
@@ -361,6 +362,12 @@ const Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute =
     path: '/admin/subscriptions',
     getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
   } as any)
+const Char123LocaleChar125LayoutDashboardAdminTasksRoute =
+  Char123LocaleChar125LayoutDashboardAdminTasksRouteImport.update({
+    id: '/admin/tasks',
+    path: '/admin/tasks',
+    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
+  } as any)
 const Char123LocaleChar125LayoutDashboardAdminUsersRoute =
   Char123LocaleChar125LayoutDashboardAdminUsersRouteImport.update({
     id: '/admin/users',
@@ -456,6 +463,7 @@ export interface FileRoutesByFullPath {
   '/{-$locale}/dashboard/admin/roles': typeof Char123LocaleChar125LayoutDashboardAdminRolesRoute
   '/{-$locale}/dashboard/admin/settings': typeof Char123LocaleChar125LayoutDashboardAdminSettingsRoute
   '/{-$locale}/dashboard/admin/subscriptions': typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute
+  '/{-$locale}/dashboard/admin/tasks': typeof Char123LocaleChar125LayoutDashboardAdminTasksRoute
   '/{-$locale}/dashboard/admin/users': typeof Char123LocaleChar125LayoutDashboardAdminUsersRoute
   '/{-$locale}/dashboard/orders/$orderId': typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute
   '/{-$locale}/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
@@ -512,6 +520,7 @@ export interface FileRoutesByTo {
   '/{-$locale}/dashboard/admin/roles': typeof Char123LocaleChar125LayoutDashboardAdminRolesRoute
   '/{-$locale}/dashboard/admin/settings': typeof Char123LocaleChar125LayoutDashboardAdminSettingsRoute
   '/{-$locale}/dashboard/admin/subscriptions': typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute
+  '/{-$locale}/dashboard/admin/tasks': typeof Char123LocaleChar125LayoutDashboardAdminTasksRoute
   '/{-$locale}/dashboard/admin/users': typeof Char123LocaleChar125LayoutDashboardAdminUsersRoute
   '/{-$locale}/dashboard/orders/$orderId': typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute
   '/{-$locale}/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
@@ -573,6 +582,7 @@ export interface FileRoutesById {
   '/{-$locale}/_layout/dashboard/admin/roles': typeof Char123LocaleChar125LayoutDashboardAdminRolesRoute
   '/{-$locale}/_layout/dashboard/admin/settings': typeof Char123LocaleChar125LayoutDashboardAdminSettingsRoute
   '/{-$locale}/_layout/dashboard/admin/subscriptions': typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute
+  '/{-$locale}/_layout/dashboard/admin/tasks': typeof Char123LocaleChar125LayoutDashboardAdminTasksRoute
   '/{-$locale}/_layout/dashboard/admin/users': typeof Char123LocaleChar125LayoutDashboardAdminUsersRoute
   '/{-$locale}/_layout/dashboard/orders/$orderId': typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute
   '/{-$locale}/_layout/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
@@ -635,6 +645,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/dashboard/admin/roles'
     | '/{-$locale}/dashboard/admin/settings'
     | '/{-$locale}/dashboard/admin/subscriptions'
+    | '/{-$locale}/dashboard/admin/tasks'
     | '/{-$locale}/dashboard/admin/users'
     | '/{-$locale}/dashboard/orders/$orderId'
     | '/{-$locale}/marketing/blog/$slug'
@@ -691,6 +702,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/dashboard/admin/roles'
     | '/{-$locale}/dashboard/admin/settings'
     | '/{-$locale}/dashboard/admin/subscriptions'
+    | '/{-$locale}/dashboard/admin/tasks'
     | '/{-$locale}/dashboard/admin/users'
     | '/{-$locale}/dashboard/orders/$orderId'
     | '/{-$locale}/marketing/blog/$slug'
@@ -751,6 +763,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/_layout/dashboard/admin/roles'
     | '/{-$locale}/_layout/dashboard/admin/settings'
     | '/{-$locale}/_layout/dashboard/admin/subscriptions'
+    | '/{-$locale}/_layout/dashboard/admin/tasks'
     | '/{-$locale}/_layout/dashboard/admin/users'
     | '/{-$locale}/_layout/dashboard/orders/$orderId'
     | '/{-$locale}/_layout/marketing/blog/$slug'
@@ -1149,6 +1162,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRouteImport
       parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
     }
+    '/{-$locale}/_layout/dashboard/admin/tasks': {
+      id: '/{-$locale}/_layout/dashboard/admin/tasks'
+      path: '/admin/tasks'
+      fullPath: '/{-$locale}/dashboard/admin/tasks'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminTasksRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
+    }
     '/{-$locale}/_layout/dashboard/admin/users': {
       id: '/{-$locale}/_layout/dashboard/admin/users'
       path: '/admin/users'
@@ -1236,6 +1256,7 @@ interface Char123LocaleChar125LayoutDashboardRouteChildren {
   Char123LocaleChar125LayoutDashboardAdminRolesRoute: typeof Char123LocaleChar125LayoutDashboardAdminRolesRoute
   Char123LocaleChar125LayoutDashboardAdminSettingsRoute: typeof Char123LocaleChar125LayoutDashboardAdminSettingsRoute
   Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute: typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute
+  Char123LocaleChar125LayoutDashboardAdminTasksRoute: typeof Char123LocaleChar125LayoutDashboardAdminTasksRoute
   Char123LocaleChar125LayoutDashboardAdminUsersRoute: typeof Char123LocaleChar125LayoutDashboardAdminUsersRoute
 }
 
@@ -1273,6 +1294,8 @@ const Char123LocaleChar125LayoutDashboardRouteChildren: Char123LocaleChar125Layo
       Char123LocaleChar125LayoutDashboardAdminSettingsRoute,
     Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute:
       Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute,
+    Char123LocaleChar125LayoutDashboardAdminTasksRoute:
+      Char123LocaleChar125LayoutDashboardAdminTasksRoute,
     Char123LocaleChar125LayoutDashboardAdminUsersRoute:
       Char123LocaleChar125LayoutDashboardAdminUsersRoute,
   }

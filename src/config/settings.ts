@@ -11,6 +11,7 @@ import {
   IconScan,
   IconSettings,
   IconShieldLock,
+  IconSparkles,
   IconUser,
   IconUsers,
   type TablerIcon,
@@ -35,6 +36,7 @@ export type SettingsSection =
   | 'admin/orders'
   | 'admin/subscriptions'
   | 'admin/credits'
+  | 'admin/tasks'
   | 'admin/audit'
 
 /**
@@ -246,6 +248,20 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
         },
         {
           kind: 'link',
+          id: 'admin-tasks',
+          title: m.settings_nav_admin_tasks(),
+          icon: IconSparkles,
+          visibility: { roles: ['admin'], feature: 'enableAdmin' },
+          destination: {
+            kind: 'internal',
+            options: linkOptions({
+              to: '/{-$locale}/dashboard/admin/tasks',
+              params: { locale },
+            }),
+          },
+        },
+        {
+          kind: 'link',
           id: 'admin-audit',
           title: m.settings_nav_admin_audit(),
           icon: IconClipboardList,
@@ -356,6 +372,12 @@ export function getSettingsSectionMeta(section: string):
         title: m.admin_roles_title(),
         description: m.admin_roles_description(),
         icon: IconShieldLock,
+      }
+    case 'admin/tasks':
+      return {
+        title: m.admin_tasks_title(),
+        description: m.admin_tasks_description(),
+        icon: IconSparkles,
       }
     case 'admin/audit':
       return {
