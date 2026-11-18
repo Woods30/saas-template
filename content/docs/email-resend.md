@@ -31,27 +31,17 @@ Prerequisites: the domain is on DNS, and you verify it as a sending domain in Re
 2. **Create an API key.** In [Resend API Keys](https://resend.com/api-keys), create a key with
    **sending permission** and save it — it is shown only once.
 
-3. **Set the environment variables.** `RESEND_API_KEY` is a server-side secret and `MAIL_FROM` is
-   the sending address:
+3. **Configure it in the admin.** Open **Settings → Mail**:
 
-   ```bash
-   RESEND_API_KEY=<your-resend-api-key>
-   MAIL_FROM=noreply@<your-domain.com>
-   ```
+   - choose `resend` as the provider;
+   - enter the API key in the Resend group (encrypted at rest, masked to the last four characters);
+   - enter the sender address in the Mail group (for example `noreply@<your-domain.com>`).
 
-   `MAIL_FROM` must be a **plain email address**; it is validated with `z.email()`, so
-   `Brand <noreply@...>` is rejected. Neither variable uses a **`VITE_` prefix**.
+   Saving takes effect immediately — no redeploy. The sender must be a **plain email address**;
+   `Brand <noreply@...>` is rejected.
 
-4. **Deploy.** Hand the two values to the Worker in production:
-
-   ```bash
-   pnpm exec wrangler secret put RESEND_API_KEY
-   pnpm exec wrangler secret put MAIL_FROM
-   ```
-
-   With automatic Release deployment, set Secret `RESEND_API_KEY` and Variable `MAIL_FROM` in
-   GitHub **Settings → Environments → production** (a Secret of the same name also works; the
-   Variable wins). Both are already in the deployment workflow's runtime upload allowlist.
+   Alternatively put `RESEND_API_KEY` and `MAIL_FROM` in `.env` and run `pnpm db:seed` to write
+   them along with everything else — env is read once, at seed time.
 
 ## DMARC
 
@@ -66,11 +56,8 @@ Point `rua` at an address that actually receives reports.
 
 ## Verify
 
-```bash
-pnpm run check:env
-```
-
-The `mail` item should stop reporting missing configuration. Then run the site locally, trigger a
+After saving in the admin, the `mail` item in the service status should stop reporting missing
+configuration. Then run the site locally, trigger a
 sign-up or a contact form submission, and confirm the message shows up in Resend's "Sent" list —
 a complete configuration only means the checks pass; domain verification and actual delivery are
 still confirmed in Resend.
@@ -86,7 +73,7 @@ contact message, welcome) on port 3001, with live hot reload.
 
 - If the same domain also uses Cloudflare Email Routing for inbound mail, the record names differ
   and both can coexist — but the root domain may carry only **one** SPF record.
-- Changing `MAIL_FROM` requires a redeploy (it is a runtime secret).
+- Changing the sender address takes effect as soon as the admin saves.
 
 Once mail works, continue with the contact form in [Email Overview](./email), or
 [Newsletter](./newsletter).

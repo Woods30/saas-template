@@ -8,7 +8,7 @@ updated: 2026-11-03
 ---
 
 通知模块把站点里的关键事件推到聊天工具的 webhook。Discord 与飞书的接入步骤几乎一样，
-所以写在同一页：建机器人 → 复制 webhook 地址 → 填环境变量 → 切换 provider。
+所以写在同一页：建机器人 → 复制 webhook 地址 → 在后台填地址并选渠道。
 
 ## 步骤
 
@@ -17,33 +17,20 @@ updated: 2026-11-03
    - **Discord**：服务器设置 → Integrations → Webhooks → New Webhook，选频道，复制 webhook URL。
    - **飞书**：群设置 → 群机器人 → 添加「自定义机器人」，复制 webhook 地址。
 
-2. **填环境变量。** 两个地址的前缀由 schema 强制校验，写错会在启动时直接失败：
+2. **在后台填地址并选渠道。** 打开「系统设置 → 通知」：
 
-   | provider | 环境变量 | 前缀要求 |
+   打开通知模块，选渠道（`discord` / `feishu`），把 webhook 地址填进对应分组。地址前缀由
+   保存时校验：
+
+   | provider | 字段 | 前缀要求 |
    |---|---|---|
-   | `discord` | `DISCORD_WEBHOOK_URL` | `https://discord.com/api/webhooks/` |
-   | `feishu` | `FEISHU_WEBHOOK_URL` | `https://open.feishu.cn/open-apis/bot/v2/hook/` |
+   | `discord` | Discord webhook 地址 | `https://discord.com/api/webhooks/` |
+   | `feishu` | 飞书 webhook 地址 | `https://open.feishu.cn/open-apis/bot/v2/hook/` |
 
-   变量**不加 `VITE_` 前缀**。
+   地址加密入库，保存即生效，不用部署。
 
-3. **切换 provider。** 在 `src/config/website.ts`：
-
-   ```ts
-   notification: { enabled: true, provider: 'discord' },
-   ```
-
-   provider 二选一，且**必须与已配置的 webhook 对应**：选了 `feishu` 却只填了
-   `DISCORD_WEBHOOK_URL`，诊断结果是 `incomplete`。
-
-4. **部署。** 生产环境把 webhook 地址交给 Worker：
-
-   ```bash
-   pnpm exec wrangler secret put DISCORD_WEBHOOK_URL
-   ```
-
-   用 Release 自动部署时在 GitHub **Settings → Environments → production** 配同名 Secret。
-   `DISCORD_WEBHOOK_URL` 已在部署工作流的运行时上传白名单里，**`FEISHU_WEBHOOK_URL` 没有**——
-   用飞书的话要自己往 `.github/workflows/deploy.yml` 的 `env` 与上传白名单里补上。
+3. **选错渠道的诊断。** 渠道**必须与已填的地址对应**：选了 `feishu` 却只填了 Discord 地址，
+   服务状态是 `incomplete`，并列出缺的字段。
 
 ## 触发点
 
@@ -56,11 +43,8 @@ updated: 2026-11-03
 
 ## 验证
 
-```bash
-pnpm run check:env
-```
-
-`notification` 一项不再报缺配置即可。然后发一次付款或提交一次联系表单，确认 webhook 收到消息。
+后台「系统设置」保存后，服务状态里 `notification` 一项不再报缺配置即可。然后发一次付款或提交
+一次联系表单，确认 webhook 收到消息。
 
 ## 注意事项
 

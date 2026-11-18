@@ -1,16 +1,19 @@
 /**
  * 生产环境变量校验：强制以 production 语义复用 `src/env` 的 schema。
- * `VITE_BASE_URL` 必须是显式提供的真实 HTTPS 域名，已启用服务的必要字段缺失即失败。
- * 只校验本地配置，不代表 Cloudflare 云端已配置 secrets；绝不打印值。
+ *
+ * 只校验**启动必需**项——`VITE_BASE_URL` 必须是无凭据的真实 HTTPS 域名，
+ * `BETTER_AUTH_SECRET` 必须 ≥ 32 字符。支付 / 邮件 / 分析的凭据在数据库里
+ * （见 ADR-0010），静态校验读不到，改由后台系统设置页与运行期 `getServiceStatuses`
+ * 报出。只校验本地配置，不代表 Cloudflare 云端已配置 secrets；绝不打印值。
  */
 import { existsSync } from 'node:fs'
 import { ZodError } from 'zod'
-import { getServiceStatuses, validateWebsiteConfig } from '../src/config/service-status'
+import { validateWebsiteConfig } from '../src/config/service-status'
 import { createWebsiteConfig } from '../src/config/website'
 import { parsePublicEnv } from '../src/core/env/public'
 import { validateProdServerEnv } from '../src/core/env/server'
 import { resolveRawEnv } from './lib/env-file'
-import { formatServiceDiagnostics, formatZodIssues } from './lib/report-issues'
+import { formatZodIssues } from './lib/report-issues'
 
 /** 生产环境变量文件；存在时优先于 `.env`。 */
 const PRODUCTION_ENV_PATH = '.env.production'
@@ -60,10 +63,9 @@ function main(): void {
   }
 
   let publicEnv: ReturnType<typeof parsePublicEnv>
-  let serverEnv: ReturnType<typeof validateProdServerEnv>
   try {
     publicEnv = parsePublicEnv(prodRaw)
-    serverEnv = validateProdServerEnv(prodRaw)
+    validateProdServerEnv(prodRaw)
   } catch (error) {
     if (error instanceof ZodError) {
       console.error('❌ 生产环境变量校验失败：')
@@ -86,13 +88,6 @@ function main(): void {
     for (const issue of configIssues) {
       console.error(`  - ${issue.key}（${issue.location}）：${issue.reason}`)
     }
-    process.exit(1)
-  }
-
-  const diagnostics = formatServiceDiagnostics(getServiceStatuses({ config, publicEnv, serverEnv }))
-  if (diagnostics.hasIncomplete) {
-    console.error('❌ 已启用服务缺少必要配置：')
-    for (const line of diagnostics.lines) console.error(`  ${line}`)
     process.exit(1)
   }
 

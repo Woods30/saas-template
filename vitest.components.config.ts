@@ -1,7 +1,5 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
-// Vite 8 的 configLoader 要求配置内相对导入带扩展名。
-import { testScenarioEnv } from './vitest.config.ts'
 
 export default defineConfig({
   resolve: {
@@ -19,8 +17,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['tests/setup.ts'],
-    // 组件测试读的是全局 `websiteConfig`，场景同样固定，不跟 `website.ts` 的出厂值走。
-    env: { ...testScenarioEnv },
+    // 组件测试读全局 `websiteConfig`；需要特定开关的用例在文件内自行 mock。
+    env: { VITE_BASE_URL: 'https://example.com' },
     include: [
       'tests/components/**/*.test.tsx',
       'tests/components/**/*.test.ts',

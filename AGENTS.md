@@ -141,8 +141,10 @@ scripts/             构建与校验脚本
     哪份 schema。改完必须重新 `pnpm db:setup`；运行期不一致会直接抛错（见 ADR-0009）。
 15. **迁移不入库**：库结构的事实源是手写 schema，迁移在本地生成后手工 apply。
     `src/core/db/schema.ts` 与 `src/core/db/migrations/` 都是生成物，不提交。
-16. **配置进库，品牌与 SEO 走 `core/config`**：全站读 `websiteConfig` 拿到的永远是当前
-    生效配置（出厂值 + 数据库分组）。密钥不进库——支付 / 邮件凭据仍只在 env。
+16. **配置进库，字段只在注册表声明**：全站读 `websiteConfig` 拿到的永远是当前生效配置
+    （注册表默认值 + 数据库里逐字段的覆盖值）。业务凭据也进库，但以 AES-GCM 加密存储
+    （`enc:v1:`），缺 `CONFIG_ENCRYPTION_KEY` 时拒绝保存含密钥的组。env 只留启动必需项，
+    `pnpm db:seed` 时作为初值。见 ADR-0010。
 
 ## 工作方式
 
@@ -152,12 +154,12 @@ scripts/             构建与校验脚本
   `pnpm dlx shadcn@latest add <component> -y`。
 - **行为修改先写失败测试**；结构整理与行为修改分开提交。
 - **测试不依赖出厂配置**：模块开关、能力开关与品牌名都是配置项，使用者会把它们改成自己的
-  值（数据库里的生效配置或 `src/config/website.ts` 的出厂值）。断言要么显式摆出自己要的配置
+  值（数据库里的生效配置或注册表声明的出厂值）。断言要么显式摆出自己要的配置
   （`makeConfig({ blog: { enabled: true } })`），要么取相对值（`websiteConfig.metadata.name`、
   `m.site_name(...)`），不写死出厂值与品牌字面量 —— 写死的话，改过配置的项目跑 `pnpm test`
-  会集体变红。组件测试读的是全局 `websiteConfig`，
-  它的场景由 `vitest.config.ts` 的 `testScenarioEnv` 固定（`VITE_MODULES` / `VITE_FEATURES` 覆盖），
-  与 `website.ts` 的出厂值无关。
+  会集体变红。组件测试读全局 `websiteConfig`，需要特定开关的用例在文件内自行 `vi.doMock`。
+- **配置只从注册表来**：新增配置项改 `src/core/config/registry.ts` 与文案，不在页面、脚本或
+  env schema 里另写一份；env 只作 `db:seed` 的初值，运行期不读。
 - 提交前 `pnpm check` 与 `pnpm test` 必须全绿。提交消息写清改了什么、为什么。
 - **文档语言为中文**；技术名词、命令、代码标识符保留英文；中文与半角英数之间加空格。
 

@@ -1,4 +1,4 @@
-import type { ServerEnv } from '@/core/env/server'
+import type { RuntimeEnv } from '@/core/env/server'
 import { getServerContext } from '@/lib/server-context'
 import { DiscordNotificationProvider } from './provider/discord'
 import { FeishuNotificationProvider } from './provider/feishu'
@@ -7,7 +7,7 @@ import type { NotificationChannel, NotificationPayload, NotificationProvider } f
 type ProviderFactory = () => NotificationProvider
 
 /** 归一化后 provider 所需的 server env 子集。 */
-type NotificationEnv = Pick<ServerEnv, 'DISCORD_WEBHOOK_URL' | 'FEISHU_WEBHOOK_URL'>
+type NotificationEnv = Pick<RuntimeEnv, 'DISCORD_WEBHOOK_URL' | 'FEISHU_WEBHOOK_URL'>
 
 /**
  * 按当前请求 env 构建 notification provider 注册表，在 `src/server.ts` 的 `als.run()` 中调用。

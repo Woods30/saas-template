@@ -1,24 +1,26 @@
 /**
- * 开发环境变量校验：复用 `src/env` 的 Zod schema 检查已提供的字段是否合法。
- * 开发允许 optional 功能未配置，因此不强制 secret；缺配置只提示。绝不打印值。
+ * 开发环境变量校验：只检查**启动必需**项是否合法。
+ *
+ * 支付 / 邮件 / 通知 / 分析的凭据已移入数据库，运行期不读 env（见 ADR-0010），
+ * 所以这里无从校验它们的完整性——那是后台「系统设置」与 `getServiceStatuses`
+ * 的运行期职责。绝不打印值。
  */
 import { ZodError } from 'zod'
-import { getServiceStatuses, validateWebsiteConfig } from '../src/config/service-status'
+import { validateWebsiteConfig } from '../src/config/service-status'
 import { createWebsiteConfig } from '../src/config/website'
 import { parsePublicEnv } from '../src/core/env/public'
 import { parseServerEnv } from '../src/core/env/server'
 import { resolveRawEnv } from './lib/env-file'
-import { formatServiceDiagnostics, formatZodIssues } from './lib/report-issues'
+import { formatZodIssues } from './lib/report-issues'
 
 function main(): void {
   // `.env` 不存在时回退到进程 env（CI 场景）。
   const raw = resolveRawEnv()
 
   let publicEnv: ReturnType<typeof parsePublicEnv>
-  let serverEnv: ReturnType<typeof parseServerEnv>
   try {
     publicEnv = parsePublicEnv(raw)
-    serverEnv = parseServerEnv(raw)
+    parseServerEnv(raw)
   } catch (error) {
     if (error instanceof ZodError) {
       console.error('❌ 开发环境变量校验失败：')
@@ -38,12 +40,6 @@ function main(): void {
       console.error(`  - ${issue.key}（${issue.location}）：${issue.reason}`)
     }
     process.exit(1)
-  }
-
-  const diagnostics = formatServiceDiagnostics(getServiceStatuses({ config, publicEnv, serverEnv }))
-  if (diagnostics.hasIncomplete) {
-    console.log('⚠️ 以下已启用服务缺少必要配置（开发环境仅提示，公共页面仍可开发）：')
-    for (const line of diagnostics.lines) console.log(`  ${line}`)
   }
 
   console.log('✅ 开发环境变量校验通过')

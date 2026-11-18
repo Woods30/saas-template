@@ -14,22 +14,20 @@ site receives net settlements. Both subscriptions and one-time payments are supp
 
 1. Create products in the Creem dashboard: recurring products for subscriptions (one per
    interval) and one-time products for lifetime purchases.
-2. Fill in the environment variables:
+2. In admin **Settings → Payment**, pick the `creem` provider and enter the API key, the webhook
+   secret, and the product map in the Creem group:
 
-   ```dotenv
-   VITE_PAYMENT_PROVIDER=creem
-   CREEM_API_KEY=creem_xxx
-   CREEM_WEBHOOK_SECRET=whsec_xxx
-   CREEM_PRODUCTS=pro_monthly=prod_xxx,pro_yearly=prod_yyy,lifetime=prod_zzz
+   ```text
+   pro_monthly=prod_xxx,pro_yearly=prod_yyy,lifetime=prod_zzz
    ```
 
-   The left side of `CREEM_PRODUCTS` is the reference on the right-hand side of `prices` in
+   The left side of the map is the reference on the right-hand side of `prices` in
    `src/config/products.ts`; the right side is the Creem product ID (`prod_*`). Separate entries
-   with commas, and map each reference to exactly one product ID.
+   with commas, and map each reference to exactly one product ID. Secrets are encrypted at rest;
+   saving takes effect immediately.
 
-3. Deploy: `pnpm run deploy`.
-4. In the Creem dashboard add the webhook endpoint `<your-site-domain>/api/webhooks/creem`, use
-   `CREEM_WEBHOOK_SECRET` as the signing secret, and subscribe to the events below.
+3. In the Creem dashboard add the webhook endpoint `<your-site-domain>/api/webhooks/creem`, enter
+   the same signing secret, and subscribe to the events below.
 
 The endpoint only responds while Creem is the active provider: when the site runs a different
 channel it answers 404, and Creem stops retrying.
@@ -69,6 +67,6 @@ merchant of record, so handle the existing subscribers yourself.
 
 ## Verify
 
-- `pnpm run check:env` passes, so the provider, credentials, and product mapping are in place.
+- After saving in the admin, `payment` reports `configured` in the service status.
 - The Creem dashboard's webhook log shows deliveries from your site (`200` means the signature
   verified).

@@ -3,7 +3,7 @@ import type { WebsiteConfig } from '@/config/website'
 import { createWebsiteConfig } from '@/config/website'
 import { sendAuthEmail, sendAuthEmailForRequest } from '@/core/auth/emails'
 import type { SendTemplateParams } from '@/core/email/types'
-import type { ServerEnv } from '@/core/env/server'
+import type { RuntimeEnv } from '@/core/env/server'
 
 /**
  * `src/core/auth/emails.ts`：better-auth 回调与 mail registry 之间的桥梁。依赖注入、无需 ALS；
@@ -21,7 +21,10 @@ const mailEnabledConfig = makeConfig({
   mail: { enabled: true, provider: 'resend', supportEmail: 'support@example.com' },
 })
 
-const env: ServerEnv = { MAIL_FROM: 'noreply@example.com', RESEND_API_KEY: 're_test' } as ServerEnv
+const env: RuntimeEnv = {
+  MAIL_FROM: 'noreply@example.com',
+  RESEND_API_KEY: 're_test',
+} as RuntimeEnv
 
 const deps = {
   sendMail: sendMailMock as never,
@@ -122,7 +125,7 @@ describe('sendAuthEmail', () => {
     sendMailMock.mockReset()
     const result = await sendAuthEmail(
       { kind: 'welcome', to: 'user@example.com', username: 'Alice', locale: 'zh' },
-      { ...deps, serverEnv: {} as ServerEnv },
+      { ...deps, serverEnv: {} as RuntimeEnv },
     )
 
     expect(result.ok).toBe(false)
@@ -167,7 +170,7 @@ describe('sendAuthEmail', () => {
       {
         ...deps,
         config,
-        serverEnv: { CLOUDFLARE_EMAIL_SENDER: 'cf@example.com' } as ServerEnv,
+        serverEnv: { CLOUDFLARE_EMAIL_SENDER: 'cf@example.com' } as RuntimeEnv,
       },
     )
 

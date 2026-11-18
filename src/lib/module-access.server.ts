@@ -1,7 +1,5 @@
 import { getServiceStatuses } from '@/config/service-status'
 import { type ServiceModule, websiteConfig } from '@/config/website'
-import { publicEnv } from '@/core/env/public'
-import { parseServerEnv } from '@/core/env/server'
 import { getServerContext } from '@/lib/server-context'
 
 /**
@@ -22,12 +20,11 @@ export function getModuleUnavailableResponse(
     return Response.json({ error: 'MODULE_DISABLED' }, { status: 404 })
   }
 
-  const env = input ? undefined : getServerContext().env
-  const current = input ?? {
-    config,
-    publicEnv,
-    serverEnv: parseServerEnv(env ?? {}),
-    bindings: { email: !!env?.EMAIL },
+  // 只在没传 input 时才碰请求上下文：单测与脚本可以显式给出配置。
+  let current = input
+  if (!current) {
+    const env = getServerContext().env
+    current = { config, serverEnv: env, bindings: { email: !!env.EMAIL } }
   }
 
   const state = getServiceStatuses(current)[module].state

@@ -1,6 +1,5 @@
 import { z } from 'zod'
-import type { PublicEnv } from '@/core/env/public'
-import type { ServerEnv } from '@/core/env/server'
+import type { RuntimeEnv } from '@/core/env/server'
 import {
   collectionConfigErrors,
   productConfigErrors,
@@ -18,7 +17,12 @@ import type { ServiceModule, WebsiteConfig } from './website'
 export type ConfigIssue = {
   key: string
   reason: string
-  location: 'src/config/website.ts' | 'src/config/products.ts' | 'env' | 'Cloudflare binding'
+  location:
+    | 'src/config/website.ts'
+    | 'src/config/products.ts'
+    | 'env'
+    | '数据库配置'
+    | 'Cloudflare binding'
   manual?: boolean
   /** 配置矛盾（字段存在但取值互斥），而非字段缺失。仅影响诊断文案的分组标签。 */
   conflict?: boolean
@@ -34,7 +38,7 @@ export type ServiceStatus = {
  *
  * 不回退 `example.com`，缺失即返回 `undefined`，对应 provider 因此不注册。
  */
-export function getMailFrom(config: WebsiteConfig, env: ServerEnv): string | undefined {
+export function getMailFrom(config: WebsiteConfig, env: RuntimeEnv): string | undefined {
   return (
     env.MAIL_FROM ??
     (config.mail.provider === 'cloudflare' ? env.CLOUDFLARE_EMAIL_SENDER : undefined)
@@ -59,11 +63,10 @@ function isRootOrProtocolRelativePath(value: string): boolean {
 
 export function getServiceStatuses(input: {
   config: WebsiteConfig
-  publicEnv: PublicEnv
-  serverEnv: ServerEnv
+  serverEnv: RuntimeEnv
   bindings?: { email: boolean }
 }): Record<ServiceModule, ServiceStatus> {
-  const { config, publicEnv: pub, serverEnv: env, bindings } = input
+  const { config, serverEnv: env, bindings } = input
   // 受控断言：每个 ServiceModule 键都会被 `check` 赋值后才返回。
   const result = {} as Record<ServiceModule, ServiceStatus>
   const check = (
@@ -110,11 +113,11 @@ export function getServiceStatuses(input: {
     'mail',
     config.mail.provider === 'resend'
       ? [
-          ['RESEND_API_KEY', !!env.RESEND_API_KEY, 'env'],
-          ['MAIL_FROM', !!env.MAIL_FROM, 'env'],
+          ['RESEND_API_KEY', !!env.RESEND_API_KEY, '数据库配置'],
+          ['MAIL_FROM', !!env.MAIL_FROM, '数据库配置'],
         ]
       : [
-          ['MAIL_FROM / CLOUDFLARE_EMAIL_SENDER', !!getMailFrom(config, env), 'env'],
+          ['MAIL_FROM / CLOUDFLARE_EMAIL_SENDER', !!getMailFrom(config, env), '数据库配置'],
           ['EMAIL', bindings?.email !== false, 'Cloudflare binding'],
         ],
     mailManual,
@@ -133,12 +136,12 @@ export function getServiceStatuses(input: {
     'newsletter',
     config.newsletter.provider === 'resend'
       ? [
-          ['RESEND_API_KEY', !!env.RESEND_API_KEY, 'env'],
-          ['RESEND_AUDIENCE_ID', !!env.RESEND_AUDIENCE_ID, 'env'],
+          ['RESEND_API_KEY', !!env.RESEND_API_KEY, '数据库配置'],
+          ['RESEND_AUDIENCE_ID', !!env.RESEND_AUDIENCE_ID, '数据库配置'],
         ]
       : [
-          ['BEEHIIV_API_KEY', !!env.BEEHIIV_API_KEY, 'env'],
-          ['BEEHIIV_PUBLICATION_ID', !!env.BEEHIIV_PUBLICATION_ID, 'env'],
+          ['BEEHIIV_API_KEY', !!env.BEEHIIV_API_KEY, '数据库配置'],
+          ['BEEHIIV_PUBLICATION_ID', !!env.BEEHIIV_PUBLICATION_ID, '数据库配置'],
         ],
   )
 
@@ -146,18 +149,18 @@ export function getServiceStatuses(input: {
   const paymentEnvChecks: Array<[string, boolean, ConfigIssue['location'], string?]> =
     config.payment.provider === 'creem'
       ? [
-          ['CREEM_API_KEY', !!env.CREEM_API_KEY, 'env'],
-          ['CREEM_WEBHOOK_SECRET', !!env.CREEM_WEBHOOK_SECRET, 'env'],
+          ['CREEM_API_KEY', !!env.CREEM_API_KEY, '数据库配置'],
+          ['CREEM_WEBHOOK_SECRET', !!env.CREEM_WEBHOOK_SECRET, '数据库配置'],
           [
             'CREEM_PRODUCTS',
             !!env.CREEM_PRODUCTS,
-            'env',
+            '数据库配置',
             'Creem 的商品 ID 映射（reference=prod_xxx）',
           ],
         ]
       : [
-          ['STRIPE_SECRET_KEY', !!env.STRIPE_SECRET_KEY, 'env'],
-          ['STRIPE_WEBHOOK_SECRET', !!env.STRIPE_WEBHOOK_SECRET, 'env'],
+          ['STRIPE_SECRET_KEY', !!env.STRIPE_SECRET_KEY, '数据库配置'],
+          ['STRIPE_WEBHOOK_SECRET', !!env.STRIPE_WEBHOOK_SECRET, '数据库配置'],
         ]
 
   check(
@@ -241,30 +244,33 @@ export function getServiceStatuses(input: {
   // 只校验当前选中 provider 对应的 webhook：配了 Discord 却选 feishu 仍是 incomplete。
   const notificationWebhookKey =
     config.notification.provider === 'discord' ? 'DISCORD_WEBHOOK_URL' : 'FEISHU_WEBHOOK_URL'
-  check('notification', [[notificationWebhookKey, !!env[notificationWebhookKey], 'env']])
+  check('notification', [[notificationWebhookKey, !!env[notificationWebhookKey], '数据库配置']])
 
+  // 分析渠道的公开标识与开关都在配置表里：缺 ID 的渠道不会注入脚本。
+  const analyticsConfig = config.analytics.config
   const analytics: Array<[string, boolean, ConfigIssue['location']]> = [
-    ['analytics.providers', config.analytics.providers.length > 0, 'src/config/website.ts'],
+    ['analytics.providers', config.analytics.providers.length > 0, '数据库配置'],
   ]
   for (const provider of config.analytics.providers) {
-    if (provider === 'ga') analytics.push(['VITE_GA_ID', !!pub.VITE_GA_ID, 'env'])
-    if (provider === 'plausible')
-      analytics.push(['VITE_PLAUSIBLE_DOMAIN', !!pub.VITE_PLAUSIBLE_DOMAIN, 'env'])
-    if (provider === 'umami')
+    if (provider === 'ga') {
+      analytics.push(['analytics.gaId', !!analyticsConfig.gaId, '数据库配置'])
+    }
+    if (provider === 'plausible') {
+      analytics.push(['analytics.plausibleDomain', !!analyticsConfig.plausibleDomain, '数据库配置'])
+    }
+    if (provider === 'umami') {
       analytics.push(
-        [
-          'VITE_UMAMI_WEBSITE_ID / VITE_UMAMI_ID',
-          !!(pub.VITE_UMAMI_WEBSITE_ID ?? pub.VITE_UMAMI_ID),
-          'env',
-        ],
-        ['VITE_UMAMI_SCRIPT_URL', !!pub.VITE_UMAMI_SCRIPT_URL, 'env'],
+        ['analytics.umamiWebsiteId', !!analyticsConfig.umamiWebsiteId, '数据库配置'],
+        ['analytics.umamiScriptUrl', !!analyticsConfig.umamiScriptUrl, '数据库配置'],
       )
-    if (provider === 'clarity')
+    }
+    if (provider === 'clarity') {
       analytics.push([
-        'VITE_CLARITY_PROJECT_ID / VITE_CLARITY_ID',
-        !!(pub.VITE_CLARITY_PROJECT_ID ?? pub.VITE_CLARITY_ID),
-        'env',
+        'analytics.clarityProjectId',
+        !!analyticsConfig.clarityProjectId,
+        '数据库配置',
       ])
+    }
   }
   check('analytics', analytics)
 

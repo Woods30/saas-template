@@ -39,13 +39,22 @@
   配置，不依赖模块单例。
 - **生效配置**：当前真正在用的站点配置 = 出厂配置（`baseConfig`）+ 数据库里的分组。
   全站读 `websiteConfig` 拿到的就是它（Proxy 转发），不需要在调用点区分来源。
-- **配置分组**：站点配置在数据库里的六个分区——`brand`、`seo`、`social`、
-  `payment`、`mail`、`modules`。每组独立校验，坏一组只丢那一组。
+- **配置注册表**：`src/core/config/registry.ts`，配置项的唯一事实来源。每个字段声明
+  键（点号格式，如 `brand.name`）、类型、默认值与可选的 `envKey`；后台表单、种子、
+  校验与 `settings` 表都从它派生。新增配置项只改这里与文案。
+- **配置项 / 配置组 / 配置 tab**：配置项是注册表里的一个字段；一组字段构成后台的一张
+  卡片（可带「测试连接」）；若干组构成一个 tab（general / modules / auth / payment /
+  mail / analytics / notification）。
+- **配置密钥加密**：`secret` 类型的字段以 AES-GCM 加密入库（`enc:v1:` 前缀），
+  密钥由 `CONFIG_ENCRYPTION_KEY` 派生；后台只回显末四位，留空表示不修改。
+  缺口令时拒绝保存含密钥的组，公开参数仍可写。
 - **DATABASE_PROVIDER**：数据库形态（`sqlite` / `d1` / `postgres`），同时决定运行时连接
   与构建期生成哪份 schema。见 ADR-0009。
 - **方言**：schema 与迁移 SQL 的形态（`sqlite` / `postgresql`）。D1 属于 sqlite 方言。
-- **publicEnv / serverEnv**：`src/core/env/public.ts`、`src/core/env/server.ts` 导出的两层已校验环境
-  变量对象，是所有 env 读取的唯一出口。
+- **ServerEnv / ManagedEnv / RuntimeEnv**：`src/core/env/server.ts` 的三层形状。`ServerEnv`
+  是启动必需项（zod 校验，只有 9 个键）；`ManagedEnv` 是由数据库配置派生的服务凭据形状
+  （纯 interface，运行期没有来源）；`RuntimeEnv = ServerEnv & ManagedEnv`，是支付 / 邮件 /
+  通知等消费方拿到的形状。`publicEnv` 只剩 `VITE_BASE_URL`，供客户端拼绝对地址。
 - **locale**：受支持语言，当前为 `zh`、`en`，默认 `zh`；`zh` 为消息源语言。
 - **message**：`messages/{zh,en}.json` 中的文案键值，经 Paraglide 编译为类型化访问器 `m.*()`。
 - **seo()**：`src/lib/seo.ts` 的路由 `head()` helper，生成 canonical 与 OG/Twitter meta，
@@ -94,25 +103,27 @@
 - **官网工程**：另一个仓 `Woods30/jerbix`，定位为模板的官网 + 支付 + 商业条款文档。
   保留完整代码副本，通过 `git merge template/main` 跟进本仓。
 - **实例项目**：使用者从模板工程克隆后改造成的自己的项目。
-- **出厂值 / 生效配置**：出厂值是 `src/config/website.ts` 里的代码默认值；生效配置是出厂值加上
-  数据库 `settings` 表里的分组。后台改的是生效配置。
+- **出厂值 / 生效配置**：出厂值是注册表声明的默认值（加上 `src/config/website.ts` 里不在
+  注册表的结构值）；生效配置是数据库 `settings` 表逐字段覆盖后的结果。后台改的是生效配置，
+  保存后立即生效。
 - **两个品牌源**：`websiteConfig.metadata.name`（footer / OG / JSON-LD，可后台改）与
   `messages.site_name`（营销文案里的品牌字样，编译期）。二者不同步时页面标题与文案里的品牌名
   会不一致。
 
 ## 关键不变量
 
-- **env 两层模型**：业务代码**不得**直接读 `process.env` / `import.meta.env`，一律经
-  `src/core/env/public.ts`、`src/core/env/server.ts`。
+- **env 边界**：业务代码**不得**直接读 `process.env` / `import.meta.env`，一律经
+  `src/core/env/public.ts`、`src/core/env/server.ts`。env 只用于启动必需项；支付 / 邮件 /
+  通知 / 分析的凭据只在 `pnpm db:seed` 时作为初值写进数据库，运行期只读数据库。
 - **`VITE_` 前缀 = 公开**：`VITE_` 变量在构建时进入客户端 bundle，任何人可见，**不得**存放
-  secret。
-- **服务端 secret**：仅从 Workers binding 或服务端读取，**绝不能**设成 `VITE_` 前缀
-  （例如 `BETTER_AUTH_SECRET`、`STRIPE_SECRET_KEY`）。
+  secret。`VITE_BASE_URL` 是唯一的公开启动变量。
+- **服务端 secret**：启动 secret（`BETTER_AUTH_SECRET`、`CONFIG_ENCRYPTION_KEY`）来自
+  Workers binding；业务凭据来自加密后的数据库配置，二者都不进客户端 bundle。
 - **locale 协商**：按 **URL 显式前缀 → cookie → `Accept-Language` → 默认语言**的顺序解析；
   SSR 与 hydration 共用 `src/lib/locale.ts` 的同一实现，保证两侧一致。
-- **单一配置入口**：面向用户的配置集中在 `src/config/website.ts`；`websiteConfig` 在模块
-  加载期求值，只放语言无关值。需随请求语言变化的文案必须在工厂调用、组件 render 或路由
-  `head()` 内调用 `m.*()` 求值。
+- **单一配置入口**：配置字段只在 `src/core/config/registry.ts` 声明；`websiteConfig` 由
+  数据库值经 `applySettingsToConfig` 求出，全站经 Proxy 读取，只放语言无关值。需随请求
+  语言变化的文案必须在工厂调用、组件 render 或路由 `head()` 内调用 `m.*()` 求值。
 - **消息键配对**：新增消息键必须在所有 locale 文件中同时存在，由 `scripts/check-locale.ts`
   双向校验。
 - **生成物禁改**：`src/routeTree.gen.ts`、`src/locale/paraglide/**`、

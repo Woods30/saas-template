@@ -6,8 +6,8 @@ import { seedVerifiedUser } from '../scripts/e2e-seed-subscription'
  * 核销型支付（collection）的端到端验收：本地 D1 + 源码兜底账户（env 注入），
  * 不接真实支付宝，也不依赖 R2（无 BUCKET 时凭证上传入口隐藏，说明仍可填）。
  *
- * 环境由 `e2e/global-setup.ts` 接线：`VITE_CHECKOUT_MODE=collection` +
- * `VITE_MODULES`（白名单含 collection）+ `VITE_COLLECTION_ACCOUNTS`。
+ * 环境由 `e2e/global-setup.ts` 接线：把 `payment.checkoutMode=collection`、
+ * `modules.collection=true` 与收款账户写进本地 D1 的 `settings` 表。
  */
 
 const PASSWORD = '{{SECRET_1ntmkuxv}}'

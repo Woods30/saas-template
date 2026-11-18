@@ -60,12 +60,10 @@ export async function main() {
     ],
   })
   if (paymentProvider === 'stripe') {
-    optional.VITE_PAYMENT_PROVIDER = 'stripe'
     optional.STRIPE_SECRET_KEY = await password({ message: 'STRIPE_SECRET_KEY' })
     optional.STRIPE_WEBHOOK_SECRET = await password({ message: 'STRIPE_WEBHOOK_SECRET' })
   }
   if (paymentProvider === 'creem') {
-    optional.VITE_PAYMENT_PROVIDER = 'creem'
     optional.CREEM_API_KEY = await password({ message: 'CREEM_API_KEY' })
     optional.CREEM_WEBHOOK_SECRET = await password({ message: 'CREEM_WEBHOOK_SECRET' })
     optional.CREEM_PRODUCTS = await input({

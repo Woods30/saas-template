@@ -73,9 +73,10 @@ Seven steps take you from a fresh clone to a live site. Every step comes with a 
    pnpm db:seed -- --brand "Acme" --email <your-support-email>
    ```
 
-   The seed is the six default configuration groups (brand, SEO, social, payment, mail, module
-   switches). `--brand` and `--email` replace the factory values with yours; leave them out to keep
-   the template defaults — you can also change them later in the admin settings page.
+   The seed writes per-field defaults from the settings registry (brand, SEO, social, payment,
+   mail, module switches, plus the credentials in `.env`). `--brand` and `--email` replace the
+   factory values with yours; leave them out to keep the template defaults — you can also change
+   them later in the admin settings page.
 
    The seed **only fills in what is missing** and never overwrites what you changed in the admin
    panel; add `--force` to overwrite.

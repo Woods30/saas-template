@@ -1,4 +1,4 @@
-import type { ServerEnv } from '@/core/env/server'
+import type { RuntimeEnv } from '@/core/env/server'
 import { getServerContext } from '@/lib/server-context'
 import { CreemPaymentProvider, parseCreemProducts } from './provider/creem'
 import { StripePaymentProvider } from './provider/stripe'
@@ -7,7 +7,7 @@ import type { PaymentProvider } from './types'
 export type PaymentProviderName = 'stripe' | 'creem'
 type PaymentProviderFactory = () => PaymentProvider
 type PaymentEnv = Pick<
-  ServerEnv,
+  RuntimeEnv,
   | 'STRIPE_SECRET_KEY'
   | 'STRIPE_WEBHOOK_SECRET'
   | 'CREEM_API_KEY'

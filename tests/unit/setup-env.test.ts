@@ -64,11 +64,11 @@ describe('buildEnvUpdates', () => {
       current: CURRENT,
       dbId: 'new-db-id',
       authSecret: 'generated-secret',
-      optional: { RESEND_API_KEY: 're_x', VITE_PAYMENT_PROVIDER: 'stripe' },
+      optional: { RESEND_API_KEY: 're_x', RESEND_AUDIENCE_ID: 'aud_x' },
     })
 
     expect(updates.RESEND_API_KEY).toBe('re_x')
-    expect(updates.VITE_PAYMENT_PROVIDER).toBe('stripe')
+    expect(updates.RESEND_AUDIENCE_ID).toBe('aud_x')
     expect(updates.DISCORD_WEBHOOK_URL).toBeUndefined()
   })
 

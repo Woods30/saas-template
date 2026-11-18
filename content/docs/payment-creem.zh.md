@@ -12,21 +12,19 @@ Creem 是 Merchant of Record：以自己名义收款、处理税费与退款，�
 ## 步骤
 
 1. 在 Creem 后台建商品：订阅用 recurring 商品（按月 / 按年各建一个），买断用 one-time 商品。
-2. 填环境变量：
+2. 在后台「系统设置 → 支付」里选渠道 `creem`，并在 Creem 分组填 API key、Webhook secret 与商品映射：
 
-   ```dotenv
-   VITE_PAYMENT_PROVIDER=creem
-   CREEM_API_KEY=creem_xxx
-   CREEM_WEBHOOK_SECRET=whsec_xxx
-   CREEM_PRODUCTS=pro_monthly=prod_xxx,pro_yearly=prod_yyy,lifetime=prod_zzz
+   ```text
+   pro_monthly=prod_xxx,pro_yearly=prod_yyy,lifetime=prod_zzz
    ```
 
-   `CREEM_PRODUCTS` 左边是 `src/config/products.ts` 里 `prices` 的右侧引用，右边是 Creem 的商品 ID（`prod_*`），逗号分隔。同一个引用只能映射一个商品 ID。
+   左边是 `src/config/products.ts` 里 `prices` 的右侧引用，右边是 Creem 的商品 ID（`prod_*`），
+   逗号分隔。同一个引用只能映射一个商品 ID。密钥加密入库，保存即生效。
 
-3. 部署：`pnpm run deploy`。
-4. 在 Creem 后台添加 webhook 端点 `<站点域名>/api/webhooks/creem`，签名密钥即 `CREEM_WEBHOOK_SECRET`，并订阅下面这些事件。
+3. 在 Creem 后台添加 webhook 端点 `<站点域名>/api/webhooks/creem`，签名密钥填回后台的
+   Webhook secret 字段，并订阅下面这些事件。
 
-端点只在当前 provider 是 Creem 时才响应：站点选的是别的渠道时该地址返回 404，Creem 会停止重试。
+端点只在当前渠道是 Creem 时才响应：站点选的是别的渠道时该地址返回 404，Creem 会停止重试。
 
 ## 事件
 
@@ -57,5 +55,5 @@ Creem 是 Merchant of Record：以自己名义收款、处理税费与退款，�
 
 ## 验证
 
-- `pnpm run check:env` 通过，说明 provider、凭据与商品映射都齐了。
+- 后台保存后，服务状态里 `payment` 一项显示 `configured`。
 - Creem 后台的 webhook 记录里能看到本站发起的投递（返回 `200` 即签名校验通过）。

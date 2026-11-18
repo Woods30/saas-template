@@ -2,13 +2,13 @@
  * 站点配置服务（服务端专用）。
  *
  * 数据流：
- * - 数据库 `settings` 表存六个分组的 JSON；
- * - 读出来与代码默认值合并，装进 `setResolvedConfig`——全站读到的就是它；
+ * - `settings` 表一个字段一行（值是 JSON；密钥是 `enc:v1:` 密文）；
+ * - 读出来逐字段校验、补齐默认值，装进 `setResolvedConfig`——全站读到的就是它；
+ * - 同一份值同时翻译成 `ServerEnv` 形状，供支付 / 邮件 / 通知等消费方使用；
  * - 进程内缓存 30 秒，后台保存后立即失效（不等 TTL）。
  *
  * 「装进全局」而不是每次调用现查：门禁、SEO、页脚这些地方是**同步**读配置的，
- * 让它们 await 数据库会把整条渲染链变成异步。缓存 + 30 秒 TTL 换来的代价是
- * 「改完最多 30 秒全站生效」，后台保存这条路径则是即时的。
+ * 让它们 await 数据库会把整条渲染链变成异步。
  */
 import {
   baseConfig,
@@ -17,26 +17,38 @@ import {
   type WebsiteConfig,
 } from '@/config/website'
 import { type DB, schema } from '@/core/db'
+import { parseServerEnv, type RuntimeEnv, type ServerEnv } from '@/core/env/server'
+import { decryptSecret, encryptSecret, isEncrypted, MissingEncryptionKeyError } from './crypto'
+import { settingsToServerEnv } from './derive'
+import { defaultSettingsValues, SETTING_FIELDS, settingField } from './registry'
 import {
   applySettingsToConfig,
-  defaultSettings,
-  mergeSettings,
-  type SettingsGroups,
-  type SettingsKey,
-  settingsSchemas,
+  groupHasSecrets,
+  resolveSettingsValues,
+  type SettingsValues,
+  validateGroupValues,
 } from './settings'
 
 /** 进程内缓存有效期。 */
 export const SETTINGS_CACHE_TTL_MS = 30_000
 
 interface SettingsCache {
-  settings: SettingsGroups
+  values: SettingsValues
+  serverEnv: RuntimeEnv
   loadedAt: number
   /** 每次写入 +1，供下游缓存判断是否过期。 */
   version: number
 }
 
 let cache: SettingsCache | undefined
+
+export interface SettingsLoadOptions {
+  now?: number
+  /** 部署环境解析出的 `ServerEnv`，提供未纳入配置表的键。 */
+  baseEnv?: ServerEnv
+  /** 密钥解密口令；缺省时密文字段回落默认值。 */
+  encryptionKey?: string
+}
 
 /** 缓存是否仍然新鲜。 */
 export function settingsCacheFresh(now: number = Date.now()): boolean {
@@ -52,9 +64,9 @@ export function resetSettingsCache(): void {
   cache = undefined
 }
 
-/** 当前生效的配置分组。 */
-export function getSettingsSnapshot(): SettingsGroups {
-  return cache?.settings ?? defaultSettings()
+/** 当前生效的配置值（扁平，键见 `registry.ts`）。 */
+export function getSettingsSnapshot(): SettingsValues {
+  return cache?.values ?? defaultSettingsValues()
 }
 
 /** 配置版本号。 */
@@ -62,7 +74,16 @@ export function getSettingsVersion(): number {
   return cache?.version ?? 0
 }
 
-/** JSON 解析失败返回 undefined：坏数据只丢该分组，不让整站配置崩掉。 */
+/**
+ * 当前生效的 `ServerEnv` 形状配置。
+ *
+ * 缓存尚未装上时用出厂值推导——调用方总是拿到完整形状，不用判空。
+ */
+export function getRuntimeServerEnv(base: ServerEnv = parseServerEnv({})): RuntimeEnv {
+  return cache?.serverEnv ?? settingsToServerEnv(defaultSettingsValues(), base)
+}
+
+/** JSON 解析失败返回 undefined：坏值只丢该字段，不让整站配置崩掉。 */
 function parseJson(raw: string): unknown | undefined {
   try {
     return JSON.parse(raw)
@@ -71,39 +92,37 @@ function parseJson(raw: string): unknown | undefined {
   }
 }
 
-/** 把合并后的分组摊回「存储形状」，便于再次合并。 */
-function toStored(settings: SettingsGroups): Record<SettingsKey, unknown> {
-  return {
-    brand: settings.brand,
-    seo: settings.seo,
-    social: settings.social,
-    payment: settings.payment,
-    mail: settings.mail,
-    modules: settings.modules,
+/**
+ * 读数据库里的全部配置值。
+ *
+ * 密钥字段在读取时就解密：下游（provider 注册、后台回显）拿到的是明文。
+ * 解密失败的字段按「未设置」处理并回落默认值——口令换了或丢了，凭据不可用是
+ * 预期行为，不该让整个请求失败。
+ */
+export async function readSettings(db: DB, encryptionKey?: string): Promise<SettingsValues> {
+  const rows = await db.select().from(schema.settings)
+  const stored: Record<string, unknown> = {}
+  for (const row of rows) {
+    const field = settingField(row.key)
+    if (!field) continue
+    const parsed = parseJson(row.value)
+    if (parsed === undefined) continue
+    if (field.secret && typeof parsed === 'string' && isEncrypted(parsed)) {
+      try {
+        stored[row.key] = await decryptSecret(parsed, encryptionKey)
+      } catch {
+        console.warn(`[config] 配置 ${row.key} 解密失败，已回落默认值`)
+      }
+      continue
+    }
+    stored[row.key] = parsed
   }
+  return resolveSettingsValues(stored)
 }
 
 /** 把当前快照装进全局配置。 */
-function install(settings: SettingsGroups): void {
-  setResolvedConfig(applySettingsToConfig(baseConfig, settings))
-}
-
-/**
- * 读数据库里的全部分组。
- *
- * 表不存在（老库没跑迁移）时抛错由调用方兜底——站点仍应能起站，只是后台
- * 改的配置不生效。
- */
-export async function readSettings(db: DB): Promise<SettingsGroups> {
-  const rows = await db.select().from(schema.settings)
-  const stored: Partial<Record<SettingsKey, unknown>> = {}
-  for (const row of rows) {
-    const parsed = parseJson(row.value)
-    if (parsed !== undefined) {
-      stored[row.key as SettingsKey] = parsed
-    }
-  }
-  return mergeSettings(defaultSettings(), stored)
+function install(values: SettingsValues): void {
+  setResolvedConfig(applySettingsToConfig(baseConfig, values))
 }
 
 /**
@@ -111,47 +130,91 @@ export async function readSettings(db: DB): Promise<SettingsGroups> {
  *
  * 读库失败时不抛：配置读不到不该让整个请求失败，退回出厂配置继续服务。
  */
-export async function loadSettings(db: DB, now: number = Date.now()): Promise<SettingsGroups> {
+export async function loadSettings(
+  db: DB,
+  options: SettingsLoadOptions = {},
+): Promise<SettingsValues> {
+  const now = options.now ?? Date.now()
   if (settingsCacheFresh(now)) {
     return getSettingsSnapshot()
   }
-  let settings: SettingsGroups
+  const baseEnv = options.baseEnv ?? parseServerEnv({})
+  let values: SettingsValues
   try {
-    settings = await readSettings(db)
+    values = await readSettings(db, options.encryptionKey)
   } catch (error) {
     console.warn('[config] 读取配置失败，使用出厂配置：', error)
-    settings = defaultSettings()
+    values = defaultSettingsValues()
   }
-  cache = { settings, loadedAt: now, version: cache?.version ?? 0 }
-  install(settings)
-  return settings
+  cache = {
+    values,
+    serverEnv: settingsToServerEnv(values, baseEnv),
+    loadedAt: now,
+    version: cache?.version ?? 0,
+  }
+  install(values)
+  return values
 }
 
 /**
  * 写一组配置并立即生效。
  *
- * 值先过 zod：后台传进来的东西必须合法，非法直接抛错，不落库。
+ * 保存是**按组**的：一次提交一张卡片。值先过注册表校验，非法直接抛错、不落库。
+ * 含密钥的组要求提供 `CONFIG_ENCRYPTION_KEY` 与**明文**值；留空的密钥表示
+ * 「保持原值」，不会被清空——后台回显是掩码，用户没改动时不该把密文覆盖成空。
  */
-export async function saveSettings(
+export async function saveSettingsGroup(
   db: DB,
-  key: SettingsKey,
-  value: unknown,
-): Promise<SettingsGroups> {
-  const parsed = settingsSchemas[key].parse(value)
-  const json = JSON.stringify(parsed)
+  groupId: string,
+  input: Record<string, unknown>,
+  options: SettingsLoadOptions = {},
+): Promise<SettingsValues> {
+  const validated = validateGroupValues(groupId, input)
+
+  if (groupHasSecrets(groupId)) {
+    const hasNewSecret = Object.entries(validated).some(
+      ([key, value]) => settingField(key)?.secret === true && value !== '',
+    )
+    if (hasNewSecret && !options.encryptionKey) {
+      throw new MissingEncryptionKeyError()
+    }
+  }
+
+  const rows: Array<{ key: string; value: string; updatedAt: Date }> = []
   const updatedAt = new Date()
-  await db
-    .insert(schema.settings)
-    .values({ key, value: json, updatedAt })
-    .onConflictDoUpdate({
-      target: schema.settings.key,
-      set: { value: json, updatedAt },
-    })
-  const merged = mergeSettings(defaultSettings(), {
-    ...toStored(getSettingsSnapshot()),
-    [key]: parsed,
-  })
-  cache = { settings: merged, loadedAt: Date.now(), version: getSettingsVersion() + 1 }
+  for (const [key, value] of Object.entries(validated)) {
+    const field = settingField(key)
+    if (!field) continue
+    let stored = value
+    if (field.secret) {
+      if (value === '') continue // 空值表示保持原值
+      stored = await encryptSecret(String(value), options.encryptionKey)
+    }
+    rows.push({ key, value: JSON.stringify(stored), updatedAt })
+  }
+
+  for (const row of rows) {
+    await db
+      .insert(schema.settings)
+      .values(row)
+      .onConflictDoUpdate({ target: schema.settings.key, set: { value: row.value, updatedAt } })
+  }
+
+  // 用「当前快照 + 本次提交」重算：不走数据库，避免刚写入的密文又被读一遍。
+  const merged = { ...getSettingsSnapshot() }
+  for (const [key, value] of Object.entries(validated)) {
+    const field = settingField(key)
+    if (!field) continue
+    if (field.secret && value === '') continue
+    merged[key] = value
+  }
+  const baseEnv = options.baseEnv ?? parseServerEnv({})
+  cache = {
+    values: merged,
+    serverEnv: settingsToServerEnv(merged, baseEnv),
+    loadedAt: Date.now(),
+    version: getSettingsVersion() + 1,
+  }
   install(merged)
   return merged
 }
@@ -160,3 +223,6 @@ export async function saveSettings(
 export function currentConfig(): WebsiteConfig {
   return getResolvedConfig()
 }
+
+/** 字段清单：后台表单按它渲染，保存时也按它校验。 */
+export const SETTINGS_FIELDS = SETTING_FIELDS

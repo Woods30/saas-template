@@ -68,27 +68,20 @@ const EXTRA_ENV_KEYS = [
 const scrubKeys = [...dotenvKeys, ...EXTRA_ENV_KEYS]
 
 /**
- * 启用中的服务模块（`VITE_MODULES` 白名单）。
- *
- * 模块开关随部署场景变化（各仓出厂值不同，可全关），校验脚本
- * 读的是仓库的 `website.ts`，因此这里显式指定，让用例只测校验逻辑本身。
+ * 生产校验只看启动必需项：服务凭据在数据库里，静态校验读不到（ADR-0010）。
+ * 这里刻意塞入一批托管键，证明它们既不被要求、也不会让校验失败。
  */
-const ENABLED_MODULES = 'mail,payment,analytics'
-
-/** 合成服务配置；包含已启用支付与可选的通知、分析字段。 */
-const ENABLED_SERVICES_ENV: Record<string, string> = {
+const MANAGED_ENV_SAMPLE: Record<string, string> = {
   RESEND_API_KEY: 're_synthetic',
   MAIL_FROM: 'test@example.com',
   STRIPE_SECRET_KEY: 'sk_test_synthetic',
-  STRIPE_WEBHOOK_SECRET: 'whsec_synthetic',
   DISCORD_WEBHOOK_URL: 'https://discord.com/api/webhooks/1/synthetic',
   VITE_GA_ID: 'G-SYNTHETIC',
-  VITE_MODULES: ENABLED_MODULES,
 }
 
-/** 把已启用服务的配置拼成 `.env` 文本。 */
-function enabledServicesEnvText(): string {
-  return `${Object.entries(ENABLED_SERVICES_ENV)
+/** 把托管键拼成 `.env` 文本。 */
+function managedEnvText(): string {
+  return `${Object.entries(MANAGED_ENV_SAMPLE)
     .map(([key, value]) => `${key}=${value}`)
     .join('\n')}\n`
 }
@@ -192,20 +185,21 @@ describe('check-env.ts（开发校验）', () => {
     expect(result.stderr).not.toContain('not-a-url')
   })
 
-  it('非法 enum（VITE_PAYMENT_PROVIDER）失败', () => {
+  it('托管键（支付 / 邮件凭据）不再参与校验：写错也不影响启动检查', () => {
+    // 这些键已移入数据库配置，留在 .env 里只是 db:seed 的初值，形状不受 schema 约束。
     const dir = makeWorkspace()
-    writeDotEnv(dir, 'VITE_PAYMENT_PROVIDER=paypal\n')
+    writeDotEnv(
+      dir,
+      ['VITE_BASE_URL=http://localhost:3000', 'STRIPE_SECRET_KEY=', 'RESEND_API_KEY='].join('\n'),
+    )
     const result = runScript(dir, checkEnv)
-    expect(result.code).toBe(1)
-    expect(result.stderr).toContain('VITE_PAYMENT_PROVIDER')
+    expect(result.stderr).toBe('')
+    expect(result.code).toBe(0)
   })
 
   it('空串视为未设置：全空 optional 字段仍通过开发检查', () => {
     const dir = makeWorkspace()
-    writeDotEnv(
-      dir,
-      ['VITE_BASE_URL=', 'VITE_PAYMENT_PROVIDER=', 'VITE_GA_ID=', 'BETTER_AUTH_SECRET='].join('\n'),
-    )
+    writeDotEnv(dir, ['VITE_BASE_URL=', 'CONFIG_ENCRYPTION_KEY=', 'BETTER_AUTH_SECRET='].join('\n'))
     const result = runScript(dir, checkEnv)
     expect(result.stderr).toBe('')
     expect(result.code).toBe(0)
@@ -233,7 +227,7 @@ describe('check-env-prod.ts（生产校验）', () => {
     const result = runScript(makeWorkspace(), checkEnvProd, {
       BETTER_AUTH_SECRET: 'a'.repeat(32),
       VITE_BASE_URL: VALID_URL,
-      ...ENABLED_SERVICES_ENV,
+      ...MANAGED_ENV_SAMPLE,
     })
     expect(result.stderr).toBe('')
     expect(result.code).toBe(0)
@@ -254,7 +248,7 @@ describe('check-env-prod.ts（生产校验）', () => {
     writeDotEnv(dir, 'VITE_BASE_URL=http://localhost:3000\n')
     writeDotEnvProduction(
       dir,
-      `BETTER_AUTH_SECRET=${VALID_SECRET}\nVITE_BASE_URL=${VALID_URL}\n${enabledServicesEnvText()}`,
+      `BETTER_AUTH_SECRET=${VALID_SECRET}\nVITE_BASE_URL=${VALID_URL}\n${managedEnvText()}`,
     )
     const result = runScript(dir, checkEnvProd)
     expect(result.stderr).toBe('')
@@ -276,7 +270,7 @@ describe('check-env-prod.ts（生产校验）', () => {
     const dir = makeWorkspace()
     writeDotEnv(
       dir,
-      `BETTER_AUTH_SECRET=${VALID_SECRET}\nVITE_BASE_URL=${VALID_URL}\n${enabledServicesEnvText()}`,
+      `BETTER_AUTH_SECRET=${VALID_SECRET}\nVITE_BASE_URL=${VALID_URL}\n${managedEnvText()}`,
     )
     const result = runScript(dir, checkEnvProd)
     expect(result.stderr).toBe('')
@@ -304,7 +298,7 @@ describe('check-env-prod.ts（生产校验）', () => {
     const dir = makeWorkspace()
     writeDotEnv(
       dir,
-      `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET="${VALID_SECRET}"\n${enabledServicesEnvText()}`,
+      `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET="${VALID_SECRET}"\n${managedEnvText()}`,
     )
     const result = runScript(dir, checkEnvProd)
     expect(result.stderr).toBe('')
@@ -312,15 +306,15 @@ describe('check-env-prod.ts（生产校验）', () => {
     expect(result.stdout).toContain('生产环境变量校验通过')
   })
 
-  it('非法 DISCORD_WEBHOOK_URL 失败', () => {
+  it('托管键形状非法不再阻断生产校验（改由后台校验）', () => {
     const dir = makeWorkspace()
     writeDotEnv(
       dir,
       `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET=${VALID_SECRET}\nDISCORD_WEBHOOK_URL=not-a-url\n`,
     )
     const result = runScript(dir, checkEnvProd)
-    expect(result.code).toBe(1)
-    expect(result.stderr).toContain('DISCORD_WEBHOOK_URL')
+    expect(result.stderr).toBe('')
+    expect(result.code).toBe(0)
   })
 
   it('进程 env 提供合法 secret 与 URL 时通过', () => {
@@ -329,29 +323,34 @@ describe('check-env-prod.ts（生产校验）', () => {
     const result = runScript(dir, checkEnvProd, {
       BETTER_AUTH_SECRET: VALID_SECRET,
       VITE_BASE_URL: VALID_URL,
-      ...ENABLED_SERVICES_ENV,
+      ...MANAGED_ENV_SAMPLE,
     })
     expect(result.stderr).toBe('')
     expect(result.code).toBe(0)
   })
 
-  it('邮件、支付与分析缺少配置时失败，已关闭的通知不要求凭据', () => {
+  it('只给启动必需项即可通过：服务凭据在数据库里，不在校验范围', () => {
     const dir = makeWorkspace()
-    // 只提供生产必需的 URL 与 auth secret，未提供邮件、支付或分析凭据。
     writeDotEnv(
       dir,
-      `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET=${VALID_SECRET}\nVITE_MODULES=${ENABLED_MODULES}\n`,
+      `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET=${VALID_SECRET}\nCONFIG_ENCRYPTION_KEY=${'c'.repeat(20)}\n`,
+    )
+    const result = runScript(dir, checkEnvProd)
+    expect(result.stderr).toBe('')
+    expect(result.code).toBe(0)
+    expect(result.stderr).not.toContain(VALID_SECRET)
+  })
+
+  it('CONFIG_ENCRYPTION_KEY 过短时失败（无值回显）', () => {
+    const dir = makeWorkspace()
+    writeDotEnv(
+      dir,
+      `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET=${VALID_SECRET}\nCONFIG_ENCRYPTION_KEY=short\n`,
     )
     const result = runScript(dir, checkEnvProd)
     expect(result.code).toBe(1)
-    expect(result.stderr).toContain('STRIPE_SECRET_KEY')
-    expect(result.stderr).toContain('RESEND_API_KEY')
-    expect(result.stderr).toContain('MAIL_FROM')
-    // analytics 默认启用，缺少 GA ID 同样必须阻止部署。
-    expect(result.stderr).toContain('VITE_GA_ID')
-    expect(result.stderr).not.toContain('DISCORD_WEBHOOK_URL')
-    // 只报字段名，不回声值。
-    expect(result.stderr).not.toContain(VALID_SECRET)
+    expect(result.stderr).toContain('CONFIG_ENCRYPTION_KEY')
+    expect(result.stderr).not.toContain('short')
   })
 
   it('生产缺少公开 URL 不能借默认 localhost 通过', () => {
@@ -489,7 +488,7 @@ describe('check-env-prod.ts（生产校验）', () => {
     const dir = makeWorkspace()
     writeDotEnv(
       dir,
-      `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET=${VALID_SECRET}\n${enabledServicesEnvText()}`,
+      `VITE_BASE_URL=${VALID_URL}\nBETTER_AUTH_SECRET=${VALID_SECRET}\n${managedEnvText()}`,
     )
     const result = runScript(dir, checkEnvProd)
     expect(result.code).toBe(0)

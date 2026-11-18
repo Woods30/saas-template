@@ -61,14 +61,13 @@ vi.mock('@/core/auth/providers', () => ({
 import { notFound } from '@tanstack/react-router'
 import { createWebsiteConfig, type WebsiteConfig } from '@/config/website'
 import { type PublicEnv, parsePublicEnv } from '@/core/env/public'
-import type { ServerEnv } from '@/core/env/server'
-import { parseServerEnv } from '@/core/env/server'
+import { parseServerEnv, type RuntimeEnv } from '@/core/env/server'
 import { assertPageEnabled, assertStaticPageEnabled } from '@/lib/module-access'
 import { getModuleUnavailableResponse } from '@/lib/module-access.server'
 import { getSitemapPaths, renderSitemapXml } from '@/routes/sitemap[.]xml'
 
 const publicEnv: PublicEnv = parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' })
-const emptyEnv: ServerEnv = parseServerEnv({})
+const emptyEnv: RuntimeEnv = parseServerEnv({})
 
 /** 合法 supportEmail 字面量。 */
 const SUPPORT_EMAIL = ['support', 'jerbix.dev'].join('@')
@@ -100,13 +99,15 @@ function makeConfig(overrides: Partial<WebsiteConfig> = {}): WebsiteConfig {
   }
 }
 
-const creds: ServerEnv = parseServerEnv({
+// 服务凭据现在来自数据库配置，测试里按运行期形状直接给出。
+const creds: RuntimeEnv = {
+  ...parseServerEnv({}),
   RESEND_API_KEY: 're_test',
   MAIL_FROM: 'noreply@jerbix.dev',
   RESEND_AUDIENCE_ID: 'audience_1',
   STRIPE_SECRET_KEY: 'sk_test',
   STRIPE_WEBHOOK_SECRET: 'whsec_test',
-})
+}
 
 function expectNotFound(fn: () => unknown): void {
   try {
@@ -205,7 +206,6 @@ describe('getModuleUnavailableResponse', () => {
   it('模块关闭返回 404 MODULE_DISABLED', async () => {
     const res = getModuleUnavailableResponse('newsletter', {
       config: makeConfig(),
-      publicEnv,
       serverEnv: creds,
     })
     expect(res?.status).toBe(404)
@@ -215,7 +215,6 @@ describe('getModuleUnavailableResponse', () => {
   it('已启用但配置不完整返回 503 SERVICE_UNAVAILABLE', async () => {
     const res = getModuleUnavailableResponse('newsletter', {
       config: makeConfig({ newsletter: { enabled: true, provider: 'resend' } }),
-      publicEnv,
       serverEnv: emptyEnv,
     })
     expect(res?.status).toBe(503)
@@ -228,7 +227,6 @@ describe('getModuleUnavailableResponse', () => {
         contact: { enabled: true },
         mail: { enabled: true, provider: 'resend', supportEmail: SUPPORT_EMAIL },
       }),
-      publicEnv,
       serverEnv: emptyEnv,
     })
     expect(res?.status).toBe(503)
@@ -238,7 +236,6 @@ describe('getModuleUnavailableResponse', () => {
     expect(
       getModuleUnavailableResponse('newsletter', {
         config: makeConfig({ newsletter: { enabled: true, provider: 'resend' } }),
-        publicEnv,
         serverEnv: creds,
       }),
     ).toBeUndefined()
@@ -250,7 +247,6 @@ describe('getModuleUnavailableResponse', () => {
         config: makeConfig({
           mail: { enabled: true, provider: 'resend', supportEmail: SUPPORT_EMAIL },
         }),
-        publicEnv,
         serverEnv: creds,
       }),
     ).toBeUndefined()
@@ -263,7 +259,6 @@ describe('getModuleUnavailableResponse', () => {
       config: makeConfig({
         payment: { enabled: true, provider: 'stripe', checkoutMode: 'provider' },
       }),
-      publicEnv,
       serverEnv: parseServerEnv({}),
     })
     expect(res?.status).toBe(503)
@@ -275,7 +270,6 @@ describe('getModuleUnavailableResponse', () => {
         config: makeConfig({
           payment: { enabled: true, provider: 'stripe', checkoutMode: 'provider' },
         }),
-        publicEnv,
         serverEnv: creds,
       }),
     ).toBeUndefined()

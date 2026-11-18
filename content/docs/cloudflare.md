@@ -69,17 +69,16 @@ What to put in the `production` environment:
 | Variable | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
 | Variable | `VITE_BASE_URL` | Full production origin, no path |
 | Secret | `BETTER_AUTH_SECRET` | At least 32 characters; keep the current value on an existing site so sessions survive |
+| Secret | `CONFIG_ENCRYPTION_KEY` | Passphrase for encrypted settings (≥ 16 chars); without it the admin cannot save secrets |
 | Variable | `BETTER_AUTH_URL` | Optional, falls back to `VITE_BASE_URL` |
-| Variable | `MAIL_FROM` | Sender address, no display name or angle brackets |
-| Secret | `RESEND_API_KEY` | Required when sending mail via Resend |
-| Secret | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Required when collecting payments via Stripe |
-| Variable / Secret | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Required for Google sign-in |
-| Variable / Secret | `VITE_TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | Required when using Turnstile |
-| Secret | `DISCORD_WEBHOOK_URL` | Required when using Discord notifications |
 | Variable | `ADMIN_EMAILS` | Admin email list |
 | Variable | `DEPLOY_SKIP_CUSTOM_DOMAIN` | Set to `true` to publish to `workers.dev` only |
 
-The workflow uploads only the runtime fields on its allowlist (the Secret rows above). When you enable another service, add its fields to the workflow's `env` block and to the runtime upload allowlist, otherwise configuring them in GitHub has no effect.
+The workflow uploads only the runtime fields on its allowlist. **Business credentials (Resend /
+Stripe / Creem / GA / Discord, …) are not here**: after deployment, enter them in the admin
+Settings page (encrypted at rest) or write them to the remote database with `pnpm db:seed` and
+the right env. A fresh deploy only has defaults — configure payment and mail in the admin before
+the site is fully usable.
 
 ## Build-time variables vs runtime secrets
 
@@ -90,9 +89,12 @@ The workflow uploads only the runtime fields on its allowlist (the Secret rows a
 
 **Changing a build-time variable requires a rebuild and a redeploy** — it is already a literal inside the client JavaScript. `BETTER_AUTH_SECRET` appears in both places for different reasons: the copy in `.env.production` only exists to pass the production check, while the runtime reads the Worker secret. **Both must be the same value.**
 
+Business credentials are a third kind: written to the database after deployment, they take
+effect as soon as you save — no rebuild, no secret change.
+
 ## Verify
 
-`pnpm run check:env:prod` is the production environment check that `deploy` runs first, and `pnpm run check:client-bundle` scans the built client bundle for leaked server fields. Online, confirm that `/` and `/pricing` return 200; if the auth module is on, `/api/auth/get-session` must respond as well.
+`pnpm run check:env:prod` is the production environment check that `deploy` runs first, and `pnpm run check:client-bundle` scans the built client bundle for leaked server fields. Online, confirm that `/` and `/pricing` return 200, and that `/api/auth/get-session` responds (auth is enabled by default).
 
 ## Notes
 

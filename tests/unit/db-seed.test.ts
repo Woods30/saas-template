@@ -5,10 +5,11 @@ import {
   buildRbacSeedSql,
   buildSeedSql,
   parseSeedOverrides,
+  seedValues,
 } from '../../scripts/db-seed'
 import { findProduct } from '../../src/config/products'
 import { DEFAULT_PERMISSIONS, DEFAULT_ROLES } from '../../src/core/auth/rbac'
-import { defaultSettings } from '../../src/core/config/settings'
+import { defaultSettingsValues, SETTING_FIELDS } from '../../src/core/config/registry'
 import { DEFAULT_ENTITLEMENTS, DEFAULT_PLANS } from '../../src/modules/entitlements/catalog'
 import { resolveEntitlements } from '../../src/modules/entitlements/service'
 import { createTestDatabase, seedUser } from '../helpers/database'
@@ -43,68 +44,104 @@ describe('种子覆盖项解析', () => {
 
 describe('覆盖落到配置上', () => {
   it('改品牌名与支持邮箱，其余不动', () => {
-    const settings = defaultSettings()
-    const result = applySeedOverrides(settings, {
+    const values = defaultSettingsValues()
+    const result = applySeedOverrides(values, {
       brandName: 'Acme',
       brandTagline: '标语',
       supportEmail: 'hi@acme.dev',
     })
 
-    expect(result.brand.name).toBe('Acme')
-    expect(result.brand.tagline).toBe('标语')
-    expect(result.mail.supportEmail).toBe('hi@acme.dev')
+    expect(result['brand.name']).toBe('Acme')
+    expect(result['brand.tagline']).toBe('标语')
+    expect(result['mail.supportEmail']).toBe('hi@acme.dev')
     // 没被覆盖的字段保持出厂值
-    expect(result.seo).toEqual(settings.seo)
-    expect(result.modules).toEqual(settings.modules)
+    expect(result['seo.default.title']).toEqual(values['seo.default.title'])
+    expect(result['modules.blog']).toBe(values['modules.blog'])
   })
 
   it('空覆盖等于原样返回', () => {
-    const settings = defaultSettings()
-    expect(applySeedOverrides(settings, {})).toEqual(settings)
+    const values = defaultSettingsValues()
+    expect(applySeedOverrides(values, {})).toEqual(values)
+  })
+})
+
+describe('env 只作 seed 初值', () => {
+  it('从 env 抄入字符串、布尔与列表', () => {
+    const values = seedValues(
+      {
+        BRAND_UNUSED: 'x',
+        STRIPE_SECRET_KEY: 'sk_live_1',
+        CREEM_DEBUG: 'true',
+        ANALYTICS_UNUSED: 'y',
+        VITE_GA_ID: 'G-1',
+      },
+      {},
+    )
+    expect(values['stripe.secretKey']).toBe('sk_live_1')
+    expect(values['creem.debug']).toBe(true)
+  })
+
+  it('旧写法的分析标识回退到新键', () => {
+    const values = seedValues(
+      { VITE_UMAMI_ID: 'umami-legacy', VITE_CLARITY_ID: 'clarity-legacy' },
+      {},
+    )
+    expect(values['analytics.umamiWebsiteId']).toBe('umami-legacy')
+    expect(values['analytics.clarityProjectId']).toBe('clarity-legacy')
+  })
+
+  it('非法收款账户 JSON 回落空列表，不静默生效半个配置', () => {
+    const values = seedValues({ VITE_COLLECTION_ACCOUNTS: 'not-json' }, {})
+    expect(values['collection.accounts']).toEqual([])
   })
 })
 
 describe('种子 SQL', () => {
   it('默认只补缺失的，不覆盖后台改过的值', () => {
-    const sql = buildSeedSql(defaultSettings(), false, 'sqlite')
+    const sql = buildSeedSql(defaultSettingsValues(), false, 'sqlite')
     expect(sql).toContain('ON CONFLICT (key) DO NOTHING')
     expect(sql).not.toContain('DO UPDATE')
   })
 
   it('--force 时覆盖已存在的值', () => {
-    const sql = buildSeedSql(defaultSettings(), true, 'sqlite')
+    const sql = buildSeedSql(defaultSettingsValues(), true, 'sqlite')
     expect(sql).toContain('DO UPDATE SET value = EXCLUDED.value')
   })
 
   it('EXCLUDED 只出现在 DO UPDATE 里，VALUES 里用不合法', () => {
-    const sql = buildSeedSql(defaultSettings(), true, 'sqlite')
+    const sql = buildSeedSql(defaultSettingsValues(), true, 'sqlite')
     const valuesPart = sql.slice(0, sql.indexOf('ON CONFLICT'))
     expect(valuesPart).not.toContain('EXCLUDED')
   })
 
-  it('每个分组一条 INSERT', () => {
-    const sql = buildSeedSql(defaultSettings(), false, 'sqlite')
-    expect(sql.trim().split('\n')).toHaveLength(6)
-    expect(sql).toContain("'brand'")
-    expect(sql).toContain("'modules'")
+  it('先清掉注册表之外的旧键（早期整组 JSON）', () => {
+    const sql = buildSeedSql(defaultSettingsValues(), false, 'sqlite')
+    expect(sql.startsWith('DELETE FROM settings WHERE key NOT IN (')).toBe(true)
+    expect(sql).toContain("'brand.name'")
+  })
+
+  it('每个字段一条 INSERT', () => {
+    const values = defaultSettingsValues()
+    const sql = buildSeedSql(values, false, 'sqlite')
+    const inserts = sql.match(/INSERT INTO settings/g) ?? []
+    expect(inserts).toHaveLength(SETTING_FIELDS.length)
   })
 
   it('sqlite 方言用秒级时间戳', () => {
-    const sql = buildSeedSql(defaultSettings(), false, 'sqlite')
+    const sql = buildSeedSql(defaultSettingsValues(), false, 'sqlite')
     expect(sql).toContain("strftime('%s','now')")
   })
 
   it('postgres 方言用 now()，不能用 sqlite 的 strftime', () => {
-    const sql = buildSeedSql(defaultSettings(), false, 'postgresql')
+    const sql = buildSeedSql(defaultSettingsValues(), false, 'postgresql')
     expect(sql).toContain('now()')
     expect(sql).not.toContain('strftime')
   })
 
   it('单引号被转义，不会截断 SQL', () => {
-    const settings = defaultSettings()
-    settings.brand.name = "O'Brien"
-    const sql = buildSeedSql(settings, false, 'sqlite')
-    // JSON 里的单引号在 SQL 字符串字面量中要写成两个
+    const values = defaultSettingsValues()
+    values['brand.name'] = "O'Brien"
+    const sql = buildSeedSql(values, false, 'sqlite')
     expect(sql).toContain("O''Brien")
     expect(sql).not.toContain("'O'Brien'")
   })
@@ -196,10 +233,12 @@ describe('权益目录与套餐的种子 SQL', () => {
 describe('种子在真实 schema 上跑通', () => {
   it('配置、目录、套餐与套餐权益都落库，重复播种不插重复行', () => {
     const { sqlite } = createTestDatabase()
-    sqlite.exec(buildSeedSql(defaultSettings(), false, 'sqlite'))
+    sqlite.exec(buildSeedSql(defaultSettingsValues(), false, 'sqlite'))
     sqlite.exec(buildCatalogSql(false, 'sqlite'))
 
-    expect(sqlite.prepare('SELECT COUNT(*) AS n FROM settings').get()).toMatchObject({ n: 6 })
+    expect(sqlite.prepare('SELECT COUNT(*) AS n FROM settings').get()).toMatchObject({
+      n: SETTING_FIELDS.length,
+    })
     expect(
       sqlite
         .prepare('SELECT key FROM entitlements ORDER BY sort_order')

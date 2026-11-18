@@ -2,87 +2,38 @@ import { describe, expect, it } from 'vitest'
 import { parsePublicEnv } from '@/core/env/public'
 import { parseServerEnv, validateProdServerEnv } from '@/core/env/server'
 
+/**
+ * 环境的两个边界：公开 env 只下发浏览器必需项，启动 env 只留「没有它站起不来」的项。
+ * 业务凭据（支付 / 邮件 / 分析）在数据库配置里，见 ADR-0010。
+ */
 describe('parsePublicEnv', () => {
   it('使用默认 VITE_BASE_URL', () => {
-    const env = parsePublicEnv({})
-    expect(env.VITE_BASE_URL).toBe('http://localhost:3000')
+    expect(parsePublicEnv({}).VITE_BASE_URL).toBe('http://localhost:3000')
   })
 
   it('拒绝非法 VITE_BASE_URL', () => {
     expect(() => parsePublicEnv({ VITE_BASE_URL: 'not-a-url' })).toThrow(/url/i)
   })
 
-  it('支付 provider 只接受 stripe 或 creem', () => {
-    expect(parsePublicEnv({ VITE_PAYMENT_PROVIDER: 'creem' }).VITE_PAYMENT_PROVIDER).toBe('creem')
-    expect(() => parsePublicEnv({ VITE_PAYMENT_PROVIDER: 'paypal' })).toThrow()
-  })
-
   it('空串视为未设置：VITE_BASE_URL 回退默认值', () => {
-    const env = parsePublicEnv({ VITE_BASE_URL: '' })
-    expect(env.VITE_BASE_URL).toBe('http://localhost:3000')
+    expect(parsePublicEnv({ VITE_BASE_URL: '' }).VITE_BASE_URL).toBe('http://localhost:3000')
   })
 
-  it('空串视为未设置：optional enum 不报错', () => {
-    const env = parsePublicEnv({ VITE_PAYMENT_PROVIDER: '', VITE_GA_ID: '' })
-    expect(env.VITE_PAYMENT_PROVIDER).toBeUndefined()
-    expect(env.VITE_GA_ID).toBeUndefined()
-  })
-
-  it('接受无凭据的 HTTPS Umami 脚本 URL', () => {
-    const url = 'https://stats.jerbix.dev/script.js'
-    expect(parsePublicEnv({ VITE_UMAMI_SCRIPT_URL: url }).VITE_UMAMI_SCRIPT_URL).toBe(url)
-  })
-
-  it.each([
-    'not-a-url',
-    'http://stats.jerbix.dev/script.js',
-    new URL('script.js', 'https://stats.jerbix.dev')
-      .toString()
-      .replace('https://', 'https://user@'),
-    new URL('script.js', 'https://stats.jerbix.dev')
-      .toString()
-      .replace('https://', 'https://:password@'),
-  ])('拒绝非法或含凭据的 Umami 脚本 URL：%s', (url) => {
-    expect(() => parsePublicEnv({ VITE_UMAMI_SCRIPT_URL: url })).toThrow(/VITE_UMAMI_SCRIPT_URL/)
-  })
-
-  it('Umami 脚本 URL 可省略或留空', () => {
-    expect(parsePublicEnv({}).VITE_UMAMI_SCRIPT_URL).toBeUndefined()
-    expect(parsePublicEnv({ VITE_UMAMI_SCRIPT_URL: '' }).VITE_UMAMI_SCRIPT_URL).toBeUndefined()
-  })
-
-  it('公开 env 不保留服务端 secret 或 MAIL_FROM', () => {
-    const env = parsePublicEnv({ RESEND_API_KEY: 'test-only', MAIL_FROM: 'noreply@jerbix.dev' })
-    expect(env).not.toHaveProperty('RESEND_API_KEY')
-    expect(env).not.toHaveProperty('MAIL_FROM')
+  it('只保留 VITE_BASE_URL：其它键一律丢弃', () => {
+    const env = parsePublicEnv({
+      VITE_BASE_URL: 'https://example.com',
+      VITE_GA_ID: 'G-XXX',
+      RESEND_API_KEY: 'test-only',
+      MAIL_FROM: 'noreply@jerbix.dev',
+    })
+    expect(env).toEqual({ VITE_BASE_URL: 'https://example.com' })
   })
 })
 
 describe('parseServerEnv', () => {
   it('省略 NODE_ENV 时默认为 development', () => {
-    const env = parseServerEnv({})
-    expect(env.NODE_ENV).toBe('development')
+    expect(parseServerEnv({}).NODE_ENV).toBe('development')
   })
-
-  it('接受合法 MAIL_FROM 邮件地址', () => {
-    expect(parseServerEnv({ MAIL_FROM: 'noreply@jerbix.dev' }).MAIL_FROM).toBe('noreply@jerbix.dev')
-  })
-
-  it.each(['bad-address', 'Jerbix <noreply@jerbix.dev>'])('拒绝非法 MAIL_FROM：%s', (MAIL_FROM) => {
-    expect(() => parseServerEnv({ MAIL_FROM })).toThrow(/MAIL_FROM/)
-  })
-
-  it('MAIL_FROM 可省略或留空', () => {
-    expect(parseServerEnv({}).MAIL_FROM).toBeUndefined()
-    expect(parseServerEnv({ MAIL_FROM: '' }).MAIL_FROM).toBeUndefined()
-  })
-
-  it.each([{ NODE_ENV: 'invalid' }, { BEEHIIV_SEND_WELCOME_EMAIL: 'invalid' }])(
-    '在解析边界拒绝非法原始 enum binding：%o',
-    (raw) => {
-      expect(() => parseServerEnv(raw)).toThrow()
-    },
-  )
 
   it('BETTER_AUTH_URL 可省略或留空', () => {
     // 设了才用于生成回调与重定向的绝对地址。
@@ -99,6 +50,39 @@ describe('parseServerEnv', () => {
     // 必须是绝对 URL，相对路径拼出的回调链接无法访问。
     expect(() => parseServerEnv({ BETTER_AUTH_URL: 'not-a-url' })).toThrow(/BETTER_AUTH_URL/)
   })
+
+  it('DATABASE_PROVIDER 只接受已知方言', () => {
+    expect(parseServerEnv({ DATABASE_PROVIDER: 'postgres' }).DATABASE_PROVIDER).toBe('postgres')
+    expect(() => parseServerEnv({ DATABASE_PROVIDER: 'mysql' })).toThrow()
+  })
+
+  it('CONFIG_ENCRYPTION_KEY 至少 16 字符', () => {
+    expect(
+      parseServerEnv({ CONFIG_ENCRYPTION_KEY: 'k'.repeat(16) }).CONFIG_ENCRYPTION_KEY,
+    ).toHaveLength(16)
+    expect(() => parseServerEnv({ CONFIG_ENCRYPTION_KEY: 'short' })).toThrow(
+      /CONFIG_ENCRYPTION_KEY/,
+    )
+  })
+
+  it('拒绝非法 NODE_ENV', () => {
+    expect(() => parseServerEnv({ NODE_ENV: 'invalid' })).toThrow()
+  })
+
+  it('剥离托管键：服务凭据只来自数据库配置', () => {
+    // 旧部署残留的环境变量不得混进运行期形状，否则「env 只作 seed 初值」不成立。
+    const env = parseServerEnv({
+      RESEND_API_KEY: 're_test',
+      MAIL_FROM: 'noreply@jerbix.dev',
+      STRIPE_SECRET_KEY: 'sk_test',
+      BEEHIIV_SEND_WELCOME_EMAIL: 'invalid',
+      ANALYTICS_UMAMI_SCRIPT_URL: 'https://stats.jerbix.dev/script.js',
+    })
+    expect(env).not.toHaveProperty('RESEND_API_KEY')
+    expect(env).not.toHaveProperty('MAIL_FROM')
+    expect(env).not.toHaveProperty('STRIPE_SECRET_KEY')
+    expect(env).not.toHaveProperty('BEEHIIV_SEND_WELCOME_EMAIL')
+  })
 })
 
 describe('validateProdServerEnv', () => {
@@ -107,8 +91,7 @@ describe('validateProdServerEnv', () => {
   })
 
   it('开发模式允许缺失 BETTER_AUTH_SECRET', () => {
-    const env = validateProdServerEnv({ NODE_ENV: 'development' })
-    expect(env.NODE_ENV).toBe('development')
+    expect(validateProdServerEnv({ NODE_ENV: 'development' }).NODE_ENV).toBe('development')
   })
 
   it('生产模式接受 ≥32 字符的 BETTER_AUTH_SECRET', () => {

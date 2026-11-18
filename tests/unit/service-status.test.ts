@@ -2,8 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { getMailFrom, getServiceStatuses, validateWebsiteConfig } from '@/config/service-status'
 import { createWebsiteConfig, type WebsiteConfig } from '@/config/website'
 import { parsePublicEnv } from '@/core/env/public'
-import { parseServerEnv } from '@/core/env/server'
+import { parseServerEnv as parseServerEnvRaw, type RuntimeEnv } from '@/core/env/server'
 import { formatServiceDiagnostics } from '../../scripts/lib/report-issues'
+
+/**
+ * 构造运行期 env：启动参数用 `parseServerEnv` 的默认值，服务凭据（现在来自数据库
+ * 配置）按用例显式给出。
+ */
+function makeServerEnv(extra: Record<string, string> = {}): RuntimeEnv {
+  return { ...parseServerEnvRaw({}), ...extra } as RuntimeEnv
+}
 
 /**
  * 构造独立配置，避免用例之间互相污染。
@@ -42,7 +50,7 @@ describe('getMailFrom', () => {
     const config = makeConfig((c) => {
       c.mail.provider = 'resend'
     })
-    const env = parseServerEnv({ MAIL_FROM: 'noreply@jerbix.dev' })
+    const env = makeServerEnv({ MAIL_FROM: 'noreply@jerbix.dev' })
     expect(getMailFrom(config, env)).toBe('noreply@jerbix.dev')
   })
 
@@ -50,7 +58,7 @@ describe('getMailFrom', () => {
     const config = makeConfig((c) => {
       c.mail.provider = 'resend'
     })
-    const env = parseServerEnv({ CLOUDFLARE_EMAIL_SENDER: 'cf@jerbix.dev' })
+    const env = makeServerEnv({ CLOUDFLARE_EMAIL_SENDER: 'cf@jerbix.dev' })
     expect(getMailFrom(config, env)).toBeUndefined()
   })
 
@@ -58,7 +66,7 @@ describe('getMailFrom', () => {
     const config = makeConfig((c) => {
       c.mail.provider = 'cloudflare'
     })
-    const env = parseServerEnv({ CLOUDFLARE_EMAIL_SENDER: 'cf@jerbix.dev' })
+    const env = makeServerEnv({ CLOUDFLARE_EMAIL_SENDER: 'cf@jerbix.dev' })
     expect(getMailFrom(config, env)).toBe('cf@jerbix.dev')
   })
 
@@ -66,7 +74,7 @@ describe('getMailFrom', () => {
     const config = makeConfig((c) => {
       c.mail.provider = 'cloudflare'
     })
-    expect(getMailFrom(config, parseServerEnv({}))).toBeUndefined()
+    expect(getMailFrom(config, makeServerEnv({}))).toBeUndefined()
   })
 })
 
@@ -77,8 +85,7 @@ describe('getServiceStatuses — mail', () => {
       config: makeConfig((c) => {
         c.mail.enabled = false
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ RESEND_API_KEY: 'synthetic-secret', MAIL_FROM: 'a@jerbix.dev' }),
+      serverEnv: makeServerEnv({ RESEND_API_KEY: 'synthetic-secret', MAIL_FROM: 'a@jerbix.dev' }),
     })
     expect(statuses.mail.state).toBe('disabled')
     expect(statuses.mail.issues).toEqual([])
@@ -89,8 +96,7 @@ describe('getServiceStatuses — mail', () => {
       config: makeConfig((c) => {
         c.mail.enabled = true
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ RESEND_API_KEY: 'synthetic-secret' }),
+      serverEnv: makeServerEnv({ RESEND_API_KEY: 'synthetic-secret' }),
     })
     expect(statuses.mail.state).toBe('incomplete')
     expect(statuses.mail.issues.map((i) => i.key)).toContain('MAIL_FROM')
@@ -102,8 +108,7 @@ describe('getServiceStatuses — mail', () => {
       config: makeConfig((c) => {
         c.mail.enabled = true
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ MAIL_FROM: 'noreply@jerbix.dev' }),
+      serverEnv: makeServerEnv({ MAIL_FROM: 'noreply@jerbix.dev' }),
     })
     expect(statuses.mail.state).toBe('incomplete')
     expect(statuses.mail.issues.map((i) => i.key)).toContain('RESEND_API_KEY')
@@ -114,8 +119,7 @@ describe('getServiceStatuses — mail', () => {
       config: makeConfig((c) => {
         c.mail.enabled = true
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ RESEND_API_KEY: 'key', MAIL_FROM: 'noreply@jerbix.dev' }),
+      serverEnv: makeServerEnv({ RESEND_API_KEY: 'key', MAIL_FROM: 'noreply@jerbix.dev' }),
     })
     expect(statuses.mail.state).toBe('configured')
     expect(statuses.mail.issues).toEqual([])
@@ -127,8 +131,7 @@ describe('getServiceStatuses — mail', () => {
         c.mail.enabled = true
         c.mail.provider = 'cloudflare'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ MAIL_FROM: 'noreply@jerbix.dev' }),
+      serverEnv: makeServerEnv({ MAIL_FROM: 'noreply@jerbix.dev' }),
       bindings: { email: true },
     })
     expect(statuses.mail.state).toBe('configured')
@@ -141,8 +144,7 @@ describe('getServiceStatuses — mail', () => {
         c.mail.enabled = true
         c.mail.provider = 'cloudflare'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ MAIL_FROM: 'noreply@jerbix.dev' }),
+      serverEnv: makeServerEnv({ MAIL_FROM: 'noreply@jerbix.dev' }),
     })
     expect(statuses.mail.state).toBe('configured')
     const manual = statuses.mail.issues.filter((i) => i.manual)
@@ -156,8 +158,7 @@ describe('getServiceStatuses — mail', () => {
         c.mail.enabled = true
         c.mail.provider = 'cloudflare'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ MAIL_FROM: 'noreply@jerbix.dev' }),
+      serverEnv: makeServerEnv({ MAIL_FROM: 'noreply@jerbix.dev' }),
       bindings: { email: false },
     })
     expect(statuses.mail.state).toBe('incomplete')
@@ -171,8 +172,7 @@ describe('getServiceStatuses — mail', () => {
         c.mail.enabled = true
         c.mail.provider = 'cloudflare'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
+      serverEnv: makeServerEnv({}),
       bindings: { email: true },
     })
     expect(statuses.mail.state).toBe('incomplete')
@@ -185,8 +185,7 @@ describe('getServiceStatuses — mail', () => {
         c.mail.enabled = true
         c.mail.provider = 'cloudflare'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ CLOUDFLARE_EMAIL_SENDER: 'cf@jerbix.dev' }),
+      serverEnv: makeServerEnv({ CLOUDFLARE_EMAIL_SENDER: 'cf@jerbix.dev' }),
       bindings: { email: true },
     })
     expect(statuses.mail.state).toBe('configured')
@@ -198,8 +197,7 @@ describe('getServiceStatuses — contact', () => {
   it('关闭时为 disabled', () => {
     const statuses = getServiceStatuses({
       config: makeConfig(),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
+      serverEnv: makeServerEnv({}),
     })
     expect(statuses.contact.state).toBe('disabled')
   })
@@ -211,8 +209,7 @@ describe('getServiceStatuses — contact', () => {
         c.mail.enabled = true
         c.mail.supportEmail = 'support@jerbix.dev'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
+      serverEnv: makeServerEnv({}),
     })
     expect(statuses.contact.state).toBe('incomplete')
     expect(statuses.contact.issues.map((i) => i.key)).toContain('mail.enabled')
@@ -226,8 +223,7 @@ describe('getServiceStatuses — contact', () => {
         c.mail.provider = 'resend'
         c.mail.supportEmail = 'not-an-email'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ RESEND_API_KEY: 'key', MAIL_FROM: 'noreply@jerbix.dev' }),
+      serverEnv: makeServerEnv({ RESEND_API_KEY: 'key', MAIL_FROM: 'noreply@jerbix.dev' }),
     })
     expect(statuses.contact.state).toBe('incomplete')
     expect(statuses.contact.issues.map((i) => i.key)).toContain('mail.supportEmail')
@@ -241,8 +237,7 @@ describe('getServiceStatuses — contact', () => {
         c.mail.provider = 'resend'
         c.mail.supportEmail = 'support@jerbix.dev'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ RESEND_API_KEY: 'key', MAIL_FROM: 'noreply@jerbix.dev' }),
+      serverEnv: makeServerEnv({ RESEND_API_KEY: 'key', MAIL_FROM: 'noreply@jerbix.dev' }),
     })
     expect(statuses.contact.state).toBe('configured')
     expect(statuses.contact.issues).toEqual([])
@@ -254,8 +249,7 @@ describe('getServiceStatuses — newsletter', () => {
   it('关闭时为 disabled', () => {
     const statuses = getServiceStatuses({
       config: makeConfig(),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
+      serverEnv: makeServerEnv({}),
     })
     expect(statuses.newsletter.state).toBe('disabled')
   })
@@ -266,8 +260,7 @@ describe('getServiceStatuses — newsletter', () => {
         c.newsletter.enabled = true
         c.newsletter.provider = 'resend'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ RESEND_API_KEY: 'synthetic-secret' }),
+      serverEnv: makeServerEnv({ RESEND_API_KEY: 'synthetic-secret' }),
     })
     expect(statuses.newsletter.state).toBe('incomplete')
     expect(statuses.newsletter.issues.map((i) => i.key)).toContain('RESEND_AUDIENCE_ID')
@@ -280,8 +273,7 @@ describe('getServiceStatuses — newsletter', () => {
         c.newsletter.enabled = true
         c.newsletter.provider = 'resend'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ RESEND_API_KEY: 'key', RESEND_AUDIENCE_ID: 'aud' }),
+      serverEnv: makeServerEnv({ RESEND_API_KEY: 'key', RESEND_AUDIENCE_ID: 'aud' }),
     })
     expect(statuses.newsletter.state).toBe('configured')
   })
@@ -292,8 +284,7 @@ describe('getServiceStatuses — newsletter', () => {
         c.newsletter.enabled = true
         c.newsletter.provider = 'beehiiv'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ BEEHIIV_API_KEY: 'key' }),
+      serverEnv: makeServerEnv({ BEEHIIV_API_KEY: 'key' }),
     })
     expect(statuses.newsletter.state).toBe('incomplete')
     expect(statuses.newsletter.issues.map((i) => i.key)).toContain('BEEHIIV_PUBLICATION_ID')
@@ -305,8 +296,7 @@ describe('getServiceStatuses — newsletter', () => {
         c.newsletter.enabled = true
         c.newsletter.provider = 'beehiiv'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ BEEHIIV_API_KEY: 'key', BEEHIIV_PUBLICATION_ID: 'pub' }),
+      serverEnv: makeServerEnv({ BEEHIIV_API_KEY: 'key', BEEHIIV_PUBLICATION_ID: 'pub' }),
     })
     expect(statuses.newsletter.state).toBe('configured')
   })
@@ -317,8 +307,7 @@ describe('getServiceStatuses — payment', () => {
   it('关闭时为 disabled', () => {
     const statuses = getServiceStatuses({
       config: makeAllDisabledConfig(),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
+      serverEnv: makeServerEnv({}),
     })
     expect(statuses.payment.state).toBe('disabled')
   })
@@ -328,8 +317,7 @@ describe('getServiceStatuses — payment', () => {
       config: makeConfig((c) => {
         c.payment.enabled = true
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ STRIPE_SECRET_KEY: 'synthetic-secret' }),
+      serverEnv: makeServerEnv({ STRIPE_SECRET_KEY: 'synthetic-secret' }),
     })
     expect(statuses.payment.state).toBe('incomplete')
     expect(statuses.payment.issues.map((i) => i.key)).toContain('STRIPE_WEBHOOK_SECRET')
@@ -343,8 +331,7 @@ describe('getServiceStatuses — payment', () => {
       config: makeConfig((c) => {
         c.payment.enabled = true
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ STRIPE_SECRET_KEY: 'key', STRIPE_WEBHOOK_SECRET: 'whsec' }),
+      serverEnv: makeServerEnv({ STRIPE_SECRET_KEY: 'key', STRIPE_WEBHOOK_SECRET: 'whsec' }),
     })
     expect(statuses.payment.issues.map((i) => i.key)).not.toContain('payment.products')
   })
@@ -354,8 +341,7 @@ describe('getServiceStatuses — payment', () => {
       config: makeConfig((c) => {
         c.payment.enabled = true
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ STRIPE_SECRET_KEY: 'key', STRIPE_WEBHOOK_SECRET: 'whsec' }),
+      serverEnv: makeServerEnv({ STRIPE_SECRET_KEY: 'key', STRIPE_WEBHOOK_SECRET: 'whsec' }),
     })
     expect(statuses.payment.state).toBe('configured')
   })
@@ -369,8 +355,7 @@ describe('getServiceStatuses — payment', () => {
         c.payment.enabled = true
         c.landingOffer = { productId: 'free', offerId: 'once' }
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ STRIPE_SECRET_KEY: 'key', STRIPE_WEBHOOK_SECRET: 'whsec' }),
+      serverEnv: makeServerEnv({ STRIPE_SECRET_KEY: 'key', STRIPE_WEBHOOK_SECRET: 'whsec' }),
     })
 
     expect(statuses.payment.state).toBe('incomplete')
@@ -384,8 +369,7 @@ describe('getServiceStatuses — payment', () => {
         c.payment.enabled = true
         c.payment.provider = 'creem'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({
+      serverEnv: makeServerEnv({
         CREEM_API_KEY: 'key',
         CREEM_WEBHOOK_SECRET: 'whsec',
         CREEM_PRODUCTS: 'pro_monthly=prod_x',
@@ -403,8 +387,7 @@ describe('getServiceStatuses — payment', () => {
         c.payment.enabled = true
         c.payment.provider = 'creem'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ CREEM_API_KEY: 'key', CREEM_WEBHOOK_SECRET: 'whsec' }),
+      serverEnv: makeServerEnv({ CREEM_API_KEY: 'key', CREEM_WEBHOOK_SECRET: 'whsec' }),
     })
     expect(statuses.payment.state).toBe('incomplete')
     expect(statuses.payment.issues.map((i) => i.key)).toContain('CREEM_PRODUCTS')
@@ -417,8 +400,7 @@ describe('getServiceStatuses — payment', () => {
         c.payment.enabled = true
         c.payment.provider = 'creem'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ STRIPE_SECRET_KEY: 'key', STRIPE_WEBHOOK_SECRET: 'whsec' }),
+      serverEnv: makeServerEnv({ STRIPE_SECRET_KEY: 'key', STRIPE_WEBHOOK_SECRET: 'whsec' }),
     })
     expect(statuses.payment.state).toBe('incomplete')
     expect(statuses.payment.issues.map((i) => i.key)).toContain('CREEM_API_KEY')
@@ -430,8 +412,7 @@ describe('getServiceStatuses — notification', () => {
   it('关闭时为 disabled', () => {
     const statuses = getServiceStatuses({
       config: makeAllDisabledConfig(),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
+      serverEnv: makeServerEnv({}),
     })
     expect(statuses.notification.state).toBe('disabled')
   })
@@ -441,8 +422,7 @@ describe('getServiceStatuses — notification', () => {
       config: makeConfig((c) => {
         c.notification.enabled = true
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
+      serverEnv: makeServerEnv({}),
     })
     expect(statuses.notification.state).toBe('incomplete')
     expect(statuses.notification.issues.map((i) => i.key)).toContain('DISCORD_WEBHOOK_URL')
@@ -453,8 +433,7 @@ describe('getServiceStatuses — notification', () => {
       config: makeConfig((c) => {
         c.notification.enabled = true
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ DISCORD_WEBHOOK_URL: 'https://discord.com/api/webhooks/1/abc' }),
+      serverEnv: makeServerEnv({ DISCORD_WEBHOOK_URL: 'https://discord.com/api/webhooks/1/abc' }),
     })
     expect(statuses.notification.state).toBe('configured')
   })
@@ -465,8 +444,7 @@ describe('getServiceStatuses — notification', () => {
         c.notification.enabled = true
         c.notification.provider = 'feishu'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({
+      serverEnv: makeServerEnv({
         FEISHU_WEBHOOK_URL: 'https://open.feishu.cn/open-apis/bot/v2/hook/abc-123',
       }),
     })
@@ -479,140 +457,87 @@ describe('getServiceStatuses — notification', () => {
         c.notification.enabled = true
         c.notification.provider = 'feishu'
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ DISCORD_WEBHOOK_URL: 'https://discord.com/api/webhooks/1/abc' }),
+      serverEnv: makeServerEnv({ DISCORD_WEBHOOK_URL: 'https://discord.com/api/webhooks/1/abc' }),
     })
     expect(statuses.notification.state).toBe('incomplete')
     expect(statuses.notification.issues.map((i) => i.key)).toContain('FEISHU_WEBHOOK_URL')
   })
 })
 
-// analytics 分支。
+// analytics 分支：公开标识在数据库配置里，缺 ID 的渠道不注入脚本。
 describe('getServiceStatuses — analytics', () => {
-  it('关闭时为 disabled', () => {
-    const statuses = getServiceStatuses({
-      config: makeAllDisabledConfig(),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
+  function analyticsStatus(
+    providers: WebsiteConfig['analytics']['providers'],
+    config: WebsiteConfig['analytics']['config'],
+    enabled = true,
+  ) {
+    return getServiceStatuses({
+      config: makeConfig((c) => {
+        c.analytics.enabled = enabled
+        c.analytics.providers = providers
+        c.analytics.config = config
+      }),
+      serverEnv: makeServerEnv(),
     })
-    expect(statuses.analytics.state).toBe('disabled')
+  }
+
+  it('关闭时为 disabled', () => {
+    expect(analyticsStatus(['ga'], {}, false).analytics.state).toBe('disabled')
   })
 
   it('启用但未选择 provider 时 incomplete', () => {
-    const statuses = getServiceStatuses({
-      config: makeConfig((c) => {
-        c.analytics.enabled = true
-        // 默认已选中 ga，本用例验证「选中为空」这一分支。
-        c.analytics.providers = []
-      }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
-    })
+    const statuses = analyticsStatus([], {})
     expect(statuses.analytics.state).toBe('incomplete')
     expect(statuses.analytics.issues.map((i) => i.key)).toContain('analytics.providers')
   })
 
-  it('GA 缺 VITE_GA_ID 时 incomplete', () => {
-    const statuses = getServiceStatuses({
-      config: makeConfig((c) => {
-        c.analytics.enabled = true
-        c.analytics.providers = ['ga']
-      }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
-    })
+  it('GA 缺 ID 时 incomplete', () => {
+    const statuses = analyticsStatus(['ga'], {})
     expect(statuses.analytics.state).toBe('incomplete')
-    expect(statuses.analytics.issues.map((i) => i.key)).toContain('VITE_GA_ID')
+    expect(statuses.analytics.issues.map((i) => i.key)).toContain('analytics.gaId')
   })
 
-  it('Plausible 缺 VITE_PLAUSIBLE_DOMAIN 时 incomplete', () => {
-    const statuses = getServiceStatuses({
-      config: makeConfig((c) => {
-        c.analytics.enabled = true
-        c.analytics.providers = ['plausible']
-      }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
-    })
+  it('Plausible 缺域名时 incomplete', () => {
+    const statuses = analyticsStatus(['plausible'], {})
     expect(statuses.analytics.state).toBe('incomplete')
-    expect(statuses.analytics.issues.map((i) => i.key)).toContain('VITE_PLAUSIBLE_DOMAIN')
+    expect(statuses.analytics.issues.map((i) => i.key)).toContain('analytics.plausibleDomain')
   })
 
   it('Umami 缺 ID 与脚本 URL 时列出两项要求', () => {
-    const statuses = getServiceStatuses({
-      config: makeConfig((c) => {
-        c.analytics.enabled = true
-        c.analytics.providers = ['umami']
-      }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
-    })
+    const statuses = analyticsStatus(['umami'], {})
     expect(statuses.analytics.state).toBe('incomplete')
     const keys = statuses.analytics.issues.map((i) => i.key)
-    expect(keys).toContain('VITE_UMAMI_WEBSITE_ID / VITE_UMAMI_ID')
-    expect(keys).toContain('VITE_UMAMI_SCRIPT_URL')
+    expect(keys).toContain('analytics.umamiWebsiteId')
+    expect(keys).toContain('analytics.umamiScriptUrl')
   })
 
   it('Umami 有 ID 但缺脚本 URL 时仍 incomplete', () => {
-    const statuses = getServiceStatuses({
-      config: makeConfig((c) => {
-        c.analytics.enabled = true
-        c.analytics.providers = ['umami']
-      }),
-      publicEnv: parsePublicEnv({ VITE_UMAMI_WEBSITE_ID: 'site-1' }),
-      serverEnv: parseServerEnv({}),
-    })
+    const statuses = analyticsStatus(['umami'], { umamiWebsiteId: 'site-1' })
     expect(statuses.analytics.state).toBe('incomplete')
-    expect(statuses.analytics.issues.map((i) => i.key)).toEqual(['VITE_UMAMI_SCRIPT_URL'])
-  })
-
-  it('Umami 使用 legacy VITE_UMAMI_ID 亦可满足 ID 要求', () => {
-    const statuses = getServiceStatuses({
-      config: makeConfig((c) => {
-        c.analytics.enabled = true
-        c.analytics.providers = ['umami']
-      }),
-      publicEnv: parsePublicEnv({
-        VITE_UMAMI_ID: 'legacy-1',
-        VITE_UMAMI_SCRIPT_URL: 'https://stats.jerbix.dev/script.js',
-      }),
-      serverEnv: parseServerEnv({}),
-    })
-    expect(statuses.analytics.state).toBe('configured')
+    expect(statuses.analytics.issues.map((i) => i.key)).toEqual(['analytics.umamiScriptUrl'])
   })
 
   it('Clarity 缺 project id 时 incomplete', () => {
-    const statuses = getServiceStatuses({
-      config: makeConfig((c) => {
-        c.analytics.enabled = true
-        c.analytics.providers = ['clarity']
-      }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
-    })
+    const statuses = analyticsStatus(['clarity'], {})
     expect(statuses.analytics.state).toBe('incomplete')
-    expect(statuses.analytics.issues.map((i) => i.key)).toContain(
-      'VITE_CLARITY_PROJECT_ID / VITE_CLARITY_ID',
-    )
+    expect(statuses.analytics.issues.map((i) => i.key)).toContain('analytics.clarityProjectId')
   })
 
   it('选中的每个 provider 都完整时 configured', () => {
-    const statuses = getServiceStatuses({
-      config: makeConfig((c) => {
-        c.analytics.enabled = true
-        c.analytics.providers = ['ga', 'plausible', 'umami', 'clarity']
-      }),
-      publicEnv: parsePublicEnv({
-        VITE_GA_ID: 'G-XXX',
-        VITE_PLAUSIBLE_DOMAIN: 'jerbix.dev',
-        VITE_UMAMI_WEBSITE_ID: 'site-1',
-        VITE_UMAMI_SCRIPT_URL: 'https://stats.jerbix.dev/script.js',
-        VITE_CLARITY_PROJECT_ID: 'clarity-1',
-      }),
-      serverEnv: parseServerEnv({}),
+    const statuses = analyticsStatus(['ga', 'plausible', 'umami', 'clarity'], {
+      gaId: 'G-XXX',
+      plausibleDomain: 'jerbix.dev',
+      umamiWebsiteId: 'site-1',
+      umamiScriptUrl: 'https://stats.jerbix.dev/script.js',
+      clarityProjectId: 'clarity-1',
     })
     expect(statuses.analytics.state).toBe('configured')
     expect(statuses.analytics.issues).toEqual([])
+  })
+
+  it('缺字段的 issue 标注为数据库配置', () => {
+    const statuses = analyticsStatus(['ga'], {})
+    expect(statuses.analytics.issues[0]?.location).toBe('数据库配置')
   })
 })
 
@@ -623,8 +548,7 @@ describe('getServiceStatuses — auth', () => {
       config: makeConfig((c) => {
         c.auth.requireEmailVerification = false
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
+      serverEnv: makeServerEnv({}),
     })
     expect(statuses.auth.state).toBe('configured')
   })
@@ -634,8 +558,7 @@ describe('getServiceStatuses — auth', () => {
       config: makeConfig((c) => {
         c.auth.requireEmailVerification = true
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
+      serverEnv: makeServerEnv({}),
     })
     expect(statuses.auth.state).toBe('incomplete')
     expect(statuses.auth.issues.map((i) => i.key)).toContain('mail.enabled')
@@ -646,8 +569,7 @@ describe('getServiceStatuses — auth', () => {
       config: makeConfig((c) => {
         c.mail.enabled = true
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({ RESEND_API_KEY: 'key', MAIL_FROM: 'noreply@jerbix.dev' }),
+      serverEnv: makeServerEnv({ RESEND_API_KEY: 'key', MAIL_FROM: 'noreply@jerbix.dev' }),
     })
     expect(statuses.auth.state).toBe('configured')
   })
@@ -657,8 +579,7 @@ describe('getServiceStatuses — auth', () => {
       config: makeConfig((c) => {
         c.auth.requireEmailVerification = false
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
+      serverEnv: makeServerEnv({}),
     })
     expect(statuses.auth.state).toBe('configured')
   })
@@ -668,8 +589,7 @@ describe('getServiceStatuses — auth', () => {
       config: makeConfig((c) => {
         c.auth.enabled = false
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
+      serverEnv: makeServerEnv({}),
     })
     expect(statuses.auth.state).toBe('disabled')
   })
@@ -688,8 +608,7 @@ describe('getServiceStatuses — 凭据不外泄', () => {
         c.analytics.enabled = true
         c.analytics.providers = ['ga']
       }),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({
+      serverEnv: makeServerEnv({
         RESEND_API_KEY: 'synthetic-resend-key',
         STRIPE_SECRET_KEY: 'synthetic-stripe-key',
         STRIPE_WEBHOOK_SECRET: 'synthetic-webhook-secret',
@@ -717,7 +636,8 @@ describe('getServiceStatuses — 完整配置判断（数据驱动）', () => {
     name: string
     mutate: (config: WebsiteConfig) => void
     completeEnv: Record<string, string>
-    completePublic: Record<string, string>
+    /** 补齐配置侧字段（凭据之外的标识）。 */
+    completeConfig?: (config: WebsiteConfig) => void
   }
 
   const cases: Case[] = [
@@ -727,7 +647,6 @@ describe('getServiceStatuses — 完整配置判断（数据驱动）', () => {
         c.mail.enabled = true
       },
       completeEnv: { RESEND_API_KEY: 'key', MAIL_FROM: 'noreply@jerbix.dev' },
-      completePublic: {},
     },
     {
       name: 'newsletter（Resend）',
@@ -735,7 +654,6 @@ describe('getServiceStatuses — 完整配置判断（数据驱动）', () => {
         c.newsletter.enabled = true
       },
       completeEnv: { RESEND_API_KEY: 'key', RESEND_AUDIENCE_ID: 'aud' },
-      completePublic: {},
     },
     {
       name: 'payment（Stripe）',
@@ -743,7 +661,6 @@ describe('getServiceStatuses — 完整配置判断（数据驱动）', () => {
         c.payment.enabled = true
       },
       completeEnv: { STRIPE_SECRET_KEY: 'key', STRIPE_WEBHOOK_SECRET: 'whsec' },
-      completePublic: {},
     },
     {
       name: 'notification',
@@ -751,7 +668,6 @@ describe('getServiceStatuses — 完整配置判断（数据驱动）', () => {
         c.notification.enabled = true
       },
       completeEnv: { DISCORD_WEBHOOK_URL: 'https://discord.com/api/webhooks/1/abc' },
-      completePublic: {},
     },
     {
       name: 'analytics（GA）',
@@ -760,7 +676,9 @@ describe('getServiceStatuses — 完整配置判断（数据驱动）', () => {
         c.analytics.providers = ['ga']
       },
       completeEnv: {},
-      completePublic: { VITE_GA_ID: 'G-XXX' },
+      completeConfig: (c) => {
+        c.analytics.config = { gaId: 'G-XXX' }
+      },
     },
     {
       name: 'contact',
@@ -770,7 +688,6 @@ describe('getServiceStatuses — 完整配置判断（数据驱动）', () => {
         c.mail.supportEmail = 'support@jerbix.dev'
       },
       completeEnv: { RESEND_API_KEY: 'key', MAIL_FROM: 'noreply@jerbix.dev' },
-      completePublic: {},
     },
   ]
 
@@ -780,24 +697,24 @@ describe('getServiceStatuses — 完整配置判断（数据驱动）', () => {
     // 关闭时：即便字段齐全也 disabled。
     const disabled = getServiceStatuses({
       config: makeAllDisabledConfig(),
-      publicEnv: parsePublicEnv(testCase.completePublic),
-      serverEnv: parseServerEnv(testCase.completeEnv),
+      serverEnv: makeServerEnv(testCase.completeEnv),
     })
     expect(disabled[moduleName].state).toBe('disabled')
 
     // 启用但缺字段。
     const incomplete = getServiceStatuses({
       config: makeConfig(testCase.mutate),
-      publicEnv: parsePublicEnv({}),
-      serverEnv: parseServerEnv({}),
+      serverEnv: makeServerEnv({}),
     })
     expect(incomplete[moduleName].state).toBe('incomplete')
 
     // 启用且字段齐全。
     const configured = getServiceStatuses({
-      config: makeConfig(testCase.mutate),
-      publicEnv: parsePublicEnv(testCase.completePublic),
-      serverEnv: parseServerEnv(testCase.completeEnv),
+      config: makeConfig((config) => {
+        testCase.mutate(config)
+        testCase.completeConfig?.(config)
+      }),
+      serverEnv: makeServerEnv(testCase.completeEnv),
     })
     expect(configured[moduleName].state).toBe('configured')
   })
@@ -813,8 +730,7 @@ describe('formatServiceDiagnostics', () => {
         config: makeConfig((c) => {
           c.mail.enabled = true
         }),
-        publicEnv: parsePublicEnv({}),
-        serverEnv: parseServerEnv({}),
+        serverEnv: makeServerEnv({}),
       }),
     )
     expect(result.hasIncomplete).toBe(true)
@@ -833,8 +749,7 @@ describe('formatServiceDiagnostics', () => {
         config: makeAllDisabledConfig((c) => {
           c.auth.requireEmailVerification = false
         }),
-        publicEnv: parsePublicEnv({}),
-        serverEnv: parseServerEnv({ RESEND_API_KEY: 'synthetic-secret' }),
+        serverEnv: makeServerEnv({ RESEND_API_KEY: 'synthetic-secret' }),
       }),
     )
     expect(result.hasIncomplete).toBe(false)
@@ -848,8 +763,7 @@ describe('formatServiceDiagnostics', () => {
           c.mail.enabled = true
           c.mail.provider = 'cloudflare'
         }),
-        publicEnv: parsePublicEnv({}),
-        serverEnv: parseServerEnv({ MAIL_FROM: 'noreply@jerbix.dev' }),
+        serverEnv: makeServerEnv({ MAIL_FROM: 'noreply@jerbix.dev' }),
       }),
     )
     expect(result.hasIncomplete).toBe(false)
@@ -864,8 +778,7 @@ describe('formatServiceDiagnostics', () => {
           // 同上：只验证齐全时 configured 且不泄漏 secret，故关掉邮箱验证。
           c.auth.requireEmailVerification = false
         }),
-        publicEnv: parsePublicEnv({}),
-        serverEnv: parseServerEnv({
+        serverEnv: makeServerEnv({
           STRIPE_SECRET_KEY: 'synthetic-stripe-key',
           STRIPE_WEBHOOK_SECRET: 'synthetic-webhook-secret',
         }),

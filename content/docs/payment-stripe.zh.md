@@ -12,17 +12,11 @@ Stripe 侧的金额、订阅与付款页面都在 Stripe 平台上，站内只�
 ## 步骤
 
 1. 在 Stripe 后台建商品与价格。订阅建 recurring 价格，买断建一次性价格；**每个价格填一个 `lookup_key`**，值与 `src/config/products.ts` 里 `prices` 的右侧一致（`pro_monthly`、`pro_yearly` 等）。
-2. 填环境变量：
-
-   ```dotenv
-   VITE_PAYMENT_PROVIDER=stripe
-   STRIPE_SECRET_KEY=sk_xxx
-   STRIPE_WEBHOOK_SECRET=whsec_xxx
-   ```
-
-3. 部署：`pnpm run deploy`。
-4. 在 Stripe Dashboard → Developers → Webhooks 添加端点 `<站点域名>/api/webhooks/stripe`，把 Signing secret 填进 `STRIPE_WEBHOOK_SECRET`。
-5. 在端点的事件列表里勾选下面这些事件。
+2. 在后台「系统设置 → 支付」里选渠道 `stripe`，并在 Stripe 分组填 Secret key 与 Webhook secret。
+   两个密钥加密入库，只回显末四位；保存即生效。
+3. 在 Stripe Dashboard → Developers → Webhooks 添加端点 `<站点域名>/api/webhooks/stripe`，
+   把 Signing secret 填回后台的 Webhook secret 字段。
+4. 在端点的事件列表里勾选下面这些事件。
 
 ## 必须订阅的事件
 
@@ -54,5 +48,5 @@ Stripe 侧的金额、订阅与付款页面都在 Stripe 平台上，站内只�
 
 ## 验证
 
-- `pnpm run check:env` 通过，说明 provider 与凭据已就位。
+- 后台保存后，服务状态里 `payment` 一项显示 `configured`。
 - Stripe Dashboard 的 Webhooks 页能看到端点投递记录（`200` 即签名校验通过）。

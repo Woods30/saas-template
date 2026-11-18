@@ -3,7 +3,7 @@ import { getMailFrom } from '@/config/service-status'
 import type { WebsiteConfig } from '@/config/website'
 import type { sendMail } from '@/core/email'
 import type { EmailTemplate, SendEmailResult } from '@/core/email/types'
-import type { ServerEnv } from '@/core/env/server'
+import type { RuntimeEnv } from '@/core/env/server'
 import { defaultLocale, resolveLocale } from '@/lib/locale'
 
 /**
@@ -30,7 +30,7 @@ export type AuthEmailInput =
 export interface AuthEmailDeps {
   sendMail: typeof sendMail
   config: WebsiteConfig
-  serverEnv: ServerEnv
+  serverEnv: RuntimeEnv
 }
 
 /** 发送一封认证流程邮件；返回 `{ ok, error }` 而非抛出。 */

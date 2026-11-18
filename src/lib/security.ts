@@ -210,42 +210,39 @@ function rewriteScriptTag(tag: string, nonce: string): string {
  * Umami 自托管，origin 需从 `VITE_UMAMI_SCRIPT_URL` 逐请求推导。
  */
 export function getAnalyticsScriptOrigins(input: {
-  analytics: { enabled: boolean; providers: readonly string[] }
-  publicEnv: {
-    VITE_GA_ID?: string
-    VITE_PLAUSIBLE_DOMAIN?: string
-    VITE_UMAMI_WEBSITE_ID?: string
-    VITE_UMAMI_ID?: string
-    VITE_UMAMI_SCRIPT_URL?: string
-    VITE_CLARITY_PROJECT_ID?: string
-    VITE_CLARITY_ID?: string
+  analytics: {
+    enabled: boolean
+    providers: readonly string[]
+    config: {
+      gaId?: string
+      plausibleDomain?: string
+      umamiWebsiteId?: string
+      umamiScriptUrl?: string
+      clarityProjectId?: string
+    }
   }
 }): string[] {
-  const { analytics, publicEnv } = input
+  const { analytics } = input
   if (!analytics.enabled) return []
 
   const selected = new Set(analytics.providers)
   const origins: string[] = []
 
-  if (selected.has('ga') && publicEnv.VITE_GA_ID) {
+  if (selected.has('ga') && analytics.config.gaId) {
     origins.push('https://www.googletagmanager.com')
   }
-  if (selected.has('plausible') && publicEnv.VITE_PLAUSIBLE_DOMAIN) {
+  if (selected.has('plausible') && analytics.config.plausibleDomain) {
     origins.push('https://plausible.io')
   }
-  if (
-    selected.has('umami') &&
-    (publicEnv.VITE_UMAMI_WEBSITE_ID ?? publicEnv.VITE_UMAMI_ID) &&
-    publicEnv.VITE_UMAMI_SCRIPT_URL
-  ) {
+  if (selected.has('umami') && analytics.config.umamiWebsiteId && analytics.config.umamiScriptUrl) {
     try {
-      const url = new URL(publicEnv.VITE_UMAMI_SCRIPT_URL)
+      const url = new URL(analytics.config.umamiScriptUrl)
       origins.push(url.origin)
     } catch {
       // 不向 CSP 写入来源不明的字符串。
     }
   }
-  if (selected.has('clarity') && (publicEnv.VITE_CLARITY_PROJECT_ID ?? publicEnv.VITE_CLARITY_ID)) {
+  if (selected.has('clarity') && analytics.config.clarityProjectId) {
     origins.push('https://www.clarity.ms')
   }
 

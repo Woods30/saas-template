@@ -13,14 +13,11 @@ The auth module covers sign-up, sign-in, password reset, and email verification.
 
 ## Steps
 
-1. **Turn on the auth module.**
+1. **Turn on the auth module.** Open admin **Settings → Modules** and enable Auth; decide whether
+   email verification is required (it is by default) on the same tab.
 
-   ```ts
-   // src/config/website.ts
-   auth: { enabled: true, requireEmailVerification: true },
-   ```
-
-   `auth.enabled` gates pages and API together: with it off, both `/{locale}/auth/*` and `/api/auth/*` return 404.
+   The switch gates pages and API together: with it off, both `/{locale}/auth/*` and
+   `/api/auth/*` return 404.
 
 2. **Set the two variables production requires.**
 
@@ -31,12 +28,13 @@ The auth module covers sign-up, sign-in, password reset, and email verification.
 
    Generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32` and upload it as a runtime secret as described in [Deploy to Cloudflare](./cloudflare).
 
-3. **(Optional) Add Google sign-in.** Two server variables are required, and both are needed:
+3. **(Optional) Add Google sign-in.** Fill in both values in the Google group under admin
+   **Settings → Auth**:
 
-   | Variable | Purpose |
+   | Field | Purpose |
    |---|---|
-   | `GOOGLE_CLIENT_ID` | The OAuth client ID from Google Cloud Console |
-   | `GOOGLE_CLIENT_SECRET` | The secret of that same client |
+   | Client ID | The OAuth client ID from Google Cloud Console |
+   | Client secret | The secret of that same client (encrypted at rest) |
 
    The Google button appears only when both are set; with just the ID there is no button and no entry point that could only fail. Register the callback URLs on the OAuth client in Google Cloud Console:
 
@@ -53,7 +51,8 @@ The auth module covers sign-up, sign-in, password reset, and email verification.
 
 - Locally, run `pnpm dev` and sign up at `/{locale}/auth/register`; a verification email should arrive.
 - Online, `curl -s https://<your-domain>/api/auth/get-session` returns 200 with `session` as `null`, which means the auth API is healthy.
-- `pnpm run check:env:prod` passes, which means the production variables and the configuration of every enabled module are complete.
+- `pnpm run check:env:prod` passes (startup variables are valid). Service credentials live in the
+  database; confirm each enabled module reads `configured` in the admin overview.
 
 ## Notes
 

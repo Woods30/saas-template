@@ -16,13 +16,18 @@ vi.mock('@/lib/server-context', () => ({
 }))
 
 // 被测模块，必须在 mock 之后导入。
-import { parseServerEnv } from '@/core/env/server'
+import { parseServerEnv, type RuntimeEnv } from '@/core/env/server'
 import {
   buildNotificationProviderRegistry,
   DiscordNotificationProvider,
   FeishuNotificationProvider,
   notify,
 } from '@/core/notify/service'
+
+/** 运行期 env：启动参数 + 数据库配置（测试里直接给出后者的键）。 */
+function makeEnv(extra: Partial<RuntimeEnv> = {}): RuntimeEnv {
+  return { ...parseServerEnv({}), ...extra }
+}
 
 // DiscordNotificationProvider。
 describe('DiscordNotificationProvider', () => {
@@ -181,14 +186,14 @@ describe('DiscordNotificationProvider', () => {
 // buildNotificationProviderRegistry。
 describe('buildNotificationProviderRegistry', () => {
   it('returns undefined for both providers when env is empty', () => {
-    const registry = buildNotificationProviderRegistry(parseServerEnv({}))
+    const registry = buildNotificationProviderRegistry(makeEnv({}))
     expect(registry.discord).toBeUndefined()
     expect(registry.feishu).toBeUndefined()
   })
 
   it('returns factories when env has webhook URLs', () => {
     const registry = buildNotificationProviderRegistry(
-      parseServerEnv({
+      makeEnv({
         DISCORD_WEBHOOK_URL: 'https://discord.com/api/webhooks/123/abc',
         FEISHU_WEBHOOK_URL: 'https://open.feishu.cn/open-apis/bot/v2/hook/abc-123',
       }),

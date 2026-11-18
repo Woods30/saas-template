@@ -1,229 +1,307 @@
 /**
- * 站点配置的形状与合并规则（纯函数，不碰数据库）。
+ * 配置值解析与落到站点配置（纯函数，不碰数据库）。
  *
- * 配置分六组，与后台设置页的六个分区一一对应：
- * `brand`（品牌）、`seo`（SEO，分语言）、`social`（社交链接）、
- * `payment`（支付渠道）、`mail`（邮件）、`modules`（模块与能力开关）。
+ * 存储侧：`settings` 表一个字段一行，值是 JSON（保留布尔 / 数字 / 数组的类型）。
+ * 读取侧：逐字段校验，**坏字段只丢该字段**，回落默认值——后台写进来的东西可能被
+ * 手工改坏，坏一个字段不该让整站配置垮掉。
  *
- * 事实源有两层：
- * - **代码默认值**（`src/config/website.ts`）：clone 出来就能跑，不依赖数据库；
- * - **数据库配置**：后台改完即生效，覆盖默认值。
- *
- * 合并规则刻意保守：数据库里**缺失或非法**的字段一律回落到默认值，而不是
- * 让一个坏字段把整组配置带崩——后台存的是 JSON，坏了不该让站点打不开。
+ * 字段清单与默认值都在 `registry.ts`，这里只负责「怎么校验」与「怎么用」。
  */
-import { z } from 'zod'
-import { baseConfig, type WebsiteConfig } from '@/config/website'
 
-export const SETTINGS_KEYS = ['brand', 'seo', 'social', 'payment', 'mail', 'modules'] as const
+import type { AnalyticsName, PaymentProviderName, WebsiteConfig } from '@/config/website'
+import type { CollectionAccountConfig } from '@/types/collection'
+import {
+  defaultSettingsValues,
+  SETTING_FIELDS,
+  type SettingField,
+  settingField,
+  settingGroup,
+} from './registry'
 
-export type SettingsKey = (typeof SETTINGS_KEYS)[number]
+export type SettingsValues = Record<string, unknown>
 
-/** 品牌：出现在标题、页脚、OG 与 JSON-LD。 */
-export const brandSchema = z.object({
-  name: z.string().min(1),
-  logoAccent: z.string(),
-  tagline: z.string(),
-})
-
-/** 单个语言的 SEO。 */
-export const seoLocaleSchema = z.object({
-  title: z.string(),
-  description: z.string(),
-  keywords: z.array(z.string()),
-})
-
-/** SEO：默认文案 + 分语言覆盖。 */
-export const seoSchema = z.object({
-  default: seoLocaleSchema,
-  locales: z.record(z.string(), seoLocaleSchema.partial()),
-})
-
-export const socialSchema = z.object({
-  links: z.record(z.string(), z.string()),
-})
-
-export const paymentSchema = z.object({
-  enabled: z.boolean(),
-  provider: z.enum(['stripe', 'creem']),
-  /**
-   * 结账链路：渠道支付与核销收款互斥。
-   *
-   * 带默认值 `provider`：这一项是后加的，早于它写入的 `payment` 分组没有这个
-   * 键。不给默认值的话整个分组会因「缺字段」被判非法而整组回落默认值——后台
-   * 改过的渠道开关会被一起抹掉。
-   */
-  checkoutMode: z.enum(['provider', 'collection']).default('provider'),
-})
-
-export const mailSchema = z.object({
-  enabled: z.boolean(),
-  provider: z.enum(['resend', 'cloudflare']),
-  supportEmail: z.string(),
-})
-
-export const modulesSchema = z.object({
-  docs: z.boolean(),
-  blog: z.boolean(),
-  changelog: z.boolean(),
-  contact: z.boolean(),
-  newsletter: z.boolean(),
-  /**
-   * 核销型支付模块。
-   *
-   * 带默认值 `false`：这一项是后加的，早于它写入的 `modules` 分组没有这个键。
-   * 不给默认值的话整个分组会因「缺字段」被判非法而整组回落默认值——后台改过的
-   * 其它开关会被一起抹掉。
-   */
-  collection: z.boolean().default(false),
-  notification: z.boolean(),
-  analytics: z.boolean(),
-  auth: z.boolean(),
-  features: z.object({
-    enableI18n: z.boolean(),
-    enableFileUpload: z.boolean(),
-    enableApiKeys: z.boolean(),
-    enableAdmin: z.boolean(),
-    enableAIGateway: z.boolean(),
-  }),
-})
-
-export const settingsSchemas = {
-  brand: brandSchema,
-  seo: seoSchema,
-  social: socialSchema,
-  payment: paymentSchema,
-  mail: mailSchema,
-  modules: modulesSchema,
-} as const
-
-export type BrandSettings = z.infer<typeof brandSchema>
-export type SeoSettings = z.infer<typeof seoSchema>
-export type SocialSettings = z.infer<typeof socialSchema>
-export type PaymentSettings = z.infer<typeof paymentSchema>
-export type MailSettings = z.infer<typeof mailSchema>
-export type ModuleSettings = z.infer<typeof modulesSchema>
-
-export interface SettingsGroups {
-  brand: BrandSettings
-  seo: SeoSettings
-  social: SocialSettings
-  payment: PaymentSettings
-  mail: MailSettings
-  modules: ModuleSettings
+/** 校验失败：消息只含字段键与原因，不含原始值（避免把口令写进日志）。 */
+export class SettingsValidationError extends Error {
+  constructor(
+    readonly field: string,
+    readonly reason: string,
+  ) {
+    super(`配置项 ${field} 不合法：${reason}`)
+    this.name = 'SettingsValidationError'
+  }
 }
 
-/**
- * 代码默认值。
- *
- * 取自 `baseConfig`——那是**不随数据库变化**的出厂配置（已套用 env 白名单），
- * 数据库里没有对应分组时用它兜底。
- *
- * 刻意不读 `websiteConfig`：那是「当前生效配置」，读它会让上一轮的值变成这一轮的
- * 默认值——库里的分组被删掉后回不到出厂值。
- */
-export function defaultSettings(): SettingsGroups {
-  const config = baseConfig
-  return {
-    brand: {
-      name: config.metadata.name,
-      logoAccent: config.metadata.logoAccent,
-      tagline: '',
-    },
-    seo: {
-      default: { title: config.metadata.name, description: '', keywords: [] },
-      locales: {},
-    },
-    social: { links: { ...config.social } },
-    payment: {
-      enabled: config.payment.enabled,
-      provider: config.payment.provider,
-      checkoutMode: config.payment.checkoutMode,
-    },
-    mail: {
-      enabled: config.mail.enabled,
-      provider: config.mail.provider,
-      supportEmail: config.mail.supportEmail,
-    },
-    modules: {
-      docs: config.docs.enabled,
-      blog: config.blog.enabled,
-      changelog: config.changelog.enabled,
-      contact: config.contact.enabled,
-      newsletter: config.newsletter.enabled,
-      collection: config.collection.enabled,
-      notification: config.notification.enabled,
-      analytics: config.analytics.enabled,
-      auth: config.auth.enabled,
-      features: { ...config.features },
-    },
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function assertSafeUrl(field: string, value: string): void {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new SettingsValidationError(field, '不是合法 URL')
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new SettingsValidationError(field, '必须是 http(s) URL')
+  }
+  if (url.username || url.password) {
+    throw new SettingsValidationError(field, 'URL 不得内嵌凭据')
   }
 }
 
 /**
- * 合并数据库里存的值与默认值。
+ * 单个字段的校验与归一化。
  *
- * 每个分组独立校验：某一组坏了只丢那一组，其余照常用。全部分组都坏时等价于
- * 纯默认值——站点仍可用，只是后台改的东西没生效。
+ * 空字符串在 url / email 上是合法的「未设置」：后台清空一个已填的值是正常操作，
+ * 不该被判为非法。
  */
-export function mergeSettings(
-  defaults: SettingsGroups,
-  stored: Partial<Record<SettingsKey, unknown>>,
-): SettingsGroups {
-  const result = { ...defaults } as SettingsGroups
-  for (const key of SETTINGS_KEYS) {
-    const raw = stored[key]
+export function parseFieldValue(field: SettingField, raw: unknown): unknown {
+  switch (field.kind) {
+    case 'text':
+    case 'textarea':
+    case 'password': {
+      if (typeof raw !== 'string') throw new SettingsValidationError(field.key, '必须是文本')
+      return raw
+    }
+    case 'url': {
+      if (typeof raw !== 'string') throw new SettingsValidationError(field.key, '必须是文本')
+      if (raw !== '') assertSafeUrl(field.key, raw)
+      return raw
+    }
+    case 'email': {
+      if (typeof raw !== 'string') throw new SettingsValidationError(field.key, '必须是文本')
+      if (raw !== '' && !EMAIL_PATTERN.test(raw)) {
+        throw new SettingsValidationError(field.key, '必须是邮箱地址')
+      }
+      return raw
+    }
+    case 'boolean': {
+      if (typeof raw !== 'boolean') throw new SettingsValidationError(field.key, '必须是布尔值')
+      return raw
+    }
+    case 'number': {
+      if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) {
+        throw new SettingsValidationError(field.key, '必须是非负数字')
+      }
+      return raw
+    }
+    case 'select': {
+      if (typeof raw !== 'string' || !field.options?.includes(raw)) {
+        throw new SettingsValidationError(field.key, '取值不在可选项中')
+      }
+      return raw
+    }
+    case 'list': {
+      if (!Array.isArray(raw) || raw.some((item) => typeof item !== 'string')) {
+        throw new SettingsValidationError(field.key, '必须是字符串列表')
+      }
+      return raw
+    }
+    case 'json': {
+      if (!Array.isArray(raw)) throw new SettingsValidationError(field.key, '必须是数组')
+      return raw
+    }
+  }
+}
+
+/**
+ * 把库里读到的值解析成完整配置。
+ *
+ * `stored` 的键是字段键，值已经是 JSON 解析后的原始值（密钥已在调用方解密）。
+ * 未存、解析失败或校验不过的字段一律回落默认值。
+ */
+export function resolveSettingsValues(stored: Record<string, unknown>): SettingsValues {
+  const values = defaultSettingsValues()
+  for (const field of SETTING_FIELDS) {
+    const raw = stored[field.key]
     if (raw === undefined || raw === null) continue
-    const parsed = settingsSchemas[key].safeParse(raw)
-    if (!parsed.success) continue
-    result[key] = parsed.data as never
+    try {
+      values[field.key] = parseFieldValue(field, raw)
+    } catch {
+      // 坏字段回落到默认值，其余字段照常。
+    }
+  }
+  return values
+}
+
+/**
+ * 校验一组提交值，返回只含该组字段的归一化结果。
+ *
+ * 保存是**按组**的：后台一次提交一张卡片。组外的键直接忽略，组内的键逐个校验，
+ * 任一失败即整组拒绝——半组合法半组非法地落库，页面与库会长期不一致。
+ */
+export function validateGroupValues(
+  groupId: string,
+  input: Record<string, unknown>,
+): SettingsValues {
+  const group = settingGroup(groupId)
+  if (!group) throw new SettingsValidationError(groupId, '配置分组不存在')
+  const result: SettingsValues = {}
+  for (const field of group.fields) {
+    if (!(field.key in input)) continue
+    result[field.key] = parseFieldValue(field, input[field.key])
   }
   return result
 }
 
+/** 组里是否含密钥字段：含则保存前必须有 `CONFIG_ENCRYPTION_KEY`。 */
+export function groupHasSecrets(groupId: string): boolean {
+  const group = settingGroup(groupId)
+  return group?.fields.some((field) => field.secret === true) === true
+}
+
+/** 组里的密钥字段键。 */
+export function groupSecretKeys(groupId: string): string[] {
+  const group = settingGroup(groupId)
+  return group?.fields.filter((field) => field.secret).map((field) => field.key) ?? []
+}
+
+function str(values: SettingsValues, key: string): string {
+  const value = values[key]
+  return typeof value === 'string' ? value : ''
+}
+
+function bool(values: SettingsValues, key: string): boolean {
+  return values[key] === true
+}
+
+function num(values: SettingsValues, key: string, fallback: number): number {
+  const value = values[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function strList(values: SettingsValues, key: string): string[] {
+  const value = values[key]
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
+}
+
+const ANALYTICS_NAMES: readonly AnalyticsName[] = ['ga', 'plausible', 'umami', 'clarity']
+
 /**
- * 把配置分组合并进站点配置形状。
+ * 把配置值落到站点配置形状。
  *
- * 门禁、SEO、页脚等仍读 `WebsiteConfig`——那是全站统一的配置形状，
- * 这里只负责把数据库里的分组翻译成它。
+ * 门禁、SEO、页脚仍读 `WebsiteConfig`——那是全站统一的配置形状；这里负责把扁平的
+ * 字段翻译成它。认证 / 支付 / 邮件等「是否启用」在配置里有两处（模块开关与各分类
+ * 的 `enabled`），统一以 `modules.*` 为准，避免两份开关打架。
  */
 export function applySettingsToConfig(
   config: WebsiteConfig,
-  settings: SettingsGroups,
+  values: SettingsValues,
 ): WebsiteConfig {
+  const social: WebsiteConfig['social'] = {}
+  for (const field of SETTING_FIELDS) {
+    if (!field.key.startsWith('social.')) continue
+    const platform = field.key.slice('social.'.length) as keyof WebsiteConfig['social']
+    const url = str(values, field.key)
+    if (url) social[platform] = url
+  }
+
+  const locales: WebsiteConfig['seo']['locales'] = {}
+  for (const locale of ['zh', 'en'] as const) {
+    const title = str(values, `seo.${locale}.title`)
+    const description = str(values, `seo.${locale}.description`)
+    if (!title && !description) continue
+    locales[locale] = {
+      ...(title ? { title } : {}),
+      ...(description ? { description } : {}),
+    }
+  }
+
+  const provider = str(values, 'payment.provider')
+  const checkoutMode = str(values, 'payment.checkoutMode')
+  const mailProvider = str(values, 'mail.provider')
+  const newsletterProvider = str(values, 'newsletter.provider')
+  const notificationProvider = str(values, 'notification.provider')
+  const analyticsProviders = strList(values, 'analytics.providers').filter(
+    (name): name is AnalyticsName => ANALYTICS_NAMES.includes(name as AnalyticsName),
+  )
+  const collectionAccounts = Array.isArray(values['collection.accounts'])
+    ? (values['collection.accounts'] as CollectionAccountConfig[])
+    : []
+
   return {
     ...config,
     metadata: {
       ...config.metadata,
-      name: settings.brand.name,
-      logoAccent: settings.brand.logoAccent,
+      name: str(values, 'brand.name') || config.metadata.name,
+      logoAccent: str(values, 'brand.logoAccent'),
     },
-    social: { ...settings.social.links },
+    social,
     seo: {
-      default: { ...settings.seo.default },
-      locales: { ...settings.seo.locales },
+      default: {
+        title: str(values, 'seo.default.title'),
+        description: str(values, 'seo.default.description'),
+        keywords: strList(values, 'seo.default.keywords'),
+      },
+      locales,
     },
-    docs: { ...config.docs, enabled: settings.modules.docs },
-    blog: { ...config.blog, enabled: settings.modules.blog },
-    changelog: { ...config.changelog, enabled: settings.modules.changelog },
-    contact: { ...config.contact, enabled: settings.modules.contact },
-    newsletter: { ...config.newsletter, enabled: settings.modules.newsletter },
-    collection: { ...config.collection, enabled: settings.modules.collection },
-    notification: { ...config.notification, enabled: settings.modules.notification },
-    analytics: { ...config.analytics, enabled: settings.modules.analytics },
-    auth: { ...config.auth, enabled: settings.modules.auth },
-    payment: {
-      ...config.payment,
-      enabled: settings.payment.enabled,
-      provider: settings.payment.provider,
-      checkoutMode: settings.payment.checkoutMode,
+    docs: {
+      enabled: bool(values, 'modules.docs'),
+      asHome: bool(values, 'docs.asHome'),
+      ...(str(values, 'docs.siteUrl') ? { siteUrl: str(values, 'docs.siteUrl') } : {}),
+      ...(str(values, 'docs.homeUrl') ? { homeUrl: str(values, 'docs.homeUrl') } : {}),
     },
+    blog: { enabled: bool(values, 'modules.blog') },
+    changelog: { enabled: bool(values, 'modules.changelog') },
     mail: {
-      ...config.mail,
-      enabled: settings.mail.enabled,
-      provider: settings.mail.provider,
-      supportEmail: settings.mail.supportEmail,
+      enabled: bool(values, 'modules.mail'),
+      provider: mailProvider === 'cloudflare' ? 'cloudflare' : 'resend',
+      supportEmail: str(values, 'mail.supportEmail'),
     },
-    features: { ...settings.modules.features },
+    contact: { enabled: bool(values, 'modules.contact') },
+    newsletter: {
+      enabled: bool(values, 'modules.newsletter'),
+      provider: newsletterProvider === 'beehiiv' ? 'beehiiv' : 'resend',
+    },
+    payment: {
+      enabled: bool(values, 'modules.payment'),
+      provider: (provider === 'creem' ? 'creem' : 'stripe') satisfies PaymentProviderName,
+      checkoutMode: checkoutMode === 'collection' ? 'collection' : 'provider',
+    },
+    collection: {
+      enabled: bool(values, 'modules.collection'),
+      verificationSlaHours: num(values, 'collection.verificationSlaHours', 24),
+      accounts: collectionAccounts,
+    },
+    notification: {
+      enabled: bool(values, 'modules.notification'),
+      provider: notificationProvider === 'feishu' ? 'feishu' : 'discord',
+    },
+    analytics: {
+      enabled: bool(values, 'modules.analytics'),
+      providers: analyticsProviders,
+      config: {
+        ...(str(values, 'analytics.gaId') ? { gaId: str(values, 'analytics.gaId') } : {}),
+        ...(str(values, 'analytics.plausibleDomain')
+          ? { plausibleDomain: str(values, 'analytics.plausibleDomain') }
+          : {}),
+        ...(str(values, 'analytics.umamiWebsiteId')
+          ? { umamiWebsiteId: str(values, 'analytics.umamiWebsiteId') }
+          : {}),
+        ...(str(values, 'analytics.umamiScriptUrl')
+          ? { umamiScriptUrl: str(values, 'analytics.umamiScriptUrl') }
+          : {}),
+        ...(str(values, 'analytics.clarityProjectId')
+          ? { clarityProjectId: str(values, 'analytics.clarityProjectId') }
+          : {}),
+      },
+    },
+    auth: {
+      enabled: bool(values, 'modules.auth'),
+      requireEmailVerification: bool(values, 'auth.requireEmailVerification'),
+    },
+    captcha: {
+      ...(str(values, 'turnstile.siteKey') ? { siteKey: str(values, 'turnstile.siteKey') } : {}),
+    },
+    features: {
+      enableI18n: bool(values, 'features.enableI18n'),
+      enableFileUpload: bool(values, 'features.enableFileUpload'),
+      enableApiKeys: bool(values, 'features.enableApiKeys'),
+      enableAdmin: bool(values, 'features.enableAdmin'),
+      enableAIGateway: bool(values, 'features.enableAIGateway'),
+    },
   }
 }
+
+export { settingField }

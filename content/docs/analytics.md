@@ -4,7 +4,7 @@ description: Enabling tracking scripts, CSP allowlists, and business events
 locale: en
 order: 21
 group: analytics
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 The analytics module injects tracking scripts in production builds and reports page views plus
@@ -12,29 +12,27 @@ business events. You can enable several providers at once; each one reports inde
 
 ## Steps
 
-1. **Pick the providers.** In `src/config/website.ts`:
+1. **Pick providers and enter their IDs.** Open admin **Settings → Analytics**:
 
-   ```ts
-   analytics: { enabled: true, providers: ['ga', 'plausible'] },
-   ```
+   - tick one or more providers (GA / Plausible / Umami / Clarity);
+   - fill in each provider's public identifier on the same tab;
+   - save — it takes effect immediately, no redeploy.
 
-   `providers` is an array, so several can be listed together.
+   The values live in the database (`analytics.providers` and `analytics.config.*`) and are sent
+   to the browser with the page.
 
-2. **Set the environment variables.** These are `VITE_` public variables and end up in the client
-   bundle:
-
-   | Provider | Variables | Notes |
+   | Provider | Setting | Notes |
    |---|---|---|
-   | `ga` | `VITE_GA_ID` | The Google Analytics Measurement ID (`G-…`) |
-   | `plausible` | `VITE_PLAUSIBLE_DOMAIN` | Your site domain |
-   | `umami` | `VITE_UMAMI_WEBSITE_ID` + `VITE_UMAMI_SCRIPT_URL` | The script URL must be a credential-free HTTPS URL; `VITE_UMAMI_ID` is the legacy compatible field |
-   | `clarity` | `VITE_CLARITY_PROJECT_ID` | `VITE_CLARITY_ID` is the legacy compatible field |
+   | `ga` | `analytics.gaId` | The Google Analytics Measurement ID (`G-…`) |
+   | `plausible` | `analytics.plausibleDomain` | Your site domain |
+   | `umami` | `analytics.umamiWebsiteId` + `analytics.umamiScriptUrl` | The script URL must be a credential-free HTTPS URL |
+   | `clarity` | `analytics.clarityProjectId` | The Microsoft Clarity project ID |
 
-   A selected provider without its ID is not registered and injects no script.
+   A provider that is selected but missing its ID is not registered and injects no script; the
+   status page marks it `incomplete` and lists the missing fields.
 
-3. **Deploy.** `VITE_` variables are inlined into the bundle at `vite build` time, so changing one
-   requires a **rebuild and redeploy**. With automatic Release deployment, set Variables of the
-   same name in GitHub **Settings → Environments → production**.
+2. **CSP follows automatically.** The allowlist is derived per request from the effective
+   configuration (next section), so no code change is needed.
 
 ## CSP allowlist
 
@@ -46,10 +44,13 @@ cover, so `script-src` must explicitly allow the matching origins (`src/lib/secu
 | `ga` | `https://www.googletagmanager.com` |
 | `plausible` | `https://plausible.io` |
 | `clarity` | `https://www.clarity.ms` |
-| `umami` | The origin of `VITE_UMAMI_SCRIPT_URL` (self-hosted, derived per request) |
+| `umami` | The origin of `analytics.umamiScriptUrl` (self-hosted, derived per request) |
 
 Data reporting goes through `connect-src`, which already includes GA4's `*.google-analytics.com`
 and `*.analytics.google.com` — without those two, the script loads but the events never arrive.
+
+Tracking scripts are injected only in production builds with the module enabled, so local
+development never pollutes real accounts.
 
 ## Business events
 

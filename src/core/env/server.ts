@@ -1,6 +1,13 @@
 import { z } from 'zod'
 import { treatEmptyAsUndefined } from './normalize'
 
+/**
+ * 启动必需的部署环境变量。
+ *
+ * 只放「没有它站点起不来，或会把自己锁在门外」的项。业务配置（支付 / 邮件 / 存储 /
+ * 分析凭据）一律在数据库里，由 `pnpm db:seed` 从同一份环境抄进去，运行期只读数据库。
+ * 见 `docs/adr/0010-settings-in-database.md`。
+ */
 const schema = z.object({
   BETTER_AUTH_SECRET: z.string().min(32, 'BETTER_AUTH_SECRET 必须 ≥ 32 字符').optional(),
   /**
@@ -22,52 +29,54 @@ const schema = z.object({
    *
    * 未设时从请求 origin 推断，单域名部署等价；**多域名或接了 OAuth / 邮件验证时必须
    * 显式设置**，否则回调地址随请求漂移。
-   *
-   * 服务端字段而非 `VITE_` 公开值：只参与服务端生成链接，不进客户端 bundle。
    */
   BETTER_AUTH_URL: z.url().optional(),
-  STRIPE_SECRET_KEY: z.string().optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().optional(),
-  /** Creem（Merchant of Record）API Key：测试模式以 `creem_test_` 开头。 */
-  CREEM_API_KEY: z.string().optional(),
-  CREEM_WEBHOOK_SECRET: z.string().optional(),
   /**
-   * 商品引用 → Creem 商品 ID（`prod_*`），逗号分隔：`pro_monthly=prod_a,lifetime=prod_b`。
+   * 配置密钥的加密口令：`settings` 表里 `enc:v1:` 密文由它派生 AES-GCM 密钥。
    *
-   * 引用仍写在 `src/config/products.ts`；商品 ID 随店铺变化，放环境变量里。
+   * 必须与数据库分开保管；丢失等于所有已存凭据不可解，只能重填。缺失时后台
+   * 拒绝保存含密钥的配置组，公开参数仍可写。
    */
-  CREEM_PRODUCTS: z.string().optional(),
-  /** 为 `true` 时请求 Creem 沙盒（`test-api.creem.io`）。 */
-  CREEM_DEBUG: z.enum(['true', 'false']).optional(),
-  GOOGLE_CLIENT_ID: z.string().optional(),
-  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  CONFIG_ENCRYPTION_KEY: z.string().min(16).optional(),
+  /** Cloudflare 部署 token：只给 CI / 脚本用，运行期不读。 */
   CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
   CLOUDFLARE_API_TOKEN: z.string().optional(),
-  CLOUDFLARE_EMAIL_SENDER: z.string().optional(),
-  RESEND_API_KEY: z.string().optional(),
-  MAIL_FROM: z.email().optional(),
-  RESEND_AUDIENCE_ID: z.string().optional(),
-  BEEHIIV_API_KEY: z.string().optional(),
-  BEEHIIV_PUBLICATION_ID: z.string().optional(),
-  BEEHIIV_SEND_WELCOME_EMAIL: z.enum(['true', 'false']).default('false').optional(),
-  DISCORD_WEBHOOK_URL: z
-    .url()
-    .refine((u) => u.startsWith('https://discord.com/api/webhooks/'), {
-      message: 'Discord webhook URL must start with https://discord.com/api/webhooks/',
-    })
-    .optional(),
-  FEISHU_WEBHOOK_URL: z
-    .url()
-    .refine((u) => u.startsWith('https://open.feishu.cn/open-apis/bot/v2/hook/'), {
-      message: 'Feishu webhook URL must start with https://open.feishu.cn/open-apis/bot/v2/hook/',
-    })
-    .optional(),
-  TURNSTILE_SECRET_KEY: z.string().optional(),
+  /** 管理员邮箱白名单，逗号分隔：发信接口的收件人校验。 */
   ADMIN_EMAILS: z.string().optional(),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 })
 
 export type ServerEnv = z.infer<typeof schema>
+
+/**
+ * 由**数据库配置**派生的服务凭据形状。
+ *
+ * 键名沿用环境变量的名字，是为了让支付 / 邮件 / 通知的消费方不必区分来源；
+ * 值来自 `core/config/derive.ts`，不是部署环境。
+ */
+export interface ManagedEnv {
+  STRIPE_SECRET_KEY?: string
+  STRIPE_WEBHOOK_SECRET?: string
+  CREEM_API_KEY?: string
+  CREEM_WEBHOOK_SECRET?: string
+  CREEM_PRODUCTS?: string
+  CREEM_DEBUG?: 'true' | 'false'
+  GOOGLE_CLIENT_ID?: string
+  GOOGLE_CLIENT_SECRET?: string
+  TURNSTILE_SECRET_KEY?: string
+  CLOUDFLARE_EMAIL_SENDER?: string
+  RESEND_API_KEY?: string
+  MAIL_FROM?: string
+  RESEND_AUDIENCE_ID?: string
+  BEEHIIV_API_KEY?: string
+  BEEHIIV_PUBLICATION_ID?: string
+  BEEHIIV_SEND_WELCOME_EMAIL?: 'true' | 'false'
+  DISCORD_WEBHOOK_URL?: string
+  FEISHU_WEBHOOK_URL?: string
+}
+
+/** 服务端消费方拿到的完整 env 形状：启动参数 + 数据库配置。 */
+export type RuntimeEnv = ServerEnv & ManagedEnv
 
 export function parseServerEnv(raw: unknown): ServerEnv {
   return schema.parse(treatEmptyAsUndefined(raw))

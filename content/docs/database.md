@@ -76,8 +76,9 @@ pnpm db:seed:remote
 pnpm db:seed:pg
 ```
 
-The seed writes the six default configuration groups. It only fills in what is missing
-(`DO NOTHING`) and never overwrites what you changed in the admin panel; `--force` overwrites.
+The seed writes the per-field defaults from the settings registry (plus the credentials you put
+in `.env`). It only fills in what is missing (`DO NOTHING`) and never overwrites what you
+changed in the admin panel; `--force` overwrites.
 RBAC permission points and taxonomies join the seed in later milestones.
 
 ## Usage

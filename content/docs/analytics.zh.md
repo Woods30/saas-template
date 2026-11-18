@@ -4,7 +4,7 @@ description: 统计脚本的启用、CSP 放行与业务事件
 locale: zh
 order: 21
 group: analytics
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 分析模块在生产构建里注入统计脚本并上报页面浏览与业务事件。可以同时开多个 provider，
@@ -12,27 +12,25 @@ updated: 2026-11-03
 
 ## 步骤
 
-1. **选 provider。** 在 `src/config/website.ts`：
+1. **选渠道并填标识。** 打开后台「系统设置 → 分析」：
 
-   ```ts
-   analytics: { enabled: true, providers: ['ga', 'plausible'] },
-   ```
+   - 勾选要用的一或多个渠道（GA / Plausible / Umami / Clarity）；
+   - 在同一页填各渠道的公开标识（见下表）；
+   - 保存即生效，不用发版。
 
-   `providers` 是数组，可以同时列多个。
+   配置存在数据库里（`analytics.providers` 与 `analytics.config.*`），随页面下发浏览器。
 
-2. **填环境变量。** 这些都是 `VITE_` 公开变量，会进客户端 bundle：
-
-   | provider | 环境变量 | 说明 |
+   | provider | 配置字段 | 说明 |
    |---|---|---|
-   | `ga` | `VITE_GA_ID` | Google Analytics 的 Measurement ID（`G-…`） |
-   | `plausible` | `VITE_PLAUSIBLE_DOMAIN` | 站点域名 |
-   | `umami` | `VITE_UMAMI_WEBSITE_ID` + `VITE_UMAMI_SCRIPT_URL` | 脚本地址必须是无凭据的 HTTPS URL；`VITE_UMAMI_ID` 是旧写法的兼容字段 |
-   | `clarity` | `VITE_CLARITY_PROJECT_ID` | `VITE_CLARITY_ID` 是旧写法的兼容字段 |
+   | `ga` | `analytics.gaId` | Google Analytics 的 Measurement ID（`G-…`） |
+   | `plausible` | `analytics.plausibleDomain` | 站点域名 |
+   | `umami` | `analytics.umamiWebsiteId` + `analytics.umamiScriptUrl` | 脚本地址必须是无凭据的 HTTPS URL |
+   | `clarity` | `analytics.clarityProjectId` | Microsoft Clarity 项目 ID |
 
-   选中但缺 ID 的 provider 不会注册，也不会注入脚本。
+   选中但缺 ID 的渠道不会注册，也不会注入脚本；状态页会把它标成 `incomplete` 并列出缺的字段。
 
-3. **部署。** `VITE_` 变量在 `vite build` 时内联进 bundle，改了必须**重新构建并部署**才生效。
-   用 Release 自动部署时在 GitHub **Settings → Environments → production** 配同名 Variable。
+2. **确认 CSP 会自动放行。** 放行名单按当前生效配置逐请求推导（见下一节），
+   不需要手工改代码。
 
 ## CSP 放行
 
@@ -44,10 +42,12 @@ updated: 2026-11-03
 | `ga` | `https://www.googletagmanager.com` |
 | `plausible` | `https://plausible.io` |
 | `clarity` | `https://www.clarity.ms` |
-| `umami` | `VITE_UMAMI_SCRIPT_URL` 的 origin（自托管，逐请求推导） |
+| `umami` | `analytics.umamiScriptUrl` 的 origin（自托管，逐请求推导） |
 
 数据上报走 `connect-src`，其中已包含 GA4 的 `*.google-analytics.com` 与
 `*.analytics.google.com`——少了这两条，脚本能加载但事件收不到。
+
+统计脚本只在**生产构建 + 渠道启用**时注入，本地开发不会污染真实账号数据。
 
 ## 业务事件
 

@@ -104,112 +104,70 @@ describe('buildCspHeader — script-src 允许分析脚本', () => {
 })
 
 // getAnalyticsScriptOrigins：只放行真的会注入脚本的 provider。
-
+//
+// 标识来自数据库配置（`analytics.config`），随页面下发浏览器；这里只关心
+// 「选了渠道 + 有标识」两者同时成立时才把 origin 写进 CSP。
 describe('getAnalyticsScriptOrigins', () => {
-  const base = {
-    VITE_GA_ID: 'G-XXX',
-    VITE_PLAUSIBLE_DOMAIN: 'jerbix.dev',
-    VITE_UMAMI_WEBSITE_ID: 'site-1',
-    VITE_UMAMI_SCRIPT_URL: 'https://stats.jerbix.dev/script.js',
-    VITE_CLARITY_PROJECT_ID: 'clarity-1',
+  const config = {
+    gaId: 'G-XXX',
+    plausibleDomain: 'jerbix.dev',
+    umamiWebsiteId: 'site-1',
+    umamiScriptUrl: 'https://stats.jerbix.dev/script.js',
+    clarityProjectId: 'clarity-1',
+  }
+
+  function origins(
+    providers: string[],
+    overrides: Partial<typeof config> = {},
+    enabled = true,
+  ): string[] {
+    return getAnalyticsScriptOrigins({
+      analytics: { enabled, providers, config: { ...config, ...overrides } },
+    })
   }
 
   it('analytics 关闭时返回空数组', () => {
-    expect(
-      getAnalyticsScriptOrigins({
-        analytics: { enabled: false, providers: ['ga', 'plausible', 'umami', 'clarity'] },
-        publicEnv: base,
-      }),
-    ).toEqual([])
+    expect(origins(['ga', 'plausible', 'umami', 'clarity'], {}, false)).toEqual([])
   })
 
   it('未选中任何 provider 时返回空数组', () => {
-    expect(
-      getAnalyticsScriptOrigins({
-        analytics: { enabled: true, providers: [] },
-        publicEnv: base,
-      }),
-    ).toEqual([])
+    expect(origins([])).toEqual([])
   })
 
-  it('GA 选中但有 ID 缺失时不放行', () => {
-    expect(
-      getAnalyticsScriptOrigins({
-        analytics: { enabled: true, providers: ['ga'] },
-        publicEnv: { ...base, VITE_GA_ID: undefined },
-      }),
-    ).toEqual([])
+  it('GA 选中但缺 ID 时不放行', () => {
+    expect(origins(['ga'], { gaId: undefined })).toEqual([])
+  })
+
+  it('GA 选中且有 ID 时放行 gtag 脚本域', () => {
+    expect(origins(['ga'])).toEqual(['https://www.googletagmanager.com'])
   })
 
   it('Plausible 选中且有 domain 时放行', () => {
-    expect(
-      getAnalyticsScriptOrigins({
-        analytics: { enabled: true, providers: ['plausible'] },
-        publicEnv: base,
-      }),
-    ).toEqual(['https://plausible.io'])
+    expect(origins(['plausible'])).toEqual(['https://plausible.io'])
   })
 
   it('Clarity 选中且有 project ID 时放行', () => {
-    expect(
-      getAnalyticsScriptOrigins({
-        analytics: { enabled: true, providers: ['clarity'] },
-        publicEnv: base,
-      }),
-    ).toEqual(['https://www.clarity.ms'])
+    expect(origins(['clarity'])).toEqual(['https://www.clarity.ms'])
   })
 
   it('Umami 的自托管脚本 URL 取 origin，不含路径', () => {
-    expect(
-      getAnalyticsScriptOrigins({
-        analytics: { enabled: true, providers: ['umami'] },
-        publicEnv: base,
-      }),
-    ).toEqual(['https://stats.jerbix.dev'])
+    expect(origins(['umami'])).toEqual(['https://stats.jerbix.dev'])
   })
 
   it('Umami 缺脚本 URL 时不放行', () => {
-    expect(
-      getAnalyticsScriptOrigins({
-        analytics: { enabled: true, providers: ['umami'] },
-        publicEnv: { ...base, VITE_UMAMI_SCRIPT_URL: undefined },
-      }),
-    ).toEqual([])
+    expect(origins(['umami'], { umamiScriptUrl: undefined })).toEqual([])
   })
 
-  it('Umami 的兼容字段 VITE_UMAMI_ID 同样有效', () => {
-    expect(
-      getAnalyticsScriptOrigins({
-        analytics: { enabled: true, providers: ['umami'] },
-        publicEnv: { ...base, VITE_UMAMI_WEBSITE_ID: undefined, VITE_UMAMI_ID: 'legacy-site' },
-      }),
-    ).toEqual(['https://stats.jerbix.dev'])
-  })
-
-  it('Clarity 的兼容字段 VITE_CLARITY_ID 同样有效', () => {
-    expect(
-      getAnalyticsScriptOrigins({
-        analytics: { enabled: true, providers: ['clarity'] },
-        publicEnv: { ...base, VITE_CLARITY_PROJECT_ID: undefined, VITE_CLARITY_ID: 'legacy' },
-      }),
-    ).toEqual(['https://www.clarity.ms'])
+  it('Umami 缺 website ID 时不放行', () => {
+    expect(origins(['umami'], { umamiWebsiteId: undefined })).toEqual([])
   })
 
   it('Umami 脚本 URL 非法时静默跳过，不写入来源不明字符串', () => {
-    expect(
-      getAnalyticsScriptOrigins({
-        analytics: { enabled: true, providers: ['umami'] },
-        publicEnv: { ...base, VITE_UMAMI_SCRIPT_URL: 'not a url' },
-      }),
-    ).toEqual([])
+    expect(origins(['umami'], { umamiScriptUrl: 'not a url' })).toEqual([])
   })
 
   it('多个 provider 同时启用时去重且顺序稳定', () => {
-    const origins = getAnalyticsScriptOrigins({
-      analytics: { enabled: true, providers: ['ga', 'plausible', 'umami', 'clarity'] },
-      publicEnv: base,
-    })
-    expect(origins).toEqual([
+    expect(origins(['ga', 'plausible', 'umami', 'clarity'])).toEqual([
       'https://www.googletagmanager.com',
       'https://plausible.io',
       'https://stats.jerbix.dev',

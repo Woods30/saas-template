@@ -1,5 +1,5 @@
 import { CACHE_TTL, createCacheKey, deleteCache, getOrSetCache } from '@/core/cache'
-import type { ServerEnv } from '@/core/env/server'
+import type { RuntimeEnv } from '@/core/env/server'
 import { checkRateLimit as sharedCheckRateLimit } from '@/lib/rate-limit'
 import { getServerContext } from '@/lib/server-context'
 import { BeehiivNewsletterProvider } from './provider/beehiiv'
@@ -16,7 +16,7 @@ type NewsletterProviderFactory = () => NewsletterProvider
 
 /** 归一化后 provider 所需的 server env 子集。 */
 type NewsletterEnv = Pick<
-  ServerEnv,
+  RuntimeEnv,
   | 'RESEND_API_KEY'
   | 'RESEND_AUDIENCE_ID'
   | 'BEEHIIV_API_KEY'

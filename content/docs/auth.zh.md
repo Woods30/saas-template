@@ -14,14 +14,10 @@ updated: 2026-11-03
 
 ## 步骤
 
-1. **打开认证模块。**
+1. **打开认证模块。** 打开后台「系统设置 → 模块」，打开「认证」；在同一 tab 里决定是否要求
+   邮箱验证（默认要求）。
 
-   ```ts
-   // src/config/website.ts
-   auth: { enabled: true, requireEmailVerification: true },
-   ```
-
-   `auth.enabled` 同时门禁页面与 API：关闭时 `/{locale}/auth/*` 与 `/api/auth/*` 一起 404。
+   模块开关同时门禁页面与 API：关闭时 `/{locale}/auth/*` 与 `/api/auth/*` 一起 404。
 
 2. **配好生产必填的两个变量。**
 
@@ -33,12 +29,12 @@ updated: 2026-11-03
    `BETTER_AUTH_SECRET` 用 `openssl rand -base64 32` 生成，按[部署到 Cloudflare](./cloudflare)
    里的方式上传为运行时 secret。
 
-3. **（可选）接入 Google 登录。** 需要两个服务端变量，缺一不可：
+3. **（可选）接入 Google 登录。** 在后台「系统设置 → 认证」的 Google 分组填两个值，缺一不可：
 
-   | 变量 | 说明 |
+   | 字段 | 说明 |
    |---|---|
-   | `GOOGLE_CLIENT_ID` | Google Cloud Console 里 OAuth 客户端的 ID |
-   | `GOOGLE_CLIENT_SECRET` | 同一个客户端的 secret |
+   | Client ID | Google Cloud Console 里 OAuth 客户端的 ID |
+   | Client secret | 同一个客户端的 secret（加密入库） |
 
    两个都配齐，登录页才出现 Google 按钮；只配 ID 时按钮不显示，也不会留下一个必然失败的
    入口。在 Google Cloud Console 的 OAuth 客户端里登记回调地址：
@@ -58,7 +54,8 @@ updated: 2026-11-03
 - 本地 `pnpm dev` 后打开 `/{locale}/auth/register` 注册一个账号，应收到验证邮件。
 - 线上 `curl -s https://<your-domain>/api/auth/get-session` 返回 200 且 `session` 为 `null`，
   说明认证 API 正常。
-- `pnpm run check:env:prod` 通过，说明生产变量与已启用模块的配置齐备。
+- `pnpm run check:env:prod` 通过（启动变量合法）。业务凭据在数据库里，到后台概览确认已启用模块
+  都显示 `configured`。
 
 ## 注意事项
 

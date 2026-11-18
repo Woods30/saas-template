@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { collectionConfigErrors, resolveCollectionPrice } from '@/config/products'
 import { getServiceStatuses } from '@/config/service-status'
-import { createWebsiteConfig } from '@/config/website'
+import { createWebsiteConfig, parseCollectionAccounts } from '@/config/website'
+import { defaultSettingsValues } from '@/core/config/registry'
+import { applySettingsToConfig } from '@/core/config/settings'
 import { parsePublicEnv } from '@/core/env/public'
-import { parseServerEnv } from '@/core/env/server'
+import { parseServerEnv, type RuntimeEnv } from '@/core/env/server'
 import type { CollectionAccountConfig } from '@/types/collection'
 import type { ProductDefinition } from '@/types/pricing'
 
@@ -45,8 +47,7 @@ function statusFor(options: {
   if (options.landingOffer) config.landingOffer = options.landingOffer
   return getServiceStatuses({
     config,
-    publicEnv: baseEnv,
-    serverEnv: parseServerEnv({}),
+    serverEnv: parseServerEnv({}) as RuntimeEnv,
   })
 }
 
@@ -131,7 +132,7 @@ describe('resolveCollectionPrice', () => {
   })
 })
 
-describe('VITE_COLLECTION_ACCOUNTS', () => {
+describe('收款账户解析', () => {
   /** 一个合法的账户 JSON：与 `ACCOUNT` 同构。 */
   const accountJson = JSON.stringify([
     {
@@ -143,45 +144,38 @@ describe('VITE_COLLECTION_ACCOUNTS', () => {
     },
   ])
 
-  it('JSON 数组覆盖源码配置的收款账户', () => {
-    const config = createWebsiteConfig({ ...baseEnv, VITE_COLLECTION_ACCOUNTS: accountJson })
-    expect(config.collection.accounts).toHaveLength(1)
-    expect(config.collection.accounts[0]).toMatchObject({
+  it('解析 JSON 数组为账户清单', () => {
+    const accounts = parseCollectionAccounts(accountJson)
+    expect(accounts).toHaveLength(1)
+    expect(accounts?.[0]).toMatchObject({
       id: 'alipay-env',
       channel: 'alipay',
       currency: 'cny',
     })
   })
 
-  it('留空或未设置时沿用源码配置', () => {
-    const withSource = createWebsiteConfig({
-      ...baseEnv,
-      VITE_COLLECTION_ACCOUNTS: '   ',
-    })
-    expect(withSource.collection.accounts).toEqual(createWebsiteConfig(baseEnv).collection.accounts)
+  it('留空或未设置时返回 undefined（表示没给）', () => {
+    expect(parseCollectionAccounts('   ')).toBeUndefined()
+    expect(parseCollectionAccounts(undefined)).toBeUndefined()
   })
 
-  it('非法 JSON 或形状不对时整体忽略，回退源码配置（fail-visible 由 service-status 报 incomplete）', () => {
-    const source = createWebsiteConfig(baseEnv).collection.accounts
+  it('非法 JSON 或形状不对时整体忽略，不静默生效半个配置', () => {
     for (const bad of ['not-json', '[{"id":1}]', JSON.stringify({ id: 'x' }), '[]']) {
-      expect(
-        createWebsiteConfig({ ...baseEnv, VITE_COLLECTION_ACCOUNTS: bad }).collection.accounts,
-      ).toEqual(source)
+      expect(parseCollectionAccounts(bad)).toBeUndefined()
     }
   })
 
-  it('env 账户参与 service-status 的完整性判定', () => {
-    const env = {
-      ...baseEnv,
-      VITE_MODULES: 'collection,auth',
-      VITE_COLLECTION_ACCOUNTS: accountJson,
-    }
-    const config = createWebsiteConfig(env)
+  it('配置值里的账户进入站点配置并参与 service-status 判定', () => {
+    const values = { ...defaultSettingsValues(), 'collection.accounts': [ACCOUNT] }
+    const config = applySettingsToConfig(createWebsiteConfig(baseEnv), {
+      ...values,
+      'modules.collection': true,
+    })
     expect(config.collection.enabled).toBe(true)
+    expect(config.collection.accounts).toEqual([ACCOUNT])
     const statuses = getServiceStatuses({
       config,
-      publicEnv: env,
-      serverEnv: parseServerEnv({}),
+      serverEnv: parseServerEnv({}) as RuntimeEnv,
     })
     expect(statuses.collection.state).toBe('configured')
   })

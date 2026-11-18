@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import type { ServerEnv } from '@/core/env/server'
+import type { RuntimeEnv } from '@/core/env/server'
 
 /** 各社交登录提供方在当前部署中是否可用。 */
 export interface AuthProviderAvailability {
@@ -12,7 +12,7 @@ export interface AuthProviderAvailability {
  * 两个凭据缺一不可：只配 clientId 时 better-auth 也不会启用该 provider，
  * 显示按钮只会把用户导向必然失败的流程。
  */
-export function getAuthProviderAvailability(env: ServerEnv): AuthProviderAvailability {
+export function getAuthProviderAvailability(env: RuntimeEnv): AuthProviderAvailability {
   return { google: !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) }
 }
 
@@ -24,10 +24,7 @@ export function getAuthProviderAvailability(env: ServerEnv): AuthProviderAvailab
  */
 export const fetchAuthProviderAvailability = createServerFn({ method: 'GET' }).handler(
   async (): Promise<AuthProviderAvailability> => {
-    const [{ getServerContext }, { parseServerEnv }] = await Promise.all([
-      import('@/lib/server-context'),
-      import('@/core/env/server'),
-    ])
-    return getAuthProviderAvailability(parseServerEnv(getServerContext().env ?? {}))
+    const { getServerContext } = await import('@/lib/server-context')
+    return getAuthProviderAvailability(getServerContext().env)
   },
 )

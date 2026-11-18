@@ -40,8 +40,8 @@ Edit `getProducts()` in `src/config/products.ts` and nothing else:
 - `recommended` is optional; array order is display order.
 - Copy is evaluated when the function runs — never call `m.*()` at module top level.
 
-The provider is chosen by `websiteConfig.payment.provider`, and the `VITE_PAYMENT_PROVIDER`
-environment variable switches it at deploy time without touching code.
+The provider is chosen in admin **Settings → Payment** (`stripe` / `creem`) and takes effect as
+soon as you save — no redeploy.
 
 ## Buyer flow
 

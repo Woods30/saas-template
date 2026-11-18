@@ -36,7 +36,7 @@ updated: 2026-11-03
 - `recommended` 可选；数组顺序就是展示顺序。
 - 文案在函数调用时求值，不在模块顶层调用 `m.*()`。
 
-provider 由 `websiteConfig.payment.provider` 选，可用环境变量 `VITE_PAYMENT_PROVIDER` 在部署时切换，不用改代码。
+provider 在后台「系统设置 → 支付」里选（`stripe` / `creem`），保存即生效，不用重新部署。
 
 ## 买家流程
 

@@ -72,7 +72,8 @@ pnpm db:seed:remote
 pnpm db:seed:pg
 ```
 
-种子写入站点配置的六组默认值，只补缺失的（`DO NOTHING`），不覆盖后台改过的值；`--force`
+种子写入站点配置的逐字段默认值（注册表 + `.env` 初值），只补缺失的（`DO NOTHING`），
+不覆盖后台改过的值；`--force`
 才覆盖。后续里程碑的 RBAC 权限点、分类等也在这里追加。
 
 ## 用法

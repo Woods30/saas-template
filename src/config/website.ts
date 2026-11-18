@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { defaultSettingsValues } from '@/core/config/registry'
+import { applySettingsToConfig } from '@/core/config/settings'
 import type { PublicEnv } from '@/core/env/public'
 import { publicEnv } from '@/core/env/public'
 import type { CollectionAccountConfig, CollectionChannel } from '@/types/collection'
@@ -148,7 +150,26 @@ export interface WebsiteConfig {
     accounts: CollectionAccountConfig[]
   }
   notification: { enabled: boolean; provider: 'discord' | 'feishu' }
-  analytics: { enabled: boolean; providers: AnalyticsName[] }
+  /**
+   * 分析渠道。
+   *
+   * `config` 里是各渠道的公开标识（GA 测量 ID、Umami 站点 ID 等）：它们在后台改，
+   * 又必须下发到浏览器才能注入脚本，因此随配置一起序列化进页面。秘密凭据
+   * （如 Turnstile secret）不在这里，见 `core/config/service`。
+   */
+  analytics: {
+    enabled: boolean
+    providers: AnalyticsName[]
+    config: {
+      gaId?: string
+      plausibleDomain?: string
+      umamiWebsiteId?: string
+      umamiScriptUrl?: string
+      clarityProjectId?: string
+    }
+  }
+  /** Turnstile 的**公开**站点 key；secret 只在服务端配置里。 */
+  captcha: { siteKey?: string }
   auth: {
     enabled: boolean
     /**
@@ -183,21 +204,9 @@ export interface WebsiteConfig {
 }
 
 /**
- * 逗号分隔的名字列表 → 集合；空值与空白项忽略。
+ * 收款账户清单字符串（JSON 数组）→ 收款账户清单。
  *
- * 返回 `undefined` 表示「没给」，与「给了空列表（表示全关）」是两回事。
- */
-function parseNameList(value: string | undefined): Set<string> | undefined {
-  if (value === undefined) return undefined
-  const names = value
-    .split(',')
-    .map((name) => name.trim())
-    .filter((name) => name !== '')
-  return new Set(names)
-}
-
-/**
- * `VITE_COLLECTION_ACCOUNTS`（JSON 数组）→ 收款账户清单。
+ * `db:seed` 用它把旧的 `VITE_COLLECTION_ACCOUNTS` 抄进配置表；运行期只读配置表。
  *
  * 返回 `undefined` 表示「没给或无效」：非法 JSON、形状不对或空数组都回退源码
  * 兜底配置，**不静默生效半个配置**。「账户没配齐」由服务状态检查如实报出来。
@@ -223,81 +232,21 @@ export function parseCollectionAccounts(
 }
 
 /**
- * 按环境变量覆盖模块与能力开关。
- *
- * 同一份代码要发到不同场景：模板的文档站只开文档模块，业务站开支付与邮件。
- * 开关写在代码里就没法让一个构建产物发两处，所以这里允许用
- * `VITE_MODULES` / `VITE_FEATURES`（逗号分隔的白名单）覆盖。
- *
- * 两个变量都缺省时原样返回：代码里的默认值就是唯一事实源。
- */
-export function applyEnvOverrides(config: WebsiteConfig, env: PublicEnv): WebsiteConfig {
-  const modules = parseNameList(env.VITE_MODULES)
-  const features = parseNameList(env.VITE_FEATURES)
-  const collectionAccounts = parseCollectionAccounts(env.VITE_COLLECTION_ACCOUNTS)
-  if (
-    !modules &&
-    !features &&
-    !collectionAccounts &&
-    env.VITE_DOCS_AS_HOME === undefined &&
-    env.VITE_PAYMENT_PROVIDER === undefined &&
-    env.VITE_CHECKOUT_MODE === undefined
-  )
-    return config
-
-  const next: WebsiteConfig = { ...config, features: { ...config.features } }
-  if (modules) {
-    next.docs = { ...next.docs, enabled: modules.has('docs') }
-    next.blog = { ...next.blog, enabled: modules.has('blog') }
-    next.changelog = { ...next.changelog, enabled: modules.has('changelog') }
-    next.mail = { ...next.mail, enabled: modules.has('mail') }
-    next.contact = { ...next.contact, enabled: modules.has('contact') }
-    next.newsletter = { ...next.newsletter, enabled: modules.has('newsletter') }
-    next.payment = { ...next.payment, enabled: modules.has('payment') }
-    next.collection = { ...next.collection, enabled: modules.has('collection') }
-    next.notification = { ...next.notification, enabled: modules.has('notification') }
-    next.analytics = { ...next.analytics, enabled: modules.has('analytics') }
-    next.auth = { ...next.auth, enabled: modules.has('auth') }
-  }
-  if (env.VITE_DOCS_AS_HOME !== undefined) {
-    next.docs = { ...next.docs, asHome: env.VITE_DOCS_AS_HOME === 'true' }
-  }
-  // 同一份代码发不同支付渠道：provider 由构建环境决定，不写死在配置里。
-  if (env.VITE_PAYMENT_PROVIDER !== undefined) {
-    next.payment = { ...next.payment, provider: env.VITE_PAYMENT_PROVIDER }
-  }
-  // 结账链路同样可由构建环境指定（也可在后台系统设置里覆盖）。
-  if (env.VITE_CHECKOUT_MODE !== undefined) {
-    next.payment = { ...next.payment, checkoutMode: env.VITE_CHECKOUT_MODE }
-  }
-  // 收款账户走部署平台的配置变量：不碰源码也能配齐核销链路的「无处可付」项。
-  if (collectionAccounts) {
-    next.collection = { ...next.collection, accounts: collectionAccounts }
-  }
-  if (features) {
-    next.features = {
-      enableI18n: features.has('enableI18n'),
-      enableFileUpload: features.has('enableFileUpload'),
-      enableApiKeys: features.has('enableApiKeys'),
-      enableAdmin: features.has('enableAdmin'),
-      enableAIGateway: features.has('enableAIGateway'),
-    }
-  }
-  return next
-}
-
-/**
  * 站点集中配置仅承载语言无关的公开值，不读取服务端 env；随请求语言变化的文案
  * 必须在组件、工厂调用或路由 `head()` 内求值。显式传入公开 env 便于单测与脚本复用。
+ *
+ * 这里只给**结构**（地址、图片、UI、首页 CTA）；品牌、开关、渠道与凭据全部来自
+ * `core/config/registry` 的出厂值，经 `applySettingsToConfig` 填进来——默认值
+ * 只维护一份。
  */
 export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
-  return applyEnvOverrides(
+  return applySettingsToConfig(
     {
       baseUrl: env.VITE_BASE_URL,
       metadata: {
-        name: 'Jerbix',
+        name: '',
         // 品牌稿的字标是双色：`Jerbi` 墨色、`x` 紫色。
-        logoAccent: 'x',
+        logoAccent: '',
         images: {
           ogImage: '/logo.png',
           logoLight: '/logo-horizontal-transparent.svg',
@@ -313,40 +262,21 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       },
       landingOffer: { productId: 'template', offerId: 'once' },
       pages: { waitlist: true },
-      // 文件型文档站默认关闭：需要时在后台「系统设置 → 模块与能力」中开启。
+      // 以下分支的形状由 `applySettingsToConfig` 覆盖，这里只声明结构。
       docs: { enabled: false },
-      blog: { enabled: true },
-      changelog: { enabled: true },
-      // 支持收件邮箱：出厂是占位地址，后台「邮件」分区可改。
-      mail: { enabled: true, provider: 'resend', supportEmail: 'support@example.com' },
+      blog: { enabled: false },
+      changelog: { enabled: false },
+      mail: { enabled: false, provider: 'resend', supportEmail: '' },
       contact: { enabled: false },
       newsletter: { enabled: false, provider: 'resend' },
-      payment: {
-        // 当前站点启用 Stripe 收款；通知与分析待配置后单独开启。
-        enabled: true,
-        provider: 'stripe',
-        // 出厂走渠道结账；核销收款由后台「结账链路」切换。
-        checkoutMode: 'provider',
-      },
-      // 核销型支付默认关闭：开了才会展示收款码链路，升级不改变既有实例行为。
-      collection: {
-        enabled: false,
-        // 核验时效承诺：页面上告知用户「多久能核完」。
-        verificationSlaHours: 24,
-        // 出厂没有收款账户：使用者需在 `src/config/website.ts` 填自己的收款码，
-        // 或用 `VITE_COLLECTION_ACCOUNTS` 在部署平台配置。这里只放占位，
-        // 不放真实收款码。
-        accounts: [],
-      },
+      payment: { enabled: false, provider: 'stripe', checkoutMode: 'provider' },
+      collection: { enabled: false, verificationSlaHours: 24, accounts: [] },
       notification: { enabled: false, provider: 'discord' },
-      analytics: { enabled: true, providers: ['ga'] },
-      // auth 默认开启：模板自带登录 / 注册，关闭时对应页面与 API 一律 404。
-      auth: { enabled: true, requireEmailVerification: true },
+      analytics: { enabled: false, providers: [], config: {} },
+      captcha: {},
+      auth: { enabled: false, requireEmailVerification: true },
       social: {},
-      seo: {
-        default: { title: 'Jerbix', description: '', keywords: [] },
-        locales: {},
-      },
+      seo: { default: { title: '', description: '', keywords: [] }, locales: {} },
       features: {
         enableI18n: true,
         enableFileUpload: false,
@@ -355,15 +285,15 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
         enableAIGateway: false,
       },
     },
-    env,
+    defaultSettingsValues(),
   )
 }
 
 /**
- * 出厂配置（代码里的默认值，已套用 env 白名单）。
+ * 出厂配置（注册表里的默认值）。
  *
  * 与 `websiteConfig` 的区别：它是**不随数据库配置变化**的那一份，
- * 数据库里没有对应分组时回落到这里。
+ * 数据库里没有对应字段时回落到这里。
  */
 export const baseConfig = createWebsiteConfig(publicEnv)
 

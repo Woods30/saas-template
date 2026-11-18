@@ -9,14 +9,15 @@
  * - `--email <地址>`       把支持邮箱换成自己的
  * - `--force`              覆盖已有值（默认只补缺失的，不动后台改过的配置）
  *
- * 种子内容：站点配置的六组默认值 + 权益目录与套餐。后续里程碑的 RBAC 权限点、
- * 分类等也在这里追加。
+ * 种子内容：站点配置的逐字段默认值（env 只在这里作初值来源）+ 权益目录与套餐。
+ * RBAC 权限点与分类也在这里写入。
  */
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { parseCollectionAccounts } from '../src/config/website'
 import {
   type BuiltinRoleSeed,
   DEFAULT_PERMISSIONS,
@@ -25,7 +26,8 @@ import {
   permissionIdOf,
   roleIdOf,
 } from '../src/core/auth/rbac'
-import { defaultSettings, type SettingsGroups } from '../src/core/config/settings'
+import { defaultSettingsValues, SETTING_FIELDS } from '../src/core/config/registry'
+import type { SettingsValues } from '../src/core/config/settings'
 import {
   type DatabaseProvider,
   type Dialect,
@@ -79,23 +81,54 @@ export function parseSeedOverrides(argv: string[]): SeedOverrides {
   return overrides
 }
 
+/**
+ * 初值：注册表默认值 + 部署环境里的旧变量 + 命令行覆盖。
+ *
+ * env 只在 seed 时作为初值来源：运行期只读数据库。键名映射写在注册表的 `envKey`
+ * 上，这里不额外维护一份清单。
+ */
+export function seedValues(
+  env: Record<string, string | undefined>,
+  overrides: SeedOverrides,
+): SettingsValues {
+  const values = defaultSettingsValues()
+  for (const field of SETTING_FIELDS) {
+    if (!field.envKey) continue
+    const raw = env[field.envKey]
+    if (raw === undefined || raw === '') continue
+    if (field.kind === 'boolean') values[field.key] = raw === 'true'
+    else if (field.kind === 'list') {
+      values[field.key] = raw
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item) => item !== '')
+    } else if (field.kind === 'json') {
+      values[field.key] = parseCollectionAccounts(raw) ?? values[field.key]
+    } else if (field.kind === 'number') {
+      const parsed = Number(raw)
+      if (Number.isFinite(parsed)) values[field.key] = parsed
+    } else values[field.key] = raw
+  }
+  // 旧写法的兼容键：新名未给时回退。
+  if (!env.VITE_UMAMI_WEBSITE_ID && env.VITE_UMAMI_ID) {
+    values['analytics.umamiWebsiteId'] = env.VITE_UMAMI_ID
+  }
+  if (!env.VITE_CLARITY_PROJECT_ID && env.VITE_CLARITY_ID) {
+    values['analytics.clarityProjectId'] = env.VITE_CLARITY_ID
+  }
+  return applySeedOverrides(values, overrides)
+}
+
 /** 把覆盖项落到配置上；未覆盖的字段保持出厂值。 */
 export function applySeedOverrides(
-  settings: SettingsGroups,
+  values: SettingsValues,
   overrides: SeedOverrides,
-): SettingsGroups {
-  return {
-    ...settings,
-    brand: {
-      ...settings.brand,
-      ...(overrides.brandName !== undefined ? { name: overrides.brandName } : {}),
-      ...(overrides.brandTagline !== undefined ? { tagline: overrides.brandTagline } : {}),
-    },
-    mail: {
-      ...settings.mail,
-      ...(overrides.supportEmail !== undefined ? { supportEmail: overrides.supportEmail } : {}),
-    },
-  }
+): SettingsValues {
+  const next = { ...values }
+  if (overrides.brandName !== undefined) next['brand.name'] = overrides.brandName
+  if (overrides.brandTagline !== undefined) next['brand.tagline'] = overrides.brandTagline
+  if (overrides.supportEmail !== undefined) next['mail.supportEmail'] = overrides.supportEmail
+  return next
 }
 
 /** SQL 字符串字面量转义。 */
@@ -116,27 +149,29 @@ function sqlNullableNumber(value: number | null): string {
 /**
  * 生成种子 SQL。
  *
+ * 逐字段插入一行；**先清掉注册表之外的旧键**——早期版本把整组 JSON 存在
+ * `brand` / `seo` 这类键下，留着它们会让「哪份生效」再次变得含糊。
+ *
  * 默认只补缺失的（`DO NOTHING`）：种子是「让站点能跑起来」，不是「把后台改过的
  * 配置冲掉」。要覆盖用 `--force`。
  *
  * 时间戳表达式随方言走：SQLite 系用 `strftime('%s','now')`（列是整数秒），
- * PostgreSQL 用 `now()`（列是 timestamptz）。写成一边通用的写法会在另一边直接报错。
- *
- * `EXCLUDED` 只在 `DO UPDATE SET` 里合法，VALUES 里不能用——所以时间戳在两处
- * 都直接写表达式。
+ * PostgreSQL 用 `now()`（列是 timestamptz）。
  */
-export function buildSeedSql(settings: SettingsGroups, force: boolean, dialect: Dialect): string {
+export function buildSeedSql(values: SettingsValues, force: boolean, dialect: Dialect): string {
   const now = dialect === 'postgresql' ? 'now()' : "strftime('%s','now')"
   const conflict = force
     ? `ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = ${now}`
     : 'ON CONFLICT (key) DO NOTHING'
-  const lines = Object.entries(settings).map(
+  const knownKeys = SETTING_FIELDS.map((field) => sqlString(field.key)).join(', ')
+  const cleanup = `DELETE FROM settings WHERE key NOT IN (${knownKeys});`
+  const lines = Object.entries(values).map(
     ([key, value]) =>
       `INSERT INTO settings (key, value, updated_at) VALUES (${sqlString(key)}, ${sqlString(
         JSON.stringify(value),
       )}, ${now}) ${conflict};`,
   )
-  return `${lines.join('\n')}\n`
+  return `${cleanup}\n${lines.join('\n')}\n`
 }
 
 /**
@@ -301,7 +336,7 @@ export async function run(argv: string[] = process.argv.slice(2)): Promise<numbe
   // 方言由写入目标决定：写到 PG 用 PG 方言，写到 D1 用 sqlite 方言。
   const dialect: Dialect = target === 'pg' ? 'postgresql' : dialectOf(provider)
 
-  const settings = applySeedOverrides(defaultSettings(), overrides)
+  const settings = seedValues(process.env, overrides)
   const sql = `${buildSeedSql(settings, force, dialect)}${buildCatalogSql(force, dialect)}${buildRbacSeedSql(force, dialect)}${buildTaxonomySeedSql(force, dialect)}`
   console.log(`写入种子数据（provider=${provider} 目标=${target}${force ? ' 覆盖' : ''}）`)
   const code = await applySeed(sql, provider, target)

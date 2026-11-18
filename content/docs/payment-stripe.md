@@ -16,19 +16,13 @@ plans and keeps a `lookup_key`.
    one-time purchase needs a one-time price. **Give every price a `lookup_key`** whose value
    matches the right-hand side of `prices` in `src/config/products.ts` (`pro_monthly`,
    `pro_yearly`, and so on).
-2. Fill in the environment variables:
-
-   ```dotenv
-   VITE_PAYMENT_PROVIDER=stripe
-   STRIPE_SECRET_KEY=sk_xxx
-   STRIPE_WEBHOOK_SECRET=whsec_xxx
-   ```
-
-3. Deploy: `pnpm run deploy`.
-4. In Stripe Dashboard → Developers → Webhooks, add the endpoint
-   `<your-site-domain>/api/webhooks/stripe` and put its signing secret into
-   `STRIPE_WEBHOOK_SECRET`.
-5. Tick the events listed below on that endpoint.
+2. In admin **Settings → Payment**, pick the `stripe` provider and enter the secret key and the
+   webhook secret in the Stripe group. Both are encrypted at rest and shown masked; saving takes
+   effect immediately.
+3. In Stripe Dashboard → Developers → Webhooks, add the endpoint
+   `<your-site-domain>/api/webhooks/stripe` and put its signing secret back into the webhook
+   secret field in the admin.
+4. Tick the events listed below on that endpoint.
 
 ## Required events
 
@@ -71,6 +65,6 @@ Changing a price needs no code change: create a new price in the Stripe dashboar
 
 ## Verify
 
-- `pnpm run check:env` passes, so the provider and credentials are in place.
+- After saving in the admin, `payment` reports `configured` in the service status.
 - The Webhooks page in Stripe Dashboard shows deliveries to your endpoint (`200` means the
   signature verified).

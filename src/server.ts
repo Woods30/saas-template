@@ -22,11 +22,10 @@ import {
 import { getMailFrom } from './config/service-status'
 import { websiteConfig } from './config/website'
 import { KVCacheProvider } from './core/cache/provider/kv'
-import { loadSettings, settingsCacheFresh } from './core/config/service'
+import { getRuntimeServerEnv, loadSettings, settingsCacheFresh } from './core/config/service'
 import { CloudflareEmailProvider } from './core/email'
 import { ResendMailProvider } from './core/email/provider/resend'
-import { publicEnv } from './core/env/public'
-import { parseServerEnv, type ServerEnv } from './core/env/server'
+import { parseServerEnv, type RuntimeEnv } from './core/env/server'
 import { buildNotificationProviderRegistry } from './core/notify/service'
 import { buildPaymentProviderRegistry } from './core/payment'
 import { R2StorageProvider } from './core/storage/provider/r2'
@@ -96,15 +95,14 @@ export default {
     // 过期才查库。读不到配置不该让请求失败，退回出厂配置继续服务。
     if (!settingsCacheFresh()) {
       const { createDbFromEnv } = await import('./core/db')
-      await loadSettings(await createDbFromEnv(env as unknown as Env))
+      await loadSettings(await createDbFromEnv(env as unknown as Env), {
+        baseEnv: parsedEnv,
+        encryptionKey: parsedEnv.CONFIG_ENCRYPTION_KEY,
+      })
     }
-    // 显式覆盖两个 `string` enum 字段以满足 `ServerEnv`，其余字段由 `...parsedEnv` 提供。
-    const normalizedEnv: Env & ServerEnv = {
-      ...env,
-      ...parsedEnv,
-      NODE_ENV: parsedEnv.NODE_ENV,
-      BEEHIIV_SEND_WELCOME_EMAIL: parsedEnv.BEEHIIV_SEND_WELCOME_EMAIL,
-    }
+    // 数据库配置派生成服务凭据形状；启动参数（secret / DB / 部署 token）仍来自 env。
+    const runtimeEnv = getRuntimeServerEnv(parsedEnv)
+    const normalizedEnv: Env & RuntimeEnv = { ...env, ...runtimeEnv }
     // env 与 nonce 一起存入 ALS，供 `getServerContext()` 与 `streamHandlerWithNonce` 读取。
     return als.run(
       {
@@ -140,7 +138,7 @@ export default {
  * 缺失发件人时对应 provider 不注册（不使用 `example.com` 回退）。
  */
 function buildMailProviderRegistry(
-  env: Env & ServerEnv,
+  env: Env & RuntimeEnv,
 ): Record<string, (() => import('./core/email').MailProvider) | undefined> {
   const registry: Record<string, (() => import('./core/email').MailProvider) | undefined> = {}
   const mailFrom = getMailFrom(websiteConfig, env)
@@ -181,7 +179,6 @@ function applySecurityHeaders(
   // Only providers that will actually inject a script get their origin into script-src.
   const analyticsScriptOrigins = getAnalyticsScriptOrigins({
     analytics: websiteConfig.analytics,
-    publicEnv,
   })
 
   // Always set CSP — nonce is regenerated per request so caching is safe.

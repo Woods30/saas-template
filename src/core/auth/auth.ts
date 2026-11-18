@@ -9,7 +9,7 @@ import { createDbFromEnv, schema } from '@/core/db'
 import { isPostgresDialect, resolveDatabaseProvider } from '@/core/db/provider'
 import { getRequestScoped } from '@/core/db/request-scope'
 import { sendMail } from '@/core/email'
-import { parseServerEnv } from '@/core/env/server'
+import { parseServerEnv, type RuntimeEnv } from '@/core/env/server'
 
 /**
  * 已创建的实例，按 D1 binding 复用。
@@ -36,7 +36,9 @@ import { parseServerEnv } from '@/core/env/server'
 export async function createAuth(env: Env) {
   const parsed = parseServerEnv(env as unknown as Record<string, unknown>)
   const db = await createDbFromEnv(env)
-  const deps = { sendMail, config: websiteConfig, serverEnv: parsed }
+  // 托管凭据（OAuth 等）来自数据库配置，由 `server.ts` 合进每请求 env。
+  const runtime = env as unknown as RuntimeEnv
+  const deps = { sendMail, config: websiteConfig, serverEnv: runtime }
 
   /** 邮件失败只记日志：注册 / 登录不应因 SMTP / API 故障而失败。 */
   async function dispatch(
@@ -130,10 +132,10 @@ export async function createAuth(env: Env) {
     },
     socialProviders: {
       google:
-        parsed.GOOGLE_CLIENT_ID && parsed.GOOGLE_CLIENT_SECRET
+        runtime.GOOGLE_CLIENT_ID && runtime.GOOGLE_CLIENT_SECRET
           ? {
-              clientId: parsed.GOOGLE_CLIENT_ID,
-              clientSecret: parsed.GOOGLE_CLIENT_SECRET,
+              clientId: runtime.GOOGLE_CLIENT_ID,
+              clientSecret: runtime.GOOGLE_CLIENT_SECRET,
             }
           : undefined,
     },

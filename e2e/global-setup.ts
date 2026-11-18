@@ -43,30 +43,10 @@ async function startTestServer() {
   const mailURL = `http://127.0.0.1:${address.port}`
   Object.assign(process.env, {
     CLOUDFLARE_INCLUDE_PROCESS_ENV: 'true',
-    RESEND_API_KEY: 're_e2e_synthetic_never_send',
-    MAIL_FROM: 'e2e@example.invalid',
     BETTER_AUTH_URL: base.origin,
     VITE_BASE_URL: base.origin,
-    /**
-     * 核销链路（collection.spec）需要的结账环境：模块白名单 + 结账模式 +
-     * 源码兜底收款账户（出厂 `accounts: []`，账户清单只能来自源码或 env）。
-     *
-     * 二维码是站内静态占位图——测试断言 `<img>` 存在与地址，不扫内容；
-     * 真实收款码永远不进仓库。`VITE_MODULES` 是白名单语义：列出 E2E 其余
-     * spec 依赖的全部模块，否则它们会被白名单关掉。
-     */
-    VITE_MODULES: 'docs,blog,changelog,mail,payment,analytics,auth,collection',
-    VITE_CHECKOUT_MODE: 'collection',
-    VITE_COLLECTION_ACCOUNTS: JSON.stringify([
-      {
-        id: 'alipay-e2e',
-        channel: 'alipay',
-        displayName: 'E2E 收款账户',
-        currency: 'cny',
-        qrImageUrl: '/app-icon-512.png',
-      },
-    ]),
   })
+  seedE2eSettings()
   const sdkPath = fileURLToPath(import.meta.resolve('resend'))
   const transportModule = '\0e2e:resend-transport'
   let installed = false
@@ -169,28 +149,72 @@ const WARMUP_PATHS = [
 /**
  * 清理本地 D1 里会影响 E2E 结账环境的残留行。
  *
- * - `collection_orders`：占尾数池（每账户活跃金额唯一），残留行会让本轮撞
- *   `AMOUNT_POOL_EXHAUSTED`；
- * - `settings` 里的 `modules` / `payment`：本地跑过 `pnpm db:seed` 时会写进出厂值
- *   （`collection: false` / `checkoutMode: 'provider'`），不删会把 E2E 注入的
- *   `VITE_MODULES` 与 `VITE_CHECKOUT_MODE` 盖掉。
+ * `collection_orders` 占尾数池（每账户活跃金额唯一），残留行会让本轮撞
+ * `AMOUNT_POOL_EXHAUSTED`。配置行由 {@link seedE2eSettings} 逐字段覆盖，
+ * 不在这里删。
  */
 function resetLocalCollectionFixtures(): void {
   try {
-    execFileSync(
-      'wrangler',
-      [
-        'd1',
-        'execute',
-        'DB',
-        '--local',
-        '--command',
-        "DELETE FROM collection_orders; DELETE FROM settings WHERE key IN ('modules', 'payment')",
-      ],
-      { stdio: 'pipe' },
-    )
+    wranglerD1(['DELETE FROM collection_orders'])
   } catch {
     // 表不存在（未跑迁移）等情形不算致命，后续用例会给出真正的原因。
+  }
+}
+
+/** 在仓库根执行一条本地 D1 SQL。 */
+function wranglerD1(statements: string[]): void {
+  execFileSync('wrangler', ['d1', 'execute', 'DB', '--local', '--command', statements.join('; ')], {
+    stdio: 'pipe',
+  })
+}
+
+/**
+ * E2E 依赖的站点配置。
+ *
+ * 配置只从数据库读（见 ADR-0010），环境变量不再能打开模块或切换结账链路，
+ * 所以这里直接写 `settings` 表。只写 E2E 与出厂值不同的字段，其余沿用注册表
+ * 默认值。
+ *
+ * 二维码是站内静态占位图——用例断言 `<img>` 存在与地址，不扫内容；真实收款码
+ * 永远不进仓库。
+ */
+const E2E_SETTINGS: ReadonlyArray<readonly [key: string, value: unknown]> = [
+  ['modules.docs', true],
+  ['modules.collection', true],
+  ['payment.checkoutMode', 'collection'],
+  [
+    'collection.accounts',
+    [
+      {
+        id: 'alipay-e2e',
+        channel: 'alipay',
+        displayName: 'E2E 收款账户',
+        currency: 'cny',
+        qrImageUrl: '/app-icon-512.png',
+      },
+    ],
+  ],
+  ['mail.provider', 'resend'],
+  ['mail.from', 'e2e@example.invalid'],
+  ['resend.apiKey', 're_e2e_synthetic_never_send'],
+]
+
+/** 把 {@link E2E_SETTINGS} 覆盖进本地 D1。 */
+function seedE2eSettings(): void {
+  try {
+    wranglerD1(
+      E2E_SETTINGS.map(
+        ([key, value]) =>
+          `INSERT INTO settings (key, value, updated_at) VALUES ('${key}', '${JSON.stringify(
+            value,
+          ).replace(
+            /'/g,
+            "''",
+          )}', strftime('%s','now')) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      ),
+    )
+  } catch {
+    // 与 reset 同理：表不存在时交给用例暴露真正原因。
   }
 }
 
