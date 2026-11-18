@@ -652,3 +652,44 @@ export const auditLogs = sqliteTable(
     createdAtIdx: index('audit_logs_created_at_idx').on(table.createdAt),
   }),
 )
+
+// ---------------------------------------------------------------------------
+// AI 任务原语（ai-tasks）
+//
+// 记录每次 AI 生成任务的输入、上游状态、积分预扣流水与失败自动退回（revoke）流水。
+// ---------------------------------------------------------------------------
+
+export const aiTasks = sqliteTable(
+  'ai_tasks',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** `text` | `image` | `video` | `audio` | `speech` */
+    mediaType: text('media_type').notNull(),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    prompt: text('prompt').notNull(),
+    /** 附加参数 JSON 文本。 */
+    options: text('options'),
+    /** `pending` | `processing` | `succeeded` | `failed` | `canceled` */
+    status: text('status').notNull().default('pending'),
+    providerTaskId: text('provider_task_id'),
+    /** 生成结果 JSON 文本（如图片/视频 URL 列表或文本内容）。 */
+    output: text('output'),
+    errorMessage: text('error_message'),
+    costCredits: integer('cost_credits').notNull().default(0),
+    /** 预扣积分对应的 `credit_transactions.id`。 */
+    creditTxId: text('credit_tx_id'),
+    /** 失败自动退回（revoke）对应的 `credit_transactions.id`，非空代表已退回。 */
+    refundTxId: text('refund_tx_id'),
+    completedAt: integer('completed_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    userStatusIdx: index('ai_tasks_user_status_idx').on(table.userId, table.status),
+    statusCreatedIdx: index('ai_tasks_status_created_idx').on(table.status, table.createdAt),
+  }),
+)

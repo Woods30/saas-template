@@ -634,3 +634,38 @@ export const auditLogs = pgTable(
     createdAtIdx: index('audit_logs_created_at_idx').on(table.createdAt),
   }),
 )
+
+// ---------------------------------------------------------------------------
+// AI 任务原语（ai-tasks）
+//
+// 记录每次 AI 生成任务的输入、上游状态、积分预扣流水与失败自动退回（revoke）流水。
+// ---------------------------------------------------------------------------
+
+export const aiTasks = pgTable(
+  'ai_tasks',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    mediaType: text('media_type').notNull(),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    prompt: text('prompt').notNull(),
+    options: text('options'),
+    status: text('status').notNull().default('pending'),
+    providerTaskId: text('provider_task_id'),
+    output: text('output'),
+    errorMessage: text('error_message'),
+    costCredits: integer('cost_credits').notNull().default(0),
+    creditTxId: text('credit_tx_id'),
+    refundTxId: text('refund_tx_id'),
+    completedAt: timestamp('completed_at', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userStatusIdx: index('ai_tasks_user_status_idx').on(table.userId, table.status),
+    statusCreatedIdx: index('ai_tasks_status_created_idx').on(table.status, table.createdAt),
+  }),
+)
