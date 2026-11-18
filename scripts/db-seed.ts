@@ -39,6 +39,11 @@ import {
   type PlanEntitlementSeed,
   type PlanSeed,
 } from '../src/modules/entitlements/catalog'
+import {
+  DEFAULT_TAXONOMIES,
+  type TaxonomySeed,
+  taxonomyIdOf,
+} from '../src/modules/taxonomy/catalog'
 
 /** 命令行覆盖项：把出厂值换成使用者的。 */
 export interface SeedOverrides {
@@ -234,6 +239,23 @@ function rolePermissionSql(role: BuiltinRoleSeed, code: string, now: string): st
   return `INSERT INTO role_permissions (id, role_id, permission_id, created_at) VALUES (${sqlString(id)}, ${sqlString(roleId)}, ${sqlString(permId)}, ${now}) ON CONFLICT (role_id, permission_id) DO NOTHING;`
 }
 
+/**
+ * 生成默认分类与标签的种子 SQL。
+ */
+export function buildTaxonomySeedSql(force: boolean, dialect: Dialect): string {
+  const now = dialect === 'postgresql' ? 'now()' : "strftime('%s','now')"
+  const lines = DEFAULT_TAXONOMIES.map((seed) => taxonomySql(seed, force, now))
+  return `${lines.join('\n')}\n`
+}
+
+function taxonomySql(seed: TaxonomySeed, force: boolean, now: string): string {
+  const id = taxonomyIdOf(seed.type, seed.slug)
+  const conflict = force
+    ? `ON CONFLICT (type, slug) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, sort_order = EXCLUDED.sort_order, updated_at = ${now}`
+    : 'ON CONFLICT (type, slug) DO NOTHING'
+  return `INSERT INTO taxonomies (id, type, slug, name, description, sort_order, created_at, updated_at) VALUES (${sqlString(id)}, ${sqlString(seed.type)}, ${sqlString(seed.slug)}, ${sqlString(seed.name)}, ${sqlNullableString(seed.description)}, ${seed.sortOrder}, ${now}, ${now}) ${conflict};`
+}
+
 /** 执行种子 SQL：SQLite / D1 走 wrangler，PostgreSQL 走 postgres 客户端。 */
 async function applySeed(sql: string, provider: DatabaseProvider, target: string): Promise<number> {
   if (provider === 'postgres' || target === 'pg') {
@@ -280,7 +302,7 @@ export async function run(argv: string[] = process.argv.slice(2)): Promise<numbe
   const dialect: Dialect = target === 'pg' ? 'postgresql' : dialectOf(provider)
 
   const settings = applySeedOverrides(defaultSettings(), overrides)
-  const sql = `${buildSeedSql(settings, force, dialect)}${buildCatalogSql(force, dialect)}${buildRbacSeedSql(force, dialect)}`
+  const sql = `${buildSeedSql(settings, force, dialect)}${buildCatalogSql(force, dialect)}${buildRbacSeedSql(force, dialect)}${buildTaxonomySeedSql(force, dialect)}`
   console.log(`写入种子数据（provider=${provider} 目标=${target}${force ? ' 覆盖' : ''}）`)
   const code = await applySeed(sql, provider, target)
   if (code === 0) console.log('✅ 种子数据写入完成')

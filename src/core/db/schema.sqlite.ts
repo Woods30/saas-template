@@ -693,3 +693,118 @@ export const aiTasks = sqliteTable(
     statusCreatedIdx: index('ai_tasks_status_created_idx').on(table.status, table.createdAt),
   }),
 )
+
+// ---------------------------------------------------------------------------
+// 内容管理与运营组（M6：taxonomy / posts / changelogs / tickets / invite_codes）
+// ---------------------------------------------------------------------------
+
+export const taxonomies = sqliteTable(
+  'taxonomies',
+  {
+    id: text('id').primaryKey(),
+    /** `category` | `tag`。 */
+    type: text('type').notNull().default('category'),
+    slug: text('slug').notNull(),
+    name: text('name').notNull(),
+    description: text('description'),
+    sortOrder: integer('sort_order').notNull().default(100),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    typeSlugUnique: uniqueIndex('taxonomies_type_slug_unique').on(table.type, table.slug),
+  }),
+)
+
+export const posts = sqliteTable(
+  'posts',
+  {
+    id: text('id').primaryKey(),
+    slug: text('slug').notNull(),
+    locale: text('locale').notNull().default('zh'),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    content: text('content').notNull(),
+    categorySlug: text('category_slug'),
+    /** JSON 数组字符串，如 `["ai","saas"]`。 */
+    tags: text('tags'),
+    /** `draft` | `published`。 */
+    status: text('status').notNull().default('published'),
+    authorName: text('author_name').notNull().default('Admin'),
+    publishedAt: integer('published_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    localeSlugUnique: uniqueIndex('posts_locale_slug_unique').on(table.locale, table.slug),
+    statusPublishedIdx: index('posts_status_published_idx').on(table.status, table.publishedAt),
+  }),
+)
+
+export const changelogs = sqliteTable(
+  'changelogs',
+  {
+    id: text('id').primaryKey(),
+    version: text('version').notNull(),
+    locale: text('locale').notNull().default('zh'),
+    title: text('title').notNull(),
+    content: text('content').notNull(),
+    /** `draft` | `published`。 */
+    status: text('status').notNull().default('published'),
+    publishedAt: integer('published_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    localeVersionUnique: uniqueIndex('changelogs_locale_version_unique').on(
+      table.locale,
+      table.version,
+    ),
+  }),
+)
+
+export const tickets = sqliteTable(
+  'tickets',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    subject: text('subject').notNull(),
+    category: text('category').notNull().default('general'),
+    /** `low` | `normal` | `high`。 */
+    priority: text('priority').notNull().default('normal'),
+    content: text('content').notNull(),
+    /** `open` | `replied` | `closed`。 */
+    status: text('status').notNull().default('open'),
+    adminReply: text('admin_reply'),
+    repliedBy: text('replied_by'),
+    repliedAt: integer('replied_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    userStatusIdx: index('tickets_user_status_idx').on(table.userId, table.status),
+    statusCreatedIdx: index('tickets_status_created_idx').on(table.status, table.createdAt),
+  }),
+)
+
+export const inviteCodes = sqliteTable(
+  'invite_codes',
+  {
+    id: text('id').primaryKey(),
+    code: text('code').notNull(),
+    bonusCredits: integer('bonus_credits').notNull().default(0),
+    maxUses: integer('max_uses').notNull().default(1),
+    usedCount: integer('used_count').notNull().default(0),
+    /** `active` | `disabled`。 */
+    status: text('status').notNull().default('active'),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }),
+    createdBy: text('created_by'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    codeUnique: uniqueIndex('invite_codes_code_unique').on(table.code),
+  }),
+)

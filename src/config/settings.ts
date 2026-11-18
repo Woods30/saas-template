@@ -5,7 +5,9 @@ import {
   IconCoins,
   IconCreditCard,
   IconDeviceLaptop,
+  IconFileText,
   IconKey,
+  IconMessage2,
   IconReceipt,
   IconRepeat,
   IconScan,
@@ -37,6 +39,8 @@ export type SettingsSection =
   | 'admin/subscriptions'
   | 'admin/credits'
   | 'admin/tasks'
+  | 'admin/content'
+  | 'admin/tickets'
   | 'admin/audit'
 
 /**
@@ -262,6 +266,34 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
         },
         {
           kind: 'link',
+          id: 'admin-content',
+          title: m.settings_nav_admin_content(),
+          icon: IconFileText,
+          visibility: { roles: ['admin'], feature: 'enableAdmin' },
+          destination: {
+            kind: 'internal',
+            options: linkOptions({
+              to: '/{-$locale}/dashboard/admin/content',
+              params: { locale },
+            }),
+          },
+        },
+        {
+          kind: 'link',
+          id: 'admin-tickets',
+          title: m.settings_nav_admin_tickets(),
+          icon: IconMessage2,
+          visibility: { roles: ['admin'], feature: 'enableAdmin' },
+          destination: {
+            kind: 'internal',
+            options: linkOptions({
+              to: '/{-$locale}/dashboard/admin/tickets',
+              params: { locale },
+            }),
+          },
+        },
+        {
+          kind: 'link',
           id: 'admin-audit',
           title: m.settings_nav_admin_audit(),
           icon: IconClipboardList,
@@ -378,6 +410,18 @@ export function getSettingsSectionMeta(section: string):
         title: m.admin_tasks_title(),
         description: m.admin_tasks_description(),
         icon: IconSparkles,
+      }
+    case 'admin/content':
+      return {
+        title: m.admin_content_title(),
+        description: m.admin_content_description(),
+        icon: IconFileText,
+      }
+    case 'admin/tickets':
+      return {
+        title: m.admin_tickets_title(),
+        description: m.admin_tickets_description(),
+        icon: IconMessage2,
       }
     case 'admin/audit':
       return {

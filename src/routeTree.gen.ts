@@ -54,6 +54,7 @@ import { Route as ApiCollectionAccountsAccountIdQrcodeRouteImport } from './rout
 import { Route as ApiCollectionOrdersOrderIdReceiptRouteImport } from './routes/api/collection/orders/$orderId/receipt'
 import { Route as Char123LocaleChar125LayoutDashboardAdminAuditRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/audit'
 import { Route as Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/collection-orders'
+import { Route as Char123LocaleChar125LayoutDashboardAdminContentRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/content'
 import { Route as Char123LocaleChar125LayoutDashboardAdminCreditsRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/credits'
 import { Route as Char123LocaleChar125LayoutDashboardAdminOrdersRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/orders'
 import { Route as Char123LocaleChar125LayoutDashboardAdminRevenueRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/revenue'
@@ -61,6 +62,7 @@ import { Route as Char123LocaleChar125LayoutDashboardAdminRolesRouteImport } fro
 import { Route as Char123LocaleChar125LayoutDashboardAdminSettingsRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/settings'
 import { Route as Char123LocaleChar125LayoutDashboardAdminSubscriptionsRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/subscriptions'
 import { Route as Char123LocaleChar125LayoutDashboardAdminTasksRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/tasks'
+import { Route as Char123LocaleChar125LayoutDashboardAdminTicketsRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/tickets'
 import { Route as Char123LocaleChar125LayoutDashboardAdminUsersRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/users'
 import { Route as Char123LocaleChar125LayoutDashboardOrdersIndexRouteImport } from './routes/{-$locale}/_layout/dashboard/orders/index'
 import { Route as Char123LocaleChar125LayoutDashboardOrdersOrderIdRouteImport } from './routes/{-$locale}/_layout/dashboard/orders/$orderId'
@@ -326,6 +328,12 @@ const Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute =
     path: '/admin/collection-orders',
     getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
   } as any)
+const Char123LocaleChar125LayoutDashboardAdminContentRoute =
+  Char123LocaleChar125LayoutDashboardAdminContentRouteImport.update({
+    id: '/admin/content',
+    path: '/admin/content',
+    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
+  } as any)
 const Char123LocaleChar125LayoutDashboardAdminCreditsRoute =
   Char123LocaleChar125LayoutDashboardAdminCreditsRouteImport.update({
     id: '/admin/credits',
@@ -366,6 +374,12 @@ const Char123LocaleChar125LayoutDashboardAdminTasksRoute =
   Char123LocaleChar125LayoutDashboardAdminTasksRouteImport.update({
     id: '/admin/tasks',
     path: '/admin/tasks',
+    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
+  } as any)
+const Char123LocaleChar125LayoutDashboardAdminTicketsRoute =
+  Char123LocaleChar125LayoutDashboardAdminTicketsRouteImport.update({
+    id: '/admin/tickets',
+    path: '/admin/tickets',
     getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
   } as any)
 const Char123LocaleChar125LayoutDashboardAdminUsersRoute =
@@ -457,6 +471,7 @@ export interface FileRoutesByFullPath {
   '/api/collection/orders/$orderId/receipt': typeof ApiCollectionOrdersOrderIdReceiptRoute
   '/{-$locale}/dashboard/admin/audit': typeof Char123LocaleChar125LayoutDashboardAdminAuditRoute
   '/{-$locale}/dashboard/admin/collection-orders': typeof Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute
+  '/{-$locale}/dashboard/admin/content': typeof Char123LocaleChar125LayoutDashboardAdminContentRoute
   '/{-$locale}/dashboard/admin/credits': typeof Char123LocaleChar125LayoutDashboardAdminCreditsRoute
   '/{-$locale}/dashboard/admin/orders': typeof Char123LocaleChar125LayoutDashboardAdminOrdersRoute
   '/{-$locale}/dashboard/admin/revenue': typeof Char123LocaleChar125LayoutDashboardAdminRevenueRoute
@@ -464,6 +479,7 @@ export interface FileRoutesByFullPath {
   '/{-$locale}/dashboard/admin/settings': typeof Char123LocaleChar125LayoutDashboardAdminSettingsRoute
   '/{-$locale}/dashboard/admin/subscriptions': typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute
   '/{-$locale}/dashboard/admin/tasks': typeof Char123LocaleChar125LayoutDashboardAdminTasksRoute
+  '/{-$locale}/dashboard/admin/tickets': typeof Char123LocaleChar125LayoutDashboardAdminTicketsRoute
   '/{-$locale}/dashboard/admin/users': typeof Char123LocaleChar125LayoutDashboardAdminUsersRoute
   '/{-$locale}/dashboard/orders/$orderId': typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute
   '/{-$locale}/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
@@ -514,6 +530,7 @@ export interface FileRoutesByTo {
   '/api/collection/orders/$orderId/receipt': typeof ApiCollectionOrdersOrderIdReceiptRoute
   '/{-$locale}/dashboard/admin/audit': typeof Char123LocaleChar125LayoutDashboardAdminAuditRoute
   '/{-$locale}/dashboard/admin/collection-orders': typeof Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute
+  '/{-$locale}/dashboard/admin/content': typeof Char123LocaleChar125LayoutDashboardAdminContentRoute
   '/{-$locale}/dashboard/admin/credits': typeof Char123LocaleChar125LayoutDashboardAdminCreditsRoute
   '/{-$locale}/dashboard/admin/orders': typeof Char123LocaleChar125LayoutDashboardAdminOrdersRoute
   '/{-$locale}/dashboard/admin/revenue': typeof Char123LocaleChar125LayoutDashboardAdminRevenueRoute
@@ -521,6 +538,7 @@ export interface FileRoutesByTo {
   '/{-$locale}/dashboard/admin/settings': typeof Char123LocaleChar125LayoutDashboardAdminSettingsRoute
   '/{-$locale}/dashboard/admin/subscriptions': typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute
   '/{-$locale}/dashboard/admin/tasks': typeof Char123LocaleChar125LayoutDashboardAdminTasksRoute
+  '/{-$locale}/dashboard/admin/tickets': typeof Char123LocaleChar125LayoutDashboardAdminTicketsRoute
   '/{-$locale}/dashboard/admin/users': typeof Char123LocaleChar125LayoutDashboardAdminUsersRoute
   '/{-$locale}/dashboard/orders/$orderId': typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute
   '/{-$locale}/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
@@ -576,6 +594,7 @@ export interface FileRoutesById {
   '/api/collection/orders/$orderId/receipt': typeof ApiCollectionOrdersOrderIdReceiptRoute
   '/{-$locale}/_layout/dashboard/admin/audit': typeof Char123LocaleChar125LayoutDashboardAdminAuditRoute
   '/{-$locale}/_layout/dashboard/admin/collection-orders': typeof Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute
+  '/{-$locale}/_layout/dashboard/admin/content': typeof Char123LocaleChar125LayoutDashboardAdminContentRoute
   '/{-$locale}/_layout/dashboard/admin/credits': typeof Char123LocaleChar125LayoutDashboardAdminCreditsRoute
   '/{-$locale}/_layout/dashboard/admin/orders': typeof Char123LocaleChar125LayoutDashboardAdminOrdersRoute
   '/{-$locale}/_layout/dashboard/admin/revenue': typeof Char123LocaleChar125LayoutDashboardAdminRevenueRoute
@@ -583,6 +602,7 @@ export interface FileRoutesById {
   '/{-$locale}/_layout/dashboard/admin/settings': typeof Char123LocaleChar125LayoutDashboardAdminSettingsRoute
   '/{-$locale}/_layout/dashboard/admin/subscriptions': typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute
   '/{-$locale}/_layout/dashboard/admin/tasks': typeof Char123LocaleChar125LayoutDashboardAdminTasksRoute
+  '/{-$locale}/_layout/dashboard/admin/tickets': typeof Char123LocaleChar125LayoutDashboardAdminTicketsRoute
   '/{-$locale}/_layout/dashboard/admin/users': typeof Char123LocaleChar125LayoutDashboardAdminUsersRoute
   '/{-$locale}/_layout/dashboard/orders/$orderId': typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute
   '/{-$locale}/_layout/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
@@ -639,6 +659,7 @@ export interface FileRouteTypes {
     | '/api/collection/orders/$orderId/receipt'
     | '/{-$locale}/dashboard/admin/audit'
     | '/{-$locale}/dashboard/admin/collection-orders'
+    | '/{-$locale}/dashboard/admin/content'
     | '/{-$locale}/dashboard/admin/credits'
     | '/{-$locale}/dashboard/admin/orders'
     | '/{-$locale}/dashboard/admin/revenue'
@@ -646,6 +667,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/dashboard/admin/settings'
     | '/{-$locale}/dashboard/admin/subscriptions'
     | '/{-$locale}/dashboard/admin/tasks'
+    | '/{-$locale}/dashboard/admin/tickets'
     | '/{-$locale}/dashboard/admin/users'
     | '/{-$locale}/dashboard/orders/$orderId'
     | '/{-$locale}/marketing/blog/$slug'
@@ -696,6 +718,7 @@ export interface FileRouteTypes {
     | '/api/collection/orders/$orderId/receipt'
     | '/{-$locale}/dashboard/admin/audit'
     | '/{-$locale}/dashboard/admin/collection-orders'
+    | '/{-$locale}/dashboard/admin/content'
     | '/{-$locale}/dashboard/admin/credits'
     | '/{-$locale}/dashboard/admin/orders'
     | '/{-$locale}/dashboard/admin/revenue'
@@ -703,6 +726,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/dashboard/admin/settings'
     | '/{-$locale}/dashboard/admin/subscriptions'
     | '/{-$locale}/dashboard/admin/tasks'
+    | '/{-$locale}/dashboard/admin/tickets'
     | '/{-$locale}/dashboard/admin/users'
     | '/{-$locale}/dashboard/orders/$orderId'
     | '/{-$locale}/marketing/blog/$slug'
@@ -757,6 +781,7 @@ export interface FileRouteTypes {
     | '/api/collection/orders/$orderId/receipt'
     | '/{-$locale}/_layout/dashboard/admin/audit'
     | '/{-$locale}/_layout/dashboard/admin/collection-orders'
+    | '/{-$locale}/_layout/dashboard/admin/content'
     | '/{-$locale}/_layout/dashboard/admin/credits'
     | '/{-$locale}/_layout/dashboard/admin/orders'
     | '/{-$locale}/_layout/dashboard/admin/revenue'
@@ -764,6 +789,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/_layout/dashboard/admin/settings'
     | '/{-$locale}/_layout/dashboard/admin/subscriptions'
     | '/{-$locale}/_layout/dashboard/admin/tasks'
+    | '/{-$locale}/_layout/dashboard/admin/tickets'
     | '/{-$locale}/_layout/dashboard/admin/users'
     | '/{-$locale}/_layout/dashboard/orders/$orderId'
     | '/{-$locale}/_layout/marketing/blog/$slug'
@@ -1120,6 +1146,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRouteImport
       parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
     }
+    '/{-$locale}/_layout/dashboard/admin/content': {
+      id: '/{-$locale}/_layout/dashboard/admin/content'
+      path: '/admin/content'
+      fullPath: '/{-$locale}/dashboard/admin/content'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminContentRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
+    }
     '/{-$locale}/_layout/dashboard/admin/credits': {
       id: '/{-$locale}/_layout/dashboard/admin/credits'
       path: '/admin/credits'
@@ -1167,6 +1200,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/tasks'
       fullPath: '/{-$locale}/dashboard/admin/tasks'
       preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminTasksRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
+    }
+    '/{-$locale}/_layout/dashboard/admin/tickets': {
+      id: '/{-$locale}/_layout/dashboard/admin/tickets'
+      path: '/admin/tickets'
+      fullPath: '/{-$locale}/dashboard/admin/tickets'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminTicketsRouteImport
       parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
     }
     '/{-$locale}/_layout/dashboard/admin/users': {
@@ -1250,6 +1290,7 @@ interface Char123LocaleChar125LayoutDashboardRouteChildren {
   Char123LocaleChar125LayoutDashboardIndexRoute: typeof Char123LocaleChar125LayoutDashboardIndexRoute
   Char123LocaleChar125LayoutDashboardAdminAuditRoute: typeof Char123LocaleChar125LayoutDashboardAdminAuditRoute
   Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute: typeof Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute
+  Char123LocaleChar125LayoutDashboardAdminContentRoute: typeof Char123LocaleChar125LayoutDashboardAdminContentRoute
   Char123LocaleChar125LayoutDashboardAdminCreditsRoute: typeof Char123LocaleChar125LayoutDashboardAdminCreditsRoute
   Char123LocaleChar125LayoutDashboardAdminOrdersRoute: typeof Char123LocaleChar125LayoutDashboardAdminOrdersRoute
   Char123LocaleChar125LayoutDashboardAdminRevenueRoute: typeof Char123LocaleChar125LayoutDashboardAdminRevenueRoute
@@ -1257,6 +1298,7 @@ interface Char123LocaleChar125LayoutDashboardRouteChildren {
   Char123LocaleChar125LayoutDashboardAdminSettingsRoute: typeof Char123LocaleChar125LayoutDashboardAdminSettingsRoute
   Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute: typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute
   Char123LocaleChar125LayoutDashboardAdminTasksRoute: typeof Char123LocaleChar125LayoutDashboardAdminTasksRoute
+  Char123LocaleChar125LayoutDashboardAdminTicketsRoute: typeof Char123LocaleChar125LayoutDashboardAdminTicketsRoute
   Char123LocaleChar125LayoutDashboardAdminUsersRoute: typeof Char123LocaleChar125LayoutDashboardAdminUsersRoute
 }
 
@@ -1282,6 +1324,8 @@ const Char123LocaleChar125LayoutDashboardRouteChildren: Char123LocaleChar125Layo
       Char123LocaleChar125LayoutDashboardAdminAuditRoute,
     Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute:
       Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute,
+    Char123LocaleChar125LayoutDashboardAdminContentRoute:
+      Char123LocaleChar125LayoutDashboardAdminContentRoute,
     Char123LocaleChar125LayoutDashboardAdminCreditsRoute:
       Char123LocaleChar125LayoutDashboardAdminCreditsRoute,
     Char123LocaleChar125LayoutDashboardAdminOrdersRoute:
@@ -1296,6 +1340,8 @@ const Char123LocaleChar125LayoutDashboardRouteChildren: Char123LocaleChar125Layo
       Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute,
     Char123LocaleChar125LayoutDashboardAdminTasksRoute:
       Char123LocaleChar125LayoutDashboardAdminTasksRoute,
+    Char123LocaleChar125LayoutDashboardAdminTicketsRoute:
+      Char123LocaleChar125LayoutDashboardAdminTicketsRoute,
     Char123LocaleChar125LayoutDashboardAdminUsersRoute:
       Char123LocaleChar125LayoutDashboardAdminUsersRoute,
   }

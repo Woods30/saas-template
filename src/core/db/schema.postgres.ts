@@ -669,3 +669,111 @@ export const aiTasks = pgTable(
     statusCreatedIdx: index('ai_tasks_status_created_idx').on(table.status, table.createdAt),
   }),
 )
+
+// ---------------------------------------------------------------------------
+// 内容管理与运营组（M6：taxonomy / posts / changelogs / tickets / invite_codes）
+// ---------------------------------------------------------------------------
+
+export const taxonomies = pgTable(
+  'taxonomies',
+  {
+    id: text('id').primaryKey(),
+    type: text('type').notNull().default('category'),
+    slug: text('slug').notNull(),
+    name: text('name').notNull(),
+    description: text('description'),
+    sortOrder: integer('sort_order').notNull().default(100),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    typeSlugUnique: uniqueIndex('taxonomies_type_slug_unique').on(table.type, table.slug),
+  }),
+)
+
+export const posts = pgTable(
+  'posts',
+  {
+    id: text('id').primaryKey(),
+    slug: text('slug').notNull(),
+    locale: text('locale').notNull().default('zh'),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    content: text('content').notNull(),
+    categorySlug: text('category_slug'),
+    tags: text('tags'),
+    status: text('status').notNull().default('published'),
+    authorName: text('author_name').notNull().default('Admin'),
+    publishedAt: timestamp('published_at', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    localeSlugUnique: uniqueIndex('posts_locale_slug_unique').on(table.locale, table.slug),
+    statusPublishedIdx: index('posts_status_published_idx').on(table.status, table.publishedAt),
+  }),
+)
+
+export const changelogs = pgTable(
+  'changelogs',
+  {
+    id: text('id').primaryKey(),
+    version: text('version').notNull(),
+    locale: text('locale').notNull().default('zh'),
+    title: text('title').notNull(),
+    content: text('content').notNull(),
+    status: text('status').notNull().default('published'),
+    publishedAt: timestamp('published_at', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    localeVersionUnique: uniqueIndex('changelogs_locale_version_unique').on(
+      table.locale,
+      table.version,
+    ),
+  }),
+)
+
+export const tickets = pgTable(
+  'tickets',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    subject: text('subject').notNull(),
+    category: text('category').notNull().default('general'),
+    priority: text('priority').notNull().default('normal'),
+    content: text('content').notNull(),
+    status: text('status').notNull().default('open'),
+    adminReply: text('admin_reply'),
+    repliedBy: text('replied_by'),
+    repliedAt: timestamp('replied_at', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userStatusIdx: index('tickets_user_status_idx').on(table.userId, table.status),
+    statusCreatedIdx: index('tickets_status_created_idx').on(table.status, table.createdAt),
+  }),
+)
+
+export const inviteCodes = pgTable(
+  'invite_codes',
+  {
+    id: text('id').primaryKey(),
+    code: text('code').notNull(),
+    bonusCredits: integer('bonus_credits').notNull().default(0),
+    maxUses: integer('max_uses').notNull().default(1),
+    usedCount: integer('used_count').notNull().default(0),
+    status: text('status').notNull().default('active'),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }),
+    createdBy: text('created_by'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    codeUnique: uniqueIndex('invite_codes_code_unique').on(table.code),
+  }),
+)

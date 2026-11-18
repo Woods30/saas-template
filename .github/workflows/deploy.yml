@@ -212,9 +212,7 @@ jobs:
             .replace(kvPattern, `$1${kv.id}$2`)
           writeFileSync('wrangler.jsonc', updated)
           NODE
-          # 迁移必须先于部署：Worker 启动即访问 users 表，缺表会让所有走会话的请求 500。
-          echo "应用 D1 迁移"
-          pnpm exec wrangler d1 migrations apply DB --remote
+          # 迁移不入库：生产库结构变更需本地生成迁移后手工 apply（wrangler d1 migrations apply DB --remote 或 pnpm db:migrate:pg）。
       - name: Validate, build and deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -223,7 +221,6 @@ jobs:
           # 模块与能力开关白名单：同一份代码发到不同场景时按环境覆盖。
           VITE_MODULES: ${{ vars.VITE_MODULES }}
           VITE_FEATURES: ${{ vars.VITE_FEATURES }}
-          VITE_DOCS_AS_HOME: ${{ vars.VITE_DOCS_AS_HOME }}
           # 自定义域名要能读 zone 的 token 才能建；没有时只发到 workers.dev。
           DEPLOY_SKIP_CUSTOM_DOMAIN: ${{ vars.DEPLOY_SKIP_CUSTOM_DOMAIN }}
           # 公开变量既可能配成 Variable 也可能配成 Secret：GA ID 与 Turnstile site key

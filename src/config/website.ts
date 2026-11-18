@@ -313,7 +313,8 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       },
       landingOffer: { productId: 'template', offerId: 'once' },
       pages: { waitlist: true },
-      docs: { enabled: true },
+      // 文件型文档站默认关闭：需要时在后台「系统设置 → 模块与能力」中开启。
+      docs: { enabled: false },
       blog: { enabled: true },
       changelog: { enabled: true },
       // 支持收件邮箱：出厂是占位地址，后台「邮件」分区可改。

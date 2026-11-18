@@ -92,5 +92,17 @@ test.describe('Admin AI 任务与积分预扣/回滚', () => {
 
     // 侧边栏入口存在
     await expect(page.getByRole('link', { name: 'AI 任务', exact: true }).first()).toBeVisible()
+
+    // 3. 验证内容与分类页（CMS）及工单与邀请码页在管理台可用
+    await page.goto('/zh/dashboard/admin/content')
+    await waitForHydration(page)
+    await expect(page.getByRole('heading', { name: '内容与分类' })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByTestId('taxonomy-badge-announcement')).toBeVisible()
+
+    await page.goto('/zh/dashboard/admin/tickets')
+    await waitForHydration(page)
+    await expect(page.getByRole('heading', { name: '工单与邀请码' })).toBeVisible({
+      timeout: 15000,
+    })
   })
 })

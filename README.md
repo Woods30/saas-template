@@ -84,13 +84,13 @@ GitHub `production` Environment 的变量与 secrets 配置见 [文档站 · Clo
 
 ## 包含什么
 
-- **营销站**：落地页、定价、功能、关于、联系、路线图、候补名单
-- **文档站**：Markdown 内容 + 侧边栏 + ⌘K 搜索 + 中英双语
-- **认证**：Better Auth（邮箱密码 + Google OAuth）、个人中心、会话管理
-- **付费**：Stripe / Creem 结账、订阅、账单页、webhook
-- **后台**：系统设置（品牌 / SEO / 模块开关）、用户管理、收入看板
-- **服务模块**：邮件、订阅、通知、分析、文件存储——各自有 provider 抽象与开关
-- **工程**：两层 env 校验、模块门禁、CSP、SEO、单元 / 组件 / E2E 三层测试、CI
+- **三层架构（`core / modules / routes`）**：基础设施在 `src/core/`，18 个业务模块在 `src/modules/`（只暴露 `service.ts`），页面与接口在 `src/routes/`，由 `scripts/check-boundaries.ts` 强制守护
+- **计费与计量三层**：积分账本（`credits`，FIFO 扣减、批次过期与幂等退款回滚）、用量流水（`usage`）、套餐功能与配额（`entitlements`），以及订阅（`subscriptions`）与核销收款（`manual-payments`）
+- **权限与安全**：细粒度角色与权限点（`rbac`，含权限天花板保护）、业务 API Key 校验（`apikeys`）与操作审计日志（`audit`）
+- **AI 原语**：轻量 `core/ai` 网关（Fal / Replicate / Mock 同步与异步队列适配）与 `ai-tasks`（积分预扣、轮询完成、失败自动退回 revoke）
+- **九类运营后台 + 审计**：用户管理、角色与权限、系统设置、营收看板、订单、订阅、核销队列、积分账本、AI 任务、内容与分类（CMS）、客服工单与邀请码、审计日志
+- **营销与内容**：落地页、定价、数据库 CMS（文章 `posts`、更新日志 `changelog`、分类与标签 `taxonomy`）与可选文件型文档站（`docs`，默认关闭）
+- **多方言数据库**：手写 `schema.sqlite.ts` 与 `schema.postgres.ts`，由 `pnpm db:setup` 按 `DATABASE_PROVIDER` 生成当前方言 schema；生产 schema 迁移在本地生成后手工 apply（`deploy.yml` 不自动执行线上 schema 变更）
 
 ## 面向 AI 的站点索引
 

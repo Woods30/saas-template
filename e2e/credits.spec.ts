@@ -133,8 +133,8 @@ test.describe('Admin 订单与订阅', () => {
     // 侧栏入口也要在：只有页面没有入口等于没做。
     await page.goto('/zh/dashboard/profile')
     await waitForHydration(page)
-    // `exact` 必须开：侧栏里还有一项叫「营收与订阅」，宽松匹配会命中两个元素。
-    await expect(page.getByRole('link', { name: '订单', exact: true })).toBeVisible()
+    // `exact` 必须开：侧栏里还有一项叫「营收与订阅」，且开启核销模块时用户侧栏也有「订单」。
+    await expect(page.locator('a[href="/zh/dashboard/admin/orders"]')).toBeVisible()
     await expect(page.getByRole('link', { name: '订阅', exact: true })).toBeVisible()
     await expect(page.getByRole('link', { name: '积分', exact: true })).toBeVisible()
   })

@@ -67,7 +67,8 @@ src/
 │   ├── layout/      跨页面布局件（Logo / 语言切换 / 用户菜单）
 │   └── ui/          shadcn 上游原件，不本地修改
 ├── core/            基础设施：模块可依赖，反向不可
-│   ├── auth/          better-auth 接线、会话与插件
+│   ├── ai/            AI Provider 轻量网关（Fal / Replicate / Mock）
+│   ├── auth/          better-auth 接线、会话、RBAC 纯函数与插件
 │   ├── cache/         缓存契约 + KV 实现
 │   ├── config/        站点配置：分组形状、合并规则、读写与缓存
 │   ├── db/            Drizzle schema（两份手写 + 生成物）、连接、事务
@@ -76,9 +77,25 @@ src/
 │   ├── notify/        通知渠道（Discord / 飞书）
 │   ├── payment/       支付契约 + Stripe / Creem
 │   └── storage/       对象存储契约 + R2 / S3
-├── modules/         业务能力：只能依赖 core 与自身
+├── modules/         业务能力：只能依赖 core 与自身，唯一公开入口为 service.ts
+│   ├── ai-tasks/      AI 生成任务记录、预扣积分与失败自动退回（revoke）
+│   ├── apikeys/       产品 API Key 业务校验与用量记账
+│   ├── audit/         后台写操作与关键事件审计日志
+│   ├── changelog/     更新日志数据库 CMS
 │   ├── contact/       联系表单
-│   └── newsletter/    订阅邮件
+│   ├── credits/       积分余额账本（FIFO、过期、退款回滚）
+│   ├── docs/          文件型文档站门面（默认关闭）
+│   ├── entitlements/  套餐功能与配额权益
+│   ├── invite-codes/  邀请码创建与积分兑换
+│   ├── manual-payments/ 核销型收款（原 collection）
+│   ├── newsletter/    订阅邮件
+│   ├── notify/        通知渠道门面
+│   ├── posts/         文章数据库 CMS
+│   ├── rbac/          角色与权限点矩阵
+│   ├── subscriptions/ 订阅生命周期与后台查询
+│   ├── taxonomy/      分类与标签
+│   ├── tickets/       客服工单
+│   └── usage/         用量流水计量
 ├── lib/             纯逻辑：locale、seo、llms、module-access、rate-limit…
 ├── locale/          Paraglide 生成物 + middleware（生成物不手改）
 └── styles/          globals.css（设计 token）、mdx.css

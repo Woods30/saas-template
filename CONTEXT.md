@@ -18,6 +18,21 @@
   `scripts/check-boundaries.ts` 强制，见 ADR-0008。
 - **模块公开入口**：`src/modules/<id>/service.ts`。模块根路径与内部文件都不算入口；
   跨模块与路由一律经由 `@/modules/<id>/service`。
+- **credits（积分账本）**：`src/modules/credits/service.ts`。采用双表（批次 `credit_grants` +
+  流水 `credit_transactions` + 分配明细 `credit_allocations` + 汇总 `credit_balances`）实现
+  FIFO 优先扣减最早到期批次、过期作废与按原消费流水逆向退回（`refundCredits`）。
+- **usage（用量流水）**：`src/modules/usage/service.ts`。记录每次功能调用的计量事件与关联扣费流水。
+- **entitlements（套餐权限与额度）**：`src/modules/entitlements/service.ts`。定义功能开关与配额上限，
+  合并套餐默认权益与用户级覆盖。
+- **manual-payments（核销型收款）**：`src/modules/manual-payments/service.ts`。原 `collection` 模块，
+  管理收款码账户、唯一尾数金额锁池、付款凭证上传与后台人工核销。
+- **rbac（角色与权限点）**：`src/modules/rbac/service.ts` 与 `src/core/auth/rbac.ts`。基于 `roles`、
+  `permissions`、`role_permissions`、`user_roles` 四张表，支持 `*` 与前缀通配及权限天花板保护。
+- **ai-tasks（AI 任务原语）**：`src/modules/ai-tasks/service.ts` 与 `src/core/ai/index.ts`。封装
+  AI 任务创建时预扣积分、异步状态轮询、失败或取消时幂等退回积分（revoke）。
+- **audit（审计日志）**：`src/modules/audit/service.ts`。记录后台敏感写操作与认证/支付事件。
+- **tickets / invite-codes / posts / changelog / taxonomy**：运营与数据库 CMS 模块，均通过各自
+  `service.ts` 向后台路由提供读写能力。
 - **websiteConfig**：`src/config/website.ts` 导出的站点集中配置，承载语言无关的元数据、
   UI 默认值、模块开关、provider 选择与社交链接；需随请求语言变化的文案不放在这里。
 - **createWebsiteConfig(env)**：显式接收 `PublicEnv` 的配置工厂，使脚本与单测可构造独立
