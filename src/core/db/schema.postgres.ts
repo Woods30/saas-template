@@ -528,3 +528,109 @@ export const collectionOrders = pgTable(
       .where(sql`status = 'settling'`),
   }),
 )
+
+// ---------------------------------------------------------------------------
+// 权限组与审计（rbac / audit）
+// ---------------------------------------------------------------------------
+
+/** 角色定义（如 super_admin / admin / editor / viewer）。 */
+export const roles = pgTable(
+  'roles',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull().unique(),
+    title: text('title').notNull(),
+    description: text('description'),
+    status: text('status').notNull().default('active'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    statusIdx: index('roles_status_idx').on(table.status),
+  }),
+)
+
+/** 权限点定义（如 `*` / `admin.users.read` / `admin.roles.write`）。 */
+export const permissions = pgTable(
+  'permissions',
+  {
+    id: text('id').primaryKey(),
+    code: text('code').notNull().unique(),
+    resource: text('resource').notNull(),
+    action: text('action').notNull(),
+    title: text('title').notNull(),
+    description: text('description'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    resourceActionIdx: index('permissions_resource_action_idx').on(table.resource, table.action),
+  }),
+)
+
+/** 角色与权限点的多对多绑定。 */
+export const rolePermissions = pgTable(
+  'role_permissions',
+  {
+    id: text('id').primaryKey(),
+    roleId: text('role_id')
+      .notNull()
+      .references(() => roles.id, { onDelete: 'cascade' }),
+    permissionId: text('permission_id')
+      .notNull()
+      .references(() => permissions.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    rolePermissionUnique: uniqueIndex('role_permissions_role_permission_unique').on(
+      table.roleId,
+      table.permissionId,
+    ),
+  }),
+)
+
+/** 用户与角色的多对多绑定（支持临时授权过期时间）。 */
+export const userRoles = pgTable(
+  'user_roles',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    roleId: text('role_id')
+      .notNull()
+      .references(() => roles.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userRoleUnique: uniqueIndex('user_roles_user_role_unique').on(table.userId, table.roleId),
+    userExpiresIdx: index('user_roles_user_expires_idx').on(table.userId, table.expiresAt),
+  }),
+)
+
+/** 审计日志：记录后台写操作与认证/支付关键事件，只追加不修改。 */
+export const auditLogs = pgTable(
+  'audit_logs',
+  {
+    id: text('id').primaryKey(),
+    actorId: text('actor_id').references(() => users.id, { onDelete: 'set null' }),
+    actorType: text('actor_type').notNull().default('admin'),
+    operation: text('operation').notNull(),
+    targetType: text('target_type'),
+    targetId: text('target_id'),
+    summary: text('summary'),
+    ipAddress: text('ip_address'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    actorCreatedIdx: index('audit_logs_actor_created_idx').on(table.actorId, table.createdAt),
+    operationCreatedIdx: index('audit_logs_operation_created_idx').on(
+      table.operation,
+      table.createdAt,
+    ),
+    createdAtIdx: index('audit_logs_created_at_idx').on(table.createdAt),
+  }),
+)

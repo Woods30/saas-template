@@ -540,3 +540,115 @@ export const collectionOrders = sqliteTable(
       .where(sql`status = 'settling'`),
   }),
 )
+
+// ---------------------------------------------------------------------------
+// 权限组与审计（rbac / audit）
+//
+// 角色（roles）与权限点（permissions）通过 `role_permissions` 多对多关联；
+// 用户（users）通过 `user_roles` 绑定一个或多个角色（可带过期时间）。
+// 审计日志（audit_logs）只追加不修改，记录后台写操作与关键认证/支付事件。
+// ---------------------------------------------------------------------------
+
+/** 角色定义（如 super_admin / admin / editor / viewer）。 */
+export const roles = sqliteTable(
+  'roles',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull().unique(),
+    title: text('title').notNull(),
+    description: text('description'),
+    /** `active` | `disabled` */
+    status: text('status').notNull().default('active'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    statusIdx: index('roles_status_idx').on(table.status),
+  }),
+)
+
+/** 权限点定义（如 `*` / `admin.users.read` / `admin.roles.write`）。 */
+export const permissions = sqliteTable(
+  'permissions',
+  {
+    id: text('id').primaryKey(),
+    code: text('code').notNull().unique(),
+    resource: text('resource').notNull(),
+    action: text('action').notNull(),
+    title: text('title').notNull(),
+    description: text('description'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    resourceActionIdx: index('permissions_resource_action_idx').on(table.resource, table.action),
+  }),
+)
+
+/** 角色与权限点的多对多绑定。 */
+export const rolePermissions = sqliteTable(
+  'role_permissions',
+  {
+    id: text('id').primaryKey(),
+    roleId: text('role_id')
+      .notNull()
+      .references(() => roles.id, { onDelete: 'cascade' }),
+    permissionId: text('permission_id')
+      .notNull()
+      .references(() => permissions.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    rolePermissionUnique: uniqueIndex('role_permissions_role_permission_unique').on(
+      table.roleId,
+      table.permissionId,
+    ),
+  }),
+)
+
+/** 用户与角色的多对多绑定（支持临时授权过期时间）。 */
+export const userRoles = sqliteTable(
+  'user_roles',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    roleId: text('role_id')
+      .notNull()
+      .references(() => roles.id, { onDelete: 'cascade' }),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    userRoleUnique: uniqueIndex('user_roles_user_role_unique').on(table.userId, table.roleId),
+    userExpiresIdx: index('user_roles_user_expires_idx').on(table.userId, table.expiresAt),
+  }),
+)
+
+/** 审计日志：记录后台写操作与认证/支付关键事件，只追加不修改。 */
+export const auditLogs = sqliteTable(
+  'audit_logs',
+  {
+    id: text('id').primaryKey(),
+    actorId: text('actor_id').references(() => users.id, { onDelete: 'set null' }),
+    /** `user` | `admin` | `system` | `apikey` */
+    actorType: text('actor_type').notNull().default('admin'),
+    operation: text('operation').notNull(),
+    targetType: text('target_type'),
+    targetId: text('target_id'),
+    summary: text('summary'),
+    ipAddress: text('ip_address'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    actorCreatedIdx: index('audit_logs_actor_created_idx').on(table.actorId, table.createdAt),
+    operationCreatedIdx: index('audit_logs_operation_created_idx').on(
+      table.operation,
+      table.createdAt,
+    ),
+    createdAtIdx: index('audit_logs_created_at_idx').on(table.createdAt),
+  }),
+)
