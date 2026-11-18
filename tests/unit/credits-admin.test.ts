@@ -40,13 +40,16 @@ describe('管理台积分余额', () => {
     expect(result.balances[0]?.userId).toBe('u2')
   })
 
-  it('没有余额的用户不出现在列表里', async () => {
+  it('没发过积分的用户也在列表里，余额为 0', async () => {
+    // 否则管理员想给新用户发积分时，列表里根本没有这个人，无从下手。
     const { sqlite, db } = createTestDatabase()
     seedUser(sqlite, 'u1')
 
     const result = await queryAdminCreditBalances(db, {})
-    expect(result.total).toBe(0)
-    expect(result.balances).toEqual([])
+    expect(result.total).toBe(1)
+    expect(result.balances[0]?.userId).toBe('u1')
+    expect(result.balances[0]?.balance).toBe(0)
+    expect(result.balances[0]?.totalGranted).toBe(0)
   })
 })
 

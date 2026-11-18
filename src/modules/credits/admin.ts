@@ -22,7 +22,8 @@ export interface AdminCreditBalance {
   totalGranted: number
   totalConsumed: number
   totalRefunded: number
-  updatedAt: Date | string
+  /** 余额最后变动时间；从未有过余额行为空。 */
+  updatedAt: Date | string | null
 }
 
 export interface AdminCreditBalancesQuery {
@@ -64,7 +65,9 @@ export interface AdminCreditTransactionsResult {
 /**
  * 查积分余额列表。
  *
- * 只列出**有余额行**的用户：没发过积分的人余额恒为 0，把他们列出来只是噪声。
+ * 以**用户表**为主表左连余额表，而不是反过来：没发过积分的用户也要能被找到，
+ * 否则管理员想给新用户发积分时，列表里根本没有这个人，无从下手。
+ * 余额等字段用 `coalesce` 兜成 0。
  */
 export async function queryAdminCreditBalances(
   db: DB,
@@ -80,29 +83,40 @@ export async function queryAdminCreditBalances(
   const [rows, counted] = await Promise.all([
     db
       .select({
-        userId: schema.creditBalances.userId,
+        userId: schema.users.id,
         email: schema.users.email,
-        balance: schema.creditBalances.balance,
-        totalGranted: schema.creditBalances.totalGranted,
-        totalConsumed: schema.creditBalances.totalConsumed,
-        totalRefunded: schema.creditBalances.totalRefunded,
+        balance: sql<number>`coalesce(${schema.creditBalances.balance}, 0)`,
+        totalGranted: sql<number>`coalesce(${schema.creditBalances.totalGranted}, 0)`,
+        totalConsumed: sql<number>`coalesce(${schema.creditBalances.totalConsumed}, 0)`,
+        totalRefunded: sql<number>`coalesce(${schema.creditBalances.totalRefunded}, 0)`,
         updatedAt: schema.creditBalances.updatedAt,
       })
-      .from(schema.creditBalances)
-      .leftJoin(schema.users, eq(schema.users.id, schema.creditBalances.userId))
+      .from(schema.users)
+      .leftJoin(schema.creditBalances, eq(schema.creditBalances.userId, schema.users.id))
       .where(where)
-      .orderBy(desc(schema.creditBalances.updatedAt), desc(schema.creditBalances.userId))
+      // 排序键用 `coalesce`：PostgreSQL 的 `DESC` 把 NULL 排在最前，SQLite 排在最后，
+      // 直接按余额表的更新时间排会让两边的顺序不一致。取不到余额更新时间时退回注册时间。
+      .orderBy(
+        desc(sql`coalesce(${schema.creditBalances.updatedAt}, ${schema.users.createdAt})`),
+        desc(schema.users.id),
+      )
       .limit(limit)
       .offset(offset),
     db
       .select({ value: count() })
-      .from(schema.creditBalances)
-      .leftJoin(schema.users, eq(schema.users.id, schema.creditBalances.userId))
+      .from(schema.users)
+      .leftJoin(schema.creditBalances, eq(schema.creditBalances.userId, schema.users.id))
       .where(where),
   ])
 
   return {
-    balances: rows.map((row) => ({ ...row, email: row.email ?? '' })),
+    balances: rows.map((row) => ({
+      ...row,
+      balance: Number(row.balance ?? 0),
+      totalGranted: Number(row.totalGranted ?? 0),
+      totalConsumed: Number(row.totalConsumed ?? 0),
+      totalRefunded: Number(row.totalRefunded ?? 0),
+    })),
     total: counted[0]?.value ?? 0,
   }
 }
