@@ -23,7 +23,7 @@ updated: 2026-11-03
 | `/settings/billing` | 账单 | 订阅状态、续费日期与交易记录，需 `payment` 模块 |
 | `/settings/api-keys` | API 密钥 | 创建与删除密钥，需 `features.enableApiKeys`，见 [API 密钥](./api-keys) |
 | `/admin/users` | 用户管理 | 改角色、封禁、删除、模拟登录，需 `admin` 角色且 `features.enableAdmin` 打开，见 [用户与管理员](./user-management) |
-| `/admin/revenue` | 营收 | 收入与订阅总览，门禁同「用户管理」 |
+| `/admin` | 营收 | 收入与订阅总览，门禁同「用户管理」 |
 
 `/settings` 本身不是内容页，进入后直接落到「资料」。
 

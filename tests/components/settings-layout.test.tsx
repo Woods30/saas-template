@@ -137,11 +137,11 @@ describe('SettingsLayout 顶栏', () => {
   /**
    * 侧栏高亮必须按**目标路径**判定，而不是菜单 id。
    *
-   * `admin` 分组下有两个子页（`admin/users` 与 `admin/revenue`），只按第一段匹配
+   * `admin` 分组下有两个子页（`admin/users` 与 `admin`），只按第一段匹配
    * 会让「用户管理」抢走「营收与订阅」的高亮——用户报过的实际缺陷。
    */
   it('管理子页高亮对应菜单项，不被同组其它项抢走', () => {
-    routerMocks.pathname = '/zh/admin/revenue'
+    routerMocks.pathname = '/zh/admin'
     renderAdmin()
     // 侧栏与面包屑都有同名文案，断言须限定在侧栏内。
     const sidebar = document.querySelector('[data-slot="sidebar"]') as HTMLElement
@@ -152,11 +152,11 @@ describe('SettingsLayout 顶栏', () => {
   })
 
   it('管理子页的面包屑末级是页面自己的标题，二级指向管理后台', () => {
-    routerMocks.pathname = '/zh/admin/revenue'
+    routerMocks.pathname = '/zh/admin'
     renderAdmin()
     expect(within(breadcrumb()).getByRole('link', { name: '管理后台' })).toHaveAttribute(
       'href',
-      '/zh/admin/revenue',
+      '/zh/admin',
     )
     const page = within(breadcrumb()).getByText('营收与订阅')
     expect(page).toHaveAttribute('aria-current', 'page')
@@ -171,7 +171,7 @@ describe('SettingsLayout 顶栏', () => {
     expect(within(content).queryByRole('link', { name: '用户管理' })).toBeNull()
     expect(within(footer).getByRole('link', { name: '管理后台' })).toHaveAttribute(
       'href',
-      '/zh/admin/revenue',
+      '/zh/admin',
     )
   })
 
@@ -193,7 +193,7 @@ describe('SettingsLayout 顶栏', () => {
   })
 
   it('管理台侧栏渲染树形分组，底部提供「系统设置」与「个人中心」', () => {
-    routerMocks.pathname = '/zh/admin/revenue'
+    routerMocks.pathname = '/zh/admin'
     renderAdmin()
     const adminContent = document.querySelector('[data-slot="sidebar-content"]') as HTMLElement
     const adminFooter = document.querySelector('[data-slot="sidebar-footer"]') as HTMLElement

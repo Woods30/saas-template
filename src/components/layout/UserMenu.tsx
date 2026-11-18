@@ -56,7 +56,7 @@ export function UserMenu({ guestFallback }: UserMenuProps) {
           {m.settings_user_menu()}
         </DropdownMenuItem>
         {isAdmin && (
-          <DropdownMenuItem render={<Link to="/{-$locale}/admin/revenue" params={{ locale }} />}>
+          <DropdownMenuItem render={<Link to="/{-$locale}/admin" params={{ locale }} />}>
             <IconShieldLock size={16} aria-hidden />
             {m.admin_settings_feature_admin()}
           </DropdownMenuItem>

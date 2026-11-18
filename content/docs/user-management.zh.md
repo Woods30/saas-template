@@ -40,7 +40,7 @@ pnpm db:admin:remote <your-email>   # 线上 D1
 
 ## 管理台
 
-`/admin/users`，入口在个人中心侧边栏的「管理」分组；`/admin/revenue` 是营收总览。
+`/admin/users`，入口在个人中心侧边栏的「管理」分组；`/admin` 是营收总览。
 两者都受**双重**约束：`features.enableAdmin` 开关与 `admin` 角色都满足才可见、可进。
 
 - **列表**：服务端直接查 D1（`fetchAdminUsers`），支持按邮箱搜索、按角色与状态筛选、offset 翻页，

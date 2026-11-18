@@ -100,9 +100,7 @@ export function DashboardUserCard({ session }: { session: SessionInfo }) {
             </DropdownMenuItem>
             {websiteConfig.features.enableAdmin && session.user.role === 'admin' && (
               <DropdownMenuItem
-                render={
-                  <Link to="/{-$locale}/admin/revenue" params={{ locale: getRequestLocale() }} />
-                }
+                render={<Link to="/{-$locale}/admin" params={{ locale: getRequestLocale() }} />}
               >
                 <IconShieldLock size={16} aria-hidden />
                 {m.admin_settings_feature_admin()}

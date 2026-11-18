@@ -31,7 +31,7 @@ import {
  * 数据在路由 loader 里取（服务端），权限在 loader 的 server function 里再校验一次：
  * 只靠 `beforeLoad` 隐藏入口拦不住直接调用。
  */
-export const Route = createFileRoute('/{-$locale}/_layout/admin/revenue')({
+export const Route = createFileRoute('/{-$locale}/_layout/admin/')({
   beforeLoad: ({ context }) => {
     assertFeatureEnabled('enableAdmin')
     assertAdminRole(context.session.user.role)
@@ -44,7 +44,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/revenue')({
     return Number.isInteger(parsed) && parsed > 0 ? { page: parsed } : {}
   },
   head: () =>
-    seo('/admin/revenue', {
+    seo('/admin', {
       title: m.admin_revenue_title(),
       description: m.admin_revenue_description(),
       locale: getRequestLocale(),

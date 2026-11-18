@@ -35,12 +35,12 @@ import { Route as Char123LocaleChar125AuthLoginRouteImport } from './routes/{-$l
 import { Route as Char123LocaleChar125AuthRegisterRouteImport } from './routes/{-$locale}/auth/register'
 import { Route as Char123LocaleChar125AuthResetPasswordRouteImport } from './routes/{-$locale}/auth/reset-password'
 import { Route as Char123LocaleChar125AuthVerifyEmailRouteImport } from './routes/{-$locale}/auth/verify-email'
+import { Route as Char123LocaleChar125LayoutAdminIndexRouteImport } from './routes/{-$locale}/_layout/admin/index'
 import { Route as Char123LocaleChar125LayoutAdminAuditRouteImport } from './routes/{-$locale}/_layout/admin/audit'
 import { Route as Char123LocaleChar125LayoutAdminCollectionOrdersRouteImport } from './routes/{-$locale}/_layout/admin/collection-orders'
 import { Route as Char123LocaleChar125LayoutAdminContentRouteImport } from './routes/{-$locale}/_layout/admin/content'
 import { Route as Char123LocaleChar125LayoutAdminCreditsRouteImport } from './routes/{-$locale}/_layout/admin/credits'
 import { Route as Char123LocaleChar125LayoutAdminOrdersRouteImport } from './routes/{-$locale}/_layout/admin/orders'
-import { Route as Char123LocaleChar125LayoutAdminRevenueRouteImport } from './routes/{-$locale}/_layout/admin/revenue'
 import { Route as Char123LocaleChar125LayoutAdminRolesRouteImport } from './routes/{-$locale}/_layout/admin/roles'
 import { Route as Char123LocaleChar125LayoutAdminSettingsRouteImport } from './routes/{-$locale}/_layout/admin/settings'
 import { Route as Char123LocaleChar125LayoutAdminSubscriptionsRouteImport } from './routes/{-$locale}/_layout/admin/subscriptions'
@@ -215,6 +215,12 @@ const Char123LocaleChar125AuthVerifyEmailRoute =
     path: '/{-$locale}/auth/verify-email',
     getParentRoute: () => rootRouteImport,
   } as any)
+const Char123LocaleChar125LayoutAdminIndexRoute =
+  Char123LocaleChar125LayoutAdminIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
+  } as any)
 const Char123LocaleChar125LayoutAdminAuditRoute =
   Char123LocaleChar125LayoutAdminAuditRouteImport.update({
     id: '/audit',
@@ -243,12 +249,6 @@ const Char123LocaleChar125LayoutAdminOrdersRoute =
   Char123LocaleChar125LayoutAdminOrdersRouteImport.update({
     id: '/orders',
     path: '/orders',
-    getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
-  } as any)
-const Char123LocaleChar125LayoutAdminRevenueRoute =
-  Char123LocaleChar125LayoutAdminRevenueRouteImport.update({
-    id: '/revenue',
-    path: '/revenue',
     getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
   } as any)
 const Char123LocaleChar125LayoutAdminRolesRoute =
@@ -464,7 +464,6 @@ export interface FileRoutesByFullPath {
   '/{-$locale}/admin/content': typeof Char123LocaleChar125LayoutAdminContentRoute
   '/{-$locale}/admin/credits': typeof Char123LocaleChar125LayoutAdminCreditsRoute
   '/{-$locale}/admin/orders': typeof Char123LocaleChar125LayoutAdminOrdersRoute
-  '/{-$locale}/admin/revenue': typeof Char123LocaleChar125LayoutAdminRevenueRoute
   '/{-$locale}/admin/roles': typeof Char123LocaleChar125LayoutAdminRolesRoute
   '/{-$locale}/admin/settings': typeof Char123LocaleChar125LayoutAdminSettingsRoute
   '/{-$locale}/admin/subscriptions': typeof Char123LocaleChar125LayoutAdminSubscriptionsRoute
@@ -484,6 +483,7 @@ export interface FileRoutesByFullPath {
   '/{-$locale}/settings/profile': typeof Char123LocaleChar125LayoutSettingsProfileRoute
   '/{-$locale}/settings/security': typeof Char123LocaleChar125LayoutSettingsSecurityRoute
   '/{-$locale}/settings/sessions': typeof Char123LocaleChar125LayoutSettingsSessionsRoute
+  '/{-$locale}/admin/': typeof Char123LocaleChar125LayoutAdminIndexRoute
   '/{-$locale}/docs/': typeof Char123LocaleChar125LayoutDocsIndexRoute
   '/{-$locale}/marketing/': typeof Char123LocaleChar125LayoutMarketingIndexRoute
   '/{-$locale}/settings/': typeof Char123LocaleChar125LayoutSettingsIndexRoute
@@ -513,7 +513,6 @@ export interface FileRoutesByTo {
   '/api/payment/$': typeof ApiPaymentSplatRoute
   '/api/webhooks/creem': typeof ApiWebhooksCreemRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
-  '/{-$locale}/admin': typeof Char123LocaleChar125LayoutAdminRouteWithChildren
   '/{-$locale}/auth/error': typeof Char123LocaleChar125AuthErrorRoute
   '/{-$locale}/auth/forgot-password': typeof Char123LocaleChar125AuthForgotPasswordRoute
   '/{-$locale}/auth/login': typeof Char123LocaleChar125AuthLoginRoute
@@ -525,7 +524,6 @@ export interface FileRoutesByTo {
   '/{-$locale}/admin/content': typeof Char123LocaleChar125LayoutAdminContentRoute
   '/{-$locale}/admin/credits': typeof Char123LocaleChar125LayoutAdminCreditsRoute
   '/{-$locale}/admin/orders': typeof Char123LocaleChar125LayoutAdminOrdersRoute
-  '/{-$locale}/admin/revenue': typeof Char123LocaleChar125LayoutAdminRevenueRoute
   '/{-$locale}/admin/roles': typeof Char123LocaleChar125LayoutAdminRolesRoute
   '/{-$locale}/admin/settings': typeof Char123LocaleChar125LayoutAdminSettingsRoute
   '/{-$locale}/admin/subscriptions': typeof Char123LocaleChar125LayoutAdminSubscriptionsRoute
@@ -544,6 +542,7 @@ export interface FileRoutesByTo {
   '/{-$locale}/settings/profile': typeof Char123LocaleChar125LayoutSettingsProfileRoute
   '/{-$locale}/settings/security': typeof Char123LocaleChar125LayoutSettingsSecurityRoute
   '/{-$locale}/settings/sessions': typeof Char123LocaleChar125LayoutSettingsSessionsRoute
+  '/{-$locale}/admin': typeof Char123LocaleChar125LayoutAdminIndexRoute
   '/{-$locale}/docs': typeof Char123LocaleChar125LayoutDocsIndexRoute
   '/{-$locale}/marketing': typeof Char123LocaleChar125LayoutMarketingIndexRoute
   '/{-$locale}/settings': typeof Char123LocaleChar125LayoutSettingsIndexRoute
@@ -589,7 +588,6 @@ export interface FileRoutesById {
   '/{-$locale}/_layout/admin/content': typeof Char123LocaleChar125LayoutAdminContentRoute
   '/{-$locale}/_layout/admin/credits': typeof Char123LocaleChar125LayoutAdminCreditsRoute
   '/{-$locale}/_layout/admin/orders': typeof Char123LocaleChar125LayoutAdminOrdersRoute
-  '/{-$locale}/_layout/admin/revenue': typeof Char123LocaleChar125LayoutAdminRevenueRoute
   '/{-$locale}/_layout/admin/roles': typeof Char123LocaleChar125LayoutAdminRolesRoute
   '/{-$locale}/_layout/admin/settings': typeof Char123LocaleChar125LayoutAdminSettingsRoute
   '/{-$locale}/_layout/admin/subscriptions': typeof Char123LocaleChar125LayoutAdminSubscriptionsRoute
@@ -609,6 +607,7 @@ export interface FileRoutesById {
   '/{-$locale}/_layout/settings/profile': typeof Char123LocaleChar125LayoutSettingsProfileRoute
   '/{-$locale}/_layout/settings/security': typeof Char123LocaleChar125LayoutSettingsSecurityRoute
   '/{-$locale}/_layout/settings/sessions': typeof Char123LocaleChar125LayoutSettingsSessionsRoute
+  '/{-$locale}/_layout/admin/': typeof Char123LocaleChar125LayoutAdminIndexRoute
   '/{-$locale}/_layout/docs/': typeof Char123LocaleChar125LayoutDocsIndexRoute
   '/{-$locale}/_layout/marketing/': typeof Char123LocaleChar125LayoutMarketingIndexRoute
   '/{-$locale}/_layout/settings/': typeof Char123LocaleChar125LayoutSettingsIndexRoute
@@ -655,7 +654,6 @@ export interface FileRouteTypes {
     | '/{-$locale}/admin/content'
     | '/{-$locale}/admin/credits'
     | '/{-$locale}/admin/orders'
-    | '/{-$locale}/admin/revenue'
     | '/{-$locale}/admin/roles'
     | '/{-$locale}/admin/settings'
     | '/{-$locale}/admin/subscriptions'
@@ -675,6 +673,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/settings/profile'
     | '/{-$locale}/settings/security'
     | '/{-$locale}/settings/sessions'
+    | '/{-$locale}/admin/'
     | '/{-$locale}/docs/'
     | '/{-$locale}/marketing/'
     | '/{-$locale}/settings/'
@@ -704,7 +703,6 @@ export interface FileRouteTypes {
     | '/api/payment/$'
     | '/api/webhooks/creem'
     | '/api/webhooks/stripe'
-    | '/{-$locale}/admin'
     | '/{-$locale}/auth/error'
     | '/{-$locale}/auth/forgot-password'
     | '/{-$locale}/auth/login'
@@ -716,7 +714,6 @@ export interface FileRouteTypes {
     | '/{-$locale}/admin/content'
     | '/{-$locale}/admin/credits'
     | '/{-$locale}/admin/orders'
-    | '/{-$locale}/admin/revenue'
     | '/{-$locale}/admin/roles'
     | '/{-$locale}/admin/settings'
     | '/{-$locale}/admin/subscriptions'
@@ -735,6 +732,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/settings/profile'
     | '/{-$locale}/settings/security'
     | '/{-$locale}/settings/sessions'
+    | '/{-$locale}/admin'
     | '/{-$locale}/docs'
     | '/{-$locale}/marketing'
     | '/{-$locale}/settings'
@@ -779,7 +777,6 @@ export interface FileRouteTypes {
     | '/{-$locale}/_layout/admin/content'
     | '/{-$locale}/_layout/admin/credits'
     | '/{-$locale}/_layout/admin/orders'
-    | '/{-$locale}/_layout/admin/revenue'
     | '/{-$locale}/_layout/admin/roles'
     | '/{-$locale}/_layout/admin/settings'
     | '/{-$locale}/_layout/admin/subscriptions'
@@ -799,6 +796,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/_layout/settings/profile'
     | '/{-$locale}/_layout/settings/security'
     | '/{-$locale}/_layout/settings/sessions'
+    | '/{-$locale}/_layout/admin/'
     | '/{-$locale}/_layout/docs/'
     | '/{-$locale}/_layout/marketing/'
     | '/{-$locale}/_layout/settings/'
@@ -1027,6 +1025,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char123LocaleChar125AuthVerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/{-$locale}/_layout/admin/': {
+      id: '/{-$locale}/_layout/admin/'
+      path: '/'
+      fullPath: '/{-$locale}/admin/'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminIndexRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
+    }
     '/{-$locale}/_layout/admin/audit': {
       id: '/{-$locale}/_layout/admin/audit'
       path: '/audit'
@@ -1060,13 +1065,6 @@ declare module '@tanstack/react-router' {
       path: '/orders'
       fullPath: '/{-$locale}/admin/orders'
       preLoaderRoute: typeof Char123LocaleChar125LayoutAdminOrdersRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
-    }
-    '/{-$locale}/_layout/admin/revenue': {
-      id: '/{-$locale}/_layout/admin/revenue'
-      path: '/revenue'
-      fullPath: '/{-$locale}/admin/revenue'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminRevenueRouteImport
       parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
     }
     '/{-$locale}/_layout/admin/roles': {
@@ -1288,13 +1286,13 @@ interface Char123LocaleChar125LayoutAdminRouteChildren {
   Char123LocaleChar125LayoutAdminContentRoute: typeof Char123LocaleChar125LayoutAdminContentRoute
   Char123LocaleChar125LayoutAdminCreditsRoute: typeof Char123LocaleChar125LayoutAdminCreditsRoute
   Char123LocaleChar125LayoutAdminOrdersRoute: typeof Char123LocaleChar125LayoutAdminOrdersRoute
-  Char123LocaleChar125LayoutAdminRevenueRoute: typeof Char123LocaleChar125LayoutAdminRevenueRoute
   Char123LocaleChar125LayoutAdminRolesRoute: typeof Char123LocaleChar125LayoutAdminRolesRoute
   Char123LocaleChar125LayoutAdminSettingsRoute: typeof Char123LocaleChar125LayoutAdminSettingsRoute
   Char123LocaleChar125LayoutAdminSubscriptionsRoute: typeof Char123LocaleChar125LayoutAdminSubscriptionsRoute
   Char123LocaleChar125LayoutAdminTasksRoute: typeof Char123LocaleChar125LayoutAdminTasksRoute
   Char123LocaleChar125LayoutAdminTicketsRoute: typeof Char123LocaleChar125LayoutAdminTicketsRoute
   Char123LocaleChar125LayoutAdminUsersRoute: typeof Char123LocaleChar125LayoutAdminUsersRoute
+  Char123LocaleChar125LayoutAdminIndexRoute: typeof Char123LocaleChar125LayoutAdminIndexRoute
 }
 
 const Char123LocaleChar125LayoutAdminRouteChildren: Char123LocaleChar125LayoutAdminRouteChildren =
@@ -1309,8 +1307,6 @@ const Char123LocaleChar125LayoutAdminRouteChildren: Char123LocaleChar125LayoutAd
       Char123LocaleChar125LayoutAdminCreditsRoute,
     Char123LocaleChar125LayoutAdminOrdersRoute:
       Char123LocaleChar125LayoutAdminOrdersRoute,
-    Char123LocaleChar125LayoutAdminRevenueRoute:
-      Char123LocaleChar125LayoutAdminRevenueRoute,
     Char123LocaleChar125LayoutAdminRolesRoute:
       Char123LocaleChar125LayoutAdminRolesRoute,
     Char123LocaleChar125LayoutAdminSettingsRoute:
@@ -1323,6 +1319,8 @@ const Char123LocaleChar125LayoutAdminRouteChildren: Char123LocaleChar125LayoutAd
       Char123LocaleChar125LayoutAdminTicketsRoute,
     Char123LocaleChar125LayoutAdminUsersRoute:
       Char123LocaleChar125LayoutAdminUsersRoute,
+    Char123LocaleChar125LayoutAdminIndexRoute:
+      Char123LocaleChar125LayoutAdminIndexRoute,
   }
 
 const Char123LocaleChar125LayoutAdminRouteWithChildren =

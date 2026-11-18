@@ -22,7 +22,7 @@ The account area behind sign-in lives at `/{locale}/settings/*` and is reachable
 | `/settings/billing` | Billing | Subscription state, renewal date, and transactions; needs the `payment` module |
 | `/settings/api-keys` | API keys | Create and delete keys; needs `features.enableApiKeys`, see [API Keys](./api-keys) |
 | `/admin/users` | Users | Change roles, ban, delete, impersonate; needs the `admin` role and `features.enableAdmin`, see [Users and Roles](./user-management) |
-| `/admin/revenue` | Revenue | Revenue and subscription overview; same gate as Users |
+| `/admin` | Revenue | Revenue and subscription overview; same gate as Users |
 
 `/settings` is not a page of its own — it lands on Profile.
 

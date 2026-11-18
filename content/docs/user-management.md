@@ -35,7 +35,7 @@ The script does one thing: `UPDATE users SET role = 'admin' WHERE email = ?`. `r
 
 ## The dashboard
 
-`/admin/users`, with its entry under the Administration sidebar of the admin console; `/admin/revenue` is the revenue overview. Both are bound by **two** constraints: the `features.enableAdmin` flag and the `admin` role.
+`/admin/users`, with its entry under the Administration sidebar of the admin console; `/admin` is the revenue overview. Both are bound by **two** constraints: the `features.enableAdmin` flag and the `admin` role.
 
 - **List**: queried straight from D1 on the server (`fetchAdminUsers`), with search by email, filters on role and status, and offset paging, 20 rows per page.
 - **Set role**: `authClient.admin.setRole({ userId, role })`.

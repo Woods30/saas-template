@@ -83,7 +83,7 @@ function isLinkActive(
   return (target.split(`/${base}/`)[1] ?? '') === currentPath
 }
 
-/** 路径在布局内的相对段：`/zh/admin/revenue` → `revenue`。 */
+/** 路径在布局内的相对段：`/zh/admin` → `revenue`。 */
 function useSectionPath(base: 'admin' | 'settings'): string {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   return pathname.split(`/${base}/`)[1] ?? ''
@@ -158,7 +158,7 @@ export function PersonalCenterLayout({
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
-                render={<Link to="/{-$locale}/admin/revenue" params={{ locale }} />}
+                render={<Link to="/{-$locale}/admin" params={{ locale }} />}
                 tooltip={m.admin_settings_feature_admin()}
                 className={SIDEBAR_ITEM_CLASS}
               >
@@ -197,7 +197,10 @@ export function AdminConsoleLayout({
     () => getAdminSidebarMenu(locale, { config: websiteConfig, authenticated: true, role }),
     [locale, role],
   )
-  const meta = getSettingsSectionMeta(`admin/${currentPath.split('/')[0] ?? ''}`)
+  // 根页（`/admin`）就是营收总览，段为空时用同一个标题，不吃掉末级面包屑。
+  const meta = getSettingsSectionMeta(
+    currentPath === '' ? 'admin' : `admin/${currentPath.split('/')[0] ?? ''}`,
+  )
 
   const [openGroups, setOpenGroups] = useState<Set<string>>(
     () => new Set(ADMIN_GROUPS_DEFAULT_OPEN),
@@ -243,7 +246,7 @@ export function AdminConsoleLayout({
       locale={locale}
       session={session}
       meta={meta}
-      root={{ label: m.admin_settings_feature_admin(), to: '/{-$locale}/admin/revenue' }}
+      root={{ label: m.admin_settings_feature_admin(), to: '/{-$locale}/admin' }}
       sidebar={
         <SidebarGroup>
           <SidebarGroupLabel>{menu.groupTitle}</SidebarGroupLabel>
@@ -351,7 +354,7 @@ function DashboardShell({
   locale: Locale
   session: SessionInfo
   meta: ReturnType<typeof getSettingsSectionMeta>
-  root: { label: string; to: '/{-$locale}/admin/revenue' | '/{-$locale}/settings/profile' }
+  root: { label: string; to: '/{-$locale}/admin' | '/{-$locale}/settings/profile' }
   sidebar: ReactNode
   footer: ReactNode
   children: ReactNode

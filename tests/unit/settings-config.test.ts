@@ -158,7 +158,7 @@ describe('管理台侧栏菜单', () => {
     expect(menu?.overviewItem.destination).toEqual({
       kind: 'internal',
       options: expect.objectContaining({
-        to: '/{-$locale}/admin/revenue',
+        to: '/{-$locale}/admin',
         params: { locale: 'en' },
       }),
     })
@@ -217,7 +217,7 @@ describe('板块标题元数据', () => {
   })
 
   it('管理分组下的子页面有各自的标题', () => {
-    expect(getSettingsSectionMeta('admin/revenue')?.title).toBe('营收与订阅')
+    expect(getSettingsSectionMeta('admin')?.title).toBe('营收与订阅')
     // 未注册的路径段返回 undefined，调用方据此退回更粗的层级。
     expect(getSettingsSectionMeta('admin/unknown')).toBeUndefined()
   })

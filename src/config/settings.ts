@@ -45,10 +45,10 @@ export type SettingsSection =
   | 'notifications'
   | 'api-keys'
   | 'billing'
+  /** 管理台根页（营收总览）；子页面路径含两段，与个人中心的单段不同。 */
   | 'admin'
-  /** 管理分组下的子页面：路径含两段，与其它板块的单段不同。 */
+  | 'admin/users'
   | 'admin/roles'
-  | 'admin/revenue'
   | 'admin/orders'
   | 'admin/subscriptions'
   | 'admin/credits'
@@ -174,7 +174,7 @@ export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSide
     icon: IconChartBar,
     destination: {
       kind: 'internal',
-      options: linkOptions({ to: '/{-$locale}/admin/revenue', params: { locale } }),
+      options: linkOptions({ to: '/{-$locale}/admin', params: { locale } }),
     },
   }
 
@@ -346,7 +346,7 @@ export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSide
 /**
  * 每个板块的标题与说明，供页面 `head()` 与内容区标题使用。
  *
- * 参数是**路径段**（`profile`、`admin/revenue`），未注册时返回 `undefined`，
+ * 参数是**路径段**（`profile`、`admin`），未注册时返回 `undefined`，
  * 调用方据此退回到更粗的层级。
  */
 export function getSettingsSectionMeta(section: string):
@@ -399,13 +399,13 @@ export function getSettingsSectionMeta(section: string):
         description: m['collection.order_list_description'](),
         icon: IconReceipt,
       }
-    case 'admin':
+    case 'admin/users':
       return {
         title: m.settings_admin_title(),
         description: m.settings_admin_description(),
         icon: IconUsers,
       }
-    case 'admin/revenue':
+    case 'admin':
       return {
         title: m.admin_revenue_title(),
         description: m.admin_revenue_description(),
