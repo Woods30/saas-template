@@ -135,6 +135,8 @@ export interface WebsiteConfig {
    */
   collection: {
     enabled: boolean
+    /** 核验时效承诺（小时），用于页面正文告知用户。 */
+    verificationSlaHours: number
     accounts: CollectionAccountConfig[]
   }
   notification: { enabled: boolean; provider: 'discord' | 'feishu' }
@@ -313,6 +315,8 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       // 核销型支付默认关闭：开了才会展示收款码链路，升级不改变既有实例行为。
       collection: {
         enabled: false,
+        // 核验时效承诺：页面上告知用户「多久能核完」。
+        verificationSlaHours: 24,
         // 出厂没有收款账户：使用者需在 `src/config/website.ts` 填自己的收款码，
         // 或用 `VITE_COLLECTION_ACCOUNTS` 在部署平台配置。这里只放占位，
         // 不放真实收款码。
