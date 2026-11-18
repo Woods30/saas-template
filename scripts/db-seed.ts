@@ -17,6 +17,14 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import {
+  type BuiltinRoleSeed,
+  DEFAULT_PERMISSIONS,
+  DEFAULT_ROLES,
+  type PermissionSeed,
+  permissionIdOf,
+  roleIdOf,
+} from '../src/core/auth/rbac'
 import { defaultSettings, type SettingsGroups } from '../src/core/config/settings'
 import {
   type DatabaseProvider,
@@ -181,6 +189,51 @@ function planEntitlementSql(plan: PlanSeed, grant: PlanEntitlementSeed, force: b
   return `INSERT INTO plan_entitlements (id, plan_key, entitlement_key, limit_value, enabled) VALUES (${sqlString(id)}, ${sqlString(plan.key)}, ${sqlString(grant.entitlementKey)}, ${sqlNullableNumber(grant.limitValue)}, ${grant.enabled ? 'TRUE' : 'FALSE'}) ${conflict};`
 }
 
+/**
+ * 生成 RBAC 权限点与内置角色的种子 SQL。
+ */
+export function buildRbacSeedSql(force: boolean, dialect: Dialect): string {
+  const now = dialect === 'postgresql' ? 'now()' : "strftime('%s','now')"
+  const lines: string[] = []
+
+  for (const perm of DEFAULT_PERMISSIONS) {
+    lines.push(permissionSql(perm, force, now))
+  }
+  for (const role of DEFAULT_ROLES) {
+    lines.push(roleSql(role, force, now))
+  }
+  for (const role of DEFAULT_ROLES) {
+    for (const code of role.permissions) {
+      lines.push(rolePermissionSql(role, code, now))
+    }
+  }
+
+  return `${lines.join('\n')}\n`
+}
+
+function permissionSql(perm: PermissionSeed, force: boolean, now: string): string {
+  const id = permissionIdOf(perm.code)
+  const conflict = force
+    ? `ON CONFLICT (code) DO UPDATE SET resource = EXCLUDED.resource, action = EXCLUDED.action, title = EXCLUDED.title, description = EXCLUDED.description, updated_at = ${now}`
+    : 'ON CONFLICT (code) DO NOTHING'
+  return `INSERT INTO permissions (id, code, resource, action, title, description, created_at, updated_at) VALUES (${sqlString(id)}, ${sqlString(perm.code)}, ${sqlString(perm.resource)}, ${sqlString(perm.action)}, ${sqlString(perm.title)}, ${sqlNullableString(perm.description)}, ${now}, ${now}) ${conflict};`
+}
+
+function roleSql(role: BuiltinRoleSeed, force: boolean, now: string): string {
+  const id = roleIdOf(role.name)
+  const conflict = force
+    ? `ON CONFLICT (name) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description, sort_order = EXCLUDED.sort_order, updated_at = ${now}`
+    : 'ON CONFLICT (name) DO NOTHING'
+  return `INSERT INTO roles (id, name, title, description, status, sort_order, created_at, updated_at) VALUES (${sqlString(id)}, ${sqlString(role.name)}, ${sqlString(role.title)}, ${sqlNullableString(role.description)}, 'active', ${role.sortOrder}, ${now}, ${now}) ${conflict};`
+}
+
+function rolePermissionSql(role: BuiltinRoleSeed, code: string, now: string): string {
+  const roleId = roleIdOf(role.name)
+  const permId = permissionIdOf(code)
+  const id = `rp:${role.name}:${code}`
+  return `INSERT INTO role_permissions (id, role_id, permission_id, created_at) VALUES (${sqlString(id)}, ${sqlString(roleId)}, ${sqlString(permId)}, ${now}) ON CONFLICT (role_id, permission_id) DO NOTHING;`
+}
+
 /** 执行种子 SQL：SQLite / D1 走 wrangler，PostgreSQL 走 postgres 客户端。 */
 async function applySeed(sql: string, provider: DatabaseProvider, target: string): Promise<number> {
   if (provider === 'postgres' || target === 'pg') {
@@ -227,7 +280,7 @@ export async function run(argv: string[] = process.argv.slice(2)): Promise<numbe
   const dialect: Dialect = target === 'pg' ? 'postgresql' : dialectOf(provider)
 
   const settings = applySeedOverrides(defaultSettings(), overrides)
-  const sql = `${buildSeedSql(settings, force, dialect)}${buildCatalogSql(force, dialect)}`
+  const sql = `${buildSeedSql(settings, force, dialect)}${buildCatalogSql(force, dialect)}${buildRbacSeedSql(force, dialect)}`
   console.log(`写入种子数据（provider=${provider} 目标=${target}${force ? ' 覆盖' : ''}）`)
   const code = await applySeed(sql, provider, target)
   if (code === 0) console.log('✅ 种子数据写入完成')

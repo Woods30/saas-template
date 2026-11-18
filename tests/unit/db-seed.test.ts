@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   applySeedOverrides,
   buildCatalogSql,
+  buildRbacSeedSql,
   buildSeedSql,
   parseSeedOverrides,
 } from '../../scripts/db-seed'
 import { findProduct } from '../../src/config/products'
+import { DEFAULT_PERMISSIONS, DEFAULT_ROLES } from '../../src/core/auth/rbac'
 import { defaultSettings } from '../../src/core/config/settings'
 import { DEFAULT_ENTITLEMENTS, DEFAULT_PLANS } from '../../src/modules/entitlements/catalog'
 import { resolveEntitlements } from '../../src/modules/entitlements/service'
@@ -218,6 +220,16 @@ describe('种子在真实 schema 上跑通', () => {
     sqlite.exec(buildCatalogSql(false, 'sqlite'))
     expect(sqlite.prepare('SELECT COUNT(*) AS n FROM plan_entitlements').get()).toMatchObject({
       n: DEFAULT_PLANS.reduce((sum, plan) => sum + plan.entitlements.length, 0),
+    })
+
+    // RBAC 权限点与内置角色同样幂等落库。
+    sqlite.exec(buildRbacSeedSql(false, 'sqlite'))
+    sqlite.exec(buildRbacSeedSql(false, 'sqlite'))
+    expect(sqlite.prepare('SELECT COUNT(*) AS n FROM permissions').get()).toMatchObject({
+      n: DEFAULT_PERMISSIONS.length,
+    })
+    expect(sqlite.prepare('SELECT COUNT(*) AS n FROM roles').get()).toMatchObject({
+      n: DEFAULT_ROLES.length,
     })
   })
 

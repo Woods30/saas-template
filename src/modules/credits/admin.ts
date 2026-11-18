@@ -217,7 +217,10 @@ export const fetchAdminCreditTransactions = createServerFn({ method: 'GET' })
 export const grantAdminCredits = createServerFn({ method: 'POST' })
   .validator((input: unknown) => grantSchema.parse(input))
   .handler(async ({ data }): Promise<{ balance: number }> => {
-    const { requireAdminDb } = await import('@/core/auth/session')
+    const [{ requireAdminDb }, { safeRecordAuditLog }] = await Promise.all([
+      import('@/core/auth/session'),
+      import('@/modules/audit/service'),
+    ])
     const { db, adminId } = await requireAdminDb()
     const result = await grantCredits(db, {
       userId: data.userId,
@@ -225,6 +228,14 @@ export const grantAdminCredits = createServerFn({ method: 'POST' })
       source: 'admin',
       reference: data.note ?? `admin:${adminId}`,
       idempotencyKey: `admin-grant:${data.userId}:${data.amount}:${Date.now()}`,
+    })
+    await safeRecordAuditLog(db, {
+      actorId: adminId,
+      actorType: 'admin',
+      operation: 'credits.grant',
+      targetType: 'user',
+      targetId: data.userId,
+      summary: `发放 ${data.amount} 积分${data.note ? `（${data.note}）` : ''}`,
     })
     return { balance: result.transaction.balanceAfter }
   })
@@ -238,13 +249,24 @@ export const grantAdminCredits = createServerFn({ method: 'POST' })
 export const deductAdminCredits = createServerFn({ method: 'POST' })
   .validator((input: unknown) => deductSchema.parse(input))
   .handler(async ({ data }): Promise<{ balance: number }> => {
-    const { requireAdminDb } = await import('@/core/auth/session')
+    const [{ requireAdminDb }, { safeRecordAuditLog }] = await Promise.all([
+      import('@/core/auth/session'),
+      import('@/modules/audit/service'),
+    ])
     const { db, adminId } = await requireAdminDb()
     const result = await consumeCredits(db, {
       userId: data.userId,
       amount: data.amount,
       reference: data.note ?? `admin:${adminId}`,
       idempotencyKey: `admin-deduct:${data.userId}:${data.amount}:${Date.now()}`,
+    })
+    await safeRecordAuditLog(db, {
+      actorId: adminId,
+      actorType: 'admin',
+      operation: 'credits.deduct',
+      targetType: 'user',
+      targetId: data.userId,
+      summary: `扣减 ${data.amount} 积分${data.note ? `（${data.note}）` : ''}`,
     })
     return { balance: result.transaction.balanceAfter }
   })
