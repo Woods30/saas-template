@@ -114,12 +114,21 @@ async function planKeysOfUser(db: DB, userId: string): Promise<string[]> {
   return keys
 }
 
-/** 套餐给的权益与额度。 */
+/**
+ * 套餐给的权益与额度。
+ *
+ * `plan_entitlements.limit_value` 为 null 表示**沿用目录默认值**，不是不限量——
+ * 不限量是目录默认值本身为 null。合并前先把每一行按目录默认值解析成具体额度，
+ * 再取最大的那个；否则「一个套餐沿用默认值、另一个给更高额度」会被默认值盖掉。
+ *
+ * @param catalogDefaults 目录里的默认额度（key → 默认额度，null 表示不限量）
+ */
 async function planGrants(
   db: DB,
   planKeys: string[],
-): Promise<Map<string, { limit: number | null; enabled: boolean }>> {
-  const grants = new Map<string, { limit: number | null; enabled: boolean }>()
+  catalogDefaults: Map<string, number | null>,
+): Promise<Map<string, number | null>> {
+  const grants = new Map<string, number | null>()
   if (planKeys.length === 0) return grants
   const rows = await db
     .select()
@@ -131,18 +140,16 @@ async function planGrants(
       ),
     )
   for (const row of rows) {
+    const effective = row.limitValue ?? catalogDefaults.get(row.entitlementKey) ?? null
     const existing = grants.get(row.entitlementKey)
     // 多个套餐给同一权益时取额度更大的那个。
-    if (!existing) {
-      grants.set(row.entitlementKey, { limit: row.limitValue, enabled: true })
+    if (existing === undefined) {
+      grants.set(row.entitlementKey, effective)
       continue
     }
     // 任一套餐给不限量，整体就不限量。
-    const merged =
-      existing.limit === null || row.limitValue === null
-        ? null
-        : Math.max(existing.limit, row.limitValue)
-    grants.set(row.entitlementKey, { limit: merged, enabled: true })
+    const merged = existing === null || effective === null ? null : Math.max(existing, effective)
+    grants.set(row.entitlementKey, merged)
   }
   return grants
 }
@@ -162,8 +169,9 @@ export async function resolveEntitlements(
   now: Date = new Date(),
 ): Promise<ResolvedEntitlement[]> {
   const catalog = await listEntitlements(db)
+  const catalogDefaults = new Map(catalog.map((item) => [item.key, item.defaultLimit]))
   const planKeys = await planKeysOfUser(db, userId)
-  const grants = await planGrants(db, planKeys)
+  const grants = await planGrants(db, planKeys, catalogDefaults)
 
   const overrides = await db
     .select()
@@ -176,8 +184,9 @@ export async function resolveEntitlements(
     const grant = grants.get(item.key)
 
     // 额度优先级：用户覆盖 > 套餐 > 目录默认。
+    // 套餐额度已经按目录默认值解析过（见 planGrants），它为 null 只可能是「不限量」。
     const limit =
-      override?.limitValue ?? grant?.limit ?? (item.type === 'quota' ? item.defaultLimit : null)
+      override?.limitValue ?? grant ?? (item.type === 'quota' ? item.defaultLimit : null)
 
     if (item.type !== 'quota') continue
 
@@ -246,7 +255,7 @@ export async function resolveEntitlements(
     const row = currentMap.get(item.key)
 
     const limit =
-      override?.limitValue ?? grant?.limit ?? (item.type === 'quota' ? item.defaultLimit : null)
+      override?.limitValue ?? grant ?? (item.type === 'quota' ? item.defaultLimit : null)
     const enabled = item.type === 'boolean' ? (override ? true : grant !== undefined) : true
     const used = row?.used ?? 0
 

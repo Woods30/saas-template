@@ -199,3 +199,55 @@ describe('套餐与用户覆盖', () => {
     expect(resolved.find((item) => item.key === 'api_call')?.limit).toBe(7)
   })
 })
+
+describe('多个套餐合并', () => {
+  /**
+   * `limit_value = null` 的含义是「沿用目录默认值」，不是「不限量」——
+   * 目录默认值本身为 null 才是不限量。合并时先按目录默认值把每一行解析成
+   * 具体额度，再取最大的那个。
+   */
+  it('一个套餐沿用目录默认值、另一个给更高额度时，取更高的那个', async () => {
+    const { sqlite, db } = createTestDatabase()
+    seedCatalog(sqlite) // api_call 默认 100
+    seedUser(sqlite, 'u1')
+    sqlite.exec(
+      `INSERT INTO plans(key,name,description,product_id,offer_id,active,sort_order,created_at,updated_at)
+       VALUES ('p1','套餐一',NULL,'pro','monthly',1,1,1,1),
+              ('p2','套餐二',NULL,'pro','yearly',1,2,1,1)`,
+    )
+    sqlite.exec(
+      `INSERT INTO plan_entitlements(id,plan_key,entitlement_key,limit_value,enabled)
+       VALUES ('pe1','p1','api_call',NULL,1),
+              ('pe2','p2','api_call',500,1)`,
+    )
+    sqlite.exec(
+      `INSERT INTO subscriptions(id,user_id,provider,subscription_id,status,product_id,offer_id,created_at,updated_at)
+       VALUES ('s1','u1','stripe','sub_1','active','pro','monthly',1,1),
+              ('s2','u1','stripe','sub_2','active','pro','yearly',1,1)`,
+    )
+
+    const resolved = await resolveEntitlements(db, 'u1')
+    expect(resolved.find((item) => item.key === 'api_call')?.limit).toBe(500)
+  })
+
+  it('套餐额度都沿用目录默认值时，结果就是目录默认值', async () => {
+    const { sqlite, db } = createTestDatabase()
+    seedCatalog(sqlite)
+    seedUser(sqlite, 'u1')
+    sqlite.exec(
+      `INSERT INTO plans(key,name,description,product_id,offer_id,active,sort_order,created_at,updated_at)
+       VALUES ('p1','套餐一',NULL,'pro','monthly',1,1,1,1)`,
+    )
+    sqlite.exec(
+      `INSERT INTO plan_entitlements(id,plan_key,entitlement_key,limit_value,enabled)
+       VALUES ('pe1','p1','api_call',NULL,1)`,
+    )
+    sqlite.exec(
+      `INSERT INTO subscriptions(id,user_id,provider,subscription_id,status,product_id,offer_id,created_at,updated_at)
+       VALUES ('s1','u1','stripe','sub_1','active','pro','monthly',1,1)`,
+    )
+
+    const resolved = await resolveEntitlements(db, 'u1')
+    expect(resolved.find((item) => item.key === 'api_call')?.limit).toBe(100)
+  })
+})
