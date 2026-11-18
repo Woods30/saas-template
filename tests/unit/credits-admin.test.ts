@@ -40,6 +40,20 @@ describe('管理台积分余额', () => {
     expect(result.balances[0]?.userId).toBe('u2')
   })
 
+  it('长邮箱也能搜到', async () => {
+    // D1 的 SQLite 对 LIKE 模式长度有上限（实测 50 字节），搜索词一长整页就 500。
+    // 本地 SQLite 没这个限制，所以这里只能守住「长搜索词仍然命中」这一头。
+    const { sqlite, db } = createTestDatabase()
+    const email = `${'a'.repeat(60)}@example.com`
+    sqlite
+      .prepare('INSERT INTO users(id,name,email,created_at,updated_at) VALUES (?,?,?,1,1)')
+      .run('u-long', 'Long', email)
+
+    const result = await queryAdminCreditBalances(db, { search: email })
+    expect(result.total).toBe(1)
+    expect(result.balances[0]?.userId).toBe('u-long')
+  })
+
   it('没发过积分的用户也在列表里，余额为 0', async () => {
     // 否则管理员想给新用户发积分时，列表里根本没有这个人，无从下手。
     const { sqlite, db } = createTestDatabase()

@@ -1,9 +1,9 @@
 import { createServerFn } from '@tanstack/react-start'
-import { count, desc, eq, like, sql } from 'drizzle-orm'
+import { count, desc, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { type DB, schema } from '@/core/db'
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@/core/db/paging'
-import { escapeLike } from '@/core/db/sql'
+import { containsInsensitive } from '@/core/db/sql'
 import { consumeCredits, grantCredits } from './operations'
 import type { CreditTransactionType } from './types'
 
@@ -74,9 +74,7 @@ export async function queryAdminCreditBalances(
   query: AdminCreditBalancesQuery = {},
 ): Promise<AdminCreditBalancesResult> {
   const needle = query.search?.trim()
-  const where = needle
-    ? like(sql`lower(${schema.users.email})`, `%${escapeLike(needle)}%`)
-    : undefined
+  const where = needle ? containsInsensitive(schema.users.email, needle) : undefined
   const limit = query.limit ?? DEFAULT_PAGE_SIZE
   const offset = query.offset ?? 0
 

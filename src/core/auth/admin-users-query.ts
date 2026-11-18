@@ -1,6 +1,6 @@
-import { and, eq, like, or, sql } from 'drizzle-orm'
+import { and, eq, or, sql } from 'drizzle-orm'
 import type { schema } from '@/core/db'
-import { escapeLike } from '@/core/db/sql'
+import { containsInsensitive } from '@/core/db/sql'
 
 /**
  * 管理员用户列表的筛选条件与类型。
@@ -58,7 +58,8 @@ export function buildUserWhere(users: UsersTable, query: AdminUsersQuery) {
   const conditions = [
     needle
       ? // SQLite 的 LIKE 只对 ASCII 大小写不敏感，转小写让比较不依赖 collation。
-        like(sql`lower(${users.email})`, `%${escapeLike(needle)}%`)
+        // 走「找下标」而不是 LIKE 模式：D1 的 SQLite 对模式长度有上限，长邮箱会 500。
+        containsInsensitive(users.email, needle)
       : undefined,
     query.role && query.role !== 'all' ? eq(users.role, query.role) : undefined,
     // `banned` 列可空：老数据或插件之外写入的行可能是 NULL，语义上等同未封禁。
