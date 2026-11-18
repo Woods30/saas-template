@@ -17,9 +17,10 @@ RBAC 这类横向能力时，没有地方安放「它属于谁、别人能用什
 
 1. **`src/core` 放基础设施**：db、env、auth、payment、storage、email、cache、notify、
    i18n。core 可以依赖外部包与 core 内部，**不得依赖 modules 或 routes**。
-2. **`src/modules` 放业务能力**：credits、usage、entitlements、subscriptions、rbac、
+2. **`src/modules` 放业务能力**：credits、subscriptions、rbac、
    apikeys、ai-tasks、tickets、invite-codes、posts、changelog、taxonomy、contact、
-   newsletter、docs 等。模块可依赖 core 与自己的内部文件，**不得依赖 routes**。
+   newsletter、docs 等（`usage` 与 `entitlements` 已由 ADR-0011 删除）。模块可依赖
+   core 与自己的内部文件，**不得依赖 routes**。
 3. **模块的唯一公开入口是 `service.ts`**：模块根路径（`@/modules/x`）与内部文件
    （`@/modules/x/internal/*`）都不算入口。跨模块调用也走对方 `service.ts`，形成单向、
    编译期可见的依赖，不引入事件总线或运行时注册。

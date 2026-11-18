@@ -23,13 +23,15 @@ ADR-0009 第 67-69 行还留了一条已知出入：模块开关仍接受 `VITE_
 3. **密钥入库并加密**：支付、邮件、存储、AI、Turnstile、通知 webhook、OAuth 的凭据写入
    `settings`，值以 `enc:v1:` 前缀存 AES-256-GCM 密文；后台只回显末四位。
    `CONFIG_ENCRYPTION_KEY` 缺失时**拒绝保存任何含密钥的组**，公开参数仍可写。
-4. **env 只留启动必需与防锁死项**：`BETTER_AUTH_SECRET`、`BETTER_AUTH_URL`、`DATABASE_*`、
-   `CONFIG_ENCRYPTION_KEY`、Cloudflare 部署 token、`ADMIN_EMAILS`。其余键从
-   `.env.example` 移除。
+4. **运行期 env 只留启动必需与防锁死项**：`BETTER_AUTH_SECRET`、`BETTER_AUTH_URL`、
+   `DATABASE_*`、`CONFIG_ENCRYPTION_KEY`、Cloudflare 部署 token、`ADMIN_EMAILS`。
+   其余键在 `.env.example` 里归入「种子初值」段：只在 `pnpm db:seed` 时读一次，
+   运行期由数据库覆盖（`core/config/derive.ts`），不再生效。
 5. **模块开关只读 DB**：删除 `applyEnvOverrides`；env 只在 `db:seed` 时作为初值来源。
    这条落实 ADR-0009 里记录为「有出入」的部分。
-6. **后台 tab 按本仓能力裁剪**：常规 / 用户 / 认证 / 支付 / 邮件 / 存储 / AI / 分析 / 通知，
-   不设空壳页；支付、邮件、存储三组提供「测试连接」。
+6. **后台 tab 按本仓能力裁剪**：常规 / 模块 / 认证 / 支付 / 邮件 / 分析 / 通知，不设空壳页。
+   存储走 R2 binding、AI 网关尚未实现，两者都没有可配凭据，因此不单列页面；支付与邮件
+   两组提供「测试连接」。
 7. **旧配置清空重 seed**：不写数据迁移脚本。模板仓不承诺跨版本迁移。
 
 ## 考虑过的替代

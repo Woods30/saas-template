@@ -26,8 +26,9 @@ ShipAny 的做法是只用 credits：功能开关是实例级全局，套餐之�
 4. **用户取消期末生效**：Stripe 用 `cancel_at_period_end`，Creem 对应到期不续费。
    这一点与 ShipAny 不同——它直接 `subscriptions.cancel(id)` 立即终止；已付费用满期
    才是用户的合理预期。
-5. **后台退款是独立操作**：`payments.refund` 权限码 + 审计日志；用 `refunding` 状态与
-   一次性 token 做 claim，防止并发重复退款。
+5. **后台退款是独立操作**：`payments.refund` 权限码 + 审计日志；用 `refunding` 状态做
+   一次性 claim（条件状态转移 `paid/partially_refunded → refunding`，抢不到即冲突），
+   防止并发重复退款。
 6. **退款反扣扣到 0 为止**：优先扣该订单发放的批次，余额不足时只扣到 0，并在流水里记录
    应扣与实际扣减的差额。退款永远不因积分不足而失败，也不允许把余额打成负数。
 
