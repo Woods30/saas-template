@@ -47,7 +47,7 @@ provider 在后台「系统设置 → 支付」里选（`stripe` / `creem`），
 
 ## 买家流程
 
-1. 买家在首页 `#pricing` 区块看到价格与购买按钮；该区块卖的是 `websiteConfig.landingOffer` 指向的那个商品与购买方式。想卖多套餐，改 `src/config/products.ts` 的套餐列表，并用 `src/components/sections/Pricing.tsx` 的 `Pricing` 组件渲染卡片（每个套餐内切换月付 / 年付 / 买断），把 `renderCta` 接到 `startCheckout` 上。
+1. 买家在首页 `#pricing` 区块看到价格与购买按钮；该区块卖的是 `websiteConfig.landingOffer` 指向的那个商品与购买方式。想卖多套餐，改 `src/config/products.ts` 的套餐列表，并用 `src/blocks/pricing.tsx` 的 `Pricing` 组件渲染卡片（每个套餐内切换月付 / 年付 / 买断），把 `renderCta` 接到 `startCheckout` 上。
 2. 未登录会先跳登录页，登录后回到价格区再点一次购买。
 3. 客户端提交 `productId`、`offerId` 与回跳地址；服务端鉴权、限流、校验回跳地址同源，再按 provider 建托管结账会话。
 4. 浏览器跳到 provider 的付款页；付款完成回到 `/settings/billing?checkout=success`，取消回到发起购买的那一页。

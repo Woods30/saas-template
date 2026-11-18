@@ -15,7 +15,7 @@ import { getLocale } from '@/locale/paraglide/runtime.js'
 const navigationLinkClass =
   'rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring'
 
-export function Navbar() {
+export function Header() {
   const locale = getLocale()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuId = useId()

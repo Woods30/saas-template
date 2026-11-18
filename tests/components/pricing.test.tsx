@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Pricing } from '@/components/sections/Pricing'
+import { Pricing } from '@/blocks/pricing'
 import { getProducts } from '@/config/products'
 import { getLocale, setLocale } from '@/locale/paraglide/runtime.js'
 import type { PricingProduct } from '@/types/pricing'

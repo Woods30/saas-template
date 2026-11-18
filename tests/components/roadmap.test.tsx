@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { Roadmap } from '@/components/sections/Roadmap'
+import { Roadmap } from '@/blocks/roadmap'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
 /** 路线图块渲染：只断言语义结构（有序列表、标题、状态文案）与本地化接线，不碰类名。 */

@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { LandingPage } from '@/components/marketing/LandingPage'
-import { MarketingLayout } from '@/components/marketing/MarketingLayout'
+import { LandingPage } from '@/blocks/landing-page'
+import { MarketingLayout } from '@/blocks/marketing-layout'
 import { resolveCollectionPrice } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import { findCatalogAmount } from '@/core/payment/price-catalog'

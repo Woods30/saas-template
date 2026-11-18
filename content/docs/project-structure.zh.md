@@ -18,8 +18,7 @@ updated: 2026-11-03
 | `src/config/` | 站点配置：`website.ts`（总开关）、`products.ts`（套餐）、`navbar-config.ts`、`footer-config.ts`、`navigation.ts`、`settings.ts`、`social-config.ts` |
 | `src/components/ui/` | shadcn（Base UI）上游原件，**不本地修改** |
 | `src/components/layout/` | Logo、语言切换、菜单项、用户菜单 |
-| `src/components/marketing/` | 营销页装配：LandingPage / Navbar / Footer / MarketingLayout |
-| `src/components/sections/` | 可复用内容区块：Hero / Features / Pricing / FAQ… |
+| `src/blocks/` | 页面区块与营销装配：`landing-*` 首页分区、通用区块（Hero / Features / Pricing / FAQ…）、`landing-page.tsx` 组合入口、`header` / `footer` / `marketing-layout`；kebab-case 文件、PascalCase 导出、无 barrel |
 | `src/components/docs/` | 文档站布局、侧栏、搜索、目录 |
 | `src/components/dashboard/` | 工作台骨架与用户卡片 |
 | `src/components/auth/` | 表单件：字段适配层、提交按钮、水合检测 |

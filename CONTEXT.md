@@ -103,6 +103,11 @@
 - **AuthFormMessages**：`src/core/auth/validation.ts` 的校验文案契约。schema 工厂接收文案而非
   自己调 `m.*()`，使校验逻辑不依赖 Paraglide 运行时、可脱离组件单测；页面用
   `authFormMessages()` 求值。
+- **blocks 层**：`src/blocks/` 存放页面区块与营销装配——通用区块（`hero`、`pricing`、`faq`…）、
+  首页各分区（`landing-*`）、`landing-page.tsx` 组合入口，以及 `header` / `footer` /
+  `marketing-layout`。文件名 kebab-case、导出 PascalCase 具名组件、**不设 barrel**：路由直接按
+  文件引用，新增区块不需要登记清单。与 `components/` 的分工是「区块（可整段复用）」对
+  「零件（`ui` 上游原件、`layout` 布局件、`data-table` 表格）」。
 - **模板工程**：本仓 `Woods30/saas-template`，含模板源码与技术文档。默认品牌为 Jerbix。
   **唯一源码源**。
 - **官网工程**：另一个仓 `Woods30/jerbix`，定位为模板的官网 + 支付 + 商业条款文档。
@@ -138,7 +143,7 @@
 ## 当前范围与状态
 
 - **已完成**：基础设施（Sub-Plan A）、业务模块（B：认证 / 支付 / 存储 / 邮件 / Newsletter /
-  通知 / D1）、营销页面与内容站（C：8 个营销 blocks + 文档站 / 博客 / 更新日志）、测试与
+  通知 / D1）、营销页面与内容站（C：`src/blocks/` 区块层 + 文档站 / 博客 / 更新日志）、测试与
   部署（D：E2E / CI / CSP）、品牌化与 Landing 单页、网站源码配置与公共菜单（模块开关、
   菜单契约、服务状态、配置文档）、个人中心（`/{locale}/settings/*`：资料 / 安全 / 登录设备 /
   通知偏好 / API 密钥 / 用户管理，含 `fetchSession` 守卫）、管理台（`/{locale}/admin/*`：

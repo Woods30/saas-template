@@ -7,8 +7,8 @@ import {
 } from '@tanstack/react-router'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Header } from '@/blocks/header'
 import { MenuItems } from '@/components/layout/MenuItems'
-import { Navbar } from '@/components/marketing/Navbar'
 import { getPublicLinkOptions, type MenuItem } from '@/config/navigation'
 import { baseConfig, websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
@@ -56,11 +56,11 @@ async function renderRoute(path: string) {
 }
 
 /**
- * 用最小 Router 只挂载 Navbar，供需要交互的用例使用：真实 routeTree 的 `shellComponent`
+ * 用最小 Router 只挂载 Header，供需要交互的用例使用：真实 routeTree 的 `shellComponent`
  * 会在 jsdom 里渲染嵌套 `<html>`，之后任何 state 更新都不返回。
  */
-async function renderNavbar() {
-  const rootRoute = createRootRoute({ component: () => <Navbar /> })
+async function renderHeader() {
+  const rootRoute = createRootRoute({ component: () => <Header /> })
   const router = createRouter({
     routeTree: rootRoute,
     history: createMemoryHistory({ initialEntries: ['/en'] }),
@@ -97,7 +97,7 @@ function internalLink(
   } satisfies MenuItem
 }
 
-describe('Navbar 消费菜单配置（真实 Router）', () => {
+describe('Header 消费菜单配置（真实 Router）', () => {
   it.each(['en', 'zh'] as const)('旧 %s 定价页跳转首页价格区且不展示演示商品', async (locale) => {
     setLocale(locale, { reload: false })
     await renderRoute(`/${locale}/pricing`)
@@ -149,7 +149,7 @@ describe('Navbar 消费菜单配置（真实 Router）', () => {
   // 此后任何 state 更新都不返回，还会拖死同 run 的其他文件。
   it('移动端 Escape 关闭面板并把焦点还给触发按钮', async () => {
     websiteConfig.docs = { enabled: true }
-    await renderNavbar()
+    await renderHeader()
     const header = within(screen.getByRole('banner'))
     const trigger = screen.getByRole('button', { name: 'Open navigation menu' })
     expect(header.getAllByRole('link', { name: 'Docs' })).toHaveLength(1)

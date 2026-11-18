@@ -56,7 +56,7 @@ soon as you save — no redeploy.
 1. The buyer sees the price and the buy button in the home page's `#pricing` block; that block
    sells the product and payment option named by `websiteConfig.landingOffer`. To sell several
    plans, extend the list in `src/config/products.ts` and render cards with the `Pricing`
-   component in `src/components/sections/Pricing.tsx` (each card switches between monthly,
+   component in `src/blocks/pricing.tsx` (each card switches between monthly,
    yearly, and one-time), wiring `renderCta` to `startCheckout`.
 2. Signed-out buyers are sent to sign-in first; after signing in they return to the pricing
    section and click buy again.

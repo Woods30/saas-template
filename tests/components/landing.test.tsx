@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LandingPage } from '@/components/marketing/LandingPage'
+import { LandingPage } from '@/blocks/landing-page'
 import { baseConfig, websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale, setLocale } from '@/locale/paraglide/runtime.js'

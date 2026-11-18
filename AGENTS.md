@@ -59,9 +59,9 @@ src/
 ├── routes/          文件路由（`{-$locale}` 是可选的 locale 前缀；文件名里的字面点写成
 │                    `[.]`，否则点会被当成路径分隔符——`llms.zh[.]txt.ts` 会变成 `/llms/zh.txt`）
 ├── config/          站点配置：website.ts（总开关）、products.ts（产品与价格锚点）、llms.ts（AI 索引文案）、navigation.ts；routes.ts 是受保护区域路径的唯一来源
+├── blocks/          页面区块与营销装配（Hero / Pricing / LandingPage / Header / Footer…）：
+│                    kebab-case 文件名、PascalCase 具名导出、**不设 barrel**
 ├── components/
-│   ├── sections/    可复用内容区块（Hero / Features / Pricing…），单文件含类型
-│   ├── marketing/   页面级装配（LandingPage / MarketingLayout / Navbar / Footer）
 │   ├── docs/        文档站布局与侧边栏
 │   ├── dashboard/   管理台与个人中心共用的外壳（侧栏 / 面包屑 / 统一标题）
 │   ├── data-table/  列表页共享表格（列定义 + 工具栏 + 空态 + 分页 + 列显隐）

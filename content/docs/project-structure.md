@@ -18,8 +18,7 @@ This page is a map. When you cannot find something, look here first, then read t
 | `src/config/` | Site config: `website.ts` (switches), `products.ts` (plans), `navbar-config.ts`, `footer-config.ts`, `navigation.ts`, `settings.ts`, `social-config.ts` |
 | `src/components/ui/` | shadcn (Base UI) upstream originals, **never edited locally** |
 | `src/components/layout/` | Logo, locale switcher, menu items, user menu |
-| `src/components/marketing/` | Marketing page assembly: LandingPage / Navbar / Footer / MarketingLayout |
-| `src/components/sections/` | Reusable content blocks: Hero / Features / Pricing / FAQ… |
+| `src/blocks/` | Page blocks and marketing assembly: `landing-*` home sections, generic blocks (Hero / Features / Pricing / FAQ…), the `landing-page.tsx` composition, `header` / `footer` / `marketing-layout`; kebab-case files, PascalCase exports, no barrel |
 | `src/components/docs/` | Docs layout, sidebar, search, table of contents |
 | `src/components/dashboard/` | Dashboard shell and user card |
 | `src/components/auth/` | Form pieces: field adapter, submit button, hydration hook |

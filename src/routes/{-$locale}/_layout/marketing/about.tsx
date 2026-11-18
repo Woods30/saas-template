@@ -1,5 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Cta, Hero, Stats } from '@/components/sections'
+import { Cta } from '@/blocks/cta'
+import { Hero } from '@/blocks/hero'
+import { Stats } from '@/blocks/stats'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
