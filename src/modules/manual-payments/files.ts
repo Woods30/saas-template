@@ -22,6 +22,9 @@ export const COLLECTION_RECEIPT_FOLDER = 'collection-receipts'
 /** 收款码 key 的命名空间前缀（含斜杠）。 */
 export const COLLECTION_QRCODE_PREFIX = `${COLLECTION_QRCODE_FOLDER}/`
 
+/** 付款凭证 key 的命名空间前缀（含斜杠）。 */
+export const COLLECTION_RECEIPT_PREFIX = `${COLLECTION_RECEIPT_FOLDER}/`
+
 /** 收款码 key 的扩展名白名单：与 `imageExtension` 的输出一致。 */
 const QR_IMAGE_EXTENSIONS = ['jpg', 'png', 'webp'] as const
 
@@ -52,6 +55,15 @@ export function collectionQrImageKey(accountId: string, extension: string): stri
 export function isCollectionQrImageKey(accountId: string, key: string): boolean {
   if (!isCollectionAccountId(accountId)) return false
   return QR_IMAGE_EXTENSIONS.some((ext) => collectionQrImageKey(accountId, ext) === key)
+}
+
+/**
+ * 由服务端派生付款凭证的 R2 key。
+ *
+ * 与收款码同理：key 只由订单号与扩展名决定，客户端无从构造。
+ */
+export function collectionReceiptKey(orderId: string, extension: string): string {
+  return `${COLLECTION_RECEIPT_PREFIX}${orderId}.${extension}`
 }
 
 /** 允许的图片类型：JPG / PNG / WebP。 */
