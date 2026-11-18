@@ -52,6 +52,7 @@ import { Route as Char123LocaleChar125LayoutMarketingRoadmapRouteImport } from '
 import { Route as Char123LocaleChar125LayoutMarketingWaitlistRouteImport } from './routes/{-$locale}/_layout/marketing/waitlist'
 import { Route as ApiCollectionAccountsAccountIdQrcodeRouteImport } from './routes/api/collection/accounts/$accountId/qrcode'
 import { Route as ApiCollectionOrdersOrderIdReceiptRouteImport } from './routes/api/collection/orders/$orderId/receipt'
+import { Route as Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/collection-orders'
 import { Route as Char123LocaleChar125LayoutDashboardAdminCreditsRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/credits'
 import { Route as Char123LocaleChar125LayoutDashboardAdminOrdersRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/orders'
 import { Route as Char123LocaleChar125LayoutDashboardAdminRevenueRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/revenue'
@@ -310,6 +311,12 @@ const ApiCollectionOrdersOrderIdReceiptRoute =
     path: '/api/collection/orders/$orderId/receipt',
     getParentRoute: () => rootRouteImport,
   } as any)
+const Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute =
+  Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRouteImport.update({
+    id: '/admin/collection-orders',
+    path: '/admin/collection-orders',
+    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
+  } as any)
 const Char123LocaleChar125LayoutDashboardAdminCreditsRoute =
   Char123LocaleChar125LayoutDashboardAdminCreditsRouteImport.update({
     id: '/admin/credits',
@@ -427,6 +434,7 @@ export interface FileRoutesByFullPath {
   '/{-$locale}/marketing/': typeof Char123LocaleChar125LayoutMarketingIndexRoute
   '/api/collection/accounts/$accountId/qrcode': typeof ApiCollectionAccountsAccountIdQrcodeRoute
   '/api/collection/orders/$orderId/receipt': typeof ApiCollectionOrdersOrderIdReceiptRoute
+  '/{-$locale}/dashboard/admin/collection-orders': typeof Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute
   '/{-$locale}/dashboard/admin/credits': typeof Char123LocaleChar125LayoutDashboardAdminCreditsRoute
   '/{-$locale}/dashboard/admin/orders': typeof Char123LocaleChar125LayoutDashboardAdminOrdersRoute
   '/{-$locale}/dashboard/admin/revenue': typeof Char123LocaleChar125LayoutDashboardAdminRevenueRoute
@@ -480,6 +488,7 @@ export interface FileRoutesByTo {
   '/{-$locale}/marketing': typeof Char123LocaleChar125LayoutMarketingIndexRoute
   '/api/collection/accounts/$accountId/qrcode': typeof ApiCollectionAccountsAccountIdQrcodeRoute
   '/api/collection/orders/$orderId/receipt': typeof ApiCollectionOrdersOrderIdReceiptRoute
+  '/{-$locale}/dashboard/admin/collection-orders': typeof Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute
   '/{-$locale}/dashboard/admin/credits': typeof Char123LocaleChar125LayoutDashboardAdminCreditsRoute
   '/{-$locale}/dashboard/admin/orders': typeof Char123LocaleChar125LayoutDashboardAdminOrdersRoute
   '/{-$locale}/dashboard/admin/revenue': typeof Char123LocaleChar125LayoutDashboardAdminRevenueRoute
@@ -538,6 +547,7 @@ export interface FileRoutesById {
   '/{-$locale}/_layout/marketing/': typeof Char123LocaleChar125LayoutMarketingIndexRoute
   '/api/collection/accounts/$accountId/qrcode': typeof ApiCollectionAccountsAccountIdQrcodeRoute
   '/api/collection/orders/$orderId/receipt': typeof ApiCollectionOrdersOrderIdReceiptRoute
+  '/{-$locale}/_layout/dashboard/admin/collection-orders': typeof Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute
   '/{-$locale}/_layout/dashboard/admin/credits': typeof Char123LocaleChar125LayoutDashboardAdminCreditsRoute
   '/{-$locale}/_layout/dashboard/admin/orders': typeof Char123LocaleChar125LayoutDashboardAdminOrdersRoute
   '/{-$locale}/_layout/dashboard/admin/revenue': typeof Char123LocaleChar125LayoutDashboardAdminRevenueRoute
@@ -597,6 +607,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/marketing/'
     | '/api/collection/accounts/$accountId/qrcode'
     | '/api/collection/orders/$orderId/receipt'
+    | '/{-$locale}/dashboard/admin/collection-orders'
     | '/{-$locale}/dashboard/admin/credits'
     | '/{-$locale}/dashboard/admin/orders'
     | '/{-$locale}/dashboard/admin/revenue'
@@ -650,6 +661,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/marketing'
     | '/api/collection/accounts/$accountId/qrcode'
     | '/api/collection/orders/$orderId/receipt'
+    | '/{-$locale}/dashboard/admin/collection-orders'
     | '/{-$locale}/dashboard/admin/credits'
     | '/{-$locale}/dashboard/admin/orders'
     | '/{-$locale}/dashboard/admin/revenue'
@@ -707,6 +719,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/_layout/marketing/'
     | '/api/collection/accounts/$accountId/qrcode'
     | '/api/collection/orders/$orderId/receipt'
+    | '/{-$locale}/_layout/dashboard/admin/collection-orders'
     | '/{-$locale}/_layout/dashboard/admin/credits'
     | '/{-$locale}/_layout/dashboard/admin/orders'
     | '/{-$locale}/_layout/dashboard/admin/revenue'
@@ -1054,6 +1067,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCollectionOrdersOrderIdReceiptRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/{-$locale}/_layout/dashboard/admin/collection-orders': {
+      id: '/{-$locale}/_layout/dashboard/admin/collection-orders'
+      path: '/admin/collection-orders'
+      fullPath: '/{-$locale}/dashboard/admin/collection-orders'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
+    }
     '/{-$locale}/_layout/dashboard/admin/credits': {
       id: '/{-$locale}/_layout/dashboard/admin/credits'
       path: '/admin/credits'
@@ -1168,6 +1188,7 @@ interface Char123LocaleChar125LayoutDashboardRouteChildren {
   Char123LocaleChar125LayoutDashboardSecurityRoute: typeof Char123LocaleChar125LayoutDashboardSecurityRoute
   Char123LocaleChar125LayoutDashboardSessionsRoute: typeof Char123LocaleChar125LayoutDashboardSessionsRoute
   Char123LocaleChar125LayoutDashboardIndexRoute: typeof Char123LocaleChar125LayoutDashboardIndexRoute
+  Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute: typeof Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute
   Char123LocaleChar125LayoutDashboardAdminCreditsRoute: typeof Char123LocaleChar125LayoutDashboardAdminCreditsRoute
   Char123LocaleChar125LayoutDashboardAdminOrdersRoute: typeof Char123LocaleChar125LayoutDashboardAdminOrdersRoute
   Char123LocaleChar125LayoutDashboardAdminRevenueRoute: typeof Char123LocaleChar125LayoutDashboardAdminRevenueRoute
@@ -1194,6 +1215,8 @@ const Char123LocaleChar125LayoutDashboardRouteChildren: Char123LocaleChar125Layo
       Char123LocaleChar125LayoutDashboardSessionsRoute,
     Char123LocaleChar125LayoutDashboardIndexRoute:
       Char123LocaleChar125LayoutDashboardIndexRoute,
+    Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute:
+      Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute,
     Char123LocaleChar125LayoutDashboardAdminCreditsRoute:
       Char123LocaleChar125LayoutDashboardAdminCreditsRoute,
     Char123LocaleChar125LayoutDashboardAdminOrdersRoute:

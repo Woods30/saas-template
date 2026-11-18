@@ -7,6 +7,7 @@ import {
   IconKey,
   IconReceipt,
   IconRepeat,
+  IconScan,
   IconSettings,
   IconShieldLock,
   IconUser,
@@ -198,6 +199,21 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
         },
         {
           kind: 'link',
+          id: 'admin-collection-orders',
+          title: m['collection_admin.nav_orders'](),
+          icon: IconScan,
+          // 核销队列只对管理员可见，且核销模块开着才显示。
+          visibility: { roles: ['admin'], feature: 'enableAdmin', module: 'collection' },
+          destination: {
+            kind: 'internal',
+            options: linkOptions({
+              to: '/{-$locale}/dashboard/admin/collection-orders',
+              params: { locale },
+            }),
+          },
+        },
+        {
+          kind: 'link',
           id: 'admin-credits',
           title: m.settings_nav_admin_credits(),
           icon: IconCoins,
@@ -303,6 +319,12 @@ export function getSettingsSectionMeta(section: string):
         title: m.admin_credits_title(),
         description: m.admin_credits_description(),
         icon: IconCoins,
+      }
+    case 'admin/collection-orders':
+      return {
+        title: m['collection_admin.title_orders'](),
+        description: m['collection_admin.description_orders'](),
+        icon: IconScan,
       }
     case 'admin/settings':
       return {
