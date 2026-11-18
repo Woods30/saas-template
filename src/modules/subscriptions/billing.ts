@@ -32,9 +32,9 @@ export const fetchBillingOverview = createServerFn({ method: 'GET' })
       import('@/config/website'),
     ])
     const env = getServerContext().env
-    const session = await getAuth(env).api.getSession({ headers: getRequestHeaders() })
+    const session = await (await getAuth(env)).api.getSession({ headers: getRequestHeaders() })
     if (!session) throw new Response('Unauthorized', { status: 401 })
-    const db = createDbFromEnv(env)
+    const db = await createDbFromEnv(env)
     const [subscriptions, payments, customerId] = await Promise.all([
       db
         .select()
@@ -70,9 +70,9 @@ export const fetchCurrentPlan = createServerFn({ method: 'GET' }).handler(
       import('./plan-state'),
     ])
     const env = getServerContext().env
-    const session = await getAuth(env).api.getSession({ headers: getRequestHeaders() })
+    const session = await (await getAuth(env)).api.getSession({ headers: getRequestHeaders() })
     if (!session) return null
-    const [row] = await createDbFromEnv(env)
+    const [row] = await (await createDbFromEnv(env))
       .select()
       .from(schema.subscriptions)
       .where(

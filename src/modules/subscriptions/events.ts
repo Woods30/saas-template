@@ -2,7 +2,6 @@ import { and, eq, sql } from 'drizzle-orm'
 import { findOfferByReference, findProduct } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import { type DB, schema } from '@/core/db'
-import { notify } from '@/core/notify/service'
 import type { PaymentEvent, ProviderSubscription } from '@/core/payment/types'
 
 type Db = DB
@@ -136,6 +135,11 @@ export async function applyPaymentEvent(
           currency: payment.currency,
         }).resolvedOptions().maximumFractionDigits ?? 2
       const amount = `${payment.amount / 10 ** digits} ${payment.currency.toUpperCase()}`
+      // 动态 import：通知渠道要读请求作用域里的 provider 注册表，
+      // 而它经 `@/lib/server-context` 依赖 `node:async_hooks`——本文件被页面路由
+      // 静态引入（`subscriptions/service.ts` 转出），静态 import 会把 Node 内置模块
+      // 带进客户端图，浏览器里 `AsyncLocalStorage` 不可用，整站水合失败。
+      const { notify } = await import('@/core/notify/service')
       await notify(websiteConfig.notification.provider, {
         title: payment.type === 'subscription' ? '订阅付款成功' : '一次性付款成功',
         message: `用户 ${userId} 购买 ${plan}：${amount}`,

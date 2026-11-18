@@ -17,7 +17,7 @@ export const Route = createFileRoute('/api/webhooks/stripe')({
           const provider = getPaymentProvider('stripe')
           const event = await provider.parseWebhookEvent(raw, signature)
           await applyPaymentEvent(
-            createDbFromEnv(env),
+            await createDbFromEnv(env),
             event,
             event.subscriptionId && event.type !== 'customer.subscription.deleted'
               ? () => provider.retrieveSubscription(event.subscriptionId as string)

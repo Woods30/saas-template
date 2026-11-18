@@ -30,10 +30,12 @@ import { parseServerEnv } from '@/core/env/server'
  *
  * 实例按 D1 binding 复用（见 `getAuth`）。邮件回调统一走 `src/core/auth/emails.ts`
  * 且绝不抛错——better-auth 经 `runInBackgroundOrAwait` 调用它们，抛错会让注册 / 登录失败。
+ *
+ * 异步：数据库连接按 provider 异步建立（驱动按需加载），故实例也是 Promise。
  */
-export function createAuth(env: Env) {
+export async function createAuth(env: Env) {
   const parsed = parseServerEnv(env as unknown as Record<string, unknown>)
-  const db = createDbFromEnv(env)
+  const db = await createDbFromEnv(env)
   const deps = { sendMail, config: websiteConfig, serverEnv: parsed }
 
   /** 邮件失败只记日志：注册 / 登录不应因 SMTP / API 故障而失败。 */
@@ -160,8 +162,11 @@ const authInstances = new WeakMap<object, ReturnType<typeof createAuth>>()
  *   不是，所以键取 binding。
  * - PostgreSQL：按请求作用域复用。Workers 的 isolate 可能在请求之间被冻结，
  *   跨请求复用的 TCP 连接会失效，因此实例挂在请求作用域上，请求结束即丢弃。
+ *
+ * 异步：实例是 Promise（数据库连接异步建立），缓存里存的也是同一个 Promise，
+ * 并发调用共享同一次建连。
  */
-export function getAuth(env: Env) {
+export async function getAuth(env: Env) {
   const provider = resolveDatabaseProvider(env.DATABASE_PROVIDER)
   if (provider === 'postgres') {
     const url = env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL

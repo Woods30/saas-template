@@ -46,10 +46,10 @@ export const fetchAdminBilling = createServerFn({ method: 'GET' }).handler(
     const { createDbFromEnv, schema } = await import('@/core/db')
 
     const env = getServerContext().env
-    const session = await getAuth(env).api.getSession({ headers: getRequestHeaders() })
+    const session = await (await getAuth(env)).api.getSession({ headers: getRequestHeaders() })
     if (session?.user.role !== 'admin') throw new Response(null, { status: 403 })
 
-    const db = createDbFromEnv(env)
+    const db = await createDbFromEnv(env)
 
     const [subscriptionRows, paymentRows] = await Promise.all([
       db

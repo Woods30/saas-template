@@ -27,7 +27,7 @@ async function authorize(request: Request, action: string) {
   const unavailable = getModuleUnavailableResponse('payment')
   if (unavailable) return unavailable
   const { env } = getServerContext()
-  const session = await getAuth(env).api.getSession({ headers: request.headers })
+  const session = await (await getAuth(env)).api.getSession({ headers: request.headers })
   if (!session) return new Response('Unauthorized', { status: 401 })
   if (
     !(await checkRateLimit({
@@ -38,7 +38,7 @@ async function authorize(request: Request, action: string) {
     }))
   )
     return new Response('Too Many Requests', { status: 429 })
-  return { session, db: createDbFromEnv(env) }
+  return { session, db: await createDbFromEnv(env) }
 }
 
 export const Route = createFileRoute('/api/payment/$')({

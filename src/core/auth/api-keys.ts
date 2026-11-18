@@ -28,7 +28,7 @@ export const fetchApiKeys = createServerFn({ method: 'GET' }).handler(
       import('@/core/auth/auth'),
       import('@tanstack/react-start/server'),
     ])
-    const result = await getAuth(getServerContext().env).api.listApiKeys({
+    const result = await (await getAuth(getServerContext().env)).api.listApiKeys({
       headers: getRequestHeaders(),
     })
     return ((result as { apiKeys?: ApiKeyEntry[] } | null)?.apiKeys ?? []) as ApiKeyEntry[]

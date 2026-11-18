@@ -92,7 +92,7 @@ export default {
     // 过期才查库。读不到配置不该让请求失败，退回出厂配置继续服务。
     if (!settingsCacheFresh()) {
       const { createDbFromEnv } = await import('./core/db')
-      await loadSettings(createDbFromEnv(env as unknown as Env))
+      await loadSettings(await createDbFromEnv(env as unknown as Env))
     }
     // 显式覆盖两个 `string` enum 字段以满足 `ServerEnv`，其余字段由 `...parsedEnv` 提供。
     const normalizedEnv: Env & ServerEnv = {

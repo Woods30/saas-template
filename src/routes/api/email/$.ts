@@ -39,7 +39,7 @@ export const Route = createFileRoute('/api/email/$')({
 
         const { env } = getServerContext()
 
-        const session = await getAuth(env).api.getSession({ headers: request.headers })
+        const session = await (await getAuth(env)).api.getSession({ headers: request.headers })
         if (!session) {
           return new Response('Unauthorized', { status: 401 })
         }

@@ -35,7 +35,7 @@ export const Route = createFileRoute('/api/webhooks/creem')({
         try {
           const provider = getPaymentProvider('creem')
           const event = await provider.parseWebhookEvent(raw, signature)
-          await applyPaymentEvent(createDbFromEnv(env), event)
+          await applyPaymentEvent(await createDbFromEnv(env), event)
           return new Response('ok')
         } catch (error) {
           if (error instanceof CreemSignatureError)

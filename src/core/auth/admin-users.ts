@@ -46,11 +46,11 @@ export const fetchAdminUsers = createServerFn({ method: 'GET' })
     const { createDbFromEnv, schema } = await import('@/core/db')
 
     const env = getServerContext().env
-    const session = await getAuth(env).api.getSession({ headers: getRequestHeaders() })
+    const session = await (await getAuth(env)).api.getSession({ headers: getRequestHeaders() })
     // 非管理员一律 403：不回空列表，避免把「被拒绝」伪装成「没有用户」。
     if (session?.user.role !== 'admin') throw new Response(null, { status: 403 })
 
-    const db = createDbFromEnv(env)
+    const db = await createDbFromEnv(env)
     const { users } = schema
     const where = buildUserWhere(users, data)
 

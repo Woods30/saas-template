@@ -67,7 +67,7 @@ describe('邮箱验证完整流程', () => {
   it('注册不创建会话，未验证登录被拒绝，邮件验证后建立会话并保留购买目标', async () => {
     const { sqlite, binding } = memoryD1()
     email.send.mockClear()
-    const auth = getAuth({ ...env(), DB: binding })
+    const auth = await getAuth({ ...env(), DB: binding })
     const callbackURL = '/zh/auth/verify-email?redirect=%2Fzh%2F%23pricing'
     const credentials = { email: 'buyer@example.com', password: 'StrongPassword123!' }
     const post = (path: string, body: object) =>
@@ -116,25 +116,25 @@ describe('邮箱验证完整流程', () => {
 })
 
 describe('better-auth 实例复用', () => {
-  it('同一 D1 binding 复用同一实例，避免每次请求重建', () => {
+  it('同一 D1 binding 复用同一实例，避免每次请求重建', async () => {
     const sharedDb = fakeD1()
-    const first = getAuth({ ...env(), DB: sharedDb })
-    const second = getAuth({ ...env(), DB: sharedDb })
+    const first = await getAuth({ ...env(), DB: sharedDb })
+    const second = await getAuth({ ...env(), DB: sharedDb })
     // 每个请求都会新建 normalizedEnv 对象，但 D1 binding 在 isolate 内稳定；
     // 按 binding 缓存才能命中，否则每次 server function 都要重建实例（实测数百毫秒）。
     expect(second).toBe(first)
   })
 
-  it('不同 D1 binding 不复用实例', () => {
-    const a = getAuth({ ...env(), DB: fakeD1() })
-    const b = getAuth({ ...env(), DB: fakeD1() })
+  it('不同 D1 binding 不复用实例', async () => {
+    const a = await getAuth({ ...env(), DB: fakeD1() })
+    const b = await getAuth({ ...env(), DB: fakeD1() })
     expect(b).not.toBe(a)
   })
 })
 
 describe('会话 cookie 缓存', () => {
   it('已开启且缓存窗口不超过 30 秒', async () => {
-    const ctx = await getAuth(env()).$context
+    const ctx = await (await getAuth(env())).$context
     const cookieCache = ctx.options.session?.cookieCache
     expect(cookieCache?.enabled).toBe(true)
     // 缓存 cookie 是签名 JWT，跨设备撤销不会让它立刻失效；
@@ -145,7 +145,7 @@ describe('会话 cookie 缓存', () => {
 
 describe('邮箱验证接线', () => {
   it('注册和未验证登录均发验证邮件，验证后自动登录', async () => {
-    const auth = getAuth(env())
+    const auth = await getAuth(env())
     const ctx = await auth.$context
     expect(ctx.options.emailAndPassword?.requireEmailVerification).toBe(true)
     expect(ctx.options.emailVerification?.sendOnSignUp).toBe(true)
@@ -157,7 +157,7 @@ describe('邮箱验证接线', () => {
     websiteConfig.mail.enabled = true
     email.send.mockClear()
     try {
-      const ctx = await getAuth(env()).$context
+      const ctx = await (await getAuth(env())).$context
       const hook = ctx.options.emailVerification?.afterEmailVerification
       expect(hook).toBeTypeOf('function')
       const user = {
@@ -183,7 +183,7 @@ describe('邮箱验证接线', () => {
 
 describe('getAuth 数据库接线', () => {
   it('使用 drizzle 适配器，而非回退到内存适配器', async () => {
-    const auth = getAuth(env())
+    const auth = await getAuth(env())
     const ctx = await auth.$context
     expect(ctx.adapter.id).toBe('drizzle')
   })
@@ -195,7 +195,7 @@ describe('getAuth 数据库接线', () => {
 
 describe('auth 插件注册', () => {
   it('服务端注册 admin 插件（/api/auth/admin/* 端点由它提供）', async () => {
-    const auth = getAuth(env())
+    const auth = await getAuth(env())
     const ctx = await auth.$context
     const ids = (ctx.options.plugins ?? []).map((plugin) => plugin.id)
     expect(ids).toContain('admin')

@@ -1,4 +1,4 @@
-import { createServerFn } from '@tanstack/react-start'
+import { createServerFn, createServerOnlyFn } from '@tanstack/react-start'
 import type { DB } from '@/core/db'
 
 /** 个人中心守卫所需的会话信息（只取页面要用的字段，不回传整个 session）。 */
@@ -43,7 +43,7 @@ async function readSession() {
     import('@/core/auth/auth'),
     import('@tanstack/react-start/server'),
   ])
-  return getAuth(getServerContext().env).api.getSession({ headers: getRequestHeaders() })
+  return (await getAuth(getServerContext().env)).api.getSession({ headers: getRequestHeaders() })
 }
 
 /**
@@ -84,9 +84,12 @@ export const fetchSession = createServerFn({ method: 'GET' }).handler(
  * 非管理员一律 403，不回空数据——把「被拒绝」伪装成「没有记录」会让管理员
  * 以为数据丢了。
  *
- * 动态 import：客户端导航时没有 ALS / env，本模块顶层不能引入服务端依赖。
+ * `createServerOnlyFn`：本模块被客户端路由静态 import（取 `fetchSession`），
+ * 编译器在客户端构建里会把函数体整个换成「调用即抛错」的桩。函数体里的
+ * `import('@tanstack/react-start/server')` 与数据库驱动因此不会进客户端图——
+ * 否则浏览器里会抛 `Buffer is not defined`，整站水合失败。
  */
-export async function requireAdminDb(): Promise<{ db: DB; adminId: string }> {
+export const requireAdminDb = createServerOnlyFn(async (): Promise<{ db: DB; adminId: string }> => {
   const [{ getServerContext }, { getAuth }, { getRequestHeaders }, { createDbFromEnv }] =
     await Promise.all([
       import('@/lib/server-context'),
@@ -95,10 +98,10 @@ export async function requireAdminDb(): Promise<{ db: DB; adminId: string }> {
       import('@/core/db'),
     ])
   const env = getServerContext().env
-  const session = await getAuth(env).api.getSession({ headers: getRequestHeaders() })
+  const session = await (await getAuth(env)).api.getSession({ headers: getRequestHeaders() })
   if (session?.user.role !== 'admin') throw new Response(null, { status: 403 })
-  return { db: createDbFromEnv(env), adminId: session.user.id }
-}
+  return { db: await createDbFromEnv(env), adminId: session.user.id }
+})
 
 /**
  * 一次取回会话列表与当前 token。
@@ -113,7 +116,7 @@ export const fetchSessionsOverview = createServerFn({ method: 'GET' }).handler(
       import('@/core/auth/auth'),
       import('@tanstack/react-start/server'),
     ])
-    const auth = getAuth(getServerContext().env)
+    const auth = await getAuth(getServerContext().env)
     const headers = getRequestHeaders()
     const [sessions, current] = await Promise.all([
       auth.api.listSessions({ headers }),

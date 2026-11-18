@@ -21,7 +21,7 @@ async function requireAdmin(): Promise<void> {
     import('@tanstack/react-start/server'),
   ])
   const env = getServerContext().env
-  const session = await getAuth(env).api.getSession({ headers: getRequestHeaders() })
+  const session = await (await getAuth(env)).api.getSession({ headers: getRequestHeaders() })
   if (session?.user.role !== 'admin') throw new Response(null, { status: 403 })
 }
 
@@ -42,7 +42,7 @@ export const saveAdminSettings = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<{ saved: SettingsKey }> => {
     await requireAdmin()
     const [{ getServerContext }] = await Promise.all([import('@/lib/server-context')])
-    const db = createDbFromEnv(getServerContext().env)
+    const db = await createDbFromEnv(getServerContext().env)
     await saveSettings(db, data.key, data.value)
     return { saved: data.key }
   })
