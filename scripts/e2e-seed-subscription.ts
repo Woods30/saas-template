@@ -111,9 +111,19 @@ export function buildUserSeedSql(user: {
   email: string
   name: string
   passwordHash: string
+  /** 角色；管理台用例需要 `'admin'`。不传则按数据库默认值 `'user'`。 */
+  role?: 'user' | 'admin'
 }): string {
   const quote = (value: string) => `'${escapeSql(value)}'`
-  return `INSERT INTO users (id, email, name, email_verified) VALUES (${quote(user.id)}, ${quote(user.email)}, ${quote(user.name)}, 1);
+  const columns = ['id', 'email', 'name', 'email_verified']
+  const values = [quote(user.id), quote(user.email), quote(user.name), '1']
+  // 角色只在显式给出时写入：直接塞 `'user'` 会覆盖数据库默认值，也让用例看不出
+  // 「这个账号本来是不是管理员」。
+  if (user.role) {
+    columns.push('role')
+    values.push(quote(user.role))
+  }
+  return `INSERT INTO users (${columns.join(', ')}) VALUES (${values.join(', ')});
 INSERT INTO accounts (id, user_id, account_id, provider_id, password) VALUES (${quote(`account_${user.id}`)}, ${quote(user.id)}, ${quote(user.id)}, 'credential', ${quote(user.passwordHash)});`
 }
 
@@ -150,6 +160,8 @@ export async function seedVerifiedUser(input: {
   email: string
   name: string
   password: string
+  /** 角色；管理台用例需要 `'admin'`。 */
+  role?: 'user' | 'admin'
 }): Promise<void> {
   const { hashPassword } = await import('better-auth/crypto')
   executeLocalD1(

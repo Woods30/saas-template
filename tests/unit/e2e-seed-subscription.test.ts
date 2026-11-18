@@ -21,6 +21,28 @@ describe('buildUserSeedSql', () => {
     expect(sql).toContain("'salt:hash'")
     expect(sql).not.toContain('INSERT INTO sessions')
   })
+
+  it('给了角色才写 role 列', () => {
+    const sql = buildUserSeedSql({
+      id: 'e2e-user-2',
+      email: 'admin@example.com',
+      name: '管理员',
+      passwordHash: 'salt:hash',
+      role: 'admin',
+    })
+    expect(sql).toContain('role')
+    expect(sql).toContain("'admin'")
+  })
+
+  it('没给角色就不写 role 列，留给数据库默认值', () => {
+    const sql = buildUserSeedSql({
+      id: 'e2e-user-3',
+      email: 'plain@example.com',
+      name: '普通用户',
+      passwordHash: 'salt:hash',
+    })
+    expect(sql).not.toContain('role')
+  })
 })
 
 describe('buildLocalD1Args', () => {
