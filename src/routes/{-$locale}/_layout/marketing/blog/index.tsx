@@ -34,7 +34,7 @@ function BlogIndex() {
       <h1 className="text-3xl font-bold">{m.blog_page_title()}</h1>
       <div className="mt-6 grid gap-4">
         {posts.map((p) => (
-          <PostCard key={p.slug} post={p} />
+          <PostCard key={p.slug} post={p} locale={locale} />
         ))}
       </div>
     </main>

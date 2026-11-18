@@ -1,6 +1,7 @@
 import { IconKey } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useCallback, useMemo, useState } from 'react'
+import { LocalDateTime } from '@/components/local-date'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -79,6 +80,7 @@ type ExpiryChoice = number | 'never'
 
 function ApiKeysPage() {
   const loaded = Route.useLoaderData()
+  const locale = getRequestLocale()
   const [keys, setKeys] = useState<ApiKeyEntry[] | null>(loaded.ok ? loaded.keys : null)
   const [error, setError] = useState<string | null>(loaded.ok ? null : m.settings_error_generic())
   const [searchValue, setSearchValue] = useState('')
@@ -214,12 +216,14 @@ function ApiKeysPage() {
                   <TableCell className="w-40 truncate">{entry.name ?? '—'}</TableCell>
                   <TableCell className="font-mono">{maskKey(entry)}</TableCell>
                   <TableCell className="hidden sm:table-cell">
-                    {formatDate(entry.createdAt)}
+                    <LocalDateTime value={entry.createdAt} locale={locale} />
                   </TableCell>
                   <TableCell className="hidden lg:table-cell">
-                    {entry.expiresAt
-                      ? formatDate(entry.expiresAt)
-                      : m.settings_api_keys_never_expires()}
+                    {entry.expiresAt ? (
+                      <LocalDateTime value={entry.expiresAt} locale={locale} />
+                    ) : (
+                      m.settings_api_keys_never_expires()
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -358,11 +362,4 @@ function CopyableKey({ value }: { value: string }) {
 function maskKey(entry: ApiKeyEntry): string {
   const head = entry.start ?? entry.prefix ?? ''
   return `${head}••••••`
-}
-
-/** 用当前语言格式化时间；无效值原样返回，不显示 `Invalid Date`。 */
-function formatDate(value: Date | string): string {
-  const date = value instanceof Date ? value : new Date(value)
-  if (Number.isNaN(date.getTime())) return String(value)
-  return date.toLocaleString()
 }

@@ -8,6 +8,7 @@ import {
 } from '@tabler/icons-react'
 import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useCallback, useEffect, useState } from 'react'
+import { LocalDateTime } from '@/components/local-date'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,7 +75,7 @@ import {
   fetchAdminUsers,
 } from '@/core/auth/admin-users'
 import { authClient } from '@/core/auth/client'
-import { getRequestLocale } from '@/lib/locale'
+import { getRequestLocale, type Locale } from '@/lib/locale'
 import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
@@ -160,6 +161,7 @@ function statusFilterItems() {
 
 function AdminUsersPage() {
   const router = useRouter()
+  const locale = getRequestLocale()
   const [users, setUsers] = useState<AdminUser[] | null>(null)
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
@@ -439,11 +441,13 @@ function AdminUsersPage() {
                   )}
                   {visibleColumns.registeredAt && (
                     <TableCell className="hidden lg:table-cell">
-                      {formatDate(user.createdAt)}
+                      <LocalDateTime value={user.createdAt} locale={locale} />
                     </TableCell>
                   )}
                   {visibleColumns.banExpiresAt && (
-                    <TableCell className="hidden xl:table-cell">{formatBanExpiry(user)}</TableCell>
+                    <TableCell className="hidden xl:table-cell">
+                      <BanExpiry user={user} locale={locale} />
+                    </TableCell>
                   )}
                   {/* 宽屏平铺操作按钮，窄屏收进 `DropdownMenu`（复用同一批 handler）。 */}
                   <TableCell className="text-right">
@@ -785,6 +789,7 @@ function UserSessionsDialog({
 }) {
   const [sessions, setSessions] = useState<UserSession[] | null>(null)
   const [busy, setBusy] = useState(false)
+  const locale = getRequestLocale()
 
   const load = useCallback(
     async (userId: string) => {
@@ -853,8 +858,12 @@ function UserSessionsDialog({
             <TableBody>
               {sessions.map((session) => (
                 <TableRow key={session.id}>
-                  <TableCell>{formatDate(session.createdAt)}</TableCell>
-                  <TableCell>{formatDate(session.expiresAt)}</TableCell>
+                  <TableCell>
+                    <LocalDateTime value={session.createdAt} locale={locale} />
+                  </TableCell>
+                  <TableCell>
+                    <LocalDateTime value={session.expiresAt} locale={locale} />
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button
                       type="button"
@@ -962,20 +971,13 @@ function AdminUserActionsMenu({
  * 三种取值须分开表达：未封禁 → `—`，已封禁且无 `banExpires` → 「永久」，
  * 否则格式化时间。这里只做展示，不重复判断是否已过期。
  */
-function formatBanExpiry(user: AdminUser): string {
-  if (!user.banned) return '—'
-  if (!user.banExpires) return m.admin_users_ban_permanent()
-  return formatDate(user.banExpires)
+function BanExpiry({ user, locale }: { user: AdminUser; locale: Locale }) {
+  if (!user.banned) return <>—</>
+  if (!user.banExpires) return <>{m.admin_users_ban_permanent()}</>
+  return <LocalDateTime value={user.banExpires} locale={locale} />
 }
 
 /** 头像回退字母：取姓名首字符，缺失时退回邮箱首字符。 */
 function userInitial(user: AdminUser): string {
   return (user.name?.trim() || user.email).charAt(0).toUpperCase()
-}
-
-/** 用当前语言格式化时间；无效值原样返回，不显示 `Invalid Date`。 */
-function formatDate(value: Date | string): string {
-  const date = value instanceof Date ? value : new Date(value)
-  if (Number.isNaN(date.getTime())) return String(value)
-  return date.toLocaleString()
 }

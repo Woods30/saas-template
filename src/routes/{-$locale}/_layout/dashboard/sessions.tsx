@@ -1,6 +1,7 @@
 import { IconDevices } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useCallback, useState } from 'react'
+import { LocalDateTime } from '@/components/local-date'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -46,6 +47,7 @@ interface SessionEntry {
 
 function SessionsPage() {
   const initial = Route.useLoaderData()
+  const locale = getRequestLocale()
   const [sessions, setSessions] = useState<SessionEntry[] | null>(
     initial.sessions as SessionEntry[],
   )
@@ -165,10 +167,10 @@ function SessionsPage() {
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
-                      {formatDate(session.createdAt)}
+                      <LocalDateTime value={session.createdAt} locale={locale} />
                     </TableCell>
                     <TableCell className="hidden xl:table-cell">
-                      {formatDate(session.expiresAt)}
+                      <LocalDateTime value={session.expiresAt} locale={locale} />
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
@@ -191,11 +193,4 @@ function SessionsPage() {
       </div>
     </div>
   )
-}
-
-/** 用当前语言格式化时间；无效值原样返回，不显示 `Invalid Date`。 */
-function formatDate(value: Date | string): string {
-  const date = value instanceof Date ? value : new Date(value)
-  if (Number.isNaN(date.getTime())) return String(value)
-  return date.toLocaleString()
 }

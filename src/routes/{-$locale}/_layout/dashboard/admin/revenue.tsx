@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { LocalDate } from '@/components/local-date'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -59,15 +60,12 @@ function money(amount: number, currency: string) {
   )
 }
 
-function date(value: Date | string | null | undefined) {
-  return value ? new Date(value).toLocaleDateString(getRequestLocale()) : '—'
-}
-
 /** 每页订阅条数。 */
 const PAGE_SIZE = 20
 
 function AdminRevenuePage() {
   const data = Route.useLoaderData() as AdminBillingResult
+  const locale = getRequestLocale()
   const { revenue, subscriptions, activeSubscriptionCount } = data
   const { page = 1 } = Route.useSearch()
   const navigate = Route.useNavigate()
@@ -187,8 +185,12 @@ function AdminRevenuePage() {
                         ? m.settings_billing_interval_year()
                         : '—'}
                   </TableCell>
-                  <TableCell>{date(subscription.createdAt)}</TableCell>
-                  <TableCell>{date(subscription.currentPeriodEnd)}</TableCell>
+                  <TableCell>
+                    <LocalDate value={subscription.createdAt} locale={locale} />
+                  </TableCell>
+                  <TableCell>
+                    <LocalDate value={subscription.currentPeriodEnd} locale={locale} />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

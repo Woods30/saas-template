@@ -60,7 +60,7 @@ export function Footer() {
           <MenuItems items={links} variant="footer" linkClassName={footerLinkClass} />
         </div>
         <div className="border-t border-border/70 pt-6 text-xs text-muted-foreground">
-          © {new Date().getFullYear()} {websiteConfig.metadata.name}. {m.footer_rights()}
+          © {new Date().getUTCFullYear()} {websiteConfig.metadata.name}. {m.footer_rights()}
         </div>
       </div>
     </footer>
