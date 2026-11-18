@@ -4,6 +4,12 @@ import { treatEmptyAsUndefined } from './normalize'
 const schema = z.object({
   VITE_BASE_URL: z.url().default('http://localhost:3000'),
   VITE_PAYMENT_PROVIDER: z.enum(['stripe', 'creem']).optional(),
+  /**
+   * 新订单走哪条结账链路：`provider` 走托管支付渠道，`collection` 走收款码核销。
+   *
+   * 缺省是 `provider`；两条链路互斥，同一时刻只有一条收新订单。
+   */
+  VITE_CHECKOUT_MODE: z.enum(['provider', 'collection']).optional(),
   VITE_GA_ID: z.string().optional(),
   VITE_PLAUSIBLE_DOMAIN: z.string().optional(),
   VITE_UMAMI_WEBSITE_ID: z.string().optional(),

@@ -46,6 +46,14 @@ export const socialSchema = z.object({
 export const paymentSchema = z.object({
   enabled: z.boolean(),
   provider: z.enum(['stripe', 'creem']),
+  /**
+   * 结账链路：渠道支付与核销收款互斥。
+   *
+   * 带默认值 `provider`：这一项是后加的，早于它写入的 `payment` 分组没有这个
+   * 键。不给默认值的话整个分组会因「缺字段」被判非法而整组回落默认值——后台
+   * 改过的渠道开关会被一起抹掉。
+   */
+  checkoutMode: z.enum(['provider', 'collection']).default('provider'),
 })
 
 export const mailSchema = z.object({
@@ -127,7 +135,11 @@ export function defaultSettings(): SettingsGroups {
       locales: {},
     },
     social: { links: { ...config.social } },
-    payment: { enabled: config.payment.enabled, provider: config.payment.provider },
+    payment: {
+      enabled: config.payment.enabled,
+      provider: config.payment.provider,
+      checkoutMode: config.payment.checkoutMode,
+    },
     mail: {
       enabled: config.mail.enabled,
       provider: config.mail.provider,
@@ -204,6 +216,7 @@ export function applySettingsToConfig(
       ...config.payment,
       enabled: settings.payment.enabled,
       provider: settings.payment.provider,
+      checkoutMode: settings.payment.checkoutMode,
     },
     mail: {
       ...config.mail,

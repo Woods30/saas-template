@@ -60,7 +60,7 @@ describe('applySettingsToConfig', () => {
       blog: false,
       features: { ...defaultSettings().modules.features, enableAdmin: false },
     },
-    payment: { enabled: false, provider: 'creem' },
+    payment: { enabled: false, provider: 'creem', checkoutMode: 'provider' },
     mail: { enabled: true, provider: 'cloudflare', supportEmail: 'hi@acme.dev' },
   }
 
@@ -89,5 +89,44 @@ describe('applySettingsToConfig', () => {
     const config = applySettingsToConfig(websiteConfig, settings)
     expect(config.baseUrl).toBe(websiteConfig.baseUrl)
     expect(config.ui).toEqual(websiteConfig.ui)
+  })
+})
+
+/**
+ * 结账链路：渠道支付与核销收款互斥，由后台选。
+ *
+ * 旧数据没有这个字段（分组是在它之前写的），必须回落到渠道支付而不是
+ * 让整组被判非法——那会把管理员改过的其它开关一起抹掉。
+ */
+describe('结账链路', () => {
+  const defaults = defaultSettings()
+
+  it('旧数据没有结账链路时默认走渠道支付', () => {
+    const merged = mergeSettings(defaults, {
+      payment: { enabled: true, provider: 'stripe' },
+    })
+    expect(merged.payment.checkoutMode).toBe('provider')
+  })
+
+  it('数据库可以选择核销收款链路', () => {
+    const merged = mergeSettings(defaults, {
+      payment: { enabled: true, provider: 'stripe', checkoutMode: 'collection' },
+    })
+    expect(merged.payment.checkoutMode).toBe('collection')
+  })
+
+  it('结账链路进入站点配置', () => {
+    const merged = mergeSettings(defaults, {
+      payment: { enabled: true, provider: 'stripe', checkoutMode: 'collection' },
+    })
+    const config = applySettingsToConfig(websiteConfig, merged)
+    expect(config.payment.checkoutMode).toBe('collection')
+  })
+
+  it('非法取值回落渠道支付', () => {
+    const merged = mergeSettings(defaults, {
+      payment: { enabled: true, provider: 'stripe', checkoutMode: 'paypal' },
+    })
+    expect(merged.payment.checkoutMode).toBe('provider')
   })
 })

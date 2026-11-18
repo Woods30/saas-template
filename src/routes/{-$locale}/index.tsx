@@ -1,6 +1,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { LandingPage } from '@/components/marketing/LandingPage'
 import { MarketingLayout } from '@/components/marketing/MarketingLayout'
+import { resolveCollectionPrice } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import { findCatalogAmount } from '@/core/payment/price-catalog'
 import { fetchPriceCatalog } from '@/core/payment/pricing'
@@ -24,30 +25,36 @@ export const Route = createFileRoute('/{-$locale}/')({
       pageType: 'WebPage',
     }),
   loader: async () => {
-    // 展示价与结账收款读同一份价格目录（同一个缓存键），不会各说各话。
-    // 取价失败只降级为「价格暂不可用」——价格是销售页的关键信息，
-    // 但不该因为它拿不到就让整页 500。
+    const offer = {
+      productId: websiteConfig.landingOffer.productId,
+      offerId: websiteConfig.landingOffer.offerId,
+    }
+    // 结账链路决定价格事实源：核销收款读本地标价，渠道支付读价格目录。
+    if (websiteConfig.payment.checkoutMode === 'collection') {
+      const price = resolveCollectionPrice(offer.productId, offer.offerId)
+      return {
+        priceCents: null,
+        collectionPrice: price ? { amount: price.amount, currency: price.currency } : null,
+      }
+    }
     try {
       const catalog = await fetchPriceCatalog()
       return {
-        priceCents: findCatalogAmount(
-          catalog,
-          websiteConfig.landingOffer.productId,
-          websiteConfig.landingOffer.offerId,
-        ),
+        priceCents: findCatalogAmount(catalog, offer.productId, offer.offerId),
+        collectionPrice: null,
       }
     } catch {
-      return { priceCents: null }
+      return { priceCents: null, collectionPrice: null }
     }
   },
   component: HomePage,
 })
 
 function HomePage() {
-  const { priceCents } = Route.useLoaderData()
+  const { priceCents, collectionPrice } = Route.useLoaderData()
   return (
     <MarketingLayout>
-      <LandingPage priceCents={priceCents} />
+      <LandingPage priceCents={priceCents} collectionPrice={collectionPrice} />
     </MarketingLayout>
   )
 }

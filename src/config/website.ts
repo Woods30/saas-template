@@ -125,6 +125,14 @@ export interface WebsiteConfig {
   payment: {
     enabled: boolean
     provider: PaymentProviderName
+    /**
+     * 结账链路：渠道支付与核销收款互斥。
+     *
+     * `provider` 走托管结账页（Stripe / Creem），`collection` 走核销型支付
+     * （用户按订单金额向收款码付款，管理员核验后结算）。首页的购买入口按它
+     * 分流：选了 `collection` 就不再调渠道结账。
+     */
+    checkoutMode: 'provider' | 'collection'
   }
   /**
    * 核销型支付（collection）模块。
@@ -232,7 +240,8 @@ export function applyEnvOverrides(config: WebsiteConfig, env: PublicEnv): Websit
     !features &&
     !collectionAccounts &&
     env.VITE_DOCS_AS_HOME === undefined &&
-    env.VITE_PAYMENT_PROVIDER === undefined
+    env.VITE_PAYMENT_PROVIDER === undefined &&
+    env.VITE_CHECKOUT_MODE === undefined
   )
     return config
 
@@ -256,6 +265,10 @@ export function applyEnvOverrides(config: WebsiteConfig, env: PublicEnv): Websit
   // 同一份代码发不同支付渠道：provider 由构建环境决定，不写死在配置里。
   if (env.VITE_PAYMENT_PROVIDER !== undefined) {
     next.payment = { ...next.payment, provider: env.VITE_PAYMENT_PROVIDER }
+  }
+  // 结账链路同样可由构建环境指定（也可在后台系统设置里覆盖）。
+  if (env.VITE_CHECKOUT_MODE !== undefined) {
+    next.payment = { ...next.payment, checkoutMode: env.VITE_CHECKOUT_MODE }
   }
   // 收款账户走部署平台的配置变量：不碰源码也能配齐核销链路的「无处可付」项。
   if (collectionAccounts) {
@@ -311,6 +324,8 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
         // 当前站点启用 Stripe 收款；通知与分析待配置后单独开启。
         enabled: true,
         provider: 'stripe',
+        // 出厂走渠道结账；核销收款由后台「结账链路」切换。
+        checkoutMode: 'provider',
       },
       // 核销型支付默认关闭：开了才会展示收款码链路，升级不改变既有实例行为。
       collection: {

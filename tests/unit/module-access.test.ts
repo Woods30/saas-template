@@ -165,7 +165,7 @@ describe('assertPageEnabled', () => {
       assertPageEnabled(
         'payment',
         makeConfig({
-          payment: { enabled: false, provider: 'stripe' },
+          payment: { enabled: false, provider: 'stripe', checkoutMode: 'provider' },
         }),
       ),
     )
@@ -261,7 +261,7 @@ describe('getModuleUnavailableResponse', () => {
     // 门禁判的是 Stripe 凭据齐不齐。
     const res = getModuleUnavailableResponse('payment', {
       config: makeConfig({
-        payment: { enabled: true, provider: 'stripe' },
+        payment: { enabled: true, provider: 'stripe', checkoutMode: 'provider' },
       }),
       publicEnv,
       serverEnv: parseServerEnv({}),
@@ -273,7 +273,7 @@ describe('getModuleUnavailableResponse', () => {
     expect(
       getModuleUnavailableResponse('payment', {
         config: makeConfig({
-          payment: { enabled: true, provider: 'stripe' },
+          payment: { enabled: true, provider: 'stripe', checkoutMode: 'provider' },
         }),
         publicEnv,
         serverEnv: creds,
@@ -315,6 +315,7 @@ describe('getSitemapPaths', () => {
       payment: {
         enabled: true,
         provider: 'stripe',
+        checkoutMode: 'provider',
       },
       contact: { enabled: true },
     })

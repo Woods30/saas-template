@@ -13,6 +13,7 @@ import {
   IconPlugConnected,
   IconShieldLock,
 } from '@tabler/icons-react'
+import { useNavigate } from '@tanstack/react-router'
 import { createElement, useId, useState } from 'react'
 import { SourceProductDemo } from '@/components/marketing/SourceProductDemo'
 import { Cta, Faq, Features } from '@/components/sections'
@@ -21,8 +22,19 @@ import { websiteConfig } from '@/config/website'
 import { useSession } from '@/core/auth/client'
 import { startCheckout } from '@/core/payment/checkout-client'
 import { formatUsdAmount } from '@/core/payment/price-catalog'
+import { formatMoney } from '@/lib/format'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
+import {
+  collectionOrderErrorMessage,
+  createCollectionOrder,
+} from '@/modules/manual-payments/service'
+
+/** 核销链路的标价视图：金额（分）与币种。 */
+export interface CollectionPriceView {
+  amount: number
+  currency: string
+}
 
 /**
  * 首页的文档入口：外部文档站优先，其次站内 `/docs`，最后回退首页锚点。
@@ -269,6 +281,9 @@ function Workflow() {
  * 模板买断价（分）；`null` 表示价格目录取不到。
  *
  * 金额由 Stripe 的价格目录给出（见 `fetchPriceCatalog`），代码里不存第二份。
+ *
+ * 核销收款链路下价格来自本地标价（`collectionPrices`，单位分）——那条链路
+ * 不接支付渠道，没有价格目录可用。
  */
 function TemplatePricing({ price }: { price: string | null }) {
   const id = useId()
@@ -276,13 +291,43 @@ function TemplatePricing({ price }: { price: string | null }) {
   const [pending, setPending] = useState(false)
   const [notice, setNotice] = useState('')
   const locale = getLocale()
+  const navigate = useNavigate()
   const loginUrl = `/${locale}/auth/login?redirect=${encodeURIComponent(`/${locale}/#pricing`)}`
-  const enabled = websiteConfig.auth.enabled && websiteConfig.payment.enabled
+  const collectionMode = websiteConfig.payment.checkoutMode === 'collection'
+  // 两条链路互斥：核销收款走核销模块，渠道支付走支付模块。
+  const enabled =
+    websiteConfig.auth.enabled &&
+    (collectionMode ? websiteConfig.collection.enabled : websiteConfig.payment.enabled)
 
   async function buy() {
     if (pending) return
     setPending(true)
     setNotice('')
+    // 核销链路：创建核销订单并站内导航到订单详情，不调渠道结账。
+    if (collectionMode) {
+      const result = await createCollectionOrder({
+        productId: websiteConfig.landingOffer.productId,
+        offerId: websiteConfig.landingOffer.offerId,
+      })
+      if (result.kind === 'redirect') {
+        await navigate({
+          to: '/{-$locale}/dashboard/orders/$orderId',
+          params: { locale, orderId: result.orderId },
+        })
+        return
+      }
+      if (result.kind === 'unauthenticated') {
+        window.location.assign(loginUrl)
+        return
+      }
+      setPending(false)
+      setNotice(
+        result.kind === 'not-configured'
+          ? m.payment_checkout_not_configured()
+          : collectionOrderErrorMessage(result.code),
+      )
+      return
+    }
     const result = await startCheckout({
       productId: websiteConfig.landingOffer.productId,
       offerId: websiteConfig.landingOffer.offerId,
@@ -597,10 +642,26 @@ function CapabilityFeatures() {
   )
 }
 
-export function LandingPage({ priceCents }: { priceCents: number | null }) {
+export function LandingPage({
+  priceCents,
+  collectionPrice = null,
+}: {
+  priceCents: number | null
+  /** 核销链路的本地标价；只在结账链路为核销收款时用。 */
+  collectionPrice?: CollectionPriceView | null
+}) {
   const [motionRunning, setMotionRunning] = useState(true)
-  // 价格事实源是 Stripe 的价格目录；取不到时降级为「价格暂不可用」，不编造金额。
-  const price = priceCents === null ? null : formatUsdAmount(priceCents)
+  const locale = getLocale()
+  // 价格事实源随结账链路走：渠道支付读 Stripe 的价格目录，核销收款读本地标价。
+  // 取不到时降级为「价格暂不可用」，不编造金额。
+  const collectionMode = websiteConfig.payment.checkoutMode === 'collection'
+  const price = collectionMode
+    ? collectionPrice
+      ? formatMoney(collectionPrice.amount, collectionPrice.currency, locale)
+      : null
+    : priceCents === null
+      ? null
+      : formatUsdAmount(priceCents)
   return (
     <div className="landing-lab" data-motion={motionRunning ? 'running' : 'paused'}>
       <section className="lab-hero !bg-none mx-auto grid max-w-6xl items-center gap-12 px-6 py-16 md:py-24 lg:grid-cols-[0.95fr_1.05fr]">

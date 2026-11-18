@@ -341,12 +341,13 @@ function PaymentSection({
 }) {
   const [enabled, setEnabled] = useState(settings.payment.enabled)
   const [provider, setProvider] = useState(settings.payment.provider)
+  const [checkoutMode, setCheckoutMode] = useState(settings.payment.checkoutMode)
 
   return (
     <Section
       title={m.admin_settings_section_payment()}
       busy={busy}
-      onSave={() => onSave('payment', { enabled, provider })}
+      onSave={() => onSave('payment', { enabled, provider, checkoutMode })}
     >
       <Field orientation="horizontal">
         <Switch id="payment-enabled" checked={enabled} onCheckedChange={setEnabled} />
@@ -370,6 +371,32 @@ function PaymentSection({
             <SelectItem value="creem">Creem</SelectItem>
           </SelectContent>
         </Select>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="payment-checkout-mode">
+          {m.admin_settings_payment_checkout_mode()}
+        </FieldLabel>
+        <Select
+          value={checkoutMode}
+          onValueChange={(value) => setCheckoutMode(value as 'provider' | 'collection')}
+          items={[
+            { value: 'provider', label: m.admin_settings_payment_checkout_mode_provider() },
+            { value: 'collection', label: m.admin_settings_payment_checkout_mode_collection() },
+          ]}
+        >
+          <SelectTrigger id="payment-checkout-mode">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="provider">
+              {m.admin_settings_payment_checkout_mode_provider()}
+            </SelectItem>
+            <SelectItem value="collection">
+              {m.admin_settings_payment_checkout_mode_collection()}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <FieldDescription>{m.admin_settings_payment_checkout_mode_hint()}</FieldDescription>
       </Field>
     </Section>
   )
@@ -462,6 +489,7 @@ function ModulesSection({
     { key: 'changelog', label: m.admin_settings_module_changelog() },
     { key: 'contact', label: m.admin_settings_module_contact() },
     { key: 'newsletter', label: m.admin_settings_module_newsletter() },
+    { key: 'collection', label: m.admin_settings_module_collection() },
     { key: 'notification', label: m.admin_settings_module_notification() },
     { key: 'analytics', label: m.admin_settings_module_analytics() },
     { key: 'auth', label: m.admin_settings_module_auth() },
