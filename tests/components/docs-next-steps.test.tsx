@@ -3,8 +3,8 @@ import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DocNextSteps } from '@/components/docs/DocNextSteps'
 import { DocsSidebar } from '@/components/docs/DocsSidebar'
-import type { DocEntry } from '@/lib/docs'
 import { setLocale } from '@/locale/paraglide/runtime.js'
+import type { DocEntry } from '@/modules/docs/service'
 
 /** 与下方卡片测试同一篇文档，用于比对两处图标。 */
 const SIDEBAR_DOC: DocEntry = {

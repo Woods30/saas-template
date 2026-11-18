@@ -1,9 +1,9 @@
 import { IconArrowRight, IconRoute } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
 import { DOC_FALLBACK_ICON, DOC_ICON } from '@/components/docs/doc-icons'
-import { DOCS_INDEX_SLUG, docLinkTarget, type NextStep } from '@/lib/docs'
 import type { Locale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
+import { DOCS_INDEX_SLUG, docLinkTarget, type NextStep } from '@/modules/docs/service'
 
 /**
  * 正文末尾的「下一步」卡片。与线性的「上一篇 / 下一篇」刻意区分：这里是作者挑选的

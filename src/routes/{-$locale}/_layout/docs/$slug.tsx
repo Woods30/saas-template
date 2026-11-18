@@ -1,21 +1,21 @@
 import { createFileRoute, notFound, redirect } from '@tanstack/react-router'
 import { DocArticle } from '@/components/docs/DocArticle'
 import { websiteConfig } from '@/config/website'
+import { getRequestLocale } from '@/lib/locale'
+import { seo } from '@/lib/seo'
 import {
   DOCS_INDEX_SLUG,
   docNeighbors,
   docsForLocale,
+  docsPublicPath,
   extractHeadings,
   findDocBySlug,
   formatUpdatedDate,
   splitNextSteps,
-} from '@/lib/docs'
-import { docsPublicPath } from '@/lib/docs-path'
-import { getRequestLocale } from '@/lib/locale'
-import { seo } from '@/lib/seo'
+} from '@/modules/docs/service'
 
 /**
- * 单篇文档页。slug 与语言无关（见 `src/lib/docs.ts`）：URL 不泄漏语言后缀，
+ * 单篇文档页。slug 与语言无关（见 `src/modules/docs/service.ts`）：URL 不泄漏语言后缀，
  * 切换语言后同一个 slug 仍能命中对应译文。
  */
 export const Route = createFileRoute('/{-$locale}/_layout/docs/$slug')({

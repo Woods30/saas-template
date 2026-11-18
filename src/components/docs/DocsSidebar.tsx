@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { DOC_FALLBACK_ICON, DOC_ICON } from '@/components/docs/doc-icons'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { websiteConfig } from '@/config/website'
-import { DOCS_INDEX_SLUG, type DocEntry, type DocGroup, groupDocs } from '@/lib/docs'
 import type { Locale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
+import { DOCS_INDEX_SLUG, type DocEntry, type DocGroup, groupDocs } from '@/modules/docs/service'
 
 /**
  * 文档侧边栏导航（交互参照 GitBook）：按 frontmatter 的 `group` 聚合，组标题可折叠。

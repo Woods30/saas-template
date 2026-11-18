@@ -4,9 +4,14 @@ import { type ReactNode, useCallback, useEffect, useId, useState } from 'react'
 import { DOC_FALLBACK_ICON, DOC_ICON } from '@/components/docs/doc-icons'
 import { Command, CommandDialog, CommandInput, CommandList } from '@/components/ui/command'
 import { Kbd, KbdGroup } from '@/components/ui/kbd'
-import { DOCS_INDEX_SLUG, type DocEntry, type DocSearchResult, searchDocs } from '@/lib/docs'
 import type { Locale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
+import {
+  DOCS_INDEX_SLUG,
+  type DocEntry,
+  type DocSearchResult,
+  searchDocs,
+} from '@/modules/docs/service'
 
 /**
  * 文档搜索：侧栏触发器 + 居中弹窗（240px 侧栏放不下结果）。检索是纯前端的，

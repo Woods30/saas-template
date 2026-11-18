@@ -14,14 +14,14 @@ import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { websiteConfig } from '@/config/website'
+import { type Locale, stripLocalePrefix } from '@/lib/locale'
+import { m } from '@/locale/paraglide/messages.js'
 import {
   DOCS_INDEX_SLUG,
   DOCS_SIDEBAR_COOKIE_NAME,
   docsForLocale,
   getSidebarCollapsed,
-} from '@/lib/docs'
-import { type Locale, stripLocalePrefix } from '@/lib/locale'
-import { m } from '@/locale/paraglide/messages.js'
+} from '@/modules/docs/service'
 
 const SIDEBAR_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
 

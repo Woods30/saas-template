@@ -2,9 +2,9 @@ import { DocNextSteps } from '@/components/docs/DocNextSteps'
 import { DocPager } from '@/components/docs/DocPager'
 import { DocsToc } from '@/components/docs/DocsToc'
 import { Mdx } from '@/components/mdx/Mdx'
-import type { DocHeading, DocNeighbor, NextStep } from '@/lib/docs'
 import type { Locale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
+import type { DocHeading, DocNeighbor, NextStep } from '@/modules/docs/service'
 
 /** 一篇文档渲染所需的全部数据；由路由的 loader 产出，组件自己不取数。 */
 export interface DocArticleData {

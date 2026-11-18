@@ -1,8 +1,8 @@
 import { QueryClient } from '@tanstack/react-query'
 import { createRouter as createTanStackRouter } from '@tanstack/react-router'
+import { rewriteDocsInput, rewriteDocsOutput } from '@/modules/docs/service'
 import { websiteConfig } from './config/website'
 import { installSiteConfigFromDocument } from './core/config/client'
-import { rewriteDocsInput, rewriteDocsOutput } from './lib/docs-path'
 import { routeTree } from './routeTree.gen'
 
 /**

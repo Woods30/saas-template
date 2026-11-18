@@ -2,8 +2,8 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DocsSearch } from '@/components/docs/DocsSearch'
-import type { DocEntry } from '@/lib/docs'
 import { setLocale } from '@/locale/paraglide/runtime.js'
+import type { DocEntry } from '@/modules/docs/service'
 
 /** 文档搜索：触发器弹出居中弹窗，纯前端过滤（文档在构建期已全部载入）。 */
 // 只替换路由边界；mock 的 `Link` 需还原 `params` / `hash` 拼接，

@@ -13,6 +13,12 @@ import {
   defaultStreamHandler,
   type HandlerCallback,
 } from '@tanstack/react-start/server'
+import {
+  DOCS_SIDEBAR_COOKIE_NAME,
+  docsLegacyRedirect,
+  parseSidebarCollapsed,
+  setServerSidebarGetter,
+} from '@/modules/docs/service'
 import { getMailFrom } from './config/service-status'
 import { websiteConfig } from './config/website'
 import { KVCacheProvider } from './core/cache/provider/kv'
@@ -24,8 +30,6 @@ import { parseServerEnv, type ServerEnv } from './core/env/server'
 import { buildNotificationProviderRegistry } from './core/notify/service'
 import { buildPaymentProviderRegistry } from './core/payment'
 import { R2StorageProvider } from './core/storage/provider/r2'
-import { DOCS_SIDEBAR_COOKIE_NAME, parseSidebarCollapsed, setServerSidebarGetter } from './lib/docs'
-import { docsLegacyRedirect } from './lib/docs-path'
 import { LOCALE_COOKIE_NAME, readCookieValue, readLocaleCookie } from './lib/locale'
 import {
   addNonceToInlineScripts,
