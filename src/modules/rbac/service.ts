@@ -53,64 +53,79 @@ export interface UserRoleAssignmentInput {
 
 /** 幂等初始化系统内置权限点与四种默认角色。 */
 export async function ensureDefaultRbac(db: DB): Promise<void> {
-  const existingPerms = await db
-    .select({ id: permissions.id, code: permissions.code })
-    .from(permissions)
+  const [existingPerms, existingRoles] = await Promise.all([
+    db.select({ id: permissions.id, code: permissions.code }).from(permissions),
+    db.select({ id: roles.id, name: roles.name }).from(roles),
+  ])
   const permIdByCode = new Map(existingPerms.map((p) => [p.code, p.id]))
+  const roleIdByName = new Map(existingRoles.map((r) => [r.name, r.id]))
 
-  for (const seed of DEFAULT_PERMISSIONS) {
-    if (!permIdByCode.has(seed.code)) {
+  const missingPerms = DEFAULT_PERMISSIONS.filter((seed) => !permIdByCode.has(seed.code)).map(
+    (seed) => {
       const id = permissionIdOf(seed.code)
-      await db.insert(permissions).values({
+      permIdByCode.set(seed.code, id)
+      return {
         id,
         code: seed.code,
         resource: seed.resource,
         action: seed.action,
         title: seed.title,
         description: seed.description,
+      }
+    },
+  )
+
+  for (let i = 0; i < missingPerms.length; i += 10) {
+    await db
+      .insert(permissions)
+      .values(missingPerms.slice(i, i + 10))
+      .onConflictDoNothing()
+  }
+
+  const newRoleNames = new Set<string>()
+  const missingRoles = DEFAULT_ROLES.filter((seed) => !roleIdByName.has(seed.name)).map((seed) => {
+    const id = roleIdOf(seed.name)
+    roleIdByName.set(seed.name, id)
+    newRoleNames.add(seed.name)
+    return {
+      id,
+      name: seed.name,
+      title: seed.title,
+      description: seed.description,
+      status: 'active' as const,
+      sortOrder: seed.sortOrder,
+    }
+  })
+
+  if (missingRoles.length > 0) {
+    await db.insert(roles).values(missingRoles).onConflictDoNothing()
+  }
+
+  if (newRoleNames.size === 0) {
+    return
+  }
+
+  const missingBindings: Array<{ id: string; roleId: string; permissionId: string }> = []
+  for (const roleSeed of DEFAULT_ROLES) {
+    if (!newRoleNames.has(roleSeed.name)) continue
+    const roleId = roleIdByName.get(roleSeed.name)
+    if (!roleId) continue
+    for (const code of roleSeed.permissions) {
+      const permId = permIdByCode.get(code)
+      if (!permId) continue
+      missingBindings.push({
+        id: `rp:${roleSeed.name}:${code}`,
+        roleId,
+        permissionId: permId,
       })
-      permIdByCode.set(seed.code, id)
     }
   }
 
-  const existingRoles = await db.select({ id: roles.id, name: roles.name }).from(roles)
-  const roleIdByName = new Map(existingRoles.map((r) => [r.name, r.id]))
-
-  for (const roleSeed of DEFAULT_ROLES) {
-    let roleId = roleIdByName.get(roleSeed.name)
-    const isNewRole = !roleId
-    if (!roleId) {
-      roleId = roleIdOf(roleSeed.name)
-      await db.insert(roles).values({
-        id: roleId,
-        name: roleSeed.name,
-        title: roleSeed.title,
-        description: roleSeed.description,
-        status: 'active',
-        sortOrder: roleSeed.sortOrder,
-      })
-      roleIdByName.set(roleSeed.name, roleId)
-    }
-
-    if (isNewRole || roleSeed.name === ROLES.SUPER_ADMIN) {
-      const boundRows = await db
-        .select({ permissionId: rolePermissions.permissionId })
-        .from(rolePermissions)
-        .where(eq(rolePermissions.roleId, roleId))
-      const boundIds = new Set(boundRows.map((b) => b.permissionId))
-
-      for (const code of roleSeed.permissions) {
-        const permId = permIdByCode.get(code)
-        if (permId && !boundIds.has(permId)) {
-          await db.insert(rolePermissions).values({
-            id: crypto.randomUUID(),
-            roleId,
-            permissionId: permId,
-          })
-          boundIds.add(permId)
-        }
-      }
-    }
+  for (let i = 0; i < missingBindings.length; i += 15) {
+    await db
+      .insert(rolePermissions)
+      .values(missingBindings.slice(i, i + 15))
+      .onConflictDoNothing()
   }
 }
 

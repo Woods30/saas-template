@@ -1,6 +1,7 @@
 import {
   IconBell,
   IconChartBar,
+  IconClipboardList,
   IconCoins,
   IconCreditCard,
   IconDeviceLaptop,
@@ -29,10 +30,12 @@ export type SettingsSection =
   | 'billing'
   | 'admin'
   /** 管理分组下的子页面：路径含两段，与其它板块的单段不同。 */
+  | 'admin/roles'
   | 'admin/revenue'
   | 'admin/orders'
   | 'admin/subscriptions'
   | 'admin/credits'
+  | 'admin/audit'
 
 /**
  * 个人中心侧边栏的导航项工厂。
@@ -227,6 +230,34 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
             }),
           },
         },
+        {
+          kind: 'link',
+          id: 'admin-roles',
+          title: m.settings_nav_admin_roles(),
+          icon: IconShieldLock,
+          visibility: { roles: ['admin'], feature: 'enableAdmin' },
+          destination: {
+            kind: 'internal',
+            options: linkOptions({
+              to: '/{-$locale}/dashboard/admin/roles',
+              params: { locale },
+            }),
+          },
+        },
+        {
+          kind: 'link',
+          id: 'admin-audit',
+          title: m.settings_nav_admin_audit(),
+          icon: IconClipboardList,
+          visibility: { roles: ['admin'], feature: 'enableAdmin' },
+          destination: {
+            kind: 'internal',
+            options: linkOptions({
+              to: '/{-$locale}/dashboard/admin/audit',
+              params: { locale },
+            }),
+          },
+        },
       ],
     },
   ]
@@ -319,6 +350,18 @@ export function getSettingsSectionMeta(section: string):
         title: m.admin_credits_title(),
         description: m.admin_credits_description(),
         icon: IconCoins,
+      }
+    case 'admin/roles':
+      return {
+        title: m.admin_roles_title(),
+        description: m.admin_roles_description(),
+        icon: IconShieldLock,
+      }
+    case 'admin/audit':
+      return {
+        title: m.admin_audit_title(),
+        description: m.admin_audit_description(),
+        icon: IconClipboardList,
       }
     case 'admin/collection-orders':
       return {
