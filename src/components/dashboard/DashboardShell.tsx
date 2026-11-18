@@ -60,7 +60,8 @@ export function toSectionMeta(
  * 个人中心与管理台共用的外壳。
  *
  * 侧栏折叠、cookie 持久化与窄屏 Sheet 都由 shadcn `sidebar` 原件负责；
- * 页面标题由面包屑末级承担，因此不渲染 `<h1>`；`DashboardUserCard` 是唯一的登出入口。
+ * 内容区标题与说明由这里统一渲染（数据来自菜单配置），页面自己不再写标题块；
+ * `DashboardUserCard` 是唯一的登出入口。
  */
 export function DashboardShell({
   locale,
@@ -69,6 +70,7 @@ export function DashboardShell({
   root,
   sidebar,
   footer,
+  hidePageHeader = false,
   children,
 }: {
   locale: Locale
@@ -78,6 +80,8 @@ export function DashboardShell({
   root: { label: string; to: AppRoute }
   sidebar: ReactNode
   footer: ReactNode
+  /** 详情页自带标题，不再叠加布局标题（避免两个 `<h1>`）。 */
+  hidePageHeader?: boolean
   children: ReactNode
 }) {
   return (
@@ -147,7 +151,17 @@ export function DashboardShell({
         </header>
         {session.impersonating && <ImpersonationBanner />}
         {/* 用 `max-w-6xl` 而非表单页的 `max-w-3xl`：这里有 5–6 列的表格，3xl 会挤到换行。 */}
-        <div className="mx-auto w-full min-w-0 max-w-6xl px-4 py-6 md:px-6">{children}</div>
+        <div className="mx-auto w-full min-w-0 max-w-6xl px-4 py-6 md:px-6">
+          {meta && !hidePageHeader && (
+            <div className="mb-6 space-y-1">
+              <h1 className="text-2xl font-semibold tracking-tight">{meta.title}</h1>
+              {meta.description && (
+                <p className="text-sm text-muted-foreground">{meta.description}</p>
+              )}
+            </div>
+          )}
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )

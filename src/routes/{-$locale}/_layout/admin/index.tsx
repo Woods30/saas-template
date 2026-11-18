@@ -13,10 +13,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { adminRoutes } from '@/config/routes'
 import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
-import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
+import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import {
   type AdminBillingResult,
@@ -32,10 +32,6 @@ import {
  * 只靠 `beforeLoad` 隐藏入口拦不住直接调用。
  */
 export const Route = createFileRoute('/{-$locale}/_layout/admin/')({
-  beforeLoad: ({ context }) => {
-    assertFeatureEnabled('enableAdmin')
-    assertAdminRole(context.session.user.role)
-  },
   loader: () => fetchAdminBilling(),
   // 页码放 URL：刷新与分享链接能停在原页，也符合「URL 即状态」的路由数据流。
   // 返回可选字段：首页不带 `?page=1`，菜单链接就不必逐处补 search。
@@ -43,13 +39,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/')({
     const parsed = Number(search.page)
     return Number.isInteger(parsed) && parsed > 0 ? { page: parsed } : {}
   },
-  head: () =>
-    seo('/admin', {
-      title: m.admin_revenue_title(),
-      description: m.admin_revenue_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => adminHead(adminRoutes.overview),
   component: AdminRevenuePage,
 })
 
@@ -104,11 +94,6 @@ function AdminRevenuePage() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h2 className="text-2xl font-semibold tracking-tight">{m.admin_revenue_title()}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{m.admin_revenue_description()}</p>
-      </header>
-
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {kpiCards.map((card) => (
           <Card key={card.title}>

@@ -18,21 +18,15 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from '@/components/ui/toast'
+import { settingsRoutes } from '@/config/routes'
 import { authClient } from '@/core/auth/client'
 import { createChangeEmailSchema, createChangePasswordSchema } from '@/core/auth/validation'
 import { destructiveFocusRing } from '@/lib/a11y'
-import { getRequestLocale } from '@/lib/locale'
-import { seo } from '@/lib/seo'
+import { settingsHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/settings/security')({
-  head: () =>
-    seo('/settings/security', {
-      title: m.settings_security_title(),
-      description: m.settings_security_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => settingsHead(settingsRoutes.security),
   component: SecurityPage,
 })
 
@@ -41,10 +35,6 @@ function SecurityPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight">{m.settings_security_title()}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{m.settings_security_description()}</p>
-      </div>
       <ChangePasswordCard />
       <ChangeEmailCard currentEmail={session.user.email} />
       <DeleteAccountCard />

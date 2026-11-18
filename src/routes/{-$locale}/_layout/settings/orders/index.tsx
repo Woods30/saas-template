@@ -14,7 +14,6 @@ import {
 import { settingsRoutes } from '@/config/routes'
 import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
-import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 import { fetchMyCollectionOrders } from '@/modules/manual-payments/service'
 import { productNameForProductId } from '@/modules/subscriptions/service'
@@ -37,13 +36,6 @@ export const Route = createFileRoute('/{-$locale}/_layout/settings/orders/')({
       return { ok: false as const, page: null }
     }
   },
-  head: () =>
-    seo('/settings/orders', {
-      title: m['collection.order_list_title'](),
-      description: m['collection.order_list_description'](),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
   component: OrdersPage,
 })
 
@@ -54,12 +46,6 @@ function OrdersPage() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-semibold">{m['collection.order_list_title']()}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {m['collection.order_list_description']()}
-        </p>
-      </header>
       {!loaded.ok && (
         <p role="alert" className="text-destructive">
           {m.settings_error_generic()}

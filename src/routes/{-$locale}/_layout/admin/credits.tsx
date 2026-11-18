@@ -25,9 +25,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
+import { adminRoutes } from '@/config/routes'
 import { getRequestLocale } from '@/lib/locale'
-import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
+import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import {
   type AdminCreditBalance,
@@ -46,10 +46,6 @@ import {
  * 幂等闸与 FIFO 批次逻辑。
  */
 export const Route = createFileRoute('/{-$locale}/_layout/admin/credits')({
-  beforeLoad: ({ context }) => {
-    assertFeatureEnabled('enableAdmin')
-    assertAdminRole(context.session.user.role)
-  },
   // 属性声明为可选：`MakeRequiredSearchParams` 会把「必填的 search 参数」算进
   // 链接类型，导致侧栏里的 linkOptions 必须带 search，导航项就没法只写路径。
   validateSearch: (search: Record<string, unknown>): AdminCreditsSearch => {
@@ -67,13 +63,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/credits')({
         offset: (deps.page - 1) * PAGE_SIZE,
       },
     }),
-  head: () =>
-    seo('/admin/credits', {
-      title: m.admin_credits_title(),
-      description: m.admin_credits_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => adminHead(adminRoutes.credits),
   component: AdminCreditsPage,
 })
 
@@ -173,11 +163,6 @@ function AdminCreditsPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h2 className="text-2xl font-semibold tracking-tight">{m.admin_credits_title()}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{m.admin_credits_description()}</p>
-      </header>
-
       <div className="flex flex-wrap items-center gap-2">
         <Input
           value={keyword}

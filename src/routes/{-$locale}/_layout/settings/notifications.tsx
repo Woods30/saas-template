@@ -5,21 +5,15 @@ import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toast'
-import { getRequestLocale } from '@/lib/locale'
+import { settingsRoutes } from '@/config/routes'
 import { assertPageEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
+import { settingsHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/settings/notifications')({
   // 模块关闭时该页与菜单项一并消失。
   beforeLoad: () => assertPageEnabled('newsletter'),
-  head: () =>
-    seo('/settings/notifications', {
-      title: m.settings_notifications_title(),
-      description: m.settings_notifications_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => settingsHead(settingsRoutes.notifications),
   component: NotificationsPage,
 })
 
@@ -68,15 +62,6 @@ function NotificationsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight">
-          {m.settings_notifications_title()}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {m.settings_notifications_description()}
-        </p>
-      </div>
-
       <Card>
         <CardHeader>
           <CardTitle>{m.settings_notifications_subscribe_label()}</CardTitle>

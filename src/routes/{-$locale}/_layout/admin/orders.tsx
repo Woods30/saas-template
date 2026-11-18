@@ -19,10 +19,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { adminRoutes } from '@/config/routes'
 import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
-import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
+import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import {
   type AdminOrder,
@@ -41,10 +41,6 @@ import {
  * 页码与状态筛选放 URL：刷新与分享链接能停在原页，也符合「URL 即状态」的路由数据流。
  */
 export const Route = createFileRoute('/{-$locale}/_layout/admin/orders')({
-  beforeLoad: ({ context }) => {
-    assertFeatureEnabled('enableAdmin')
-    assertAdminRole(context.session.user.role)
-  },
   // 属性声明为可选：`MakeRequiredSearchParams` 会把「必填的 search 参数」算进
   // 链接类型，导致侧栏里的 linkOptions 必须带 search，导航项就没法只写路径。
   validateSearch: (search: Record<string, unknown>): AdminOrdersSearch => {
@@ -66,13 +62,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/orders')({
         offset: (deps.page - 1) * PAGE_SIZE,
       },
     }),
-  head: () =>
-    seo('/admin/orders', {
-      title: m.admin_orders_title(),
-      description: m.admin_orders_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => adminHead(adminRoutes.orders),
   component: AdminOrdersPage,
 })
 
@@ -115,11 +105,6 @@ function AdminOrdersPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h2 className="text-2xl font-semibold tracking-tight">{m.admin_orders_title()}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{m.admin_orders_description()}</p>
-      </header>
-
       <div className="flex flex-wrap items-center gap-2">
         <Select
           value={status}

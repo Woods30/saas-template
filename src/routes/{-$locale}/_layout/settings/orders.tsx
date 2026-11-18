@@ -1,8 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { getRequestLocale } from '@/lib/locale'
+import { settingsRoutes } from '@/config/routes'
 import { assertPageEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
-import { m } from '@/locale/paraglide/messages.js'
+import { settingsHead } from '@/lib/page-head'
 import type { CollectionOrderStatus } from '@/modules/manual-payments/service'
 
 /**
@@ -16,13 +15,7 @@ import type { CollectionOrderStatus } from '@/modules/manual-payments/service'
  */
 export const Route = createFileRoute('/{-$locale}/_layout/settings/orders')({
   beforeLoad: () => assertPageEnabled('collection'),
-  head: () =>
-    seo('/settings/orders', {
-      title: m['collection.order_list_title'](),
-      description: m['collection.order_list_description'](),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => settingsHead(settingsRoutes.orders),
 })
 
 /**

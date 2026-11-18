@@ -26,27 +26,17 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
+import { adminRoutes } from '@/config/routes'
 import { getRequestLocale } from '@/lib/locale'
-import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
+import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import { fetchAdminContentOverview, saveAdminChangelog } from '@/modules/changelog/service'
 import { removeAdminPost, saveAdminPost } from '@/modules/posts/service'
 import { saveAdminTaxonomy } from '@/modules/taxonomy/service'
 
 export const Route = createFileRoute('/{-$locale}/_layout/admin/content')({
-  beforeLoad: ({ context }) => {
-    assertFeatureEnabled('enableAdmin')
-    assertAdminRole(context.session.user.role)
-  },
   loader: () => fetchAdminContentOverview(),
-  head: () =>
-    seo('/admin/content', {
-      title: m.admin_content_title(),
-      description: m.admin_content_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => adminHead(adminRoutes.content),
   component: AdminContentPage,
 })
 
@@ -169,11 +159,7 @@ function AdminContentPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">{m.admin_content_title()}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{m.admin_content_description()}</p>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"

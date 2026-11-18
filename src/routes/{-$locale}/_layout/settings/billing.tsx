@@ -17,7 +17,7 @@ import { useCheckoutNotice } from '@/hooks/use-checkout-notice'
 import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
 import { assertPageEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
+import { settingsHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import {
   type BillingOverview,
@@ -39,13 +39,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/settings/billing')({
       return { ok: false as const, data: null }
     }
   },
-  head: () =>
-    seo('/settings/billing', {
-      title: m.settings_billing_title(),
-      description: m.settings_billing_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => settingsHead(settingsRoutes.billing),
   validateSearch: (search: Record<string, unknown>): { checkout?: 'success' | 'cancelled' } =>
     search.checkout === 'success' || search.checkout === 'cancelled'
       ? { checkout: search.checkout }
@@ -106,10 +100,6 @@ function BillingPage() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-semibold">{m.settings_billing_title()}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{m.settings_billing_description()}</p>
-      </header>
       {error && (
         <p role="alert" className="text-destructive">
           {m.settings_error_generic()}

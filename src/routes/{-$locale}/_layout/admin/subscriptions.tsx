@@ -19,10 +19,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { adminRoutes } from '@/config/routes'
 import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
-import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
+import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import {
   type AdminSubscriptionItem,
@@ -39,10 +39,6 @@ import {
  * 订单页看的是已经收过钱的事实，两边口径不同所以分成两页。
  */
 export const Route = createFileRoute('/{-$locale}/_layout/admin/subscriptions')({
-  beforeLoad: ({ context }) => {
-    assertFeatureEnabled('enableAdmin')
-    assertAdminRole(context.session.user.role)
-  },
   // 属性声明为可选：`MakeRequiredSearchParams` 会把「必填的 search 参数」算进
   // 链接类型，导致侧栏里的 linkOptions 必须带 search，导航项就没法只写路径。
   validateSearch: (search: Record<string, unknown>): AdminSubscriptionsSearch => {
@@ -65,13 +61,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/subscriptions')(
         offset: (deps.page - 1) * PAGE_SIZE,
       },
     }),
-  head: () =>
-    seo('/admin/subscriptions', {
-      title: m.admin_subscriptions_title(),
-      description: m.admin_subscriptions_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => adminHead(adminRoutes.subscriptions),
   component: AdminSubscriptionsPage,
 })
 
@@ -115,11 +105,6 @@ function AdminSubscriptionsPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h2 className="text-2xl font-semibold tracking-tight">{m.admin_subscriptions_title()}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{m.admin_subscriptions_description()}</p>
-      </header>
-
       <div className="flex flex-wrap items-center gap-2">
         <Select
           value={status}

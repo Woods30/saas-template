@@ -8,22 +8,14 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from '@/components/ui/toast'
+import { settingsRoutes } from '@/config/routes'
 import { authClient } from '@/core/auth/client'
 import { createProfileSchema } from '@/core/auth/validation'
-import { getRequestLocale } from '@/lib/locale'
-import { seo } from '@/lib/seo'
+import { settingsHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/settings/profile')({
-  head: () => {
-    const base = seo('/settings/profile', {
-      title: m.settings_profile_title(),
-      description: m.settings_profile_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    })
-    return base
-  },
+  head: () => settingsHead(settingsRoutes.profile),
   component: ProfilePage,
 })
 
@@ -60,11 +52,6 @@ function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight">{m.settings_profile_title()}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{m.settings_profile_description()}</p>
-      </div>
-
       <Card>
         <CardHeader>
           <CardTitle>{m.settings_profile_name_label()}</CardTitle>

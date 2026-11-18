@@ -48,6 +48,8 @@ export function PersonalCenterLayout({
       locale={locale}
       session={session}
       meta={meta}
+      // 详情页（`orders/<id>`）自带标题，避免与布局标题重复。
+      hidePageHeader={section.includes('/')}
       root={{ label: m.settings_title(), to: settingsRoutes.profile }}
       sidebar={
         <SidebarGroup>

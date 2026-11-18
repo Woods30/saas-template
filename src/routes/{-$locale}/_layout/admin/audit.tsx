@@ -14,9 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { adminRoutes } from '@/config/routes'
 import { getRequestLocale } from '@/lib/locale'
-import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
+import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import { fetchAdminAuditLogs } from '@/modules/audit/service'
 
@@ -30,10 +30,6 @@ interface AdminAuditSearch {
 }
 
 export const Route = createFileRoute('/{-$locale}/_layout/admin/audit')({
-  beforeLoad: ({ context }) => {
-    assertFeatureEnabled('enableAdmin')
-    assertAdminRole(context.session.user.role)
-  },
   validateSearch: (search: Record<string, unknown>): AdminAuditSearch => {
     const parsed = Number(search.page)
     const page = Number.isInteger(parsed) && parsed > 0 ? parsed : 1
@@ -55,13 +51,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/audit')({
         offset: (deps.page - 1) * PAGE_SIZE,
       },
     }),
-  head: () =>
-    seo('/admin/audit', {
-      title: m.admin_audit_title(),
-      description: m.admin_audit_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => adminHead(adminRoutes.audit),
   component: AdminAuditPage,
 })
 
@@ -91,11 +81,7 @@ function AdminAuditPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">{m.admin_audit_title()}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{m.admin_audit_description()}</p>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex items-center gap-2">
           <Input
             type="search"

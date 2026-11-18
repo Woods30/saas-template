@@ -130,9 +130,12 @@ describe('SettingsLayout 顶栏', () => {
     expect(nav.querySelectorAll('[data-slot="breadcrumb-item"]')).toHaveLength(2)
   })
 
-  it('不放标题 h1（末级面包屑已是页面标题）', () => {
+  it('内容区标题由布局统一渲染，文案取自菜单配置', () => {
     renderPersonal()
-    expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
+    const headings = screen.getAllByRole('heading', { level: 1 })
+    // 布局是唯一的 h1 来源：页面不再自己写标题块。
+    expect(headings).toHaveLength(1)
+    expect(headings[0]).toHaveTextContent('资料')
   })
 
   /**

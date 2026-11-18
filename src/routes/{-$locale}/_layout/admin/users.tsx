@@ -68,6 +68,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
+import { adminRoutes } from '@/config/routes'
 import {
   type AdminUser,
   type AdminUserRoleFilter,
@@ -76,8 +77,7 @@ import {
 } from '@/core/auth/admin-users'
 import { authClient } from '@/core/auth/client'
 import { getRequestLocale, type Locale } from '@/lib/locale'
-import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
+import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 
 /** 分页用 offset/limit，`listUsers` 只认 offset。 */
@@ -97,17 +97,7 @@ const SEARCH_DEBOUNCE_MS = 300
  * 写操作后需 `load()` + `router.invalidate()`，否则管理员改到自己角色时侧栏不更新。
  */
 export const Route = createFileRoute('/{-$locale}/_layout/admin/users')({
-  beforeLoad: ({ context }) => {
-    assertFeatureEnabled('enableAdmin')
-    assertAdminRole(context.session.user.role)
-  },
-  head: () =>
-    seo('/admin/users', {
-      title: m.admin_users_title(),
-      description: m.admin_users_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => adminHead(adminRoutes.users),
   component: AdminUsersPage,
 })
 
@@ -252,11 +242,6 @@ function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight">{m.admin_users_title()}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{m.admin_users_description()}</p>
-      </div>
-
       {/* 表格不外套 `Card`：`Table` 的边框与圆角已由 globals.css 统一提供。 */}
       <div className="space-y-4">
         {/* 工具行：左侧查询控件，右侧列显隐；布局照 shadcn `dashboard-01`。 */}

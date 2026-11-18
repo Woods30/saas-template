@@ -40,11 +40,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
+import { adminRoutes } from '@/config/routes'
 import { websiteConfig } from '@/config/website'
 import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
-import { assertAdminRole, assertFeatureEnabled, assertPageEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
+import { assertPageEnabled } from '@/lib/module-access'
+import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import {
   type AdminCollectionOrder,
@@ -93,13 +94,8 @@ interface AdminAccountPayload {
 }
 
 export const Route = createFileRoute('/{-$locale}/_layout/admin/collection-orders')({
-  beforeLoad: ({ context }) => {
-    // 三层门禁：collection 模块 → enableAdmin → admin 角色，缺一不可；
-    // 模块关闭时整页 404，而不是渲染成 loader 的错误态。
-    assertPageEnabled('collection')
-    assertFeatureEnabled('enableAdmin')
-    assertAdminRole(context.session.user.role)
-  },
+  // 模块关闭时整页 404（父级 `_layout/admin` 已做管理员门禁）。
+  beforeLoad: () => assertPageEnabled('collection'),
   // 页码与筛选放 URL：刷新与分享链接能停在原处，也符合「URL 即状态」的路由数据流。
   validateSearch: (search: Record<string, unknown>): { page?: number; status?: string } => {
     const parsed = Number(search.page)
@@ -126,13 +122,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/collection-order
       accounts: accounts instanceof Response ? [] : accounts,
     }
   },
-  head: () =>
-    seo('/admin/collection-orders', {
-      title: m['collection_admin.title_orders'](),
-      description: m['collection_admin.description_orders'](),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => adminHead(adminRoutes.collectionOrders),
   component: AdminCollectionOrdersComponent,
 })
 
@@ -362,15 +352,6 @@ function AdminCollectionOrdersComponent() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight">
-          {m['collection_admin.title_orders']()}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {m['collection_admin.description_orders']()}
-        </p>
-      </div>
-
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}

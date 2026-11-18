@@ -26,9 +26,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
-import { getRequestLocale } from '@/lib/locale'
-import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
+import { adminRoutes } from '@/config/routes'
+import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import {
   fetchAdminRoles,
@@ -40,18 +39,8 @@ import {
 } from '@/modules/rbac/service'
 
 export const Route = createFileRoute('/{-$locale}/_layout/admin/roles')({
-  beforeLoad: ({ context }) => {
-    assertFeatureEnabled('enableAdmin')
-    assertAdminRole(context.session.user.role)
-  },
   loader: () => fetchAdminRoles(),
-  head: () =>
-    seo('/admin/roles', {
-      title: m.admin_roles_title(),
-      description: m.admin_roles_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => adminHead(adminRoutes.roles),
   component: AdminRolesPage,
 })
 
@@ -159,11 +148,7 @@ function AdminRolesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">{m.admin_roles_title()}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{m.admin_roles_description()}</p>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         {canWriteRoles ? (
           <Button
             type="button"

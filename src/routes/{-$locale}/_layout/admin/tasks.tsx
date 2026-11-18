@@ -26,9 +26,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
+import { adminRoutes } from '@/config/routes'
 import { getRequestLocale } from '@/lib/locale'
-import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
+import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import {
   cancelAdminAiTask,
@@ -47,10 +47,6 @@ interface AdminTasksSearch {
 }
 
 export const Route = createFileRoute('/{-$locale}/_layout/admin/tasks')({
-  beforeLoad: ({ context }) => {
-    assertFeatureEnabled('enableAdmin')
-    assertAdminRole(context.session.user.role)
-  },
   validateSearch: (search: Record<string, unknown>): AdminTasksSearch => {
     const parsed = Number(search.page)
     const page = Number.isInteger(parsed) && parsed > 0 ? parsed : 1
@@ -72,13 +68,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/tasks')({
         offset: (deps.page - 1) * PAGE_SIZE,
       },
     }),
-  head: () =>
-    seo('/admin/tasks', {
-      title: m.admin_tasks_title(),
-      description: m.admin_tasks_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => adminHead(adminRoutes.tasks),
   component: AdminAiTasksPage,
 })
 
@@ -181,11 +171,7 @@ function AdminAiTasksPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">{m.admin_tasks_title()}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{m.admin_tasks_description()}</p>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Input
             type="search"

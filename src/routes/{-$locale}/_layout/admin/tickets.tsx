@@ -26,9 +26,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
+import { adminRoutes } from '@/config/routes'
 import { getRequestLocale } from '@/lib/locale'
-import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
+import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import { fetchAdminTicketsAndInvites, saveAdminInviteCode } from '@/modules/invite-codes/service'
 import {
@@ -38,18 +38,8 @@ import {
 } from '@/modules/tickets/service'
 
 export const Route = createFileRoute('/{-$locale}/_layout/admin/tickets')({
-  beforeLoad: ({ context }) => {
-    assertFeatureEnabled('enableAdmin')
-    assertAdminRole(context.session.user.role)
-  },
   loader: () => fetchAdminTicketsAndInvites(),
-  head: () =>
-    seo('/admin/tickets', {
-      title: m.admin_tickets_title(),
-      description: m.admin_tickets_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => adminHead(adminRoutes.tickets),
   component: AdminTicketsPage,
 })
 
@@ -163,11 +153,7 @@ function AdminTicketsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">{m.admin_tickets_title()}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{m.admin_tickets_description()}</p>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"

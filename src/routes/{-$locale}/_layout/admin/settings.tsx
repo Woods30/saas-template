@@ -22,11 +22,10 @@ import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toast'
+import { adminRoutes } from '@/config/routes'
 import { fetchAdminSettings, saveAdminSettings } from '@/core/config/admin'
 import type { SettingsGroups, SettingsKey } from '@/core/config/settings'
-import { getRequestLocale } from '@/lib/locale'
-import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
+import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 
 /**
@@ -36,17 +35,7 @@ import { m } from '@/locale/paraglide/messages.js'
  * 密钥类配置（支付 / 邮件凭据）不在这里——它们仍只在环境变量中。
  */
 export const Route = createFileRoute('/{-$locale}/_layout/admin/settings')({
-  beforeLoad: ({ context }) => {
-    assertFeatureEnabled('enableAdmin')
-    assertAdminRole(context.session.user.role)
-  },
-  head: () =>
-    seo('/admin/settings', {
-      title: m.admin_settings_title(),
-      description: m.admin_settings_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => adminHead(adminRoutes.settings),
   component: AdminSettingsPage,
 })
 
@@ -126,11 +115,6 @@ function AdminSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight">{m.admin_settings_title()}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{m.admin_settings_description()}</p>
-      </div>
-
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}

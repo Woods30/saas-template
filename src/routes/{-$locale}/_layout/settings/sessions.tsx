@@ -15,23 +15,18 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
+import { settingsRoutes } from '@/config/routes'
 import { authClient } from '@/core/auth/client'
 import { fetchSessionsOverview } from '@/core/auth/session'
 import { getRequestLocale } from '@/lib/locale'
-import { seo } from '@/lib/seo'
+import { settingsHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/settings/sessions')({
   // 数据在路由加载阶段取好：客户端导航时内容随路由一起出现，不会先渲染空壳再补数据。
   // 服务端并行取列表与当前会话，避免「列表 + 当前 token」拆成两次往返。
   loader: () => fetchSessionsOverview(),
-  head: () =>
-    seo('/settings/sessions', {
-      title: m.settings_sessions_title(),
-      description: m.settings_sessions_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => settingsHead(settingsRoutes.sessions),
   component: SessionsPage,
 })
 
@@ -87,11 +82,6 @@ function SessionsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight">{m.settings_sessions_title()}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{m.settings_sessions_description()}</p>
-      </div>
-
       {/* 表格直接放在内容区，外面不再套 `Card`。
 
           与 API 密钥 / 用户管理同一套：`Table` 的滚动容器已由 globals.css 统一给了

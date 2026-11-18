@@ -36,11 +36,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { toast } from '@/components/ui/toast'
+import { settingsRoutes } from '@/config/routes'
 import { type ApiKeyEntry, fetchApiKeys } from '@/core/auth/api-keys'
 import { authClient } from '@/core/auth/client'
 import { getRequestLocale } from '@/lib/locale'
 import { assertFeatureEnabled } from '@/lib/module-access'
-import { seo } from '@/lib/seo'
+import { settingsHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/settings/api-keys')({
@@ -55,13 +56,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/settings/api-keys')({
       return { ok: false as const, keys: [] }
     }
   },
-  head: () =>
-    seo('/settings/api-keys', {
-      title: m.settings_api_keys_title(),
-      description: m.settings_api_keys_description(),
-      locale: getRequestLocale(),
-      noindex: true,
-    }),
+  head: () => settingsHead(settingsRoutes.apiKeys),
   component: ApiKeysPage,
 })
 
@@ -148,11 +143,6 @@ function ApiKeysPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight">{m.settings_api_keys_title()}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{m.settings_api_keys_description()}</p>
-      </div>
-
       {/* 不外套 `Card`：`Table` 的边框与圆角已由 globals.css 统一提供，套上会成双边框。 */}
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">

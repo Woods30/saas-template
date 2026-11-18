@@ -169,12 +169,12 @@ function renderPage() {
 }
 
 describe('核验队列页', () => {
-  it('队列页渲染标题，状态筛选默认落在待核验', async () => {
+  it('状态筛选默认落在待核验', async () => {
     stubLoaderData({ ok: true as const, page: { rows: [], total: 0 } })
     renderPage()
-    await waitFor(() => expect(screen.getByText('核销订单核验')).toBeInTheDocument())
+    // 页面标题由布局统一渲染（取自菜单配置），页面自己只负责筛选与列表。
     // 默认筛选是「等待人工核验」：URL 里没有 status 时由页面兜底。
-    expect(screen.getByRole('combobox')).toHaveTextContent('等待人工核验')
+    await waitFor(() => expect(screen.getByRole('combobox')).toHaveTextContent('等待人工核验'))
   })
 
   it('列表显示订单号、买家邮箱、应付金额与辅助说明', async () => {
