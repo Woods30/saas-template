@@ -233,7 +233,7 @@ describe('seo()', () => {
 
   it('noindex: true 追加 robots 指令', async () => {
     const { seoModule } = await loadModules(CUSTOM_BASE_URL)
-    const head = seoModule.seo('/dashboard/profile', { title: '个人资料', noindex: true })
+    const head = seoModule.seo('/settings/profile', { title: '个人资料', noindex: true })
     expect(head.meta).toContainEqual({ name: 'robots', content: 'noindex' })
 
     const open = seoModule.seo('/pricing', { title: '价格' })

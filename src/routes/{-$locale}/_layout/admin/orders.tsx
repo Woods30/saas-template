@@ -1,4 +1,4 @@
-import { IconRepeat } from '@tabler/icons-react'
+import { IconReceipt } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
 import { LocalDate } from '@/components/local-date'
 import { Badge } from '@/components/ui/badge'
@@ -25,40 +25,41 @@ import { assertAdminRole, assertFeatureEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 import {
-  type AdminSubscriptionItem,
-  type AdminSubscriptionStatusFilter,
-  fetchAdminSubscriptions,
+  type AdminOrder,
+  type AdminOrderStatusFilter,
+  fetchAdminOrders,
+  paymentStatusMessageKey,
   productNameForProductId,
-  subscriptionStatusMessageKey,
 } from '@/modules/subscriptions/service'
 
 /**
- * 管理台订阅列表。
+ * 管理台订单列表。
  *
- * 关注的是**续费**：什么时候到期、要不要取消、还剩多久。
- * 订单页看的是已经收过钱的事实，两边口径不同所以分成两页。
+ * 与营收页的分工：营收页给聚合口径（每个币种收了多少），这里给明细口径
+ * （哪一笔付过款、付了多少、退了多少）。
+ *
+ * 页码与状态筛选放 URL：刷新与分享链接能停在原页，也符合「URL 即状态」的路由数据流。
  */
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/subscriptions')({
+export const Route = createFileRoute('/{-$locale}/_layout/admin/orders')({
   beforeLoad: ({ context }) => {
     assertFeatureEnabled('enableAdmin')
     assertAdminRole(context.session.user.role)
   },
   // 属性声明为可选：`MakeRequiredSearchParams` 会把「必填的 search 参数」算进
   // 链接类型，导致侧栏里的 linkOptions 必须带 search，导航项就没法只写路径。
-  validateSearch: (search: Record<string, unknown>): AdminSubscriptionsSearch => {
+  validateSearch: (search: Record<string, unknown>): AdminOrdersSearch => {
     const parsed = Number(search.page)
     const page = Number.isInteger(parsed) && parsed > 0 ? parsed : 1
     const raw = search.status
     const status =
-      typeof raw === 'string' &&
-      SUBSCRIPTION_STATUSES.includes(raw as AdminSubscriptionStatusFilter)
-        ? (raw as AdminSubscriptionStatusFilter)
+      typeof raw === 'string' && ORDER_STATUSES.includes(raw as AdminOrderStatusFilter)
+        ? (raw as AdminOrderStatusFilter)
         : 'all'
     return { page, status }
   },
   loaderDeps: ({ search }) => ({ page: search.page ?? 1, status: search.status ?? 'all' }),
   loader: ({ deps }) =>
-    fetchAdminSubscriptions({
+    fetchAdminOrders({
       data: {
         status: deps.status,
         limit: PAGE_SIZE,
@@ -66,58 +67,57 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/subscr
       },
     }),
   head: () =>
-    seo('/dashboard/admin/subscriptions', {
-      title: m.admin_subscriptions_title(),
-      description: m.admin_subscriptions_description(),
+    seo('/admin/orders', {
+      title: m.admin_orders_title(),
+      description: m.admin_orders_description(),
       locale: getRequestLocale(),
       noindex: true,
     }),
-  component: AdminSubscriptionsPage,
+  component: AdminOrdersPage,
 })
 
-/** 每页订阅条数。 */
+/** 每页订单条数。 */
 const PAGE_SIZE = 20
 
 /** 可选的状态筛选值。 */
-const SUBSCRIPTION_STATUSES: AdminSubscriptionStatusFilter[] = [
+const ORDER_STATUSES: AdminOrderStatusFilter[] = [
   'all',
-  'active',
-  'trialing',
-  'past_due',
-  'canceled',
-  'incomplete',
+  'paid',
+  'failed',
+  'refunded',
+  'partially_refunded',
 ]
 
-interface AdminSubscriptionsSearch {
+interface AdminOrdersSearch {
   page?: number
-  status?: AdminSubscriptionStatusFilter
+  status?: AdminOrderStatusFilter
 }
 
-/** 筛选下拉的选项：渲染期构造，切换语言后选项才跟着更新。 */
+/** 筛选下拉的选项：必须渲染期构造，否则切换语言后选项仍是旧文案。 */
 function statusItems() {
   return [
-    { value: 'all', label: m.admin_subscriptions_filter_all() },
-    { value: 'active', label: m.admin_subscriptions_filter_active() },
-    { value: 'trialing', label: m.admin_subscriptions_filter_trialing() },
-    { value: 'past_due', label: m.admin_subscriptions_filter_past_due() },
-    { value: 'canceled', label: m.admin_subscriptions_filter_canceled() },
-    { value: 'incomplete', label: m.admin_subscriptions_filter_incomplete() },
+    { value: 'all', label: m.admin_orders_filter_all() },
+    { value: 'paid', label: m.admin_orders_filter_paid() },
+    { value: 'failed', label: m.admin_orders_filter_failed() },
+    { value: 'refunded', label: m.admin_orders_filter_refunded() },
+    { value: 'partially_refunded', label: m.admin_orders_filter_partially_refunded() },
   ]
 }
 
-function AdminSubscriptionsPage() {
+function AdminOrdersPage() {
   const data = Route.useLoaderData()
   const { page = 1, status = 'all' } = Route.useSearch()
   const navigate = Route.useNavigate()
   const locale = getRequestLocale()
   const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE))
+  // 页码可能因数据变少而越界（如订单被删），夹到有效范围而不是渲染空表。
   const currentPage = Math.min(page, totalPages)
 
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-2xl font-semibold tracking-tight">{m.admin_subscriptions_title()}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{m.admin_subscriptions_description()}</p>
+        <h2 className="text-2xl font-semibold tracking-tight">{m.admin_orders_title()}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{m.admin_orders_description()}</p>
       </header>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -127,18 +127,18 @@ function AdminSubscriptionsPage() {
             void navigate({
               search: (previous) => ({
                 ...previous,
-                status: value as AdminSubscriptionStatusFilter,
+                status: value as AdminOrderStatusFilter,
                 page: 1,
               }),
             })
           }
           items={statusItems()}
         >
-          <SelectTrigger size="sm" aria-label={m.admin_subscriptions_col_status()}>
+          <SelectTrigger size="sm" aria-label={m.admin_orders_col_status()}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {SUBSCRIPTION_STATUSES.map((value) => (
+            {ORDER_STATUSES.map((value) => (
               <SelectItem key={value} value={value}>
                 {statusItems().find((item) => item.value === value)?.label}
               </SelectItem>
@@ -147,70 +147,56 @@ function AdminSubscriptionsPage() {
         </Select>
       </div>
 
-      {data.subscriptions.length === 0 ? (
+      {data.orders.length === 0 ? (
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">
-              <IconRepeat aria-hidden />
+              <IconReceipt aria-hidden />
             </EmptyMedia>
-            <EmptyTitle>{m.admin_subscriptions_empty()}</EmptyTitle>
+            <EmptyTitle>{m.admin_orders_empty()}</EmptyTitle>
           </EmptyHeader>
         </Empty>
       ) : (
+        // 不套 `Card`：卡片自带 ring 边框，与 `Table` 自身的分隔线叠成双层外框。
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{m.admin_subscriptions_col_user()}</TableHead>
-              <TableHead>{m.admin_subscriptions_col_plan()}</TableHead>
-              <TableHead>{m.admin_subscriptions_col_status()}</TableHead>
-              <TableHead>{m.admin_subscriptions_col_amount()}</TableHead>
-              <TableHead className="hidden sm:table-cell">
-                {m.admin_subscriptions_col_interval()}
-              </TableHead>
-              <TableHead className="hidden lg:table-cell">
-                {m.admin_subscriptions_col_renews_at()}
-              </TableHead>
+              <TableHead>{m.admin_orders_col_user()}</TableHead>
+              <TableHead>{m.admin_orders_col_product()}</TableHead>
+              <TableHead>{m.admin_orders_col_amount()}</TableHead>
+              <TableHead>{m.admin_orders_col_refunded()}</TableHead>
+              <TableHead>{m.admin_orders_col_status()}</TableHead>
+              <TableHead className="hidden lg:table-cell">{m.admin_orders_col_paid_at()}</TableHead>
               <TableHead className="hidden xl:table-cell">
-                {m.admin_subscriptions_col_created_at()}
+                {m.admin_orders_col_created_at()}
               </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.subscriptions.map((subscription: AdminSubscriptionItem) => (
-              <TableRow key={subscription.id}>
+            {data.orders.map((order: AdminOrder) => (
+              <TableRow key={order.id}>
                 <TableCell className="max-w-[220px] truncate">
-                  {subscription.email || subscription.userId || '—'}
+                  {order.email || order.userId || '—'}
                 </TableCell>
                 <TableCell>
-                  {productNameForProductId(subscription.productId) ?? subscription.productId ?? '—'}
+                  {productNameForProductId(order.productId) ?? order.productId ?? '—'}
                 </TableCell>
+                <TableCell>{formatMoney(order.amount, order.currency, locale)}</TableCell>
                 <TableCell>
-                  <div className="flex flex-wrap items-center gap-1">
-                    <Badge variant={subscription.status === 'active' ? 'default' : 'secondary'}>
-                      {m[subscriptionStatusMessageKey(subscription.status)]()}
-                    </Badge>
-                    {subscription.cancelAtPeriodEnd && (
-                      <Badge variant="outline">{m.admin_revenue_cancel_at_period_end()}</Badge>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {subscription.amount !== null && subscription.currency
-                    ? formatMoney(subscription.amount, subscription.currency, locale)
+                  {order.refundedAmount > 0
+                    ? formatMoney(order.refundedAmount, order.currency, locale)
                     : '—'}
                 </TableCell>
-                <TableCell className="hidden sm:table-cell">
-                  {subscription.interval === 'month'
-                    ? m.settings_billing_interval_month()
-                    : subscription.interval === 'year'
-                      ? m.settings_billing_interval_year()
-                      : '—'}
+                <TableCell>
+                  <Badge variant={order.status === 'paid' ? 'default' : 'secondary'}>
+                    {m[paymentStatusMessageKey(order.status)]()}
+                  </Badge>
                 </TableCell>
                 <TableCell className="hidden lg:table-cell">
-                  <LocalDate value={subscription.currentPeriodEnd} locale={locale} />
+                  <LocalDate value={order.paidAt} locale={locale} />
                 </TableCell>
                 <TableCell className="hidden xl:table-cell">
-                  <LocalDate value={subscription.createdAt} locale={locale} />
+                  <LocalDate value={order.createdAt} locale={locale} />
                 </TableCell>
               </TableRow>
             ))}
@@ -221,7 +207,7 @@ function AdminSubscriptionsPage() {
       {data.total > 0 && (
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
-            {m.admin_subscriptions_page_status({ page: currentPage, total: totalPages })}
+            {m.admin_orders_page_status({ page: currentPage, total: totalPages })}
           </p>
           <div className="flex gap-2">
             <Button
@@ -234,7 +220,7 @@ function AdminSubscriptionsPage() {
                 })
               }
             >
-              {m.admin_subscriptions_page_prev()}
+              {m.admin_orders_page_prev()}
             </Button>
             <Button
               variant="outline"
@@ -246,7 +232,7 @@ function AdminSubscriptionsPage() {
                 })
               }
             >
-              {m.admin_subscriptions_page_next()}
+              {m.admin_orders_page_next()}
             </Button>
           </div>
         </div>

@@ -29,7 +29,7 @@ interface AdminAuditSearch {
   target?: string
 }
 
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/audit')({
+export const Route = createFileRoute('/{-$locale}/_layout/admin/audit')({
   beforeLoad: ({ context }) => {
     assertFeatureEnabled('enableAdmin')
     assertAdminRole(context.session.user.role)
@@ -56,7 +56,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/audit'
       },
     }),
   head: () =>
-    seo('/dashboard/admin/audit', {
+    seo('/admin/audit', {
       title: m.admin_audit_title(),
       description: m.admin_audit_description(),
       locale: getRequestLocale(),

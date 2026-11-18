@@ -55,9 +55,9 @@ async function signIn(page: Page, email: string): Promise<void> {
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await page.waitForURL((url) => url.pathname === '/zh' || url.pathname === '/')
   // session cookie 在客户端设置后要等 better-auth 的 session hook 读回来；
-  // 首页的「立即购买」在水合读到会话前渲染成跳登录的链接。进一次 dashboard
+  // 首页的「立即购买」在水合读到会话前渲染成跳登录的链接。进一次个人中心
   // 确认服务端已认得这个会话，再回首页就能稳定拿到按钮形态。
-  await page.goto('/zh/dashboard/profile')
+  await page.goto('/zh/settings/profile')
   await expect(page.getByRole('button', { name: /核销测试用户|repro|@example\.com/ })).toBeVisible({
     timeout: 15000,
   })
@@ -80,21 +80,21 @@ async function createOrder(page: Page): Promise<void> {
   for (let attempt = 0; ; attempt++) {
     await page.getByRole('button', { name: '立即购买' }).click({ noWaitAfter: true })
     const onDetail = await page
-      .waitForURL(/\/zh\/dashboard\/orders\/.+/, { timeout: 8000 })
+      .waitForURL(/\/zh\/settings\/orders\/.+/, { timeout: 8000 })
       .then(() => true)
       .catch(() => false)
     if (onDetail || attempt === 2) break
     if (!page.url().includes('/zh/#pricing')) await page.goto('/zh/#pricing')
   }
 
-  if (!/\/zh\/dashboard\/orders\/.+/.test(new URL(page.url()).pathname)) {
+  if (!/\/zh\/settings\/orders\/.+/.test(new URL(page.url()).pathname)) {
     // 导航没完成但订单可能已建好（dev server 冷编译会让响应悬挂）：去列表页
     // 等订单行出现，而不是立刻点一个还不存在的链接。
-    await page.goto('/zh/dashboard/orders')
+    await page.goto('/zh/settings/orders')
     await page.getByRole('link', { name: '查看详情' }).first().click({ timeout: 20000 })
   }
   await expect(page.getByTestId('payable-amount')).toBeVisible({ timeout: 15000 })
-  await expect(page).toHaveURL(/\/zh\/dashboard\/orders\/.+/)
+  await expect(page).toHaveURL(/\/zh\/settings\/orders\/.+/)
 }
 
 /** 读本地 D1 里订单行的 base_amount 与 fingerprint（尾数占位需要精确值）。 */
@@ -159,7 +159,7 @@ test.describe('Collection', () => {
     const adminContext = await browser.newContext()
     const adminPage = await adminContext.newPage()
     await login(adminPage, 'admin')
-    await adminPage.goto('/zh/dashboard/admin/collection-orders')
+    await adminPage.goto('/zh/admin/collection-orders')
     // goto 也可能撞上水合竞态渲染成用户页（快照证据：URL 在 admin 路由但内容
     // 是「订单详情」）。以管理台标题为准，没渲染出来就重新 goto。
     for (let attempt = 0; ; attempt++) {
@@ -170,7 +170,7 @@ test.describe('Collection', () => {
         .catch(() => false)
       if (rendered) break
       if (attempt === 2) throw new Error('管理台核验页始终未渲染')
-      await adminPage.goto('/zh/dashboard/admin/collection-orders')
+      await adminPage.goto('/zh/admin/collection-orders')
     }
     const payableText = await adminPage
       .getByText(/¥[\d,]+\.\d{2}/)
@@ -200,10 +200,10 @@ test.describe('Collection', () => {
 
     // 用户轮询（5 秒一次）拿到已结算。
     await expect(userPage.getByText('已到账').first()).toBeVisible({ timeout: 15000 })
-    await userPage.goto('/zh/dashboard/billing')
+    await userPage.goto('/zh/settings/billing')
     await expect(userPage.getByText('付款记录', { exact: true })).toBeVisible()
     await expect(userPage.getByText('还没有付款记录。')).toHaveCount(0)
-    await userPage.goto('/zh/dashboard/orders')
+    await userPage.goto('/zh/settings/orders')
     await expect(userPage.getByText('已到账').first()).toBeVisible()
 
     await userContext.close()
@@ -219,14 +219,14 @@ test.describe('Collection', () => {
     const otherContext = await browser.newContext()
     const otherPage = await otherContext.newPage()
     await login(otherPage)
-    await otherPage.goto(`/zh/dashboard/orders/${orderId}`)
+    await otherPage.goto(`/zh/settings/orders/${orderId}`)
     await expect(otherPage.getByText('订单不存在或不在你的账号下。')).toBeVisible()
     await otherContext.close()
 
     // 普通用户访问管理台被角色门禁拦下（404 与「页面不存在」同形，不泄漏门禁差异）。
     // 用 page.request 而非 request fixture：后者不共享浏览器 cookie，会以未登录
     // 身份被重定向到登录页，测不到角色门禁本身。
-    const response = await page.request.get('/zh/dashboard/admin/collection-orders')
+    const response = await page.request.get('/zh/admin/collection-orders')
     expect(response.status()).toBe(404)
   })
 

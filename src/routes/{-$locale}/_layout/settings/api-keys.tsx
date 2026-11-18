@@ -43,7 +43,7 @@ import { assertFeatureEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/api-keys')({
+export const Route = createFileRoute('/{-$locale}/_layout/settings/api-keys')({
   // 功能开关关闭时整页 404：与菜单项消失同源，路由本身始终保留。
   beforeLoad: () => assertFeatureEnabled('enableApiKeys'),
   // 数据在路由加载阶段取回：客户端导航时内容随路由一起出现，不会先渲染空壳再补数据。
@@ -56,7 +56,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/api-keys')({
     }
   },
   head: () =>
-    seo('/dashboard/api-keys', {
+    seo('/settings/api-keys', {
       title: m.settings_api_keys_title(),
       description: m.settings_api_keys_description(),
       locale: getRequestLocale(),

@@ -20,7 +20,7 @@ API keys let users issue their own calling credentials. Keys live in the `apikey
    features: { enableApiKeys: true },
    ```
 
-2. **Open the keys page.** It lives at `/dashboard/api-keys` and its entry sits in the account center sidebar. With the flag off, the page 404s and the whole `/api/auth/api-key/*` endpoint group 404s too (`src/routes/api/auth/$.ts`).
+2. **Open the keys page.** It lives at `/settings/api-keys` and its entry sits in the account center sidebar. With the flag off, the page 404s and the whole `/api/auth/api-key/*` endpoint group 404s too (`src/routes/api/auth/$.ts`).
 
 3. **Create.** Enter a name and pick an expiry → `authClient.apiKey.create({ name, expiresIn })`. The `key` in the response is **plaintext** and appears only in that one response; the page shows it once in a dialog and then it is gone. A user who did not save it has to delete the key and create a new one.
 
@@ -53,7 +53,7 @@ if (!result.valid) return new Response('Unauthorized', { status: 401 })
 | `keyExpiration.disableCustomExpiresTime` | `false` | When `true`, client values are ignored |
 | `keyExpiration.defaultExpiresIn` | `null` | Fallback when the client omits a value (in seconds); `null` means no expiry |
 
-Expiry only matters **at creation time**: the plugin converts it into an `expiresAt` timestamp, and the list reads that one timestamp, so there is no way to extend a key in the UI afterwards — delete it and create a new one. When you change the bounds, change `apiKey({ keyExpiration })` in `src/core/auth/auth.ts` and `EXPIRY_OPTIONS` in `src/routes/{-$locale}/_layout/dashboard/api-keys.tsx` together, or users can pick a value the server is bound to reject.
+Expiry only matters **at creation time**: the plugin converts it into an `expiresAt` timestamp, and the list reads that one timestamp, so there is no way to extend a key in the UI afterwards — delete it and create a new one. When you change the bounds, change `apiKey({ keyExpiration })` in `src/core/auth/auth.ts` and `EXPIRY_OPTIONS` in `src/routes/{-$locale}/_layout/settings/api-keys.tsx` together, or users can pick a value the server is bound to reject.
 
 ## Notes
 

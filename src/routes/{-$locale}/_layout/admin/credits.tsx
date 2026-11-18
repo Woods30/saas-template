@@ -45,7 +45,7 @@ import {
  * 手工调整一律走账本自己的发放 / 消费接口——另写一套改余额的 SQL 会绕开
  * 幂等闸与 FIFO 批次逻辑。
  */
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/credits')({
+export const Route = createFileRoute('/{-$locale}/_layout/admin/credits')({
   beforeLoad: ({ context }) => {
     assertFeatureEnabled('enableAdmin')
     assertAdminRole(context.session.user.role)
@@ -68,7 +68,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/credit
       },
     }),
   head: () =>
-    seo('/dashboard/admin/credits', {
+    seo('/admin/credits', {
       title: m.admin_credits_title(),
       description: m.admin_credits_description(),
       locale: getRequestLocale(),

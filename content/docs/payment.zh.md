@@ -43,14 +43,14 @@ provider 由 `websiteConfig.payment.provider` 选，可用环境变量 `VITE_PAY
 1. 买家在首页 `#pricing` 区块看到价格与购买按钮；该区块卖的是 `websiteConfig.landingOffer` 指向的那个商品与购买方式。想卖多套餐，改 `src/config/products.ts` 的套餐列表，并用 `src/components/sections/Pricing.tsx` 的 `Pricing` 组件渲染卡片（每个套餐内切换月付 / 年付 / 买断），把 `renderCta` 接到 `startCheckout` 上。
 2. 未登录会先跳登录页，登录后回到价格区再点一次购买。
 3. 客户端提交 `productId`、`offerId` 与回跳地址；服务端鉴权、限流、校验回跳地址同源，再按 provider 建托管结账会话。
-4. 浏览器跳到 provider 的付款页；付款完成回到 `/dashboard/billing?checkout=success`，取消回到发起购买的那一页。
+4. 浏览器跳到 provider 的付款页；付款完成回到 `/settings/billing?checkout=success`，取消回到发起购买的那一页。
 5. 权益由 provider 的 webhook 确认后写入——回跳页本身不发权益。
 
 一个账号最多保留一份**未终止**的订阅（`active`、`trialing`、`past_due`、`unpaid`、`paused`、`incomplete` 都算）。已安排期末取消的订阅在到期前仍占名额。一次性商品可以重复买，也能与订阅并存，不会取消或接管已有订阅。
 
 ## 账单页
 
-`/dashboard/billing` 显示：
+`/settings/billing` 显示：
 
 - 当前订阅：套餐名、状态、金额与周期、续费或结束日期；
 - 历史订阅；

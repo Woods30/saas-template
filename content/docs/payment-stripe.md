@@ -55,7 +55,7 @@ an invalid signature, and 500 when processing fails — Stripe retries the latte
 
 - Payment: the buy button in the home page's `#pricing` section → the server creates a Checkout
   Session → the browser goes to Stripe's hosted payment page → a completed payment returns to
-  `/dashboard/billing`.
+  `/settings/billing`.
 - Management: the "Manage subscription" button on the billing page → Stripe Customer Portal, where
   renewal cancellation, payment methods, and invoices live. Whether the portal offers plan
   switching is decided by your Stripe dashboard configuration.

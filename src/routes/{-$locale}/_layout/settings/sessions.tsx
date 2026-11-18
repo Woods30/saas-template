@@ -21,12 +21,12 @@ import { getRequestLocale } from '@/lib/locale'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/sessions')({
+export const Route = createFileRoute('/{-$locale}/_layout/settings/sessions')({
   // 数据在路由加载阶段取好：客户端导航时内容随路由一起出现，不会先渲染空壳再补数据。
   // 服务端并行取列表与当前会话，避免「列表 + 当前 token」拆成两次往返。
   loader: () => fetchSessionsOverview(),
   head: () =>
-    seo('/dashboard/sessions', {
+    seo('/settings/sessions', {
       title: m.settings_sessions_title(),
       description: m.settings_sessions_description(),
       locale: getRequestLocale(),

@@ -51,14 +51,12 @@ export function UserMenu({ guestFallback }: UserMenuProps) {
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem render={<Link to="/{-$locale}/dashboard/profile" params={{ locale }} />}>
+        <DropdownMenuItem render={<Link to="/{-$locale}/settings/profile" params={{ locale }} />}>
           <IconSettings size={16} aria-hidden />
           {m.settings_user_menu()}
         </DropdownMenuItem>
         {isAdmin && (
-          <DropdownMenuItem
-            render={<Link to="/{-$locale}/dashboard/admin/revenue" params={{ locale }} />}
-          >
+          <DropdownMenuItem render={<Link to="/{-$locale}/admin/revenue" params={{ locale }} />}>
             <IconShieldLock size={16} aria-hidden />
             {m.admin_settings_feature_admin()}
           </DropdownMenuItem>

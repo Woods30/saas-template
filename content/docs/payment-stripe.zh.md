@@ -43,7 +43,7 @@ Stripe 侧的金额、订阅与付款页面都在 Stripe 平台上，站内只�
 
 ## 买家入口
 
-- 付款：首页 `#pricing` 的购买按钮 → 服务端建 Checkout Session → 跳转 Stripe 托管的付款页 → 付款完成回到 `/dashboard/billing`。
+- 付款：首页 `#pricing` 的购买按钮 → 服务端建 Checkout Session → 跳转 Stripe 托管的付款页 → 付款完成回到 `/settings/billing`。
 - 管理：账单页的「管理订阅」按钮 → Stripe Customer Portal，取消续费、换支付方式、下发票都在那里。Portal 里能不能切换套餐由 Stripe 后台配置决定。
 
 ## 价格目录与改价

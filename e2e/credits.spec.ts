@@ -59,7 +59,7 @@ test.describe('Admin 积分', () => {
     await page.getByRole('button', { name: '登录', exact: true }).click()
     await page.waitForURL((url) => url.pathname === '/zh' || url.pathname === '/')
 
-    await page.goto('/zh/dashboard/admin/credits')
+    await page.goto('/zh/admin/credits')
     // 非管理员被路由守卫挡下：页面不存在，而不是「有页面但空」。
     await expect(page.getByRole('heading', { name: '积分' })).toHaveCount(0)
   })
@@ -68,7 +68,7 @@ test.describe('Admin 积分', () => {
     await loginAsAdmin(page)
     const target = await seedTarget()
 
-    await page.goto('/zh/dashboard/admin/credits')
+    await page.goto('/zh/admin/credits')
     await waitForHydration(page)
     await expect(page.getByRole('heading', { name: '积分' })).toBeVisible({ timeout: 15000 })
 
@@ -99,7 +99,7 @@ test.describe('Admin 积分', () => {
     await loginAsAdmin(page)
     const target = await seedTarget()
 
-    await page.goto('/zh/dashboard/admin/credits')
+    await page.goto('/zh/admin/credits')
     await waitForHydration(page)
     await expect(page.getByRole('heading', { name: '积分' })).toBeVisible({ timeout: 15000 })
     await page.getByRole('textbox', { name: '按邮箱搜索' }).fill(target)
@@ -122,23 +122,23 @@ test.describe('Admin 订单与订阅', () => {
   test('管理员能看到订单页与订阅页', async ({ page }) => {
     await loginAsAdmin(page)
 
-    await page.goto('/zh/dashboard/admin/orders')
+    await page.goto('/zh/admin/orders')
     await waitForHydration(page)
     await expect(page.getByRole('heading', { name: '订单' })).toBeVisible({ timeout: 15000 })
 
-    await page.goto('/zh/dashboard/admin/subscriptions')
+    await page.goto('/zh/admin/subscriptions')
     await waitForHydration(page)
     await expect(page.getByRole('heading', { name: '订阅' })).toBeVisible({ timeout: 15000 })
 
     // 独立管理台侧栏入口在管理台路由下展示；个人中心侧栏只展示个人菜单与「管理后台」切换入口。
     // 用 href 而非 link 名称定位：面包屑末级也渲染成 `role="link"`，按名称会撞上两处。
-    await expect(page.locator('a[href="/zh/dashboard/admin/orders"]')).toBeVisible()
-    await expect(page.locator('a[href="/zh/dashboard/admin/subscriptions"]')).toBeVisible()
-    await expect(page.locator('a[href="/zh/dashboard/admin/credits"]')).toBeVisible()
+    await expect(page.locator('a[href="/zh/admin/orders"]')).toBeVisible()
+    await expect(page.locator('a[href="/zh/admin/subscriptions"]')).toBeVisible()
+    await expect(page.locator('a[href="/zh/admin/credits"]')).toBeVisible()
 
-    await page.goto('/zh/dashboard/profile')
+    await page.goto('/zh/settings/profile')
     await waitForHydration(page)
-    await expect(page.locator('a[href="/zh/dashboard/admin/orders"]')).toHaveCount(0)
+    await expect(page.locator('a[href="/zh/admin/orders"]')).toHaveCount(0)
     await expect(page.getByRole('link', { name: '管理后台', exact: true })).toBeVisible()
   })
 })

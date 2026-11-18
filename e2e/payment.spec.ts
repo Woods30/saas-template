@@ -42,13 +42,13 @@ test.describe('Payment', () => {
     test.skip(!(await configured(request)), '支付未配置')
     const email = await login(page)
     seed(email)
-    await page.goto('/zh/dashboard/billing')
+    await page.goto('/zh/settings/billing')
     await expect(page.getByRole('button', { name: '管理订阅' })).toBeVisible()
     const response = await page.request.post('/api/payment', {
       data: {
         productId: 'pro',
         offerId: 'monthly',
-        successUrl: `${new URL(page.url()).origin}/zh/dashboard/billing`,
+        successUrl: `${new URL(page.url()).origin}/zh/settings/billing`,
         cancelUrl: `${new URL(page.url()).origin}/zh/pricing`,
       },
     })
@@ -58,7 +58,7 @@ test.describe('Payment', () => {
     test.skip(!(await configured(request)), '支付未配置')
     const email = await login(page)
     seed(email, true)
-    await page.goto('/zh/dashboard/billing')
+    await page.goto('/zh/settings/billing')
     await expect(page.getByText('专业版', { exact: true }).first()).toBeVisible()
     await expect(page.getByText('生效中', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: '管理订阅' })).toBeVisible()
@@ -80,7 +80,7 @@ test.describe('Payment', () => {
       {
         productId: 'pro',
         offerId: '__proto__',
-        successUrl: `${origin}/zh/dashboard/billing`,
+        successUrl: `${origin}/zh/settings/billing`,
         cancelUrl: `${origin}/zh/pricing`,
       },
     ]) {
@@ -89,7 +89,7 @@ test.describe('Payment', () => {
     expect(
       (
         await page.request.delete('/api/payment', {
-          data: { customerId: 'cus_other', returnUrl: `${origin}/zh/dashboard/billing` },
+          data: { customerId: 'cus_other', returnUrl: `${origin}/zh/settings/billing` },
         })
       ).status(),
     ).toBe(404)

@@ -310,7 +310,7 @@ describe('LandingPage', () => {
       )
       await waitFor(() => expect(router.navigate).toHaveBeenCalled())
       expect(router.navigate).toHaveBeenCalledWith({
-        to: '/{-$locale}/dashboard/orders/$orderId',
+        to: '/{-$locale}/settings/orders/$orderId',
         params: { locale: 'zh', orderId: 'ord_1' },
       })
       expect(request).not.toHaveBeenCalled()

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { MenuItem, MenuLinkItem } from '@/config/navigation'
-import { getSettingsSectionMeta, getSettingsSections } from '@/config/settings'
+import { getAdminSidebarMenu, getSettingsSectionMeta, getSettingsSections } from '@/config/settings'
 import { createWebsiteConfig } from '@/config/website'
 import { parsePublicEnv } from '@/core/env/public'
 import { getLocale, overwriteGetLocale } from '@/locale/paraglide/runtime.js'
@@ -51,24 +51,20 @@ function groupIds(items: readonly MenuItem[]): string[] {
 }
 
 describe('个人中心导航分组', () => {
-  it('返回两个顶层 group：personal 与 admin', () => {
+  it('只返回 personal 一个顶层 group，管理菜单不混进来', () => {
     const config = createConfig({ admin: true })
-    expect(groupIds(getSettingsSections('en', ctx(config, 'admin')))).toEqual(['personal', 'admin'])
+    expect(groupIds(getSettingsSections('en', ctx(config, 'admin')))).toEqual(['personal'])
   })
 
   it('模块关闭时 personal 组不含「通知偏好」，其余三项恒在', () => {
     const config = createConfig({ newsletter: false })
-    const personal = leafItems(getSettingsSections('en', ctx(config)))
-      .filter((item) => item.id !== 'admin')
-      .map((item) => item.id)
+    const personal = leafItems(getSettingsSections('en', ctx(config))).map((item) => item.id)
     expect(personal).toEqual(['profile', 'security', 'sessions'])
   })
 
   it('newsletter 开启时「通知偏好」出现在 personal 组末尾', () => {
     const config = createConfig({ newsletter: true })
-    const personal = leafItems(getSettingsSections('en', ctx(config)))
-      .filter((item) => item.id !== 'admin')
-      .map((item) => item.id)
+    const personal = leafItems(getSettingsSections('en', ctx(config))).map((item) => item.id)
     expect(personal).toEqual(['profile', 'security', 'sessions', 'notifications'])
   })
 
@@ -82,7 +78,7 @@ describe('个人中心导航分组', () => {
     expect(apiKeys?.destination).toEqual({
       kind: 'internal',
       options: expect.objectContaining({
-        to: '/{-$locale}/dashboard/api-keys',
+        to: '/{-$locale}/settings/api-keys',
         params: { locale: 'en' },
       }),
     })
@@ -105,7 +101,7 @@ describe('个人中心导航分组', () => {
     expect(billing?.destination).toEqual({
       kind: 'internal',
       options: expect.objectContaining({
-        to: '/{-$locale}/dashboard/billing',
+        to: '/{-$locale}/settings/billing',
         params: { locale: 'en' },
       }),
     })
@@ -124,14 +120,14 @@ describe('个人中心导航分组', () => {
       item.destination.kind === 'internal' ? item.destination.options : null,
     )
     expect(destinations).toEqual([
-      expect.objectContaining({ to: '/{-$locale}/dashboard/profile', params: { locale: 'en' } }),
-      expect.objectContaining({ to: '/{-$locale}/dashboard/security', params: { locale: 'en' } }),
-      expect.objectContaining({ to: '/{-$locale}/dashboard/sessions', params: { locale: 'en' } }),
+      expect.objectContaining({ to: '/{-$locale}/settings/profile', params: { locale: 'en' } }),
+      expect.objectContaining({ to: '/{-$locale}/settings/security', params: { locale: 'en' } }),
+      expect.objectContaining({ to: '/{-$locale}/settings/sessions', params: { locale: 'en' } }),
       expect.objectContaining({
-        to: '/{-$locale}/dashboard/notifications',
+        to: '/{-$locale}/settings/notifications',
         params: { locale: 'en' },
       }),
-      expect.objectContaining({ to: '/{-$locale}/dashboard/api-keys', params: { locale: 'en' } }),
+      expect.objectContaining({ to: '/{-$locale}/settings/api-keys', params: { locale: 'en' } }),
     ])
   })
 
@@ -153,44 +149,53 @@ describe('个人中心导航分组', () => {
   })
 })
 
-describe('admin 组可见性', () => {
-  it('admin 角色 + enableAdmin 开启时出现「用户管理」，指向 /dashboard/admin/users', () => {
-    const config = createConfig({ admin: true })
-    const admin = leafItems(getSettingsSections('en', ctx(config, 'admin'))).find(
-      (item) => item.id === 'admin',
-    )
-    expect(admin).toBeDefined()
-    expect(admin?.visibility).toEqual(
-      expect.objectContaining({ roles: ['admin'], feature: 'enableAdmin' }),
-    )
-    expect(admin?.destination).toEqual({
+describe('管理台侧栏菜单', () => {
+  it('admin 角色 + enableAdmin 开启时返回树形菜单', () => {
+    const config = createConfig({ admin: true, payment: true })
+    const menu = getAdminSidebarMenu('en', ctx(config, 'admin'))
+    expect(menu).not.toBeNull()
+    expect(menu?.collapsibleGroups.map((group) => group.id)).toEqual(['rbac', 'billing', 'content'])
+    expect(menu?.overviewItem.destination).toEqual({
       kind: 'internal',
       options: expect.objectContaining({
-        to: '/{-$locale}/dashboard/admin/users',
+        to: '/{-$locale}/admin/revenue',
+        params: { locale: 'en' },
+      }),
+    })
+    expect(menu?.footerItems.map((item) => item.id)).toEqual(['admin-settings', 'personal-switch'])
+    expect(menu?.footerItems[1]?.destination).toEqual({
+      kind: 'internal',
+      options: expect.objectContaining({
+        to: '/{-$locale}/settings/profile',
         params: { locale: 'en' },
       }),
     })
   })
 
-  it('非 admin 角色不出现该项（即使 enableAdmin 开启）', () => {
-    const config = createConfig({ admin: true })
-    for (const role of ['user', 'viewer', undefined]) {
-      expect(
-        leafItems(getSettingsSections('en', ctx(config, role))).map((item) => item.id),
-      ).not.toContain('admin')
-    }
+  it('非 admin 角色或 enableAdmin 关闭时返回 null', () => {
+    const enabled = createConfig({ admin: true })
+    expect(getAdminSidebarMenu('en', ctx(enabled, 'user'))).toBeNull()
+    expect(getAdminSidebarMenu('en', ctx(enabled))).toBeNull()
+    const disabled = createConfig({ admin: false })
+    expect(getAdminSidebarMenu('en', ctx(disabled, 'admin'))).toBeNull()
   })
 
-  it('enableAdmin 关闭时不出现该项（即使角色是 admin）', () => {
-    const config = createConfig({ admin: false })
+  it('账单分组按 collection 模块开关决定是否含核销订单', () => {
+    const config = createConfig({ admin: true, payment: true })
+    const withCollection = getAdminSidebarMenu(
+      'en',
+      ctx({ ...config, collection: { ...config.collection, enabled: true } }, 'admin'),
+    )
     expect(
-      leafItems(getSettingsSections('en', ctx(config, 'admin'))).map((item) => item.id),
-    ).not.toContain('admin')
-  })
+      withCollection?.collapsibleGroups
+        .find((group) => group.id === 'billing')
+        ?.items.map((item) => item.id),
+    ).toContain('admin-collection-orders')
 
-  it('admin 组被整体过滤时，顶层不再残留空组', () => {
-    const config = createConfig({ admin: true })
-    expect(groupIds(getSettingsSections('en', ctx(config, 'user')))).toEqual(['personal'])
+    const menu = getAdminSidebarMenu('en', ctx(config, 'admin'))
+    expect(
+      menu?.collapsibleGroups.find((group) => group.id === 'billing')?.items.map((item) => item.id),
+    ).not.toContain('admin-collection-orders')
   })
 })
 

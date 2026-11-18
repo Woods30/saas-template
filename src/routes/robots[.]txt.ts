@@ -34,7 +34,7 @@ export const Route = createFileRoute('/robots.txt')({
         const body = `User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /dashboard/
+Disallow: /settings/
 Disallow: /admin/
 
 # AI 抓取器：检索与训练都收录。

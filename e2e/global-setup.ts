@@ -160,10 +160,10 @@ const WARMUP_PATHS = [
   '/zh/auth/login',
   '/zh/auth/register',
   '/docs/getting-started',
-  '/zh/dashboard/profile',
-  '/zh/dashboard/sessions',
+  '/zh/settings/profile',
+  '/zh/settings/sessions',
   '/zh/pricing',
-  '/zh/dashboard/billing',
+  '/zh/settings/billing',
 ]
 
 /**

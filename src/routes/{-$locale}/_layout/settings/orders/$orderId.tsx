@@ -41,7 +41,7 @@ import { collectionOrderStatusMessageKey } from '../orders'
  * - **「我已支付」只是申报**：申报成功进入待核验，页面绝不自行显示「已到账」——
  *   到账是管理员核验后由轮询拿回的服务端状态。
  */
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/orders/$orderId')({
+export const Route = createFileRoute('/{-$locale}/_layout/settings/orders/$orderId')({
   beforeLoad: () => assertPageEnabled('collection'),
   loader: async ({ params }) => {
     try {
@@ -74,7 +74,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/orders/$orde
     }
   },
   head: () =>
-    seo('/dashboard/orders', {
+    seo('/settings/orders', {
       title: m['collection.order_detail_title'](),
       description: m['collection.order_detail_description'](),
       locale: getRequestLocale(),
@@ -225,7 +225,7 @@ function OrderDetailPage() {
           // `nativeButton={false}`：Base UI 的 Button 默认渲染 <button>，换成 <a>
           // 后必须关掉，否则开发环境会警告「丢了原生按钮语义」。
           nativeButton={false}
-          render={<Link to="/{-$locale}/dashboard/orders" params={{ locale }} />}
+          render={<Link to="/{-$locale}/settings/orders" params={{ locale }} />}
         >
           {m['collection.order_back_to_list']()}
         </Button>

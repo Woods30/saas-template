@@ -92,7 +92,7 @@ export type MenuLinkItem = Common &
       | {
           kind: 'internal'
           // 不用 `getPublicLinkOptions` 的返回类型：那是公共导航的封闭联合，
-          // `/dashboard/*` 等站内链接不在其中。
+          // `/settings/*` 等站内链接不在其中。
           options: LinkOptions
         }
       | { kind: 'external'; href: string; newTab: boolean }

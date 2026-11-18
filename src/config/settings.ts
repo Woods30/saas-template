@@ -58,10 +58,11 @@ export type SettingsSection =
   | 'admin/audit'
 
 /**
- * 个人中心侧边栏的导航项工厂。
+ * 个人中心（`/settings/*`）侧边栏的导航项工厂。
  *
- * 文案在**调用时**用 `m.*()` 求值以跟随请求语言；门禁交给 `filterMenuItems`，
- * 空分组会被摘掉，因此非管理员不会看到一个空标题。
+ * 只描述个人菜单：管理台是另一棵路由树，菜单由 `getAdminSidebarMenu` 单独给出，
+ * 不再塞进这里靠角色过滤。文案在**调用时**用 `m.*()` 求值以跟随请求语言；
+ * 门禁交给 `filterMenuItems`，空分组会被摘掉。
  */
 export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[] {
   const items: readonly MenuItem[] = [
@@ -77,7 +78,7 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
           icon: IconUser,
           destination: {
             kind: 'internal',
-            options: linkOptions({ to: '/{-$locale}/dashboard/profile', params: { locale } }),
+            options: linkOptions({ to: '/{-$locale}/settings/profile', params: { locale } }),
           },
         },
         {
@@ -87,7 +88,7 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
           icon: IconShieldLock,
           destination: {
             kind: 'internal',
-            options: linkOptions({ to: '/{-$locale}/dashboard/security', params: { locale } }),
+            options: linkOptions({ to: '/{-$locale}/settings/security', params: { locale } }),
           },
         },
         {
@@ -97,7 +98,7 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
           icon: IconDeviceLaptop,
           destination: {
             kind: 'internal',
-            options: linkOptions({ to: '/{-$locale}/dashboard/sessions', params: { locale } }),
+            options: linkOptions({ to: '/{-$locale}/settings/sessions', params: { locale } }),
           },
         },
         {
@@ -108,7 +109,7 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
           visibility: { module: 'newsletter' },
           destination: {
             kind: 'internal',
-            options: linkOptions({ to: '/{-$locale}/dashboard/notifications', params: { locale } }),
+            options: linkOptions({ to: '/{-$locale}/settings/notifications', params: { locale } }),
           },
         },
         {
@@ -120,7 +121,7 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
           visibility: { module: 'payment' },
           destination: {
             kind: 'internal',
-            options: linkOptions({ to: '/{-$locale}/dashboard/billing', params: { locale } }),
+            options: linkOptions({ to: '/{-$locale}/settings/billing', params: { locale } }),
           },
         },
         {
@@ -132,7 +133,7 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
           visibility: { module: 'collection' },
           destination: {
             kind: 'internal',
-            options: linkOptions({ to: '/{-$locale}/dashboard/orders', params: { locale } }),
+            options: linkOptions({ to: '/{-$locale}/settings/orders', params: { locale } }),
           },
         },
         {
@@ -144,180 +145,7 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
           visibility: { feature: 'enableApiKeys' },
           destination: {
             kind: 'internal',
-            options: linkOptions({ to: '/{-$locale}/dashboard/api-keys', params: { locale } }),
-          },
-        },
-      ],
-    },
-    {
-      kind: 'group',
-      id: 'admin',
-      title: m.settings_group_admin(),
-      items: [
-        {
-          kind: 'link',
-          id: 'admin',
-          title: m.settings_nav_admin(),
-          icon: IconUsers,
-          // 角色 + 功能开关双重约束：两者都满足才显示。
-          visibility: { roles: ['admin'], feature: 'enableAdmin' },
-          destination: {
-            kind: 'internal',
-            options: linkOptions({ to: '/{-$locale}/dashboard/admin/users', params: { locale } }),
-          },
-        },
-        {
-          kind: 'link',
-          id: 'admin-settings',
-          title: m.settings_nav_admin_settings(),
-          icon: IconSettings,
-          // 与用户管理同一套约束：角色 + 功能开关都满足才显示。
-          visibility: { roles: ['admin'], feature: 'enableAdmin' },
-          destination: {
-            kind: 'internal',
-            options: linkOptions({
-              to: '/{-$locale}/dashboard/admin/settings',
-              params: { locale },
-            }),
-          },
-        },
-        {
-          kind: 'link',
-          id: 'admin-revenue',
-          title: m.settings_nav_admin_revenue(),
-          icon: IconChartBar,
-          // 与用户管理同一套约束：角色 + 功能开关都满足才显示。
-          visibility: { roles: ['admin'], feature: 'enableAdmin' },
-          destination: {
-            kind: 'internal',
-            options: linkOptions({ to: '/{-$locale}/dashboard/admin/revenue', params: { locale } }),
-          },
-        },
-        {
-          kind: 'link',
-          id: 'admin-orders',
-          title: m.settings_nav_admin_orders(),
-          icon: IconReceipt,
-          // 与用户管理同一套约束：角色 + 功能开关都满足才显示。
-          visibility: { roles: ['admin'], feature: 'enableAdmin' },
-          destination: {
-            kind: 'internal',
-            options: linkOptions({ to: '/{-$locale}/dashboard/admin/orders', params: { locale } }),
-          },
-        },
-        {
-          kind: 'link',
-          id: 'admin-subscriptions',
-          title: m.settings_nav_admin_subscriptions(),
-          icon: IconRepeat,
-          // 与用户管理同一套约束：角色 + 功能开关都满足才显示。
-          visibility: { roles: ['admin'], feature: 'enableAdmin' },
-          destination: {
-            kind: 'internal',
-            options: linkOptions({
-              to: '/{-$locale}/dashboard/admin/subscriptions',
-              params: { locale },
-            }),
-          },
-        },
-        {
-          kind: 'link',
-          id: 'admin-collection-orders',
-          title: m['collection_admin.nav_orders'](),
-          icon: IconScan,
-          // 核销队列只对管理员可见，且核销模块开着才显示。
-          visibility: { roles: ['admin'], feature: 'enableAdmin', module: 'collection' },
-          destination: {
-            kind: 'internal',
-            options: linkOptions({
-              to: '/{-$locale}/dashboard/admin/collection-orders',
-              params: { locale },
-            }),
-          },
-        },
-        {
-          kind: 'link',
-          id: 'admin-credits',
-          title: m.settings_nav_admin_credits(),
-          icon: IconCoins,
-          // 与用户管理同一套约束：角色 + 功能开关都满足才显示。
-          visibility: { roles: ['admin'], feature: 'enableAdmin' },
-          destination: {
-            kind: 'internal',
-            options: linkOptions({
-              to: '/{-$locale}/dashboard/admin/credits',
-              params: { locale },
-            }),
-          },
-        },
-        {
-          kind: 'link',
-          id: 'admin-roles',
-          title: m.settings_nav_admin_roles(),
-          icon: IconShieldLock,
-          visibility: { roles: ['admin'], feature: 'enableAdmin' },
-          destination: {
-            kind: 'internal',
-            options: linkOptions({
-              to: '/{-$locale}/dashboard/admin/roles',
-              params: { locale },
-            }),
-          },
-        },
-        {
-          kind: 'link',
-          id: 'admin-tasks',
-          title: m.settings_nav_admin_tasks(),
-          icon: IconSparkles,
-          visibility: { roles: ['admin'], feature: 'enableAdmin' },
-          destination: {
-            kind: 'internal',
-            options: linkOptions({
-              to: '/{-$locale}/dashboard/admin/tasks',
-              params: { locale },
-            }),
-          },
-        },
-        {
-          kind: 'link',
-          id: 'admin-content',
-          title: m.settings_nav_admin_content(),
-          icon: IconFileText,
-          visibility: { roles: ['admin'], feature: 'enableAdmin' },
-          destination: {
-            kind: 'internal',
-            options: linkOptions({
-              to: '/{-$locale}/dashboard/admin/content',
-              params: { locale },
-            }),
-          },
-        },
-        {
-          kind: 'link',
-          id: 'admin-tickets',
-          title: m.settings_nav_admin_tickets(),
-          icon: IconMessage2,
-          visibility: { roles: ['admin'], feature: 'enableAdmin' },
-          destination: {
-            kind: 'internal',
-            options: linkOptions({
-              to: '/{-$locale}/dashboard/admin/tickets',
-              params: { locale },
-            }),
-          },
-        },
-        {
-          kind: 'link',
-          id: 'admin-audit',
-          title: m.settings_nav_admin_audit(),
-          icon: IconClipboardList,
-          visibility: { roles: ['admin'], feature: 'enableAdmin' },
-          destination: {
-            kind: 'internal',
-            options: linkOptions({
-              to: '/{-$locale}/dashboard/admin/audit',
-              params: { locale },
-            }),
+            options: linkOptions({ to: '/{-$locale}/settings/api-keys', params: { locale } }),
           },
         },
       ],
@@ -327,7 +155,7 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
 }
 
 /**
- * 独立管理台（`/dashboard/admin/*`）的树形侧栏导航。
+ * 独立管理台（`/admin/*`）的树形侧栏导航。
  *
  * 对齐 ShipAny 管理台侧栏结构：
  * - 顶部单列「营收与订阅」（概览）
@@ -346,7 +174,7 @@ export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSide
     icon: IconChartBar,
     destination: {
       kind: 'internal',
-      options: linkOptions({ to: '/{-$locale}/dashboard/admin/revenue', params: { locale } }),
+      options: linkOptions({ to: '/{-$locale}/admin/revenue', params: { locale } }),
     },
   }
 
@@ -358,7 +186,7 @@ export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSide
       icon: IconUsers,
       destination: {
         kind: 'internal',
-        options: linkOptions({ to: '/{-$locale}/dashboard/admin/users', params: { locale } }),
+        options: linkOptions({ to: '/{-$locale}/admin/users', params: { locale } }),
       },
     },
     {
@@ -368,7 +196,7 @@ export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSide
       icon: IconShieldLock,
       destination: {
         kind: 'internal',
-        options: linkOptions({ to: '/{-$locale}/dashboard/admin/roles', params: { locale } }),
+        options: linkOptions({ to: '/{-$locale}/admin/roles', params: { locale } }),
       },
     },
     {
@@ -378,7 +206,7 @@ export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSide
       icon: IconClipboardList,
       destination: {
         kind: 'internal',
-        options: linkOptions({ to: '/{-$locale}/dashboard/admin/audit', params: { locale } }),
+        options: linkOptions({ to: '/{-$locale}/admin/audit', params: { locale } }),
       },
     },
   ]
@@ -391,7 +219,7 @@ export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSide
       icon: IconReceipt,
       destination: {
         kind: 'internal',
-        options: linkOptions({ to: '/{-$locale}/dashboard/admin/orders', params: { locale } }),
+        options: linkOptions({ to: '/{-$locale}/admin/orders', params: { locale } }),
       },
     },
     {
@@ -402,7 +230,7 @@ export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSide
       destination: {
         kind: 'internal',
         options: linkOptions({
-          to: '/{-$locale}/dashboard/admin/subscriptions',
+          to: '/{-$locale}/admin/subscriptions',
           params: { locale },
         }),
       },
@@ -417,7 +245,7 @@ export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSide
             destination: {
               kind: 'internal' as const,
               options: linkOptions({
-                to: '/{-$locale}/dashboard/admin/collection-orders',
+                to: '/{-$locale}/admin/collection-orders',
                 params: { locale },
               }),
             },
@@ -431,7 +259,7 @@ export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSide
       icon: IconCoins,
       destination: {
         kind: 'internal',
-        options: linkOptions({ to: '/{-$locale}/dashboard/admin/credits', params: { locale } }),
+        options: linkOptions({ to: '/{-$locale}/admin/credits', params: { locale } }),
       },
     },
   ]
@@ -444,7 +272,7 @@ export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSide
       icon: IconFileText,
       destination: {
         kind: 'internal',
-        options: linkOptions({ to: '/{-$locale}/dashboard/admin/content', params: { locale } }),
+        options: linkOptions({ to: '/{-$locale}/admin/content', params: { locale } }),
       },
     },
     {
@@ -454,7 +282,7 @@ export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSide
       icon: IconMessage2,
       destination: {
         kind: 'internal',
-        options: linkOptions({ to: '/{-$locale}/dashboard/admin/tickets', params: { locale } }),
+        options: linkOptions({ to: '/{-$locale}/admin/tickets', params: { locale } }),
       },
     },
     {
@@ -464,7 +292,7 @@ export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSide
       icon: IconSparkles,
       destination: {
         kind: 'internal',
-        options: linkOptions({ to: '/{-$locale}/dashboard/admin/tasks', params: { locale } }),
+        options: linkOptions({ to: '/{-$locale}/admin/tasks', params: { locale } }),
       },
     },
   ]
@@ -477,7 +305,7 @@ export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSide
       icon: IconSettings,
       destination: {
         kind: 'internal',
-        options: linkOptions({ to: '/{-$locale}/dashboard/admin/settings', params: { locale } }),
+        options: linkOptions({ to: '/{-$locale}/admin/settings', params: { locale } }),
       },
     },
     {
@@ -487,7 +315,7 @@ export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSide
       icon: IconUser,
       destination: {
         kind: 'internal',
-        options: linkOptions({ to: '/{-$locale}/dashboard/profile', params: { locale } }),
+        options: linkOptions({ to: '/{-$locale}/settings/profile', params: { locale } }),
       },
     },
   ]

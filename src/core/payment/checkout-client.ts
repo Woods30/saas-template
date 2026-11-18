@@ -32,7 +32,7 @@ export async function startCheckout(params: StartCheckoutParams): Promise<Checko
         productId: params.productId,
         offerId: params.offerId,
         locale: params.locale,
-        successUrl: `${base}/${params.locale}/dashboard/billing?checkout=success`,
+        successUrl: `${base}/${params.locale}/settings/billing?checkout=success`,
         cancelUrl: `${base}${params.cancelPath}`,
       }),
     })

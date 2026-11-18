@@ -34,14 +34,14 @@ import { fetchAdminContentOverview, saveAdminChangelog } from '@/modules/changel
 import { removeAdminPost, saveAdminPost } from '@/modules/posts/service'
 import { saveAdminTaxonomy } from '@/modules/taxonomy/service'
 
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/content')({
+export const Route = createFileRoute('/{-$locale}/_layout/admin/content')({
   beforeLoad: ({ context }) => {
     assertFeatureEnabled('enableAdmin')
     assertAdminRole(context.session.user.role)
   },
   loader: () => fetchAdminContentOverview(),
   head: () =>
-    seo('/dashboard/admin/content', {
+    seo('/admin/content', {
       title: m.admin_content_title(),
       description: m.admin_content_description(),
       locale: getRequestLocale(),

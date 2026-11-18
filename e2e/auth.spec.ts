@@ -36,7 +36,7 @@ test.describe('Auth', () => {
     expect((await denied).status()).toBe(403)
     await expect(page.getByRole('alert')).toContainText('请先验证邮箱')
     expect(await (await page.request.get('/api/auth/get-session')).json()).toBeNull()
-    await page.goto('/zh/dashboard/profile')
+    await page.goto('/zh/settings/profile')
     await expect(page).toHaveURL(/\/zh\/auth\/login/)
 
     let verificationURL = ''

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { seedVerifiedUser } from '../scripts/e2e-seed-subscription'
 
 /**
- * E2E: 管理台 AI 任务页（`/dashboard/admin/tasks`）。
+ * E2E: 管理台 AI 任务页（`/admin/tasks`）。
  *
  * 验证三件事：
  * 1. 非管理员访问被路由守卫拦截；
@@ -47,7 +47,7 @@ test.describe('Admin AI 任务与积分预扣/回滚', () => {
     await page.getByRole('button', { name: '登录', exact: true }).click()
     await page.waitForURL((url) => url.pathname === '/zh' || url.pathname === '/')
 
-    await page.goto('/zh/dashboard/admin/tasks')
+    await page.goto('/zh/admin/tasks')
     await expect(page.getByRole('heading', { name: 'AI 任务' })).toHaveCount(0)
   })
 
@@ -56,7 +56,7 @@ test.describe('Admin AI 任务与积分预扣/回滚', () => {
     const okPrompt = `Neon skyline ${crypto.randomUUID().slice(0, 6)}`
     const failPrompt = `Broken render ${crypto.randomUUID().slice(0, 6)}`
 
-    await page.goto('/zh/dashboard/admin/tasks')
+    await page.goto('/zh/admin/tasks')
     await waitForHydration(page)
     await expect(page.getByRole('heading', { name: 'AI 任务' })).toBeVisible({ timeout: 15000 })
 
@@ -94,12 +94,12 @@ test.describe('Admin AI 任务与积分预扣/回滚', () => {
     await expect(page.getByRole('link', { name: 'AI 任务', exact: true }).first()).toBeVisible()
 
     // 3. 验证内容与分类页（CMS）及工单与邀请码页在管理台可用
-    await page.goto('/zh/dashboard/admin/content')
+    await page.goto('/zh/admin/content')
     await waitForHydration(page)
     await expect(page.getByRole('heading', { name: '内容与分类' })).toBeVisible({ timeout: 15000 })
     await expect(page.getByTestId('taxonomy-badge-announcement')).toBeVisible()
 
-    await page.goto('/zh/dashboard/admin/tickets')
+    await page.goto('/zh/admin/tickets')
     await waitForHydration(page)
     await expect(page.getByRole('heading', { name: '工单与邀请码' })).toBeVisible({
       timeout: 15000,

@@ -25,9 +25,9 @@ import { getRequestLocale } from '@/lib/locale'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/security')({
+export const Route = createFileRoute('/{-$locale}/_layout/settings/security')({
   head: () =>
-    seo('/dashboard/security', {
+    seo('/settings/security', {
       title: m.settings_security_title(),
       description: m.settings_security_description(),
       locale: getRequestLocale(),

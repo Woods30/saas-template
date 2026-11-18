@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocale } from '@/locale/paraglide/runtime.js'
-import { Route as ApiKeysRoute } from '@/routes/{-$locale}/_layout/dashboard/api-keys'
+import { Route as ApiKeysRoute } from '@/routes/{-$locale}/_layout/settings/api-keys'
 
 /**
  * API 密钥创建弹窗的有效期选择：默认 30 天；`expiresIn` 以秒传参（单位错了密钥会

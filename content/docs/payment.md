@@ -56,7 +56,7 @@ environment variable switches it at deploy time without touching code.
    limits, verifies that the return URLs are same-origin, then creates a hosted checkout session
    with the provider.
 4. The browser goes to the provider's payment page; a completed payment returns to
-   `/dashboard/billing?checkout=success`, a cancelled one returns to the page that started the
+   `/settings/billing?checkout=success`, a cancelled one returns to the page that started the
    purchase.
 5. Entitlements are written after the provider's webhook confirms them — the return page never
    grants access.
@@ -68,7 +68,7 @@ coexist with a subscription; they never cancel or take over an existing subscrip
 
 ## Billing page
 
-`/dashboard/billing` shows:
+`/settings/billing` shows:
 
 - the current subscription: plan name, status, amount and interval, renewal or end date;
 - subscription history;

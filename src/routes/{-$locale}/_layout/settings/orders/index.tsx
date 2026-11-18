@@ -20,12 +20,12 @@ import { productNameForProductId } from '@/modules/subscriptions/service'
 import { collectionOrderStatusMessageKey } from '../orders'
 
 /**
- * 用户自己的核销订单列表（`/dashboard/orders` 的 index 子路由）。
+ * 用户自己的核销订单列表（`/settings/orders` 的 index 子路由）。
  *
  * 父路由 `orders.tsx` 只承担门禁与 SEO；列表数据在这里取。与 `billing` 页同一
  * 套路：数据在 loader 一次取回，失败交给页面渲染提示。
  */
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/orders/')({
+export const Route = createFileRoute('/{-$locale}/_layout/settings/orders/')({
   loader: async () => {
     try {
       const result = await fetchMyCollectionOrders()
@@ -37,7 +37,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/orders/')({
     }
   },
   head: () =>
-    seo('/dashboard/orders', {
+    seo('/settings/orders', {
       title: m['collection.order_list_title'](),
       description: m['collection.order_list_description'](),
       locale: getRequestLocale(),
@@ -110,7 +110,7 @@ function OrdersPage() {
                         nativeButton={false}
                         render={
                           <Link
-                            to="/{-$locale}/dashboard/orders/$orderId"
+                            to="/{-$locale}/settings/orders/$orderId"
                             params={{ locale, orderId: order.id }}
                           />
                         }

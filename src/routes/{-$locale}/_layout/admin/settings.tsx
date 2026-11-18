@@ -35,13 +35,13 @@ import { m } from '@/locale/paraglide/messages.js'
  * 配置存在数据库里：每个分区单独保存，保存后进程内快照立即刷新，前台立刻生效。
  * 密钥类配置（支付 / 邮件凭据）不在这里——它们仍只在环境变量中。
  */
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/settings')({
+export const Route = createFileRoute('/{-$locale}/_layout/admin/settings')({
   beforeLoad: ({ context }) => {
     assertFeatureEnabled('enableAdmin')
     assertAdminRole(context.session.user.role)
   },
   head: () =>
-    seo('/dashboard/admin/settings', {
+    seo('/admin/settings', {
       title: m.admin_settings_title(),
       description: m.admin_settings_description(),
       locale: getRequestLocale(),

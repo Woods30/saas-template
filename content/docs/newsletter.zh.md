@@ -9,7 +9,7 @@ updated: 2026-11-03
 
 订阅模块把访客邮箱收进一个名单，名单存在第三方服务（Resend Audiences 或 Beehiiv），本站只负责
 收单与查状态。开启后有两处入口：营销页的订阅框（`NewsletterCta` 组件）与个人中心的「通知偏好」
-开关（`/dashboard/notifications`）。
+开关（`/settings/notifications`）。
 
 ## 步骤
 

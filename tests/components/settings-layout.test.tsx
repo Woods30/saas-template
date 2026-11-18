@@ -1,17 +1,17 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DashboardLayout } from '@/components/dashboard/DashboardLayout'
+import { AdminConsoleLayout, PersonalCenterLayout } from '@/components/dashboard/DashboardLayout'
 import type { SessionInfo } from '@/core/auth/session'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
 /** 个人中心外壳：面包屑导航、收起态侧栏、侧栏底部用户卡片、内容区宽度。 */
 const routerMocks = vi.hoisted(() => ({
-  pathname: '/en/dashboard/profile',
+  pathname: '/en/settings/profile',
 }))
 
 // 只替换路由边界；mock 的 `Link` 必须还原 `params` → `href` 拼接，
-// 否则断言里的 `/zh/dashboard/profile` 测的是 mock 而不是组件。
+// 否则断言里的 `/zh/settings/profile` 测的是 mock 而不是组件。
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
@@ -40,7 +40,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 beforeEach(() => {
   clearCookies()
   setLocale('zh', { reload: false })
-  routerMocks.pathname = '/en/dashboard/profile'
+  routerMocks.pathname = '/en/settings/profile'
 })
 
 function clearCookies() {
@@ -53,12 +53,21 @@ function clearCookies() {
   }
 }
 
-/** 渲染外壳；session 由路由 beforeLoad 取到后透传进来。 */
-function renderLayout(role: SessionInfo['user']['role'] = 'user') {
+/** 渲染个人中心外壳；session 由路由 beforeLoad 取到后透传进来。 */
+function renderPersonal(role: SessionInfo['user']['role'] = 'user') {
   return render(
-    <DashboardLayout locale="zh" session={sessionWith(role)}>
+    <PersonalCenterLayout locale="zh" session={sessionWith(role)}>
       <div>内容区</div>
-    </DashboardLayout>,
+    </PersonalCenterLayout>,
+  )
+}
+
+/** 渲染管理台外壳。两条路由树各自挂载，不再由同一个组件按路径判断。 */
+function renderAdmin(role: SessionInfo['user']['role'] = 'admin') {
+  return render(
+    <AdminConsoleLayout locale="zh" session={sessionWith(role)}>
+      <div>内容区</div>
+    </AdminConsoleLayout>,
   )
 }
 
@@ -84,19 +93,19 @@ describe('SettingsLayout 顶栏', () => {
   }
 
   it('渲染折叠按钮（宽窄屏都常驻，窄屏靠它拉出抽屉）', () => {
-    renderLayout()
+    renderPersonal()
     const trigger = document.querySelector('[data-slot="sidebar-trigger"]')
     expect(trigger).not.toBeNull()
   })
 
   it('面包屑渲染三级：首页 › 个人中心 › 当前板块', () => {
-    renderLayout()
+    renderPersonal()
     const nav = breadcrumb()
     expect(nav).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '首页' })).toHaveAttribute('href', '/zh')
     expect(screen.getByRole('link', { name: '个人中心' })).toHaveAttribute(
       'href',
-      '/zh/dashboard/profile',
+      '/zh/settings/profile',
     )
     const page = within(breadcrumb()).getByText('资料')
     expect(page.tagName).toBe('SPAN')
@@ -104,16 +113,16 @@ describe('SettingsLayout 顶栏', () => {
   })
 
   it('末级文案随 pathname 变化（安全板块 → 安全）', () => {
-    routerMocks.pathname = '/zh/dashboard/security'
-    renderLayout()
+    routerMocks.pathname = '/zh/settings/security'
+    renderPersonal()
     const page = within(breadcrumb()).getByText('安全')
     expect(page.tagName).toBe('SPAN')
     expect(page).toHaveAttribute('aria-current', 'page')
   })
 
   it('pathname 不是已知板块时只渲染前两级，不渲染空末级', () => {
-    routerMocks.pathname = '/zh/dashboard/unknown-future'
-    renderLayout()
+    routerMocks.pathname = '/zh/settings/unknown-future'
+    renderPersonal()
     expect(screen.getByRole('link', { name: '首页' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '个人中心' })).toBeInTheDocument()
     const nav = breadcrumb()
@@ -121,7 +130,7 @@ describe('SettingsLayout 顶栏', () => {
   })
 
   it('不放标题 h1（末级面包屑已是页面标题）', () => {
-    renderLayout()
+    renderPersonal()
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
   })
 
@@ -132,8 +141,8 @@ describe('SettingsLayout 顶栏', () => {
    * 会让「用户管理」抢走「营收与订阅」的高亮——用户报过的实际缺陷。
    */
   it('管理子页高亮对应菜单项，不被同组其它项抢走', () => {
-    routerMocks.pathname = '/zh/dashboard/admin/revenue'
-    renderLayout('admin')
+    routerMocks.pathname = '/zh/admin/revenue'
+    renderAdmin()
     // 侧栏与面包屑都有同名文案，断言须限定在侧栏内。
     const sidebar = document.querySelector('[data-slot="sidebar"]') as HTMLElement
     const revenue = within(sidebar).getByRole('link', { name: '营收与订阅' })
@@ -143,33 +152,49 @@ describe('SettingsLayout 顶栏', () => {
   })
 
   it('管理子页的面包屑末级是页面自己的标题，二级指向管理后台', () => {
-    routerMocks.pathname = '/zh/dashboard/admin/revenue'
-    renderLayout('admin')
+    routerMocks.pathname = '/zh/admin/revenue'
+    renderAdmin()
     expect(within(breadcrumb()).getByRole('link', { name: '管理后台' })).toHaveAttribute(
       'href',
-      '/zh/dashboard/admin/revenue',
+      '/zh/admin/revenue',
     )
     const page = within(breadcrumb()).getByText('营收与订阅')
     expect(page).toHaveAttribute('aria-current', 'page')
   })
 
-  it('个人中心与管理后台侧栏菜单独立，互不混排且底部提供切换入口', () => {
-    // 1. 管理员在个人中心路由时，主菜单只渲染个人项，底部提供「管理后台」切换入口
-    routerMocks.pathname = '/zh/dashboard/profile'
-    const { unmount } = renderLayout('admin')
+  it('个人中心侧栏只渲染个人项，底部提供「管理后台」切换入口', () => {
+    routerMocks.pathname = '/zh/settings/profile'
+    renderPersonal('admin')
     const content = document.querySelector('[data-slot="sidebar-content"]') as HTMLElement
     const footer = document.querySelector('[data-slot="sidebar-footer"]') as HTMLElement
     expect(within(content).getByRole('link', { name: '资料' })).toBeInTheDocument()
     expect(within(content).queryByRole('link', { name: '用户管理' })).toBeNull()
     expect(within(footer).getByRole('link', { name: '管理后台' })).toHaveAttribute(
       'href',
-      '/zh/dashboard/admin/revenue',
+      '/zh/admin/revenue',
     )
-    unmount()
+  })
 
-    // 2. 管理员在管理后台路由时，主菜单渲染树形管理分组，底部提供「系统设置」与「个人中心」
-    routerMocks.pathname = '/zh/dashboard/admin/revenue'
-    renderLayout('admin')
+  /**
+   * 回归：分组菜单曾用菜单对象做 effect 依赖，对象每渲染一次都是新的，
+   * 于是「收起当前页所在分组」会被下一次渲染立刻重开，看起来像点了没反应。
+   */
+  it('当前路由所在的分组可以手动收起，不会被自动展开逻辑立刻重开', async () => {
+    routerMocks.pathname = '/zh/admin/roles'
+    renderAdmin()
+    const content = document.querySelector('[data-slot="sidebar-content"]') as HTMLElement
+    const group = () => within(content).getByRole('button', { name: '用户与权限' })
+    expect(group()).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(group())
+    await waitFor(() => expect(group()).toHaveAttribute('aria-expanded', 'false'))
+    // 收起后子菜单项一起消失，避免「看着收起、其实还能点」。
+    expect(within(content).queryByRole('link', { name: '角色与权限' })).toBeNull()
+  })
+
+  it('管理台侧栏渲染树形分组，底部提供「系统设置」与「个人中心」', () => {
+    routerMocks.pathname = '/zh/admin/revenue'
+    renderAdmin()
     const adminContent = document.querySelector('[data-slot="sidebar-content"]') as HTMLElement
     const adminFooter = document.querySelector('[data-slot="sidebar-footer"]') as HTMLElement
     expect(within(adminContent).queryByRole('link', { name: '资料' })).toBeNull()
@@ -187,21 +212,21 @@ describe('SettingsLayout 顶栏', () => {
     )
     expect(within(adminFooter).getByRole('link', { name: '系统设置' })).toHaveAttribute(
       'href',
-      '/zh/dashboard/admin/settings',
+      '/zh/admin/settings',
     )
     expect(within(adminFooter).getByRole('link', { name: '个人中心' })).toHaveAttribute(
       'href',
-      '/zh/dashboard/profile',
+      '/zh/settings/profile',
     )
   })
 
   it('不放「返回站点」链接（logo 已是回站点出口）', () => {
-    renderLayout()
+    renderPersonal()
     expect(screen.queryByRole('link', { name: '返回站点' })).toBeNull()
   })
 
   it('主题切换只出现在窄屏顶栏（md 以上交给用户菜单）', () => {
-    renderLayout()
+    renderPersonal()
     const header = document.querySelector('main > header')
     expect(header).not.toBeNull()
     const themeButton = within(header as HTMLElement).getByRole('button', { name: /主题/ })
@@ -217,7 +242,7 @@ describe('SettingsLayout 顶栏', () => {
  */
 describe('SettingsLayout 收起态侧栏', () => {
   it('侧栏头同时提供横版 logo 与方形图标，按折叠状态切换', () => {
-    renderLayout()
+    renderPersonal()
     const header = document.querySelector('[data-slot="sidebar-header"]')
     expect(header).not.toBeNull()
     const images = [...(header as HTMLElement).querySelectorAll('img')]
@@ -230,7 +255,7 @@ describe('SettingsLayout 收起态侧栏', () => {
   })
 
   it('菜单项放大：展开态 40px 行 + 18px 图标，收起态 36px + 20px 图标', () => {
-    renderLayout()
+    renderPersonal()
     const buttons = [...document.querySelectorAll('[data-slot="sidebar-menu-button"]')]
     expect(buttons.length).toBeGreaterThan(0)
     for (const button of buttons) {
@@ -244,7 +269,7 @@ describe('SettingsLayout 收起态侧栏', () => {
   })
 
   it('侧栏底部不再单列主题行（已收进用户菜单）', () => {
-    renderLayout()
+    renderPersonal()
     const footer = document.querySelector('[data-slot="sidebar-footer"]')
     expect(footer).not.toBeNull()
     expect(within(footer as HTMLElement).queryByRole('button', { name: /主题/ })).toBeNull()
@@ -264,12 +289,12 @@ describe('SettingsLayout 侧栏底部的用户卡片', () => {
   }
 
   it('把用户卡片渲染进侧栏底部', () => {
-    renderLayout()
+    renderPersonal()
     expect(sidebarFooter()).toBeInTheDocument()
   })
 
   it('footer 内确实是用户卡片：头像、名字与邮箱都在其内', () => {
-    renderLayout()
+    renderPersonal()
     const footer = sidebarFooter()
     expect(within(footer).getByText('woods@example.com')).toBeInTheDocument()
     expect(within(footer).getByRole('button', { name: 'woods' })).toBeInTheDocument()
@@ -282,7 +307,7 @@ describe('SettingsLayout 侧栏底部的用户卡片', () => {
  */
 describe('SettingsLayout 内容区宽度', () => {
   it('内容区用宽容器而非表单窄栏', () => {
-    renderLayout()
+    renderPersonal()
     const inner = screen.getByText('内容区').parentElement
     expect(inner).not.toBeNull()
     expect(inner?.className).toContain('max-w-6xl')
@@ -291,7 +316,7 @@ describe('SettingsLayout 内容区宽度', () => {
   })
 
   it('SidebarInset 允许收缩（表格超宽时由 Table 内部滚动）', () => {
-    renderLayout()
+    renderPersonal()
     const inset = document.querySelector('[data-slot="sidebar-inset"]')
     expect(inset?.className).toContain('min-w-0')
   })

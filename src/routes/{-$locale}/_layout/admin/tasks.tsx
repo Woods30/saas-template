@@ -46,7 +46,7 @@ interface AdminTasksSearch {
   status?: string
 }
 
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/tasks')({
+export const Route = createFileRoute('/{-$locale}/_layout/admin/tasks')({
   beforeLoad: ({ context }) => {
     assertFeatureEnabled('enableAdmin')
     assertAdminRole(context.session.user.role)
@@ -73,7 +73,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/tasks'
       },
     }),
   head: () =>
-    seo('/dashboard/admin/tasks', {
+    seo('/admin/tasks', {
       title: m.admin_tasks_title(),
       description: m.admin_tasks_description(),
       locale: getRequestLocale(),

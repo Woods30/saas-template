@@ -1,14 +1,14 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DashboardLayout } from '@/components/dashboard/DashboardLayout'
+import { PersonalCenterLayout } from '@/components/dashboard/DashboardLayout'
 import { findProduct } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import type { SessionInfo } from '@/core/auth/session'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 import type { CollectionOrder } from '@/modules/manual-payments/service'
-import { Route as OrderDetailRoute } from '@/routes/{-$locale}/_layout/dashboard/orders/$orderId'
-import { Route as OrdersIndexRoute } from '@/routes/{-$locale}/_layout/dashboard/orders/index'
+import { Route as OrderDetailRoute } from '@/routes/{-$locale}/_layout/settings/orders/$orderId'
+import { Route as OrdersIndexRoute } from '@/routes/{-$locale}/_layout/settings/orders/index'
 
 /**
  * 核销型支付的用户流程：订单列表 / 详情、申报与轮询、无对象存储降级、
@@ -20,7 +20,7 @@ import { Route as OrdersIndexRoute } from '@/routes/{-$locale}/_layout/dashboard
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
-  pathname: '/zh/dashboard/orders',
+  pathname: '/zh/settings/orders',
   session: null as { user: { id: string } } | null,
   createOrder: vi.fn(),
   submitOrder: vi.fn(),
@@ -163,7 +163,7 @@ let motion: MediaQueryList
 beforeEach(() => {
   setLocale('zh', { reload: false })
   mocks.navigate.mockReset()
-  mocks.pathname = '/zh/dashboard/orders'
+  mocks.pathname = '/zh/settings/orders'
   mocks.session = { user: { id: 'u_1' } }
   mocks.createOrder.mockReset().mockResolvedValue({ id: 'ord_1' })
   mocks.submitOrder.mockReset().mockResolvedValue({ status: 'pending_verification' })
@@ -307,7 +307,7 @@ describe('订单列表页', () => {
     // Base UI 的 Button 渲染成 <a> 时带 `role="button"`，按这个角色找。
     expect(screen.getByRole('button', { name: '查看详情' })).toHaveAttribute(
       'href',
-      '/zh/dashboard/orders/ord_1',
+      '/zh/settings/orders/ord_1',
     )
   })
 
@@ -321,9 +321,9 @@ describe('订单列表页', () => {
 describe('个人中心入口与面包屑', () => {
   function renderLayout() {
     return render(
-      <DashboardLayout locale="zh" session={sessionWith()}>
+      <PersonalCenterLayout locale="zh" session={sessionWith()}>
         <div>内容区</div>
-      </DashboardLayout>,
+      </PersonalCenterLayout>,
     )
   }
 
@@ -333,7 +333,7 @@ describe('个人中心入口与面包屑', () => {
     const sidebar = document.querySelector('[data-slot="sidebar"]') as HTMLElement
     expect(within(sidebar).getByRole('link', { name: '订单' })).toHaveAttribute(
       'href',
-      '/zh/dashboard/orders',
+      '/zh/settings/orders',
     )
     unmount()
     websiteConfig.collection.enabled = false
@@ -342,7 +342,7 @@ describe('个人中心入口与面包屑', () => {
     expect(within(closed).queryByRole('link', { name: '订单' })).toBeNull()
   })
 
-  it.each(['/zh/dashboard/orders', '/zh/dashboard/orders/ord_1'])('面包屑识别 %s', (pathname) => {
+  it.each(['/zh/settings/orders', '/zh/settings/orders/ord_1'])('面包屑识别 %s', (pathname) => {
     mocks.pathname = pathname
     renderLayout()
     const breadcrumb = screen.getByRole('navigation', { name: 'breadcrumb' })

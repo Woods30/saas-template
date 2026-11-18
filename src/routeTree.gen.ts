@@ -25,23 +25,28 @@ import { Route as ApiNewsletterSplatRouteImport } from './routes/api/newsletter/
 import { Route as ApiPaymentSplatRouteImport } from './routes/api/payment/$'
 import { Route as ApiWebhooksCreemRouteImport } from './routes/api/webhooks/creem'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api/webhooks/stripe'
-import { Route as Char123LocaleChar125LayoutDashboardRouteImport } from './routes/{-$locale}/_layout/dashboard'
+import { Route as Char123LocaleChar125LayoutAdminRouteImport } from './routes/{-$locale}/_layout/admin'
 import { Route as Char123LocaleChar125LayoutDocsRouteImport } from './routes/{-$locale}/_layout/docs'
 import { Route as Char123LocaleChar125LayoutMarketingRouteImport } from './routes/{-$locale}/_layout/marketing'
+import { Route as Char123LocaleChar125LayoutSettingsRouteImport } from './routes/{-$locale}/_layout/settings'
 import { Route as Char123LocaleChar125AuthErrorRouteImport } from './routes/{-$locale}/auth/error'
 import { Route as Char123LocaleChar125AuthForgotPasswordRouteImport } from './routes/{-$locale}/auth/forgot-password'
 import { Route as Char123LocaleChar125AuthLoginRouteImport } from './routes/{-$locale}/auth/login'
 import { Route as Char123LocaleChar125AuthRegisterRouteImport } from './routes/{-$locale}/auth/register'
 import { Route as Char123LocaleChar125AuthResetPasswordRouteImport } from './routes/{-$locale}/auth/reset-password'
 import { Route as Char123LocaleChar125AuthVerifyEmailRouteImport } from './routes/{-$locale}/auth/verify-email'
-import { Route as Char123LocaleChar125LayoutDashboardIndexRouteImport } from './routes/{-$locale}/_layout/dashboard/index'
-import { Route as Char123LocaleChar125LayoutDashboardApiKeysRouteImport } from './routes/{-$locale}/_layout/dashboard/api-keys'
-import { Route as Char123LocaleChar125LayoutDashboardBillingRouteImport } from './routes/{-$locale}/_layout/dashboard/billing'
-import { Route as Char123LocaleChar125LayoutDashboardNotificationsRouteImport } from './routes/{-$locale}/_layout/dashboard/notifications'
-import { Route as Char123LocaleChar125LayoutDashboardOrdersRouteImport } from './routes/{-$locale}/_layout/dashboard/orders'
-import { Route as Char123LocaleChar125LayoutDashboardProfileRouteImport } from './routes/{-$locale}/_layout/dashboard/profile'
-import { Route as Char123LocaleChar125LayoutDashboardSecurityRouteImport } from './routes/{-$locale}/_layout/dashboard/security'
-import { Route as Char123LocaleChar125LayoutDashboardSessionsRouteImport } from './routes/{-$locale}/_layout/dashboard/sessions'
+import { Route as Char123LocaleChar125LayoutAdminAuditRouteImport } from './routes/{-$locale}/_layout/admin/audit'
+import { Route as Char123LocaleChar125LayoutAdminCollectionOrdersRouteImport } from './routes/{-$locale}/_layout/admin/collection-orders'
+import { Route as Char123LocaleChar125LayoutAdminContentRouteImport } from './routes/{-$locale}/_layout/admin/content'
+import { Route as Char123LocaleChar125LayoutAdminCreditsRouteImport } from './routes/{-$locale}/_layout/admin/credits'
+import { Route as Char123LocaleChar125LayoutAdminOrdersRouteImport } from './routes/{-$locale}/_layout/admin/orders'
+import { Route as Char123LocaleChar125LayoutAdminRevenueRouteImport } from './routes/{-$locale}/_layout/admin/revenue'
+import { Route as Char123LocaleChar125LayoutAdminRolesRouteImport } from './routes/{-$locale}/_layout/admin/roles'
+import { Route as Char123LocaleChar125LayoutAdminSettingsRouteImport } from './routes/{-$locale}/_layout/admin/settings'
+import { Route as Char123LocaleChar125LayoutAdminSubscriptionsRouteImport } from './routes/{-$locale}/_layout/admin/subscriptions'
+import { Route as Char123LocaleChar125LayoutAdminTasksRouteImport } from './routes/{-$locale}/_layout/admin/tasks'
+import { Route as Char123LocaleChar125LayoutAdminTicketsRouteImport } from './routes/{-$locale}/_layout/admin/tickets'
+import { Route as Char123LocaleChar125LayoutAdminUsersRouteImport } from './routes/{-$locale}/_layout/admin/users'
 import { Route as Char123LocaleChar125LayoutDocsIndexRouteImport } from './routes/{-$locale}/_layout/docs/index'
 import { Route as Char123LocaleChar125LayoutDocsSlugRouteImport } from './routes/{-$locale}/_layout/docs/$slug'
 import { Route as Char123LocaleChar125LayoutMarketingIndexRouteImport } from './routes/{-$locale}/_layout/marketing/index'
@@ -50,26 +55,22 @@ import { Route as Char123LocaleChar125LayoutMarketingContactRouteImport } from '
 import { Route as Char123LocaleChar125LayoutMarketingFeaturesRouteImport } from './routes/{-$locale}/_layout/marketing/features'
 import { Route as Char123LocaleChar125LayoutMarketingRoadmapRouteImport } from './routes/{-$locale}/_layout/marketing/roadmap'
 import { Route as Char123LocaleChar125LayoutMarketingWaitlistRouteImport } from './routes/{-$locale}/_layout/marketing/waitlist'
+import { Route as Char123LocaleChar125LayoutSettingsIndexRouteImport } from './routes/{-$locale}/_layout/settings/index'
+import { Route as Char123LocaleChar125LayoutSettingsApiKeysRouteImport } from './routes/{-$locale}/_layout/settings/api-keys'
+import { Route as Char123LocaleChar125LayoutSettingsBillingRouteImport } from './routes/{-$locale}/_layout/settings/billing'
+import { Route as Char123LocaleChar125LayoutSettingsNotificationsRouteImport } from './routes/{-$locale}/_layout/settings/notifications'
+import { Route as Char123LocaleChar125LayoutSettingsOrdersRouteImport } from './routes/{-$locale}/_layout/settings/orders'
+import { Route as Char123LocaleChar125LayoutSettingsProfileRouteImport } from './routes/{-$locale}/_layout/settings/profile'
+import { Route as Char123LocaleChar125LayoutSettingsSecurityRouteImport } from './routes/{-$locale}/_layout/settings/security'
+import { Route as Char123LocaleChar125LayoutSettingsSessionsRouteImport } from './routes/{-$locale}/_layout/settings/sessions'
 import { Route as ApiCollectionAccountsAccountIdQrcodeRouteImport } from './routes/api/collection/accounts/$accountId/qrcode'
 import { Route as ApiCollectionOrdersOrderIdReceiptRouteImport } from './routes/api/collection/orders/$orderId/receipt'
-import { Route as Char123LocaleChar125LayoutDashboardAdminAuditRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/audit'
-import { Route as Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/collection-orders'
-import { Route as Char123LocaleChar125LayoutDashboardAdminContentRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/content'
-import { Route as Char123LocaleChar125LayoutDashboardAdminCreditsRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/credits'
-import { Route as Char123LocaleChar125LayoutDashboardAdminOrdersRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/orders'
-import { Route as Char123LocaleChar125LayoutDashboardAdminRevenueRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/revenue'
-import { Route as Char123LocaleChar125LayoutDashboardAdminRolesRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/roles'
-import { Route as Char123LocaleChar125LayoutDashboardAdminSettingsRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/settings'
-import { Route as Char123LocaleChar125LayoutDashboardAdminSubscriptionsRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/subscriptions'
-import { Route as Char123LocaleChar125LayoutDashboardAdminTasksRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/tasks'
-import { Route as Char123LocaleChar125LayoutDashboardAdminTicketsRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/tickets'
-import { Route as Char123LocaleChar125LayoutDashboardAdminUsersRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/users'
-import { Route as Char123LocaleChar125LayoutDashboardOrdersIndexRouteImport } from './routes/{-$locale}/_layout/dashboard/orders/index'
-import { Route as Char123LocaleChar125LayoutDashboardOrdersOrderIdRouteImport } from './routes/{-$locale}/_layout/dashboard/orders/$orderId'
 import { Route as Char123LocaleChar125LayoutMarketingBlogIndexRouteImport } from './routes/{-$locale}/_layout/marketing/blog/index'
 import { Route as Char123LocaleChar125LayoutMarketingBlogSlugRouteImport } from './routes/{-$locale}/_layout/marketing/blog/$slug'
 import { Route as Char123LocaleChar125LayoutMarketingChangelogIndexRouteImport } from './routes/{-$locale}/_layout/marketing/changelog/index'
 import { Route as Char123LocaleChar125LayoutMarketingLegalSlugRouteImport } from './routes/{-$locale}/_layout/marketing/legal/$slug'
+import { Route as Char123LocaleChar125LayoutSettingsOrdersIndexRouteImport } from './routes/{-$locale}/_layout/settings/orders/index'
+import { Route as Char123LocaleChar125LayoutSettingsOrdersOrderIdRouteImport } from './routes/{-$locale}/_layout/settings/orders/$orderId'
 
 const LlmsFullDottxtRoute = LlmsFullDottxtRouteImport.update({
   id: '/llms-full.txt',
@@ -154,10 +155,10 @@ const ApiWebhooksStripeRoute = ApiWebhooksStripeRouteImport.update({
   path: '/api/webhooks/stripe',
   getParentRoute: () => rootRouteImport,
 } as any)
-const Char123LocaleChar125LayoutDashboardRoute =
-  Char123LocaleChar125LayoutDashboardRouteImport.update({
-    id: '/{-$locale}/_layout/dashboard',
-    path: '/{-$locale}/dashboard',
+const Char123LocaleChar125LayoutAdminRoute =
+  Char123LocaleChar125LayoutAdminRouteImport.update({
+    id: '/{-$locale}/_layout/admin',
+    path: '/{-$locale}/admin',
     getParentRoute: () => rootRouteImport,
   } as any)
 const Char123LocaleChar125LayoutDocsRoute =
@@ -170,6 +171,12 @@ const Char123LocaleChar125LayoutMarketingRoute =
   Char123LocaleChar125LayoutMarketingRouteImport.update({
     id: '/{-$locale}/_layout/marketing',
     path: '/{-$locale}/marketing',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char123LocaleChar125LayoutSettingsRoute =
+  Char123LocaleChar125LayoutSettingsRouteImport.update({
+    id: '/{-$locale}/_layout/settings',
+    path: '/{-$locale}/settings',
     getParentRoute: () => rootRouteImport,
   } as any)
 const Char123LocaleChar125AuthErrorRoute =
@@ -208,53 +215,77 @@ const Char123LocaleChar125AuthVerifyEmailRoute =
     path: '/{-$locale}/auth/verify-email',
     getParentRoute: () => rootRouteImport,
   } as any)
-const Char123LocaleChar125LayoutDashboardIndexRoute =
-  Char123LocaleChar125LayoutDashboardIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
+const Char123LocaleChar125LayoutAdminAuditRoute =
+  Char123LocaleChar125LayoutAdminAuditRouteImport.update({
+    id: '/audit',
+    path: '/audit',
+    getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
   } as any)
-const Char123LocaleChar125LayoutDashboardApiKeysRoute =
-  Char123LocaleChar125LayoutDashboardApiKeysRouteImport.update({
-    id: '/api-keys',
-    path: '/api-keys',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
+const Char123LocaleChar125LayoutAdminCollectionOrdersRoute =
+  Char123LocaleChar125LayoutAdminCollectionOrdersRouteImport.update({
+    id: '/collection-orders',
+    path: '/collection-orders',
+    getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
   } as any)
-const Char123LocaleChar125LayoutDashboardBillingRoute =
-  Char123LocaleChar125LayoutDashboardBillingRouteImport.update({
-    id: '/billing',
-    path: '/billing',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
+const Char123LocaleChar125LayoutAdminContentRoute =
+  Char123LocaleChar125LayoutAdminContentRouteImport.update({
+    id: '/content',
+    path: '/content',
+    getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
   } as any)
-const Char123LocaleChar125LayoutDashboardNotificationsRoute =
-  Char123LocaleChar125LayoutDashboardNotificationsRouteImport.update({
-    id: '/notifications',
-    path: '/notifications',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
+const Char123LocaleChar125LayoutAdminCreditsRoute =
+  Char123LocaleChar125LayoutAdminCreditsRouteImport.update({
+    id: '/credits',
+    path: '/credits',
+    getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
   } as any)
-const Char123LocaleChar125LayoutDashboardOrdersRoute =
-  Char123LocaleChar125LayoutDashboardOrdersRouteImport.update({
+const Char123LocaleChar125LayoutAdminOrdersRoute =
+  Char123LocaleChar125LayoutAdminOrdersRouteImport.update({
     id: '/orders',
     path: '/orders',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
+    getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
   } as any)
-const Char123LocaleChar125LayoutDashboardProfileRoute =
-  Char123LocaleChar125LayoutDashboardProfileRouteImport.update({
-    id: '/profile',
-    path: '/profile',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
+const Char123LocaleChar125LayoutAdminRevenueRoute =
+  Char123LocaleChar125LayoutAdminRevenueRouteImport.update({
+    id: '/revenue',
+    path: '/revenue',
+    getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
   } as any)
-const Char123LocaleChar125LayoutDashboardSecurityRoute =
-  Char123LocaleChar125LayoutDashboardSecurityRouteImport.update({
-    id: '/security',
-    path: '/security',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
+const Char123LocaleChar125LayoutAdminRolesRoute =
+  Char123LocaleChar125LayoutAdminRolesRouteImport.update({
+    id: '/roles',
+    path: '/roles',
+    getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
   } as any)
-const Char123LocaleChar125LayoutDashboardSessionsRoute =
-  Char123LocaleChar125LayoutDashboardSessionsRouteImport.update({
-    id: '/sessions',
-    path: '/sessions',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
+const Char123LocaleChar125LayoutAdminSettingsRoute =
+  Char123LocaleChar125LayoutAdminSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
+  } as any)
+const Char123LocaleChar125LayoutAdminSubscriptionsRoute =
+  Char123LocaleChar125LayoutAdminSubscriptionsRouteImport.update({
+    id: '/subscriptions',
+    path: '/subscriptions',
+    getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
+  } as any)
+const Char123LocaleChar125LayoutAdminTasksRoute =
+  Char123LocaleChar125LayoutAdminTasksRouteImport.update({
+    id: '/tasks',
+    path: '/tasks',
+    getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
+  } as any)
+const Char123LocaleChar125LayoutAdminTicketsRoute =
+  Char123LocaleChar125LayoutAdminTicketsRouteImport.update({
+    id: '/tickets',
+    path: '/tickets',
+    getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
+  } as any)
+const Char123LocaleChar125LayoutAdminUsersRoute =
+  Char123LocaleChar125LayoutAdminUsersRouteImport.update({
+    id: '/users',
+    path: '/users',
+    getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
   } as any)
 const Char123LocaleChar125LayoutDocsIndexRoute =
   Char123LocaleChar125LayoutDocsIndexRouteImport.update({
@@ -304,6 +335,54 @@ const Char123LocaleChar125LayoutMarketingWaitlistRoute =
     path: '/waitlist',
     getParentRoute: () => Char123LocaleChar125LayoutMarketingRoute,
   } as any)
+const Char123LocaleChar125LayoutSettingsIndexRoute =
+  Char123LocaleChar125LayoutSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => Char123LocaleChar125LayoutSettingsRoute,
+  } as any)
+const Char123LocaleChar125LayoutSettingsApiKeysRoute =
+  Char123LocaleChar125LayoutSettingsApiKeysRouteImport.update({
+    id: '/api-keys',
+    path: '/api-keys',
+    getParentRoute: () => Char123LocaleChar125LayoutSettingsRoute,
+  } as any)
+const Char123LocaleChar125LayoutSettingsBillingRoute =
+  Char123LocaleChar125LayoutSettingsBillingRouteImport.update({
+    id: '/billing',
+    path: '/billing',
+    getParentRoute: () => Char123LocaleChar125LayoutSettingsRoute,
+  } as any)
+const Char123LocaleChar125LayoutSettingsNotificationsRoute =
+  Char123LocaleChar125LayoutSettingsNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => Char123LocaleChar125LayoutSettingsRoute,
+  } as any)
+const Char123LocaleChar125LayoutSettingsOrdersRoute =
+  Char123LocaleChar125LayoutSettingsOrdersRouteImport.update({
+    id: '/orders',
+    path: '/orders',
+    getParentRoute: () => Char123LocaleChar125LayoutSettingsRoute,
+  } as any)
+const Char123LocaleChar125LayoutSettingsProfileRoute =
+  Char123LocaleChar125LayoutSettingsProfileRouteImport.update({
+    id: '/profile',
+    path: '/profile',
+    getParentRoute: () => Char123LocaleChar125LayoutSettingsRoute,
+  } as any)
+const Char123LocaleChar125LayoutSettingsSecurityRoute =
+  Char123LocaleChar125LayoutSettingsSecurityRouteImport.update({
+    id: '/security',
+    path: '/security',
+    getParentRoute: () => Char123LocaleChar125LayoutSettingsRoute,
+  } as any)
+const Char123LocaleChar125LayoutSettingsSessionsRoute =
+  Char123LocaleChar125LayoutSettingsSessionsRouteImport.update({
+    id: '/sessions',
+    path: '/sessions',
+    getParentRoute: () => Char123LocaleChar125LayoutSettingsRoute,
+  } as any)
 const ApiCollectionAccountsAccountIdQrcodeRoute =
   ApiCollectionAccountsAccountIdQrcodeRouteImport.update({
     id: '/api/collection/accounts/$accountId/qrcode',
@@ -315,90 +394,6 @@ const ApiCollectionOrdersOrderIdReceiptRoute =
     id: '/api/collection/orders/$orderId/receipt',
     path: '/api/collection/orders/$orderId/receipt',
     getParentRoute: () => rootRouteImport,
-  } as any)
-const Char123LocaleChar125LayoutDashboardAdminAuditRoute =
-  Char123LocaleChar125LayoutDashboardAdminAuditRouteImport.update({
-    id: '/admin/audit',
-    path: '/admin/audit',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
-  } as any)
-const Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute =
-  Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRouteImport.update({
-    id: '/admin/collection-orders',
-    path: '/admin/collection-orders',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
-  } as any)
-const Char123LocaleChar125LayoutDashboardAdminContentRoute =
-  Char123LocaleChar125LayoutDashboardAdminContentRouteImport.update({
-    id: '/admin/content',
-    path: '/admin/content',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
-  } as any)
-const Char123LocaleChar125LayoutDashboardAdminCreditsRoute =
-  Char123LocaleChar125LayoutDashboardAdminCreditsRouteImport.update({
-    id: '/admin/credits',
-    path: '/admin/credits',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
-  } as any)
-const Char123LocaleChar125LayoutDashboardAdminOrdersRoute =
-  Char123LocaleChar125LayoutDashboardAdminOrdersRouteImport.update({
-    id: '/admin/orders',
-    path: '/admin/orders',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
-  } as any)
-const Char123LocaleChar125LayoutDashboardAdminRevenueRoute =
-  Char123LocaleChar125LayoutDashboardAdminRevenueRouteImport.update({
-    id: '/admin/revenue',
-    path: '/admin/revenue',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
-  } as any)
-const Char123LocaleChar125LayoutDashboardAdminRolesRoute =
-  Char123LocaleChar125LayoutDashboardAdminRolesRouteImport.update({
-    id: '/admin/roles',
-    path: '/admin/roles',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
-  } as any)
-const Char123LocaleChar125LayoutDashboardAdminSettingsRoute =
-  Char123LocaleChar125LayoutDashboardAdminSettingsRouteImport.update({
-    id: '/admin/settings',
-    path: '/admin/settings',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
-  } as any)
-const Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute =
-  Char123LocaleChar125LayoutDashboardAdminSubscriptionsRouteImport.update({
-    id: '/admin/subscriptions',
-    path: '/admin/subscriptions',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
-  } as any)
-const Char123LocaleChar125LayoutDashboardAdminTasksRoute =
-  Char123LocaleChar125LayoutDashboardAdminTasksRouteImport.update({
-    id: '/admin/tasks',
-    path: '/admin/tasks',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
-  } as any)
-const Char123LocaleChar125LayoutDashboardAdminTicketsRoute =
-  Char123LocaleChar125LayoutDashboardAdminTicketsRouteImport.update({
-    id: '/admin/tickets',
-    path: '/admin/tickets',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
-  } as any)
-const Char123LocaleChar125LayoutDashboardAdminUsersRoute =
-  Char123LocaleChar125LayoutDashboardAdminUsersRouteImport.update({
-    id: '/admin/users',
-    path: '/admin/users',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
-  } as any)
-const Char123LocaleChar125LayoutDashboardOrdersIndexRoute =
-  Char123LocaleChar125LayoutDashboardOrdersIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardOrdersRoute,
-  } as any)
-const Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute =
-  Char123LocaleChar125LayoutDashboardOrdersOrderIdRouteImport.update({
-    id: '/$orderId',
-    path: '/$orderId',
-    getParentRoute: () => Char123LocaleChar125LayoutDashboardOrdersRoute,
   } as any)
 const Char123LocaleChar125LayoutMarketingBlogIndexRoute =
   Char123LocaleChar125LayoutMarketingBlogIndexRouteImport.update({
@@ -424,6 +419,18 @@ const Char123LocaleChar125LayoutMarketingLegalSlugRoute =
     path: '/legal/$slug',
     getParentRoute: () => Char123LocaleChar125LayoutMarketingRoute,
   } as any)
+const Char123LocaleChar125LayoutSettingsOrdersIndexRoute =
+  Char123LocaleChar125LayoutSettingsOrdersIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => Char123LocaleChar125LayoutSettingsOrdersRoute,
+  } as any)
+const Char123LocaleChar125LayoutSettingsOrdersOrderIdRoute =
+  Char123LocaleChar125LayoutSettingsOrdersOrderIdRouteImport.update({
+    id: '/$orderId',
+    path: '/$orderId',
+    getParentRoute: () => Char123LocaleChar125LayoutSettingsOrdersRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/llms-full.txt': typeof LlmsFullDottxtRoute
@@ -442,51 +449,52 @@ export interface FileRoutesByFullPath {
   '/api/payment/$': typeof ApiPaymentSplatRoute
   '/api/webhooks/creem': typeof ApiWebhooksCreemRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
-  '/{-$locale}/dashboard': typeof Char123LocaleChar125LayoutDashboardRouteWithChildren
+  '/{-$locale}/admin': typeof Char123LocaleChar125LayoutAdminRouteWithChildren
   '/{-$locale}/docs': typeof Char123LocaleChar125LayoutDocsRouteWithChildren
   '/{-$locale}/marketing': typeof Char123LocaleChar125LayoutMarketingRouteWithChildren
+  '/{-$locale}/settings': typeof Char123LocaleChar125LayoutSettingsRouteWithChildren
   '/{-$locale}/auth/error': typeof Char123LocaleChar125AuthErrorRoute
   '/{-$locale}/auth/forgot-password': typeof Char123LocaleChar125AuthForgotPasswordRoute
   '/{-$locale}/auth/login': typeof Char123LocaleChar125AuthLoginRoute
   '/{-$locale}/auth/register': typeof Char123LocaleChar125AuthRegisterRoute
   '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
   '/{-$locale}/auth/verify-email': typeof Char123LocaleChar125AuthVerifyEmailRoute
-  '/{-$locale}/dashboard/api-keys': typeof Char123LocaleChar125LayoutDashboardApiKeysRoute
-  '/{-$locale}/dashboard/billing': typeof Char123LocaleChar125LayoutDashboardBillingRoute
-  '/{-$locale}/dashboard/notifications': typeof Char123LocaleChar125LayoutDashboardNotificationsRoute
-  '/{-$locale}/dashboard/orders': typeof Char123LocaleChar125LayoutDashboardOrdersRouteWithChildren
-  '/{-$locale}/dashboard/profile': typeof Char123LocaleChar125LayoutDashboardProfileRoute
-  '/{-$locale}/dashboard/security': typeof Char123LocaleChar125LayoutDashboardSecurityRoute
-  '/{-$locale}/dashboard/sessions': typeof Char123LocaleChar125LayoutDashboardSessionsRoute
+  '/{-$locale}/admin/audit': typeof Char123LocaleChar125LayoutAdminAuditRoute
+  '/{-$locale}/admin/collection-orders': typeof Char123LocaleChar125LayoutAdminCollectionOrdersRoute
+  '/{-$locale}/admin/content': typeof Char123LocaleChar125LayoutAdminContentRoute
+  '/{-$locale}/admin/credits': typeof Char123LocaleChar125LayoutAdminCreditsRoute
+  '/{-$locale}/admin/orders': typeof Char123LocaleChar125LayoutAdminOrdersRoute
+  '/{-$locale}/admin/revenue': typeof Char123LocaleChar125LayoutAdminRevenueRoute
+  '/{-$locale}/admin/roles': typeof Char123LocaleChar125LayoutAdminRolesRoute
+  '/{-$locale}/admin/settings': typeof Char123LocaleChar125LayoutAdminSettingsRoute
+  '/{-$locale}/admin/subscriptions': typeof Char123LocaleChar125LayoutAdminSubscriptionsRoute
+  '/{-$locale}/admin/tasks': typeof Char123LocaleChar125LayoutAdminTasksRoute
+  '/{-$locale}/admin/tickets': typeof Char123LocaleChar125LayoutAdminTicketsRoute
+  '/{-$locale}/admin/users': typeof Char123LocaleChar125LayoutAdminUsersRoute
   '/{-$locale}/docs/$slug': typeof Char123LocaleChar125LayoutDocsSlugRoute
   '/{-$locale}/marketing/about': typeof Char123LocaleChar125LayoutMarketingAboutRoute
   '/{-$locale}/marketing/contact': typeof Char123LocaleChar125LayoutMarketingContactRoute
   '/{-$locale}/marketing/features': typeof Char123LocaleChar125LayoutMarketingFeaturesRoute
   '/{-$locale}/marketing/roadmap': typeof Char123LocaleChar125LayoutMarketingRoadmapRoute
   '/{-$locale}/marketing/waitlist': typeof Char123LocaleChar125LayoutMarketingWaitlistRoute
-  '/{-$locale}/dashboard/': typeof Char123LocaleChar125LayoutDashboardIndexRoute
+  '/{-$locale}/settings/api-keys': typeof Char123LocaleChar125LayoutSettingsApiKeysRoute
+  '/{-$locale}/settings/billing': typeof Char123LocaleChar125LayoutSettingsBillingRoute
+  '/{-$locale}/settings/notifications': typeof Char123LocaleChar125LayoutSettingsNotificationsRoute
+  '/{-$locale}/settings/orders': typeof Char123LocaleChar125LayoutSettingsOrdersRouteWithChildren
+  '/{-$locale}/settings/profile': typeof Char123LocaleChar125LayoutSettingsProfileRoute
+  '/{-$locale}/settings/security': typeof Char123LocaleChar125LayoutSettingsSecurityRoute
+  '/{-$locale}/settings/sessions': typeof Char123LocaleChar125LayoutSettingsSessionsRoute
   '/{-$locale}/docs/': typeof Char123LocaleChar125LayoutDocsIndexRoute
   '/{-$locale}/marketing/': typeof Char123LocaleChar125LayoutMarketingIndexRoute
+  '/{-$locale}/settings/': typeof Char123LocaleChar125LayoutSettingsIndexRoute
   '/api/collection/accounts/$accountId/qrcode': typeof ApiCollectionAccountsAccountIdQrcodeRoute
   '/api/collection/orders/$orderId/receipt': typeof ApiCollectionOrdersOrderIdReceiptRoute
-  '/{-$locale}/dashboard/admin/audit': typeof Char123LocaleChar125LayoutDashboardAdminAuditRoute
-  '/{-$locale}/dashboard/admin/collection-orders': typeof Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute
-  '/{-$locale}/dashboard/admin/content': typeof Char123LocaleChar125LayoutDashboardAdminContentRoute
-  '/{-$locale}/dashboard/admin/credits': typeof Char123LocaleChar125LayoutDashboardAdminCreditsRoute
-  '/{-$locale}/dashboard/admin/orders': typeof Char123LocaleChar125LayoutDashboardAdminOrdersRoute
-  '/{-$locale}/dashboard/admin/revenue': typeof Char123LocaleChar125LayoutDashboardAdminRevenueRoute
-  '/{-$locale}/dashboard/admin/roles': typeof Char123LocaleChar125LayoutDashboardAdminRolesRoute
-  '/{-$locale}/dashboard/admin/settings': typeof Char123LocaleChar125LayoutDashboardAdminSettingsRoute
-  '/{-$locale}/dashboard/admin/subscriptions': typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute
-  '/{-$locale}/dashboard/admin/tasks': typeof Char123LocaleChar125LayoutDashboardAdminTasksRoute
-  '/{-$locale}/dashboard/admin/tickets': typeof Char123LocaleChar125LayoutDashboardAdminTicketsRoute
-  '/{-$locale}/dashboard/admin/users': typeof Char123LocaleChar125LayoutDashboardAdminUsersRoute
-  '/{-$locale}/dashboard/orders/$orderId': typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute
   '/{-$locale}/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
   '/{-$locale}/marketing/legal/$slug': typeof Char123LocaleChar125LayoutMarketingLegalSlugRoute
-  '/{-$locale}/dashboard/orders/': typeof Char123LocaleChar125LayoutDashboardOrdersIndexRoute
+  '/{-$locale}/settings/orders/$orderId': typeof Char123LocaleChar125LayoutSettingsOrdersOrderIdRoute
   '/{-$locale}/marketing/blog/': typeof Char123LocaleChar125LayoutMarketingBlogIndexRoute
   '/{-$locale}/marketing/changelog/': typeof Char123LocaleChar125LayoutMarketingChangelogIndexRoute
+  '/{-$locale}/settings/orders/': typeof Char123LocaleChar125LayoutSettingsOrdersIndexRoute
 }
 export interface FileRoutesByTo {
   '/llms-full.txt': typeof LlmsFullDottxtRoute
@@ -505,47 +513,48 @@ export interface FileRoutesByTo {
   '/api/payment/$': typeof ApiPaymentSplatRoute
   '/api/webhooks/creem': typeof ApiWebhooksCreemRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/{-$locale}/admin': typeof Char123LocaleChar125LayoutAdminRouteWithChildren
   '/{-$locale}/auth/error': typeof Char123LocaleChar125AuthErrorRoute
   '/{-$locale}/auth/forgot-password': typeof Char123LocaleChar125AuthForgotPasswordRoute
   '/{-$locale}/auth/login': typeof Char123LocaleChar125AuthLoginRoute
   '/{-$locale}/auth/register': typeof Char123LocaleChar125AuthRegisterRoute
   '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
   '/{-$locale}/auth/verify-email': typeof Char123LocaleChar125AuthVerifyEmailRoute
-  '/{-$locale}/dashboard/api-keys': typeof Char123LocaleChar125LayoutDashboardApiKeysRoute
-  '/{-$locale}/dashboard/billing': typeof Char123LocaleChar125LayoutDashboardBillingRoute
-  '/{-$locale}/dashboard/notifications': typeof Char123LocaleChar125LayoutDashboardNotificationsRoute
-  '/{-$locale}/dashboard/profile': typeof Char123LocaleChar125LayoutDashboardProfileRoute
-  '/{-$locale}/dashboard/security': typeof Char123LocaleChar125LayoutDashboardSecurityRoute
-  '/{-$locale}/dashboard/sessions': typeof Char123LocaleChar125LayoutDashboardSessionsRoute
+  '/{-$locale}/admin/audit': typeof Char123LocaleChar125LayoutAdminAuditRoute
+  '/{-$locale}/admin/collection-orders': typeof Char123LocaleChar125LayoutAdminCollectionOrdersRoute
+  '/{-$locale}/admin/content': typeof Char123LocaleChar125LayoutAdminContentRoute
+  '/{-$locale}/admin/credits': typeof Char123LocaleChar125LayoutAdminCreditsRoute
+  '/{-$locale}/admin/orders': typeof Char123LocaleChar125LayoutAdminOrdersRoute
+  '/{-$locale}/admin/revenue': typeof Char123LocaleChar125LayoutAdminRevenueRoute
+  '/{-$locale}/admin/roles': typeof Char123LocaleChar125LayoutAdminRolesRoute
+  '/{-$locale}/admin/settings': typeof Char123LocaleChar125LayoutAdminSettingsRoute
+  '/{-$locale}/admin/subscriptions': typeof Char123LocaleChar125LayoutAdminSubscriptionsRoute
+  '/{-$locale}/admin/tasks': typeof Char123LocaleChar125LayoutAdminTasksRoute
+  '/{-$locale}/admin/tickets': typeof Char123LocaleChar125LayoutAdminTicketsRoute
+  '/{-$locale}/admin/users': typeof Char123LocaleChar125LayoutAdminUsersRoute
   '/{-$locale}/docs/$slug': typeof Char123LocaleChar125LayoutDocsSlugRoute
   '/{-$locale}/marketing/about': typeof Char123LocaleChar125LayoutMarketingAboutRoute
   '/{-$locale}/marketing/contact': typeof Char123LocaleChar125LayoutMarketingContactRoute
   '/{-$locale}/marketing/features': typeof Char123LocaleChar125LayoutMarketingFeaturesRoute
   '/{-$locale}/marketing/roadmap': typeof Char123LocaleChar125LayoutMarketingRoadmapRoute
   '/{-$locale}/marketing/waitlist': typeof Char123LocaleChar125LayoutMarketingWaitlistRoute
-  '/{-$locale}/dashboard': typeof Char123LocaleChar125LayoutDashboardIndexRoute
+  '/{-$locale}/settings/api-keys': typeof Char123LocaleChar125LayoutSettingsApiKeysRoute
+  '/{-$locale}/settings/billing': typeof Char123LocaleChar125LayoutSettingsBillingRoute
+  '/{-$locale}/settings/notifications': typeof Char123LocaleChar125LayoutSettingsNotificationsRoute
+  '/{-$locale}/settings/profile': typeof Char123LocaleChar125LayoutSettingsProfileRoute
+  '/{-$locale}/settings/security': typeof Char123LocaleChar125LayoutSettingsSecurityRoute
+  '/{-$locale}/settings/sessions': typeof Char123LocaleChar125LayoutSettingsSessionsRoute
   '/{-$locale}/docs': typeof Char123LocaleChar125LayoutDocsIndexRoute
   '/{-$locale}/marketing': typeof Char123LocaleChar125LayoutMarketingIndexRoute
+  '/{-$locale}/settings': typeof Char123LocaleChar125LayoutSettingsIndexRoute
   '/api/collection/accounts/$accountId/qrcode': typeof ApiCollectionAccountsAccountIdQrcodeRoute
   '/api/collection/orders/$orderId/receipt': typeof ApiCollectionOrdersOrderIdReceiptRoute
-  '/{-$locale}/dashboard/admin/audit': typeof Char123LocaleChar125LayoutDashboardAdminAuditRoute
-  '/{-$locale}/dashboard/admin/collection-orders': typeof Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute
-  '/{-$locale}/dashboard/admin/content': typeof Char123LocaleChar125LayoutDashboardAdminContentRoute
-  '/{-$locale}/dashboard/admin/credits': typeof Char123LocaleChar125LayoutDashboardAdminCreditsRoute
-  '/{-$locale}/dashboard/admin/orders': typeof Char123LocaleChar125LayoutDashboardAdminOrdersRoute
-  '/{-$locale}/dashboard/admin/revenue': typeof Char123LocaleChar125LayoutDashboardAdminRevenueRoute
-  '/{-$locale}/dashboard/admin/roles': typeof Char123LocaleChar125LayoutDashboardAdminRolesRoute
-  '/{-$locale}/dashboard/admin/settings': typeof Char123LocaleChar125LayoutDashboardAdminSettingsRoute
-  '/{-$locale}/dashboard/admin/subscriptions': typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute
-  '/{-$locale}/dashboard/admin/tasks': typeof Char123LocaleChar125LayoutDashboardAdminTasksRoute
-  '/{-$locale}/dashboard/admin/tickets': typeof Char123LocaleChar125LayoutDashboardAdminTicketsRoute
-  '/{-$locale}/dashboard/admin/users': typeof Char123LocaleChar125LayoutDashboardAdminUsersRoute
-  '/{-$locale}/dashboard/orders/$orderId': typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute
   '/{-$locale}/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
   '/{-$locale}/marketing/legal/$slug': typeof Char123LocaleChar125LayoutMarketingLegalSlugRoute
-  '/{-$locale}/dashboard/orders': typeof Char123LocaleChar125LayoutDashboardOrdersIndexRoute
+  '/{-$locale}/settings/orders/$orderId': typeof Char123LocaleChar125LayoutSettingsOrdersOrderIdRoute
   '/{-$locale}/marketing/blog': typeof Char123LocaleChar125LayoutMarketingBlogIndexRoute
   '/{-$locale}/marketing/changelog': typeof Char123LocaleChar125LayoutMarketingChangelogIndexRoute
+  '/{-$locale}/settings/orders': typeof Char123LocaleChar125LayoutSettingsOrdersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -565,51 +574,52 @@ export interface FileRoutesById {
   '/api/payment/$': typeof ApiPaymentSplatRoute
   '/api/webhooks/creem': typeof ApiWebhooksCreemRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
-  '/{-$locale}/_layout/dashboard': typeof Char123LocaleChar125LayoutDashboardRouteWithChildren
+  '/{-$locale}/_layout/admin': typeof Char123LocaleChar125LayoutAdminRouteWithChildren
   '/{-$locale}/_layout/docs': typeof Char123LocaleChar125LayoutDocsRouteWithChildren
   '/{-$locale}/_layout/marketing': typeof Char123LocaleChar125LayoutMarketingRouteWithChildren
+  '/{-$locale}/_layout/settings': typeof Char123LocaleChar125LayoutSettingsRouteWithChildren
   '/{-$locale}/auth/error': typeof Char123LocaleChar125AuthErrorRoute
   '/{-$locale}/auth/forgot-password': typeof Char123LocaleChar125AuthForgotPasswordRoute
   '/{-$locale}/auth/login': typeof Char123LocaleChar125AuthLoginRoute
   '/{-$locale}/auth/register': typeof Char123LocaleChar125AuthRegisterRoute
   '/{-$locale}/auth/reset-password': typeof Char123LocaleChar125AuthResetPasswordRoute
   '/{-$locale}/auth/verify-email': typeof Char123LocaleChar125AuthVerifyEmailRoute
-  '/{-$locale}/_layout/dashboard/api-keys': typeof Char123LocaleChar125LayoutDashboardApiKeysRoute
-  '/{-$locale}/_layout/dashboard/billing': typeof Char123LocaleChar125LayoutDashboardBillingRoute
-  '/{-$locale}/_layout/dashboard/notifications': typeof Char123LocaleChar125LayoutDashboardNotificationsRoute
-  '/{-$locale}/_layout/dashboard/orders': typeof Char123LocaleChar125LayoutDashboardOrdersRouteWithChildren
-  '/{-$locale}/_layout/dashboard/profile': typeof Char123LocaleChar125LayoutDashboardProfileRoute
-  '/{-$locale}/_layout/dashboard/security': typeof Char123LocaleChar125LayoutDashboardSecurityRoute
-  '/{-$locale}/_layout/dashboard/sessions': typeof Char123LocaleChar125LayoutDashboardSessionsRoute
+  '/{-$locale}/_layout/admin/audit': typeof Char123LocaleChar125LayoutAdminAuditRoute
+  '/{-$locale}/_layout/admin/collection-orders': typeof Char123LocaleChar125LayoutAdminCollectionOrdersRoute
+  '/{-$locale}/_layout/admin/content': typeof Char123LocaleChar125LayoutAdminContentRoute
+  '/{-$locale}/_layout/admin/credits': typeof Char123LocaleChar125LayoutAdminCreditsRoute
+  '/{-$locale}/_layout/admin/orders': typeof Char123LocaleChar125LayoutAdminOrdersRoute
+  '/{-$locale}/_layout/admin/revenue': typeof Char123LocaleChar125LayoutAdminRevenueRoute
+  '/{-$locale}/_layout/admin/roles': typeof Char123LocaleChar125LayoutAdminRolesRoute
+  '/{-$locale}/_layout/admin/settings': typeof Char123LocaleChar125LayoutAdminSettingsRoute
+  '/{-$locale}/_layout/admin/subscriptions': typeof Char123LocaleChar125LayoutAdminSubscriptionsRoute
+  '/{-$locale}/_layout/admin/tasks': typeof Char123LocaleChar125LayoutAdminTasksRoute
+  '/{-$locale}/_layout/admin/tickets': typeof Char123LocaleChar125LayoutAdminTicketsRoute
+  '/{-$locale}/_layout/admin/users': typeof Char123LocaleChar125LayoutAdminUsersRoute
   '/{-$locale}/_layout/docs/$slug': typeof Char123LocaleChar125LayoutDocsSlugRoute
   '/{-$locale}/_layout/marketing/about': typeof Char123LocaleChar125LayoutMarketingAboutRoute
   '/{-$locale}/_layout/marketing/contact': typeof Char123LocaleChar125LayoutMarketingContactRoute
   '/{-$locale}/_layout/marketing/features': typeof Char123LocaleChar125LayoutMarketingFeaturesRoute
   '/{-$locale}/_layout/marketing/roadmap': typeof Char123LocaleChar125LayoutMarketingRoadmapRoute
   '/{-$locale}/_layout/marketing/waitlist': typeof Char123LocaleChar125LayoutMarketingWaitlistRoute
-  '/{-$locale}/_layout/dashboard/': typeof Char123LocaleChar125LayoutDashboardIndexRoute
+  '/{-$locale}/_layout/settings/api-keys': typeof Char123LocaleChar125LayoutSettingsApiKeysRoute
+  '/{-$locale}/_layout/settings/billing': typeof Char123LocaleChar125LayoutSettingsBillingRoute
+  '/{-$locale}/_layout/settings/notifications': typeof Char123LocaleChar125LayoutSettingsNotificationsRoute
+  '/{-$locale}/_layout/settings/orders': typeof Char123LocaleChar125LayoutSettingsOrdersRouteWithChildren
+  '/{-$locale}/_layout/settings/profile': typeof Char123LocaleChar125LayoutSettingsProfileRoute
+  '/{-$locale}/_layout/settings/security': typeof Char123LocaleChar125LayoutSettingsSecurityRoute
+  '/{-$locale}/_layout/settings/sessions': typeof Char123LocaleChar125LayoutSettingsSessionsRoute
   '/{-$locale}/_layout/docs/': typeof Char123LocaleChar125LayoutDocsIndexRoute
   '/{-$locale}/_layout/marketing/': typeof Char123LocaleChar125LayoutMarketingIndexRoute
+  '/{-$locale}/_layout/settings/': typeof Char123LocaleChar125LayoutSettingsIndexRoute
   '/api/collection/accounts/$accountId/qrcode': typeof ApiCollectionAccountsAccountIdQrcodeRoute
   '/api/collection/orders/$orderId/receipt': typeof ApiCollectionOrdersOrderIdReceiptRoute
-  '/{-$locale}/_layout/dashboard/admin/audit': typeof Char123LocaleChar125LayoutDashboardAdminAuditRoute
-  '/{-$locale}/_layout/dashboard/admin/collection-orders': typeof Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute
-  '/{-$locale}/_layout/dashboard/admin/content': typeof Char123LocaleChar125LayoutDashboardAdminContentRoute
-  '/{-$locale}/_layout/dashboard/admin/credits': typeof Char123LocaleChar125LayoutDashboardAdminCreditsRoute
-  '/{-$locale}/_layout/dashboard/admin/orders': typeof Char123LocaleChar125LayoutDashboardAdminOrdersRoute
-  '/{-$locale}/_layout/dashboard/admin/revenue': typeof Char123LocaleChar125LayoutDashboardAdminRevenueRoute
-  '/{-$locale}/_layout/dashboard/admin/roles': typeof Char123LocaleChar125LayoutDashboardAdminRolesRoute
-  '/{-$locale}/_layout/dashboard/admin/settings': typeof Char123LocaleChar125LayoutDashboardAdminSettingsRoute
-  '/{-$locale}/_layout/dashboard/admin/subscriptions': typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute
-  '/{-$locale}/_layout/dashboard/admin/tasks': typeof Char123LocaleChar125LayoutDashboardAdminTasksRoute
-  '/{-$locale}/_layout/dashboard/admin/tickets': typeof Char123LocaleChar125LayoutDashboardAdminTicketsRoute
-  '/{-$locale}/_layout/dashboard/admin/users': typeof Char123LocaleChar125LayoutDashboardAdminUsersRoute
-  '/{-$locale}/_layout/dashboard/orders/$orderId': typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute
   '/{-$locale}/_layout/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
   '/{-$locale}/_layout/marketing/legal/$slug': typeof Char123LocaleChar125LayoutMarketingLegalSlugRoute
-  '/{-$locale}/_layout/dashboard/orders/': typeof Char123LocaleChar125LayoutDashboardOrdersIndexRoute
+  '/{-$locale}/_layout/settings/orders/$orderId': typeof Char123LocaleChar125LayoutSettingsOrdersOrderIdRoute
   '/{-$locale}/_layout/marketing/blog/': typeof Char123LocaleChar125LayoutMarketingBlogIndexRoute
   '/{-$locale}/_layout/marketing/changelog/': typeof Char123LocaleChar125LayoutMarketingChangelogIndexRoute
+  '/{-$locale}/_layout/settings/orders/': typeof Char123LocaleChar125LayoutSettingsOrdersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -630,51 +640,52 @@ export interface FileRouteTypes {
     | '/api/payment/$'
     | '/api/webhooks/creem'
     | '/api/webhooks/stripe'
-    | '/{-$locale}/dashboard'
+    | '/{-$locale}/admin'
     | '/{-$locale}/docs'
     | '/{-$locale}/marketing'
+    | '/{-$locale}/settings'
     | '/{-$locale}/auth/error'
     | '/{-$locale}/auth/forgot-password'
     | '/{-$locale}/auth/login'
     | '/{-$locale}/auth/register'
     | '/{-$locale}/auth/reset-password'
     | '/{-$locale}/auth/verify-email'
-    | '/{-$locale}/dashboard/api-keys'
-    | '/{-$locale}/dashboard/billing'
-    | '/{-$locale}/dashboard/notifications'
-    | '/{-$locale}/dashboard/orders'
-    | '/{-$locale}/dashboard/profile'
-    | '/{-$locale}/dashboard/security'
-    | '/{-$locale}/dashboard/sessions'
+    | '/{-$locale}/admin/audit'
+    | '/{-$locale}/admin/collection-orders'
+    | '/{-$locale}/admin/content'
+    | '/{-$locale}/admin/credits'
+    | '/{-$locale}/admin/orders'
+    | '/{-$locale}/admin/revenue'
+    | '/{-$locale}/admin/roles'
+    | '/{-$locale}/admin/settings'
+    | '/{-$locale}/admin/subscriptions'
+    | '/{-$locale}/admin/tasks'
+    | '/{-$locale}/admin/tickets'
+    | '/{-$locale}/admin/users'
     | '/{-$locale}/docs/$slug'
     | '/{-$locale}/marketing/about'
     | '/{-$locale}/marketing/contact'
     | '/{-$locale}/marketing/features'
     | '/{-$locale}/marketing/roadmap'
     | '/{-$locale}/marketing/waitlist'
-    | '/{-$locale}/dashboard/'
+    | '/{-$locale}/settings/api-keys'
+    | '/{-$locale}/settings/billing'
+    | '/{-$locale}/settings/notifications'
+    | '/{-$locale}/settings/orders'
+    | '/{-$locale}/settings/profile'
+    | '/{-$locale}/settings/security'
+    | '/{-$locale}/settings/sessions'
     | '/{-$locale}/docs/'
     | '/{-$locale}/marketing/'
+    | '/{-$locale}/settings/'
     | '/api/collection/accounts/$accountId/qrcode'
     | '/api/collection/orders/$orderId/receipt'
-    | '/{-$locale}/dashboard/admin/audit'
-    | '/{-$locale}/dashboard/admin/collection-orders'
-    | '/{-$locale}/dashboard/admin/content'
-    | '/{-$locale}/dashboard/admin/credits'
-    | '/{-$locale}/dashboard/admin/orders'
-    | '/{-$locale}/dashboard/admin/revenue'
-    | '/{-$locale}/dashboard/admin/roles'
-    | '/{-$locale}/dashboard/admin/settings'
-    | '/{-$locale}/dashboard/admin/subscriptions'
-    | '/{-$locale}/dashboard/admin/tasks'
-    | '/{-$locale}/dashboard/admin/tickets'
-    | '/{-$locale}/dashboard/admin/users'
-    | '/{-$locale}/dashboard/orders/$orderId'
     | '/{-$locale}/marketing/blog/$slug'
     | '/{-$locale}/marketing/legal/$slug'
-    | '/{-$locale}/dashboard/orders/'
+    | '/{-$locale}/settings/orders/$orderId'
     | '/{-$locale}/marketing/blog/'
     | '/{-$locale}/marketing/changelog/'
+    | '/{-$locale}/settings/orders/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/llms-full.txt'
@@ -693,47 +704,48 @@ export interface FileRouteTypes {
     | '/api/payment/$'
     | '/api/webhooks/creem'
     | '/api/webhooks/stripe'
+    | '/{-$locale}/admin'
     | '/{-$locale}/auth/error'
     | '/{-$locale}/auth/forgot-password'
     | '/{-$locale}/auth/login'
     | '/{-$locale}/auth/register'
     | '/{-$locale}/auth/reset-password'
     | '/{-$locale}/auth/verify-email'
-    | '/{-$locale}/dashboard/api-keys'
-    | '/{-$locale}/dashboard/billing'
-    | '/{-$locale}/dashboard/notifications'
-    | '/{-$locale}/dashboard/profile'
-    | '/{-$locale}/dashboard/security'
-    | '/{-$locale}/dashboard/sessions'
+    | '/{-$locale}/admin/audit'
+    | '/{-$locale}/admin/collection-orders'
+    | '/{-$locale}/admin/content'
+    | '/{-$locale}/admin/credits'
+    | '/{-$locale}/admin/orders'
+    | '/{-$locale}/admin/revenue'
+    | '/{-$locale}/admin/roles'
+    | '/{-$locale}/admin/settings'
+    | '/{-$locale}/admin/subscriptions'
+    | '/{-$locale}/admin/tasks'
+    | '/{-$locale}/admin/tickets'
+    | '/{-$locale}/admin/users'
     | '/{-$locale}/docs/$slug'
     | '/{-$locale}/marketing/about'
     | '/{-$locale}/marketing/contact'
     | '/{-$locale}/marketing/features'
     | '/{-$locale}/marketing/roadmap'
     | '/{-$locale}/marketing/waitlist'
-    | '/{-$locale}/dashboard'
+    | '/{-$locale}/settings/api-keys'
+    | '/{-$locale}/settings/billing'
+    | '/{-$locale}/settings/notifications'
+    | '/{-$locale}/settings/profile'
+    | '/{-$locale}/settings/security'
+    | '/{-$locale}/settings/sessions'
     | '/{-$locale}/docs'
     | '/{-$locale}/marketing'
+    | '/{-$locale}/settings'
     | '/api/collection/accounts/$accountId/qrcode'
     | '/api/collection/orders/$orderId/receipt'
-    | '/{-$locale}/dashboard/admin/audit'
-    | '/{-$locale}/dashboard/admin/collection-orders'
-    | '/{-$locale}/dashboard/admin/content'
-    | '/{-$locale}/dashboard/admin/credits'
-    | '/{-$locale}/dashboard/admin/orders'
-    | '/{-$locale}/dashboard/admin/revenue'
-    | '/{-$locale}/dashboard/admin/roles'
-    | '/{-$locale}/dashboard/admin/settings'
-    | '/{-$locale}/dashboard/admin/subscriptions'
-    | '/{-$locale}/dashboard/admin/tasks'
-    | '/{-$locale}/dashboard/admin/tickets'
-    | '/{-$locale}/dashboard/admin/users'
-    | '/{-$locale}/dashboard/orders/$orderId'
     | '/{-$locale}/marketing/blog/$slug'
     | '/{-$locale}/marketing/legal/$slug'
-    | '/{-$locale}/dashboard/orders'
+    | '/{-$locale}/settings/orders/$orderId'
     | '/{-$locale}/marketing/blog'
     | '/{-$locale}/marketing/changelog'
+    | '/{-$locale}/settings/orders'
   id:
     | '__root__'
     | '/llms-full.txt'
@@ -752,51 +764,52 @@ export interface FileRouteTypes {
     | '/api/payment/$'
     | '/api/webhooks/creem'
     | '/api/webhooks/stripe'
-    | '/{-$locale}/_layout/dashboard'
+    | '/{-$locale}/_layout/admin'
     | '/{-$locale}/_layout/docs'
     | '/{-$locale}/_layout/marketing'
+    | '/{-$locale}/_layout/settings'
     | '/{-$locale}/auth/error'
     | '/{-$locale}/auth/forgot-password'
     | '/{-$locale}/auth/login'
     | '/{-$locale}/auth/register'
     | '/{-$locale}/auth/reset-password'
     | '/{-$locale}/auth/verify-email'
-    | '/{-$locale}/_layout/dashboard/api-keys'
-    | '/{-$locale}/_layout/dashboard/billing'
-    | '/{-$locale}/_layout/dashboard/notifications'
-    | '/{-$locale}/_layout/dashboard/orders'
-    | '/{-$locale}/_layout/dashboard/profile'
-    | '/{-$locale}/_layout/dashboard/security'
-    | '/{-$locale}/_layout/dashboard/sessions'
+    | '/{-$locale}/_layout/admin/audit'
+    | '/{-$locale}/_layout/admin/collection-orders'
+    | '/{-$locale}/_layout/admin/content'
+    | '/{-$locale}/_layout/admin/credits'
+    | '/{-$locale}/_layout/admin/orders'
+    | '/{-$locale}/_layout/admin/revenue'
+    | '/{-$locale}/_layout/admin/roles'
+    | '/{-$locale}/_layout/admin/settings'
+    | '/{-$locale}/_layout/admin/subscriptions'
+    | '/{-$locale}/_layout/admin/tasks'
+    | '/{-$locale}/_layout/admin/tickets'
+    | '/{-$locale}/_layout/admin/users'
     | '/{-$locale}/_layout/docs/$slug'
     | '/{-$locale}/_layout/marketing/about'
     | '/{-$locale}/_layout/marketing/contact'
     | '/{-$locale}/_layout/marketing/features'
     | '/{-$locale}/_layout/marketing/roadmap'
     | '/{-$locale}/_layout/marketing/waitlist'
-    | '/{-$locale}/_layout/dashboard/'
+    | '/{-$locale}/_layout/settings/api-keys'
+    | '/{-$locale}/_layout/settings/billing'
+    | '/{-$locale}/_layout/settings/notifications'
+    | '/{-$locale}/_layout/settings/orders'
+    | '/{-$locale}/_layout/settings/profile'
+    | '/{-$locale}/_layout/settings/security'
+    | '/{-$locale}/_layout/settings/sessions'
     | '/{-$locale}/_layout/docs/'
     | '/{-$locale}/_layout/marketing/'
+    | '/{-$locale}/_layout/settings/'
     | '/api/collection/accounts/$accountId/qrcode'
     | '/api/collection/orders/$orderId/receipt'
-    | '/{-$locale}/_layout/dashboard/admin/audit'
-    | '/{-$locale}/_layout/dashboard/admin/collection-orders'
-    | '/{-$locale}/_layout/dashboard/admin/content'
-    | '/{-$locale}/_layout/dashboard/admin/credits'
-    | '/{-$locale}/_layout/dashboard/admin/orders'
-    | '/{-$locale}/_layout/dashboard/admin/revenue'
-    | '/{-$locale}/_layout/dashboard/admin/roles'
-    | '/{-$locale}/_layout/dashboard/admin/settings'
-    | '/{-$locale}/_layout/dashboard/admin/subscriptions'
-    | '/{-$locale}/_layout/dashboard/admin/tasks'
-    | '/{-$locale}/_layout/dashboard/admin/tickets'
-    | '/{-$locale}/_layout/dashboard/admin/users'
-    | '/{-$locale}/_layout/dashboard/orders/$orderId'
     | '/{-$locale}/_layout/marketing/blog/$slug'
     | '/{-$locale}/_layout/marketing/legal/$slug'
-    | '/{-$locale}/_layout/dashboard/orders/'
+    | '/{-$locale}/_layout/settings/orders/$orderId'
     | '/{-$locale}/_layout/marketing/blog/'
     | '/{-$locale}/_layout/marketing/changelog/'
+    | '/{-$locale}/_layout/settings/orders/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -816,9 +829,10 @@ export interface RootRouteChildren {
   ApiPaymentSplatRoute: typeof ApiPaymentSplatRoute
   ApiWebhooksCreemRoute: typeof ApiWebhooksCreemRoute
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
-  Char123LocaleChar125LayoutDashboardRoute: typeof Char123LocaleChar125LayoutDashboardRouteWithChildren
+  Char123LocaleChar125LayoutAdminRoute: typeof Char123LocaleChar125LayoutAdminRouteWithChildren
   Char123LocaleChar125LayoutDocsRoute: typeof Char123LocaleChar125LayoutDocsRouteWithChildren
   Char123LocaleChar125LayoutMarketingRoute: typeof Char123LocaleChar125LayoutMarketingRouteWithChildren
+  Char123LocaleChar125LayoutSettingsRoute: typeof Char123LocaleChar125LayoutSettingsRouteWithChildren
   Char123LocaleChar125AuthErrorRoute: typeof Char123LocaleChar125AuthErrorRoute
   Char123LocaleChar125AuthForgotPasswordRoute: typeof Char123LocaleChar125AuthForgotPasswordRoute
   Char123LocaleChar125AuthLoginRoute: typeof Char123LocaleChar125AuthLoginRoute
@@ -943,11 +957,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWebhooksStripeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/{-$locale}/_layout/dashboard': {
-      id: '/{-$locale}/_layout/dashboard'
-      path: '/{-$locale}/dashboard'
-      fullPath: '/{-$locale}/dashboard'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardRouteImport
+    '/{-$locale}/_layout/admin': {
+      id: '/{-$locale}/_layout/admin'
+      path: '/{-$locale}/admin'
+      fullPath: '/{-$locale}/admin'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/{-$locale}/_layout/docs': {
@@ -962,6 +976,13 @@ declare module '@tanstack/react-router' {
       path: '/{-$locale}/marketing'
       fullPath: '/{-$locale}/marketing'
       preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/{-$locale}/_layout/settings': {
+      id: '/{-$locale}/_layout/settings'
+      path: '/{-$locale}/settings'
+      fullPath: '/{-$locale}/settings'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/{-$locale}/auth/error': {
@@ -1006,61 +1027,89 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char123LocaleChar125AuthVerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/{-$locale}/_layout/dashboard/': {
-      id: '/{-$locale}/_layout/dashboard/'
-      path: '/'
-      fullPath: '/{-$locale}/dashboard/'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardIndexRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
+    '/{-$locale}/_layout/admin/audit': {
+      id: '/{-$locale}/_layout/admin/audit'
+      path: '/audit'
+      fullPath: '/{-$locale}/admin/audit'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminAuditRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
     }
-    '/{-$locale}/_layout/dashboard/api-keys': {
-      id: '/{-$locale}/_layout/dashboard/api-keys'
-      path: '/api-keys'
-      fullPath: '/{-$locale}/dashboard/api-keys'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardApiKeysRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
+    '/{-$locale}/_layout/admin/collection-orders': {
+      id: '/{-$locale}/_layout/admin/collection-orders'
+      path: '/collection-orders'
+      fullPath: '/{-$locale}/admin/collection-orders'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminCollectionOrdersRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
     }
-    '/{-$locale}/_layout/dashboard/billing': {
-      id: '/{-$locale}/_layout/dashboard/billing'
-      path: '/billing'
-      fullPath: '/{-$locale}/dashboard/billing'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardBillingRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
+    '/{-$locale}/_layout/admin/content': {
+      id: '/{-$locale}/_layout/admin/content'
+      path: '/content'
+      fullPath: '/{-$locale}/admin/content'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminContentRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
     }
-    '/{-$locale}/_layout/dashboard/notifications': {
-      id: '/{-$locale}/_layout/dashboard/notifications'
-      path: '/notifications'
-      fullPath: '/{-$locale}/dashboard/notifications'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardNotificationsRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
+    '/{-$locale}/_layout/admin/credits': {
+      id: '/{-$locale}/_layout/admin/credits'
+      path: '/credits'
+      fullPath: '/{-$locale}/admin/credits'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminCreditsRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
     }
-    '/{-$locale}/_layout/dashboard/orders': {
-      id: '/{-$locale}/_layout/dashboard/orders'
+    '/{-$locale}/_layout/admin/orders': {
+      id: '/{-$locale}/_layout/admin/orders'
       path: '/orders'
-      fullPath: '/{-$locale}/dashboard/orders'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardOrdersRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
+      fullPath: '/{-$locale}/admin/orders'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminOrdersRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
     }
-    '/{-$locale}/_layout/dashboard/profile': {
-      id: '/{-$locale}/_layout/dashboard/profile'
-      path: '/profile'
-      fullPath: '/{-$locale}/dashboard/profile'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardProfileRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
+    '/{-$locale}/_layout/admin/revenue': {
+      id: '/{-$locale}/_layout/admin/revenue'
+      path: '/revenue'
+      fullPath: '/{-$locale}/admin/revenue'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminRevenueRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
     }
-    '/{-$locale}/_layout/dashboard/security': {
-      id: '/{-$locale}/_layout/dashboard/security'
-      path: '/security'
-      fullPath: '/{-$locale}/dashboard/security'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardSecurityRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
+    '/{-$locale}/_layout/admin/roles': {
+      id: '/{-$locale}/_layout/admin/roles'
+      path: '/roles'
+      fullPath: '/{-$locale}/admin/roles'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminRolesRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
     }
-    '/{-$locale}/_layout/dashboard/sessions': {
-      id: '/{-$locale}/_layout/dashboard/sessions'
-      path: '/sessions'
-      fullPath: '/{-$locale}/dashboard/sessions'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardSessionsRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
+    '/{-$locale}/_layout/admin/settings': {
+      id: '/{-$locale}/_layout/admin/settings'
+      path: '/settings'
+      fullPath: '/{-$locale}/admin/settings'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminSettingsRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
+    }
+    '/{-$locale}/_layout/admin/subscriptions': {
+      id: '/{-$locale}/_layout/admin/subscriptions'
+      path: '/subscriptions'
+      fullPath: '/{-$locale}/admin/subscriptions'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminSubscriptionsRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
+    }
+    '/{-$locale}/_layout/admin/tasks': {
+      id: '/{-$locale}/_layout/admin/tasks'
+      path: '/tasks'
+      fullPath: '/{-$locale}/admin/tasks'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminTasksRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
+    }
+    '/{-$locale}/_layout/admin/tickets': {
+      id: '/{-$locale}/_layout/admin/tickets'
+      path: '/tickets'
+      fullPath: '/{-$locale}/admin/tickets'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminTicketsRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
+    }
+    '/{-$locale}/_layout/admin/users': {
+      id: '/{-$locale}/_layout/admin/users'
+      path: '/users'
+      fullPath: '/{-$locale}/admin/users'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminUsersRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
     }
     '/{-$locale}/_layout/docs/': {
       id: '/{-$locale}/_layout/docs/'
@@ -1118,6 +1167,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingWaitlistRouteImport
       parentRoute: typeof Char123LocaleChar125LayoutMarketingRoute
     }
+    '/{-$locale}/_layout/settings/': {
+      id: '/{-$locale}/_layout/settings/'
+      path: '/'
+      fullPath: '/{-$locale}/settings/'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsIndexRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutSettingsRoute
+    }
+    '/{-$locale}/_layout/settings/api-keys': {
+      id: '/{-$locale}/_layout/settings/api-keys'
+      path: '/api-keys'
+      fullPath: '/{-$locale}/settings/api-keys'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsApiKeysRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutSettingsRoute
+    }
+    '/{-$locale}/_layout/settings/billing': {
+      id: '/{-$locale}/_layout/settings/billing'
+      path: '/billing'
+      fullPath: '/{-$locale}/settings/billing'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsBillingRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutSettingsRoute
+    }
+    '/{-$locale}/_layout/settings/notifications': {
+      id: '/{-$locale}/_layout/settings/notifications'
+      path: '/notifications'
+      fullPath: '/{-$locale}/settings/notifications'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsNotificationsRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutSettingsRoute
+    }
+    '/{-$locale}/_layout/settings/orders': {
+      id: '/{-$locale}/_layout/settings/orders'
+      path: '/orders'
+      fullPath: '/{-$locale}/settings/orders'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsOrdersRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutSettingsRoute
+    }
+    '/{-$locale}/_layout/settings/profile': {
+      id: '/{-$locale}/_layout/settings/profile'
+      path: '/profile'
+      fullPath: '/{-$locale}/settings/profile'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsProfileRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutSettingsRoute
+    }
+    '/{-$locale}/_layout/settings/security': {
+      id: '/{-$locale}/_layout/settings/security'
+      path: '/security'
+      fullPath: '/{-$locale}/settings/security'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsSecurityRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutSettingsRoute
+    }
+    '/{-$locale}/_layout/settings/sessions': {
+      id: '/{-$locale}/_layout/settings/sessions'
+      path: '/sessions'
+      fullPath: '/{-$locale}/settings/sessions'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsSessionsRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutSettingsRoute
+    }
     '/api/collection/accounts/$accountId/qrcode': {
       id: '/api/collection/accounts/$accountId/qrcode'
       path: '/api/collection/accounts/$accountId/qrcode'
@@ -1131,104 +1236,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/collection/orders/$orderId/receipt'
       preLoaderRoute: typeof ApiCollectionOrdersOrderIdReceiptRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/{-$locale}/_layout/dashboard/admin/audit': {
-      id: '/{-$locale}/_layout/dashboard/admin/audit'
-      path: '/admin/audit'
-      fullPath: '/{-$locale}/dashboard/admin/audit'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminAuditRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
-    }
-    '/{-$locale}/_layout/dashboard/admin/collection-orders': {
-      id: '/{-$locale}/_layout/dashboard/admin/collection-orders'
-      path: '/admin/collection-orders'
-      fullPath: '/{-$locale}/dashboard/admin/collection-orders'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
-    }
-    '/{-$locale}/_layout/dashboard/admin/content': {
-      id: '/{-$locale}/_layout/dashboard/admin/content'
-      path: '/admin/content'
-      fullPath: '/{-$locale}/dashboard/admin/content'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminContentRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
-    }
-    '/{-$locale}/_layout/dashboard/admin/credits': {
-      id: '/{-$locale}/_layout/dashboard/admin/credits'
-      path: '/admin/credits'
-      fullPath: '/{-$locale}/dashboard/admin/credits'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminCreditsRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
-    }
-    '/{-$locale}/_layout/dashboard/admin/orders': {
-      id: '/{-$locale}/_layout/dashboard/admin/orders'
-      path: '/admin/orders'
-      fullPath: '/{-$locale}/dashboard/admin/orders'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminOrdersRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
-    }
-    '/{-$locale}/_layout/dashboard/admin/revenue': {
-      id: '/{-$locale}/_layout/dashboard/admin/revenue'
-      path: '/admin/revenue'
-      fullPath: '/{-$locale}/dashboard/admin/revenue'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminRevenueRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
-    }
-    '/{-$locale}/_layout/dashboard/admin/roles': {
-      id: '/{-$locale}/_layout/dashboard/admin/roles'
-      path: '/admin/roles'
-      fullPath: '/{-$locale}/dashboard/admin/roles'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminRolesRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
-    }
-    '/{-$locale}/_layout/dashboard/admin/settings': {
-      id: '/{-$locale}/_layout/dashboard/admin/settings'
-      path: '/admin/settings'
-      fullPath: '/{-$locale}/dashboard/admin/settings'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminSettingsRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
-    }
-    '/{-$locale}/_layout/dashboard/admin/subscriptions': {
-      id: '/{-$locale}/_layout/dashboard/admin/subscriptions'
-      path: '/admin/subscriptions'
-      fullPath: '/{-$locale}/dashboard/admin/subscriptions'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
-    }
-    '/{-$locale}/_layout/dashboard/admin/tasks': {
-      id: '/{-$locale}/_layout/dashboard/admin/tasks'
-      path: '/admin/tasks'
-      fullPath: '/{-$locale}/dashboard/admin/tasks'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminTasksRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
-    }
-    '/{-$locale}/_layout/dashboard/admin/tickets': {
-      id: '/{-$locale}/_layout/dashboard/admin/tickets'
-      path: '/admin/tickets'
-      fullPath: '/{-$locale}/dashboard/admin/tickets'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminTicketsRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
-    }
-    '/{-$locale}/_layout/dashboard/admin/users': {
-      id: '/{-$locale}/_layout/dashboard/admin/users'
-      path: '/admin/users'
-      fullPath: '/{-$locale}/dashboard/admin/users'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminUsersRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
-    }
-    '/{-$locale}/_layout/dashboard/orders/': {
-      id: '/{-$locale}/_layout/dashboard/orders/'
-      path: '/'
-      fullPath: '/{-$locale}/dashboard/orders/'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardOrdersIndexRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardOrdersRoute
-    }
-    '/{-$locale}/_layout/dashboard/orders/$orderId': {
-      id: '/{-$locale}/_layout/dashboard/orders/$orderId'
-      path: '/$orderId'
-      fullPath: '/{-$locale}/dashboard/orders/$orderId'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRouteImport
-      parentRoute: typeof Char123LocaleChar125LayoutDashboardOrdersRoute
     }
     '/{-$locale}/_layout/marketing/blog/': {
       id: '/{-$locale}/_layout/marketing/blog/'
@@ -1258,97 +1265,69 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char123LocaleChar125LayoutMarketingLegalSlugRouteImport
       parentRoute: typeof Char123LocaleChar125LayoutMarketingRoute
     }
+    '/{-$locale}/_layout/settings/orders/': {
+      id: '/{-$locale}/_layout/settings/orders/'
+      path: '/'
+      fullPath: '/{-$locale}/settings/orders/'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsOrdersIndexRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutSettingsOrdersRoute
+    }
+    '/{-$locale}/_layout/settings/orders/$orderId': {
+      id: '/{-$locale}/_layout/settings/orders/$orderId'
+      path: '/$orderId'
+      fullPath: '/{-$locale}/settings/orders/$orderId'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutSettingsOrdersOrderIdRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutSettingsOrdersRoute
+    }
   }
 }
 
-interface Char123LocaleChar125LayoutDashboardOrdersRouteChildren {
-  Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute: typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute
-  Char123LocaleChar125LayoutDashboardOrdersIndexRoute: typeof Char123LocaleChar125LayoutDashboardOrdersIndexRoute
+interface Char123LocaleChar125LayoutAdminRouteChildren {
+  Char123LocaleChar125LayoutAdminAuditRoute: typeof Char123LocaleChar125LayoutAdminAuditRoute
+  Char123LocaleChar125LayoutAdminCollectionOrdersRoute: typeof Char123LocaleChar125LayoutAdminCollectionOrdersRoute
+  Char123LocaleChar125LayoutAdminContentRoute: typeof Char123LocaleChar125LayoutAdminContentRoute
+  Char123LocaleChar125LayoutAdminCreditsRoute: typeof Char123LocaleChar125LayoutAdminCreditsRoute
+  Char123LocaleChar125LayoutAdminOrdersRoute: typeof Char123LocaleChar125LayoutAdminOrdersRoute
+  Char123LocaleChar125LayoutAdminRevenueRoute: typeof Char123LocaleChar125LayoutAdminRevenueRoute
+  Char123LocaleChar125LayoutAdminRolesRoute: typeof Char123LocaleChar125LayoutAdminRolesRoute
+  Char123LocaleChar125LayoutAdminSettingsRoute: typeof Char123LocaleChar125LayoutAdminSettingsRoute
+  Char123LocaleChar125LayoutAdminSubscriptionsRoute: typeof Char123LocaleChar125LayoutAdminSubscriptionsRoute
+  Char123LocaleChar125LayoutAdminTasksRoute: typeof Char123LocaleChar125LayoutAdminTasksRoute
+  Char123LocaleChar125LayoutAdminTicketsRoute: typeof Char123LocaleChar125LayoutAdminTicketsRoute
+  Char123LocaleChar125LayoutAdminUsersRoute: typeof Char123LocaleChar125LayoutAdminUsersRoute
 }
 
-const Char123LocaleChar125LayoutDashboardOrdersRouteChildren: Char123LocaleChar125LayoutDashboardOrdersRouteChildren =
+const Char123LocaleChar125LayoutAdminRouteChildren: Char123LocaleChar125LayoutAdminRouteChildren =
   {
-    Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute:
-      Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute,
-    Char123LocaleChar125LayoutDashboardOrdersIndexRoute:
-      Char123LocaleChar125LayoutDashboardOrdersIndexRoute,
+    Char123LocaleChar125LayoutAdminAuditRoute:
+      Char123LocaleChar125LayoutAdminAuditRoute,
+    Char123LocaleChar125LayoutAdminCollectionOrdersRoute:
+      Char123LocaleChar125LayoutAdminCollectionOrdersRoute,
+    Char123LocaleChar125LayoutAdminContentRoute:
+      Char123LocaleChar125LayoutAdminContentRoute,
+    Char123LocaleChar125LayoutAdminCreditsRoute:
+      Char123LocaleChar125LayoutAdminCreditsRoute,
+    Char123LocaleChar125LayoutAdminOrdersRoute:
+      Char123LocaleChar125LayoutAdminOrdersRoute,
+    Char123LocaleChar125LayoutAdminRevenueRoute:
+      Char123LocaleChar125LayoutAdminRevenueRoute,
+    Char123LocaleChar125LayoutAdminRolesRoute:
+      Char123LocaleChar125LayoutAdminRolesRoute,
+    Char123LocaleChar125LayoutAdminSettingsRoute:
+      Char123LocaleChar125LayoutAdminSettingsRoute,
+    Char123LocaleChar125LayoutAdminSubscriptionsRoute:
+      Char123LocaleChar125LayoutAdminSubscriptionsRoute,
+    Char123LocaleChar125LayoutAdminTasksRoute:
+      Char123LocaleChar125LayoutAdminTasksRoute,
+    Char123LocaleChar125LayoutAdminTicketsRoute:
+      Char123LocaleChar125LayoutAdminTicketsRoute,
+    Char123LocaleChar125LayoutAdminUsersRoute:
+      Char123LocaleChar125LayoutAdminUsersRoute,
   }
 
-const Char123LocaleChar125LayoutDashboardOrdersRouteWithChildren =
-  Char123LocaleChar125LayoutDashboardOrdersRoute._addFileChildren(
-    Char123LocaleChar125LayoutDashboardOrdersRouteChildren,
-  )
-
-interface Char123LocaleChar125LayoutDashboardRouteChildren {
-  Char123LocaleChar125LayoutDashboardApiKeysRoute: typeof Char123LocaleChar125LayoutDashboardApiKeysRoute
-  Char123LocaleChar125LayoutDashboardBillingRoute: typeof Char123LocaleChar125LayoutDashboardBillingRoute
-  Char123LocaleChar125LayoutDashboardNotificationsRoute: typeof Char123LocaleChar125LayoutDashboardNotificationsRoute
-  Char123LocaleChar125LayoutDashboardOrdersRoute: typeof Char123LocaleChar125LayoutDashboardOrdersRouteWithChildren
-  Char123LocaleChar125LayoutDashboardProfileRoute: typeof Char123LocaleChar125LayoutDashboardProfileRoute
-  Char123LocaleChar125LayoutDashboardSecurityRoute: typeof Char123LocaleChar125LayoutDashboardSecurityRoute
-  Char123LocaleChar125LayoutDashboardSessionsRoute: typeof Char123LocaleChar125LayoutDashboardSessionsRoute
-  Char123LocaleChar125LayoutDashboardIndexRoute: typeof Char123LocaleChar125LayoutDashboardIndexRoute
-  Char123LocaleChar125LayoutDashboardAdminAuditRoute: typeof Char123LocaleChar125LayoutDashboardAdminAuditRoute
-  Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute: typeof Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute
-  Char123LocaleChar125LayoutDashboardAdminContentRoute: typeof Char123LocaleChar125LayoutDashboardAdminContentRoute
-  Char123LocaleChar125LayoutDashboardAdminCreditsRoute: typeof Char123LocaleChar125LayoutDashboardAdminCreditsRoute
-  Char123LocaleChar125LayoutDashboardAdminOrdersRoute: typeof Char123LocaleChar125LayoutDashboardAdminOrdersRoute
-  Char123LocaleChar125LayoutDashboardAdminRevenueRoute: typeof Char123LocaleChar125LayoutDashboardAdminRevenueRoute
-  Char123LocaleChar125LayoutDashboardAdminRolesRoute: typeof Char123LocaleChar125LayoutDashboardAdminRolesRoute
-  Char123LocaleChar125LayoutDashboardAdminSettingsRoute: typeof Char123LocaleChar125LayoutDashboardAdminSettingsRoute
-  Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute: typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute
-  Char123LocaleChar125LayoutDashboardAdminTasksRoute: typeof Char123LocaleChar125LayoutDashboardAdminTasksRoute
-  Char123LocaleChar125LayoutDashboardAdminTicketsRoute: typeof Char123LocaleChar125LayoutDashboardAdminTicketsRoute
-  Char123LocaleChar125LayoutDashboardAdminUsersRoute: typeof Char123LocaleChar125LayoutDashboardAdminUsersRoute
-}
-
-const Char123LocaleChar125LayoutDashboardRouteChildren: Char123LocaleChar125LayoutDashboardRouteChildren =
-  {
-    Char123LocaleChar125LayoutDashboardApiKeysRoute:
-      Char123LocaleChar125LayoutDashboardApiKeysRoute,
-    Char123LocaleChar125LayoutDashboardBillingRoute:
-      Char123LocaleChar125LayoutDashboardBillingRoute,
-    Char123LocaleChar125LayoutDashboardNotificationsRoute:
-      Char123LocaleChar125LayoutDashboardNotificationsRoute,
-    Char123LocaleChar125LayoutDashboardOrdersRoute:
-      Char123LocaleChar125LayoutDashboardOrdersRouteWithChildren,
-    Char123LocaleChar125LayoutDashboardProfileRoute:
-      Char123LocaleChar125LayoutDashboardProfileRoute,
-    Char123LocaleChar125LayoutDashboardSecurityRoute:
-      Char123LocaleChar125LayoutDashboardSecurityRoute,
-    Char123LocaleChar125LayoutDashboardSessionsRoute:
-      Char123LocaleChar125LayoutDashboardSessionsRoute,
-    Char123LocaleChar125LayoutDashboardIndexRoute:
-      Char123LocaleChar125LayoutDashboardIndexRoute,
-    Char123LocaleChar125LayoutDashboardAdminAuditRoute:
-      Char123LocaleChar125LayoutDashboardAdminAuditRoute,
-    Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute:
-      Char123LocaleChar125LayoutDashboardAdminCollectionOrdersRoute,
-    Char123LocaleChar125LayoutDashboardAdminContentRoute:
-      Char123LocaleChar125LayoutDashboardAdminContentRoute,
-    Char123LocaleChar125LayoutDashboardAdminCreditsRoute:
-      Char123LocaleChar125LayoutDashboardAdminCreditsRoute,
-    Char123LocaleChar125LayoutDashboardAdminOrdersRoute:
-      Char123LocaleChar125LayoutDashboardAdminOrdersRoute,
-    Char123LocaleChar125LayoutDashboardAdminRevenueRoute:
-      Char123LocaleChar125LayoutDashboardAdminRevenueRoute,
-    Char123LocaleChar125LayoutDashboardAdminRolesRoute:
-      Char123LocaleChar125LayoutDashboardAdminRolesRoute,
-    Char123LocaleChar125LayoutDashboardAdminSettingsRoute:
-      Char123LocaleChar125LayoutDashboardAdminSettingsRoute,
-    Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute:
-      Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute,
-    Char123LocaleChar125LayoutDashboardAdminTasksRoute:
-      Char123LocaleChar125LayoutDashboardAdminTasksRoute,
-    Char123LocaleChar125LayoutDashboardAdminTicketsRoute:
-      Char123LocaleChar125LayoutDashboardAdminTicketsRoute,
-    Char123LocaleChar125LayoutDashboardAdminUsersRoute:
-      Char123LocaleChar125LayoutDashboardAdminUsersRoute,
-  }
-
-const Char123LocaleChar125LayoutDashboardRouteWithChildren =
-  Char123LocaleChar125LayoutDashboardRoute._addFileChildren(
-    Char123LocaleChar125LayoutDashboardRouteChildren,
+const Char123LocaleChar125LayoutAdminRouteWithChildren =
+  Char123LocaleChar125LayoutAdminRoute._addFileChildren(
+    Char123LocaleChar125LayoutAdminRouteChildren,
   )
 
 interface Char123LocaleChar125LayoutDocsRouteChildren {
@@ -1411,6 +1390,60 @@ const Char123LocaleChar125LayoutMarketingRouteWithChildren =
     Char123LocaleChar125LayoutMarketingRouteChildren,
   )
 
+interface Char123LocaleChar125LayoutSettingsOrdersRouteChildren {
+  Char123LocaleChar125LayoutSettingsOrdersOrderIdRoute: typeof Char123LocaleChar125LayoutSettingsOrdersOrderIdRoute
+  Char123LocaleChar125LayoutSettingsOrdersIndexRoute: typeof Char123LocaleChar125LayoutSettingsOrdersIndexRoute
+}
+
+const Char123LocaleChar125LayoutSettingsOrdersRouteChildren: Char123LocaleChar125LayoutSettingsOrdersRouteChildren =
+  {
+    Char123LocaleChar125LayoutSettingsOrdersOrderIdRoute:
+      Char123LocaleChar125LayoutSettingsOrdersOrderIdRoute,
+    Char123LocaleChar125LayoutSettingsOrdersIndexRoute:
+      Char123LocaleChar125LayoutSettingsOrdersIndexRoute,
+  }
+
+const Char123LocaleChar125LayoutSettingsOrdersRouteWithChildren =
+  Char123LocaleChar125LayoutSettingsOrdersRoute._addFileChildren(
+    Char123LocaleChar125LayoutSettingsOrdersRouteChildren,
+  )
+
+interface Char123LocaleChar125LayoutSettingsRouteChildren {
+  Char123LocaleChar125LayoutSettingsApiKeysRoute: typeof Char123LocaleChar125LayoutSettingsApiKeysRoute
+  Char123LocaleChar125LayoutSettingsBillingRoute: typeof Char123LocaleChar125LayoutSettingsBillingRoute
+  Char123LocaleChar125LayoutSettingsNotificationsRoute: typeof Char123LocaleChar125LayoutSettingsNotificationsRoute
+  Char123LocaleChar125LayoutSettingsOrdersRoute: typeof Char123LocaleChar125LayoutSettingsOrdersRouteWithChildren
+  Char123LocaleChar125LayoutSettingsProfileRoute: typeof Char123LocaleChar125LayoutSettingsProfileRoute
+  Char123LocaleChar125LayoutSettingsSecurityRoute: typeof Char123LocaleChar125LayoutSettingsSecurityRoute
+  Char123LocaleChar125LayoutSettingsSessionsRoute: typeof Char123LocaleChar125LayoutSettingsSessionsRoute
+  Char123LocaleChar125LayoutSettingsIndexRoute: typeof Char123LocaleChar125LayoutSettingsIndexRoute
+}
+
+const Char123LocaleChar125LayoutSettingsRouteChildren: Char123LocaleChar125LayoutSettingsRouteChildren =
+  {
+    Char123LocaleChar125LayoutSettingsApiKeysRoute:
+      Char123LocaleChar125LayoutSettingsApiKeysRoute,
+    Char123LocaleChar125LayoutSettingsBillingRoute:
+      Char123LocaleChar125LayoutSettingsBillingRoute,
+    Char123LocaleChar125LayoutSettingsNotificationsRoute:
+      Char123LocaleChar125LayoutSettingsNotificationsRoute,
+    Char123LocaleChar125LayoutSettingsOrdersRoute:
+      Char123LocaleChar125LayoutSettingsOrdersRouteWithChildren,
+    Char123LocaleChar125LayoutSettingsProfileRoute:
+      Char123LocaleChar125LayoutSettingsProfileRoute,
+    Char123LocaleChar125LayoutSettingsSecurityRoute:
+      Char123LocaleChar125LayoutSettingsSecurityRoute,
+    Char123LocaleChar125LayoutSettingsSessionsRoute:
+      Char123LocaleChar125LayoutSettingsSessionsRoute,
+    Char123LocaleChar125LayoutSettingsIndexRoute:
+      Char123LocaleChar125LayoutSettingsIndexRoute,
+  }
+
+const Char123LocaleChar125LayoutSettingsRouteWithChildren =
+  Char123LocaleChar125LayoutSettingsRoute._addFileChildren(
+    Char123LocaleChar125LayoutSettingsRouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   LlmsFullDottxtRoute: LlmsFullDottxtRoute,
   LlmsFullDotzhDottxtRoute: LlmsFullDotzhDottxtRoute,
@@ -1428,12 +1461,14 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPaymentSplatRoute: ApiPaymentSplatRoute,
   ApiWebhooksCreemRoute: ApiWebhooksCreemRoute,
   ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
-  Char123LocaleChar125LayoutDashboardRoute:
-    Char123LocaleChar125LayoutDashboardRouteWithChildren,
+  Char123LocaleChar125LayoutAdminRoute:
+    Char123LocaleChar125LayoutAdminRouteWithChildren,
   Char123LocaleChar125LayoutDocsRoute:
     Char123LocaleChar125LayoutDocsRouteWithChildren,
   Char123LocaleChar125LayoutMarketingRoute:
     Char123LocaleChar125LayoutMarketingRouteWithChildren,
+  Char123LocaleChar125LayoutSettingsRoute:
+    Char123LocaleChar125LayoutSettingsRouteWithChildren,
   Char123LocaleChar125AuthErrorRoute: Char123LocaleChar125AuthErrorRoute,
   Char123LocaleChar125AuthForgotPasswordRoute:
     Char123LocaleChar125AuthForgotPasswordRoute,

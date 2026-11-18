@@ -311,7 +311,7 @@ function TemplatePricing({ price }: { price: string | null }) {
       })
       if (result.kind === 'redirect') {
         await navigate({
-          to: '/{-$locale}/dashboard/orders/$orderId',
+          to: '/{-$locale}/settings/orders/$orderId',
           params: { locale, orderId: result.orderId },
         })
         return

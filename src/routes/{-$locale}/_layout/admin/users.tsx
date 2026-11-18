@@ -96,13 +96,13 @@ const SEARCH_DEBOUNCE_MS = 300
  * 缺一即可绕过；不满足时抛 `notFound()`，不泄漏页面存在。
  * 写操作后需 `load()` + `router.invalidate()`，否则管理员改到自己角色时侧栏不更新。
  */
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/users')({
+export const Route = createFileRoute('/{-$locale}/_layout/admin/users')({
   beforeLoad: ({ context }) => {
     assertFeatureEnabled('enableAdmin')
     assertAdminRole(context.session.user.role)
   },
   head: () =>
-    seo('/dashboard/admin/users', {
+    seo('/admin/users', {
       title: m.admin_users_title(),
       description: m.admin_users_description(),
       locale: getRequestLocale(),

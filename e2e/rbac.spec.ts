@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { seedVerifiedUser } from '../scripts/e2e-seed-subscription'
 
 /**
- * E2E: 管理台角色权限页（`/dashboard/admin/roles`）与审计日志页（`/dashboard/admin/audit`）。
+ * E2E: 管理台角色权限页（`/admin/roles`）与审计日志页（`/admin/audit`）。
  *
  * 验证三件事：
  * 1. 非管理员访问两个页面均被路由守卫拦截；
@@ -47,10 +47,10 @@ test.describe('Admin 角色权限与审计日志', () => {
     await page.getByRole('button', { name: '登录', exact: true }).click()
     await page.waitForURL((url) => url.pathname === '/zh' || url.pathname === '/')
 
-    await page.goto('/zh/dashboard/admin/roles')
+    await page.goto('/zh/admin/roles')
     await expect(page.getByRole('heading', { name: '角色与权限' })).toHaveCount(0)
 
-    await page.goto('/zh/dashboard/admin/audit')
+    await page.goto('/zh/admin/audit')
     await expect(page.getByRole('heading', { name: '审计日志' })).toHaveCount(0)
   })
 
@@ -58,7 +58,7 @@ test.describe('Admin 角色权限与审计日志', () => {
     await loginAsAdmin(page)
     const customRoleName = `auditor_${crypto.randomUUID().slice(0, 6).replace(/-/g, '_')}`
 
-    await page.goto('/zh/dashboard/admin/roles')
+    await page.goto('/zh/admin/roles')
     await waitForHydration(page)
     await expect(page.getByRole('heading', { name: '角色与权限' })).toBeVisible({ timeout: 15000 })
 
@@ -83,7 +83,7 @@ test.describe('Admin 角色权限与审计日志', () => {
     await expect(customRow).toContainText('admin.audit.read')
 
     // 跳转到审计日志页，确认刚才的新建角色操作已落盘
-    await page.goto('/zh/dashboard/admin/audit')
+    await page.goto('/zh/admin/audit')
     await waitForHydration(page)
     await expect(page.getByRole('heading', { name: '审计日志' })).toBeVisible({ timeout: 15000 })
     await expect(page.getByRole('table')).toContainText('rbac.role.create', { timeout: 15000 })

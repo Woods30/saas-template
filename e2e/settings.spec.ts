@@ -30,15 +30,15 @@ async function login(page: import('@playwright/test').Page) {
 
 test.describe('Settings', () => {
   test('未登录访问个人中心被重定向到登录页', async ({ page }) => {
-    await page.goto('/zh/dashboard/profile')
+    await page.goto('/zh/settings/profile')
     await page.waitForURL(/\/zh\/auth\/login/)
     await expect(page.getByRole('heading', { name: '登录' })).toBeVisible()
   })
 
-  test('/dashboard 落到资料板块，导航随模块门禁收敛', async ({ page }) => {
+  test('/settings 落到资料板块，导航随模块门禁收敛', async ({ page }) => {
     await login(page)
-    await page.goto('/zh/dashboard')
-    await page.waitForURL(/\/zh\/dashboard\/profile/)
+    await page.goto('/zh/settings')
+    await page.waitForURL(/\/zh\/settings\/profile/)
 
     await expect(page.getByRole('textbox', { name: '昵称' })).toHaveValue('设置用户')
     await expect(page.getByRole('link', { name: '安全' })).toBeVisible()
@@ -48,7 +48,7 @@ test.describe('Settings', () => {
 
   test('改昵称后刷新仍为新值', async ({ page }) => {
     await login(page)
-    await page.goto('/zh/dashboard/profile')
+    await page.goto('/zh/settings/profile')
     await waitForForm(page)
 
     // 用 `role` 而非 `getByLabel`：侧栏用户卡片按钮带 `aria-label={name}`，其名字会变，
@@ -68,9 +68,9 @@ test.describe('Settings', () => {
     await login(page)
     await expect(page).toHaveURL(/\/zh$|\/$/)
 
-    // 登出入口在侧栏用户卡片：`dashboard` 是 `_layout` 路由，首页顶栏的 `UserMenu`
-    // 在这里并不存在，必须先进入工作台。
-    await page.goto('/zh/dashboard/profile')
+    // 登出入口在侧栏用户卡片：个人中心是独立路由树，首页顶栏的 `UserMenu`
+    // 在这里并不存在，必须先进入个人中心。
+    await page.goto('/zh/settings/profile')
     await page.waitForLoadState('networkidle')
     const sidebar = page.locator('[data-slot="sidebar"]')
     const trigger = sidebar.getByRole('button', { name: /设置用户/ })
@@ -88,7 +88,7 @@ test.describe('Settings', () => {
     await page.waitForURL((url) => url.pathname === '/zh' || url.pathname === '/')
     await page.waitForLoadState('load')
 
-    await page.goto('/zh/dashboard/profile')
+    await page.goto('/zh/settings/profile')
     await page.waitForURL(/\/zh\/auth\/login/)
   })
 })

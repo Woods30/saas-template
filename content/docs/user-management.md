@@ -35,7 +35,7 @@ The script does one thing: `UPDATE users SET role = 'admin' WHERE email = ?`. `r
 
 ## The dashboard
 
-`/dashboard/admin/users`, with its entry in the Administration group of the account center sidebar; `/dashboard/admin/revenue` is the revenue overview. Both are bound by **two** constraints: the `features.enableAdmin` flag and the `admin` role.
+`/admin/users`, with its entry under the Administration sidebar of the admin console; `/admin/revenue` is the revenue overview. Both are bound by **two** constraints: the `features.enableAdmin` flag and the `admin` role.
 
 - **List**: queried straight from D1 on the server (`fetchAdminUsers`), with search by email, filters on role and status, and offset paging, 20 rows per page.
 - **Set role**: `authClient.admin.setRole({ userId, role })`.
@@ -52,4 +52,4 @@ The script does one thing: `UPDATE users SET role = 'admin' WHERE email = ?`. `r
 
 ## Verify
 
-Sign in as an admin and open `/dashboard/admin/users`; the user list should be there. Turn off `features.enableAdmin` and the sidebar entry disappears while the same address returns 404.
+Sign in as an admin and open `/admin/users`; the user list should be there. Turn off `features.enableAdmin` and the sidebar entry disappears while the same address returns 404.

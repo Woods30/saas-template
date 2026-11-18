@@ -37,14 +37,14 @@ import {
   updateAdminTicket,
 } from '@/modules/tickets/service'
 
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/tickets')({
+export const Route = createFileRoute('/{-$locale}/_layout/admin/tickets')({
   beforeLoad: ({ context }) => {
     assertFeatureEnabled('enableAdmin')
     assertAdminRole(context.session.user.role)
   },
   loader: () => fetchAdminTicketsAndInvites(),
   head: () =>
-    seo('/dashboard/admin/tickets', {
+    seo('/admin/tickets', {
       title: m.admin_tickets_title(),
       description: m.admin_tickets_description(),
       locale: getRequestLocale(),

@@ -10,7 +10,7 @@ updated: 2026-11-03
 The newsletter module collects visitor emails into a list. The list lives in a third-party service
 (Resend Audiences or Beehiiv); this site only receives signups and reads the status. Once enabled
 there are two entry points: the signup box on marketing pages (the `NewsletterCta` component) and
-the preference toggle in the account area (`/dashboard/notifications`).
+the preference toggle in the account area (`/settings/notifications`).
 
 ## Steps
 

@@ -21,7 +21,7 @@ API 密钥让用户在自己的账号下签发调用凭据。密钥存在 `apike
    features: { enableApiKeys: true },
    ```
 
-2. **进入密钥页。** 地址 `/dashboard/api-keys`，入口在个人中心侧边栏。开关关掉时页面 404，
+2. **进入密钥页。** 地址 `/settings/api-keys`，入口在个人中心侧边栏。开关关掉时页面 404，
    `/api/auth/api-key/*` 这一组端点也整体 404（`src/routes/api/auth/$.ts`）。
 
 3. **创建。** 填名称 + 选有效期 → `authClient.apiKey.create({ name, expiresIn })`。响应里的 `key`
@@ -63,7 +63,7 @@ if (!result.valid) return new Response('Unauthorized', { status: 401 })
 
 有效期只在**创建那一刻**有意义：插件把它换算成 `expiresAt` 落库，列表读的是那个时间戳，所以创建后
 无法在界面上续期，只能删了重建。改上下限要同时改 `src/core/auth/auth.ts` 的 `apiKey({ keyExpiration })`
-和 `src/routes/{-$locale}/_layout/dashboard/api-keys.tsx` 的 `EXPIRY_OPTIONS`，否则用户能选到一个
+和 `src/routes/{-$locale}/_layout/settings/api-keys.tsx` 的 `EXPIRY_OPTIONS`，否则用户能选到一个
 必然被服务端拒绝的值。
 
 ## 注意事项

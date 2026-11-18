@@ -1,6 +1,6 @@
 import { IconChevronRight, IconShieldLock } from '@tabler/icons-react'
 import { Link, useRouterState } from '@tanstack/react-router'
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { DashboardUserCard } from '@/components/dashboard/DashboardUserCard'
 import { BrandLogo } from '@/components/layout/BrandLogo'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
@@ -40,24 +40,66 @@ import type { Locale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
 
 /**
- * 工作台与管理台外壳。侧栏直接用 shadcn `sidebar`（Base UI 版），折叠、cookie 持久化
- * 与窄屏抽屉都由原件负责：
- * - 个人中心（`/dashboard/*`）仅渲染个人菜单，管理员在侧栏底部提供「管理后台」切换入口；
- * - 管理后台（`/dashboard/admin/*`）渲染独立的树形管理菜单与底部「系统设置 / 个人中心」切换入口。
- * 页面标题由面包屑末级承担，因此不渲染 `<h1>`；`DashboardUserCard` 是本路由内唯一的登出入口。
+ * 个人中心与管理台的**两套独立外壳**。
+ *
+ * 两条路由树各自挂一个布局组件，入口由路由本身决定，不再在同一个布局里按路径
+ * 判断「当前是不是管理台」：
+ * - 个人中心（`/settings/*`）只渲染个人菜单，管理员在侧栏底部拿到「管理后台」切换入口；
+ * - 管理台（`/admin/*`）渲染树形管理菜单与底部「系统设置 / 个人中心」切换入口。
+ *
+ * 侧栏折叠、cookie 持久化与窄屏 Sheet 都由 shadcn `sidebar` 原件负责；
+ * 页面标题由面包屑末级承担，因此不渲染 `<h1>`；`DashboardUserCard` 是唯一的登出入口。
  */
+
 /** 侧栏菜单项尺寸覆盖：原件 32px 行高在本仓 240px 侧栏里偏挤，这里放大到 40px。
  * 收起态原件 `size-8!` 带 important，覆盖时同样要带 `!`。 */
 const SIDEBAR_ITEM_CLASS =
   'h-10 text-[0.9375rem] [&_svg]:size-[1.125rem] group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:p-2! group-data-[collapsible=icon]:[&_svg]:size-5'
 
-function isLinkActive(item: MenuLinkItem, currentDashboardPath: string): boolean {
-  const options = item.destination.kind === 'internal' ? item.destination.options : null
-  const targetPath = options !== null && 'to' in options ? (options.to ?? '') : ''
-  return targetPath !== '' && (targetPath.split('/dashboard/')[1] ?? '') === currentDashboardPath
+/** 管理台可折叠分组默认全开；进入某页时再由 `useEffect` 展开命中的分组。 */
+const ADMIN_GROUPS_DEFAULT_OPEN = ['rbac', 'billing', 'content']
+
+/** 取菜单项指向的站内路径；外部链接返回 `null`。 */
+function targetPathOf(item: MenuLinkItem): string | null {
+  if (item.destination.kind !== 'internal') return null
+  const options = item.destination.options
+  return 'to' in options ? (options.to ?? null) : null
 }
 
-export function DashboardLayout({
+/**
+ * 高亮按**目标路径**判定，而不是菜单 id。
+ *
+ * 菜单 id 与路由段并非一一对应：`admin` 分组下有 `users` 与 `revenue` 两个子页，
+ * 只按第一段匹配会让两个菜单项同时命中或都不命中（用户管理抢走高亮）。
+ * `base` 是当前布局所属的路由段，用于把完整路径裁成布局内的相对段。
+ */
+function isLinkActive(
+  item: MenuLinkItem,
+  base: 'admin' | 'settings',
+  currentPath: string,
+): boolean {
+  const target = targetPathOf(item)
+  if (target === null) return false
+  return (target.split(`/${base}/`)[1] ?? '') === currentPath
+}
+
+/** 路径在布局内的相对段：`/zh/admin/revenue` → `revenue`。 */
+function useSectionPath(base: 'admin' | 'settings'): string {
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  return pathname.split(`/${base}/`)[1] ?? ''
+}
+
+/** 管理员才有管理台入口：角色 + 功能开关双重约束。 */
+function canEnterAdmin(session: SessionInfo): boolean {
+  return websiteConfig.features.enableAdmin && session.user.role === 'admin'
+}
+
+/**
+ * 个人中心布局（`/settings/*`）。
+ *
+ * 只读个人菜单；管理员额外拿到侧栏底部的「管理后台」入口。
+ */
+export function PersonalCenterLayout({
   locale,
   session,
   children,
@@ -66,50 +108,123 @@ export function DashboardLayout({
   session: SessionInfo
   children: ReactNode
 }) {
-  const pathname = useRouterState({ select: (state) => state.location.pathname })
-  const menuCtx = {
+  const currentPath = useSectionPath('settings')
+  const groups = getSettingsSections(locale, {
     config: websiteConfig,
     authenticated: true,
     role: session.user.role,
-  }
-  const allGroups = getSettingsSections(locale, menuCtx)
-  // 当前板块取 `/dashboard/` 之后的一段；未注册的板块匹配不到，面包屑退化为两级。
-  const currentSection = pathname.split('/dashboard/')[1]?.split('/')[0]
-  /**
-   * 高亮按**目标路径**判定，而不是菜单 id。
-   *
-   * 菜单 id 与路由段并非一一对应：`admin` 分组下有 `admin/users` 与 `admin/revenue`
-   * 两个子页，只按第一段匹配会让两个菜单项同时命中或都不命中（用户管理抢走高亮）。
-   */
-  const currentDashboardPath = pathname.split('/dashboard/')[1] ?? ''
-  const isAdminRoute = currentDashboardPath === 'admin' || currentDashboardPath.startsWith('admin/')
-  const personalGroups = allGroups.filter((g) => g.kind === 'group' && g.id === 'personal')
-  const adminMenu = getAdminSidebarMenu(locale, menuCtx)
+  }).filter((group) => group.kind === 'group' && group.id === 'personal')
+  const meta = getSettingsSectionMeta(currentPath.split('/')[0] ?? '')
 
-  // 可折叠管理分组默认展开，且路由变化时自动展开包含当前路由的父组。
-  const [openAdminGroups, setOpenAdminGroups] = useState<Set<string>>(
-    () => new Set(['rbac', 'billing', 'content']),
+  return (
+    <DashboardShell
+      locale={locale}
+      session={session}
+      meta={meta}
+      root={{ label: m.settings_title(), to: '/{-$locale}/settings/profile' }}
+      sidebar={groups.map((group) => {
+        if (group.kind !== 'group') return null
+        return (
+          <SidebarGroup key={group.id}>
+            <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map((item) => {
+                  if (item.kind !== 'link') return null
+                  const options =
+                    item.destination.kind === 'internal' ? item.destination.options : null
+                  const Icon = item.icon
+                  return (
+                    <SidebarMenuItem key={item.id}>
+                      <SidebarMenuButton
+                        render={options ? <Link {...options} /> : undefined}
+                        isActive={isLinkActive(item, 'settings', currentPath)}
+                        tooltip={item.title}
+                        className={SIDEBAR_ITEM_CLASS}
+                      >
+                        {Icon && <Icon aria-hidden />}
+                        <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )
+      })}
+      footer={
+        canEnterAdmin(session) && (
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                render={<Link to="/{-$locale}/admin/revenue" params={{ locale }} />}
+                tooltip={m.admin_settings_feature_admin()}
+                className={SIDEBAR_ITEM_CLASS}
+              >
+                <IconShieldLock aria-hidden />
+                <span>{m.admin_settings_feature_admin()}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        )
+      }
+    >
+      {children}
+    </DashboardShell>
+  )
+}
+
+/**
+ * 管理台布局（`/admin/*`）。
+ *
+ * 树形菜单：顶部单列「营收与订阅」概览，下接可折叠分组；底部「系统设置」与
+ * 「个人中心」反向切换入口。非管理员由路由 `beforeLoad` 拦下，这里不再兜底判断。
+ */
+export function AdminConsoleLayout({
+  locale,
+  session,
+  children,
+}: {
+  locale: Locale
+  session: SessionInfo
+  children: ReactNode
+}) {
+  const currentPath = useSectionPath('admin')
+  const role = session.user.role
+  // 菜单结构只随语言与角色变化；每次渲染新建对象会让下面的 effect 反复重跑。
+  const menu = useMemo(
+    () => getAdminSidebarMenu(locale, { config: websiteConfig, authenticated: true, role }),
+    [locale, role],
+  )
+  const meta = getSettingsSectionMeta(`admin/${currentPath.split('/')[0] ?? ''}`)
+
+  const [openGroups, setOpenGroups] = useState<Set<string>>(
+    () => new Set(ADMIN_GROUPS_DEFAULT_OPEN),
+  )
+
+  /**
+   * 命中当前路由的分组 id。
+   *
+   * 依赖是**字符串**而非菜单对象：菜单对象即使 memo 过，也会随语言/角色重建；
+   * 用字符串做依赖能保证只有「换到另一个分组」时才自动展开，用户在同一页手动
+   * 收起的分组不会被立刻重开。
+   */
+  const activeGroupId = useMemo(
+    () =>
+      menu?.collapsibleGroups.find((group) =>
+        group.items.some((item) => isLinkActive(item, 'admin', currentPath)),
+      )?.id ?? null,
+    [menu, currentPath],
   )
 
   useEffect(() => {
-    if (!adminMenu) return
-    setOpenAdminGroups((prev) => {
-      let changed = false
-      const next = new Set(prev)
-      for (const group of adminMenu.collapsibleGroups) {
-        if (group.items.some((sub) => isLinkActive(sub, currentDashboardPath))) {
-          if (!next.has(group.id)) {
-            next.add(group.id)
-            changed = true
-          }
-        }
-      }
-      return changed ? next : prev
-    })
-  }, [adminMenu, currentDashboardPath])
+    if (!activeGroupId) return
+    setOpenGroups((prev) => (prev.has(activeGroupId) ? prev : new Set(prev).add(activeGroupId)))
+  }, [activeGroupId])
 
-  function toggleAdminGroup(id: string) {
-    setOpenAdminGroups((prev) => {
+  function toggleGroup(id: string) {
+    setOpenGroups((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -117,10 +232,130 @@ export function DashboardLayout({
     })
   }
 
-  // 面包屑末级优先用完整路径（`admin/revenue`），匹配不到再退回第一段（`admin`）。
-  const currentMeta =
-    getSettingsSectionMeta(currentDashboardPath) ?? getSettingsSectionMeta(currentSection ?? '')
+  if (!menu) return null
 
+  const overviewOptions =
+    menu.overviewItem.destination.kind === 'internal' ? menu.overviewItem.destination.options : null
+  const OverviewIcon = menu.overviewItem.icon
+
+  return (
+    <DashboardShell
+      locale={locale}
+      session={session}
+      meta={meta}
+      root={{ label: m.admin_settings_feature_admin(), to: '/{-$locale}/admin/revenue' }}
+      sidebar={
+        <SidebarGroup>
+          <SidebarGroupLabel>{menu.groupTitle}</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={overviewOptions ? <Link {...overviewOptions} /> : undefined}
+                  isActive={isLinkActive(menu.overviewItem, 'admin', currentPath)}
+                  tooltip={menu.overviewItem.title}
+                  className={SIDEBAR_ITEM_CLASS}
+                >
+                  {OverviewIcon && <OverviewIcon aria-hidden />}
+                  <span>{menu.overviewItem.title}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {menu.collapsibleGroups.map((group) => {
+                const open = openGroups.has(group.id)
+                const childActive = group.items.some((item) =>
+                  isLinkActive(item, 'admin', currentPath),
+                )
+                const GroupIcon = group.icon
+                return (
+                  <SidebarMenuItem key={group.id}>
+                    <SidebarMenuButton
+                      tooltip={group.title}
+                      isActive={childActive && !open}
+                      aria-expanded={open}
+                      onClick={() => toggleGroup(group.id)}
+                      className={SIDEBAR_ITEM_CLASS}
+                    >
+                      <GroupIcon aria-hidden />
+                      <span>{group.title}</span>
+                      <IconChevronRight
+                        aria-hidden
+                        className={`ml-auto size-4 shrink-0 text-sidebar-foreground/70 transition-transform ${
+                          open ? 'rotate-90' : ''
+                        }`}
+                      />
+                    </SidebarMenuButton>
+                    {open && (
+                      <SidebarMenuSub>
+                        {group.items.map((item) => {
+                          const options =
+                            item.destination.kind === 'internal' ? item.destination.options : null
+                          const Icon = item.icon
+                          return (
+                            <SidebarMenuSubItem key={item.id}>
+                              <SidebarMenuSubButton
+                                render={options ? <Link {...options} /> : undefined}
+                                isActive={isLinkActive(item, 'admin', currentPath)}
+                              >
+                                {Icon && <Icon aria-hidden />}
+                                <span>{item.title}</span>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          )
+                        })}
+                      </SidebarMenuSub>
+                    )}
+                  </SidebarMenuItem>
+                )
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      }
+      footer={
+        <SidebarMenu>
+          {menu.footerItems.map((item) => {
+            const options = item.destination.kind === 'internal' ? item.destination.options : null
+            const Icon = item.icon
+            return (
+              <SidebarMenuItem key={item.id}>
+                <SidebarMenuButton
+                  render={options ? <Link {...options} /> : undefined}
+                  isActive={isLinkActive(item, 'admin', currentPath)}
+                  tooltip={item.title}
+                  className={SIDEBAR_ITEM_CLASS}
+                >
+                  {Icon && <Icon aria-hidden />}
+                  <span>{item.title}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )
+          })}
+        </SidebarMenu>
+      }
+    >
+      {children}
+    </DashboardShell>
+  )
+}
+
+/** 两个布局共用的外壳：侧栏框架、顶栏面包屑、模拟登录提示与内容容器。 */
+function DashboardShell({
+  locale,
+  session,
+  meta,
+  root,
+  sidebar,
+  footer,
+  children,
+}: {
+  locale: Locale
+  session: SessionInfo
+  meta: ReturnType<typeof getSettingsSectionMeta>
+  root: { label: string; to: '/{-$locale}/admin/revenue' | '/{-$locale}/settings/profile' }
+  sidebar: ReactNode
+  footer: ReactNode
+  children: ReactNode
+}) {
   return (
     <SidebarProvider>
       {/* 本主题 `--sidebar` 与 `--background` 同值，inset 面板的边界全靠
@@ -144,155 +379,9 @@ export function DashboardLayout({
             />
           </Link>
         </SidebarHeader>
-        <SidebarContent>
-          {isAdminRoute && adminMenu ? (
-            <SidebarGroup>
-              <SidebarGroupLabel>{adminMenu.groupTitle}</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {(() => {
-                    const overviewOptions =
-                      adminMenu.overviewItem.destination.kind === 'internal'
-                        ? adminMenu.overviewItem.destination.options
-                        : null
-                    const OverviewIcon = adminMenu.overviewItem.icon
-                    return (
-                      <SidebarMenuItem key={adminMenu.overviewItem.id}>
-                        <SidebarMenuButton
-                          render={overviewOptions ? <Link {...overviewOptions} /> : undefined}
-                          isActive={isLinkActive(adminMenu.overviewItem, currentDashboardPath)}
-                          tooltip={adminMenu.overviewItem.title}
-                          className={SIDEBAR_ITEM_CLASS}
-                        >
-                          {OverviewIcon && <OverviewIcon aria-hidden />}
-                          <span>{adminMenu.overviewItem.title}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    )
-                  })()}
-                  {adminMenu.collapsibleGroups.map((group) => {
-                    const open = openAdminGroups.has(group.id)
-                    const childActive = group.items.some((sub) =>
-                      isLinkActive(sub, currentDashboardPath),
-                    )
-                    const GroupIcon = group.icon
-                    return (
-                      <SidebarMenuItem key={group.id}>
-                        <SidebarMenuButton
-                          tooltip={group.title}
-                          isActive={childActive && !open}
-                          aria-expanded={open}
-                          onClick={() => toggleAdminGroup(group.id)}
-                          className={SIDEBAR_ITEM_CLASS}
-                        >
-                          <GroupIcon aria-hidden />
-                          <span>{group.title}</span>
-                          <IconChevronRight
-                            aria-hidden
-                            className={`ml-auto size-4 shrink-0 text-sidebar-foreground/70 transition-transform ${
-                              open ? 'rotate-90' : ''
-                            }`}
-                          />
-                        </SidebarMenuButton>
-                        {open && (
-                          <SidebarMenuSub>
-                            {group.items.map((sub) => {
-                              const subOptions =
-                                sub.destination.kind === 'internal' ? sub.destination.options : null
-                              const SubIcon = sub.icon
-                              return (
-                                <SidebarMenuSubItem key={sub.id}>
-                                  <SidebarMenuSubButton
-                                    render={subOptions ? <Link {...subOptions} /> : undefined}
-                                    isActive={isLinkActive(sub, currentDashboardPath)}
-                                  >
-                                    {SubIcon && <SubIcon aria-hidden />}
-                                    <span>{sub.title}</span>
-                                  </SidebarMenuSubButton>
-                                </SidebarMenuSubItem>
-                              )
-                            })}
-                          </SidebarMenuSub>
-                        )}
-                      </SidebarMenuItem>
-                    )
-                  })}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          ) : (
-            personalGroups.map((group) => {
-              if (group.kind !== 'group') return null
-              return (
-                <SidebarGroup key={group.id}>
-                  <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {group.items.map((item) => {
-                        if (item.kind !== 'link') return null
-                        const options =
-                          item.destination.kind === 'internal' ? item.destination.options : null
-                        const isActive = isLinkActive(item, currentDashboardPath)
-                        const Icon = item.icon
-                        return (
-                          <SidebarMenuItem key={item.id}>
-                            <SidebarMenuButton
-                              render={options ? <Link {...options} /> : undefined}
-                              isActive={isActive}
-                              tooltip={item.title}
-                              className={SIDEBAR_ITEM_CLASS}
-                            >
-                              {Icon && <Icon aria-hidden />}
-                              <span>{item.title}</span>
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
-                        )
-                      })}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-              )
-            })
-          )}
-        </SidebarContent>
+        <SidebarContent>{sidebar}</SidebarContent>
         <SidebarFooter>
-          {isAdminRoute && adminMenu ? (
-            <SidebarMenu>
-              {adminMenu.footerItems.map((item) => {
-                const options =
-                  item.destination.kind === 'internal' ? item.destination.options : null
-                const Icon = item.icon
-                return (
-                  <SidebarMenuItem key={item.id}>
-                    <SidebarMenuButton
-                      render={options ? <Link {...options} /> : undefined}
-                      isActive={isLinkActive(item, currentDashboardPath)}
-                      tooltip={item.title}
-                      className={SIDEBAR_ITEM_CLASS}
-                    >
-                      {Icon && <Icon aria-hidden />}
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
-          ) : (
-            adminMenu && (
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    render={<Link to="/{-$locale}/dashboard/admin/revenue" params={{ locale }} />}
-                    tooltip={m.admin_settings_feature_admin()}
-                    className={SIDEBAR_ITEM_CLASS}
-                  >
-                    <IconShieldLock aria-hidden />
-                    <span>{m.admin_settings_feature_admin()}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            )
-          )}
+          {footer}
           <DashboardUserCard session={session} />
         </SidebarFooter>
       </Sidebar>
@@ -313,25 +402,15 @@ export function DashboardLayout({
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
-                {isAdminRoute ? (
-                  <BreadcrumbLink
-                    render={<Link to="/{-$locale}/dashboard/admin/revenue" params={{ locale }} />}
-                  >
-                    {m.admin_settings_feature_admin()}
-                  </BreadcrumbLink>
-                ) : (
-                  <BreadcrumbLink
-                    render={<Link to="/{-$locale}/dashboard/profile" params={{ locale }} />}
-                  >
-                    {m.settings_title()}
-                  </BreadcrumbLink>
-                )}
+                <BreadcrumbLink render={<Link to={root.to} params={{ locale }} />}>
+                  {root.label}
+                </BreadcrumbLink>
               </BreadcrumbItem>
-              {currentMeta && (
+              {meta && (
                 <>
                   <BreadcrumbSeparator />
                   <BreadcrumbItem>
-                    <BreadcrumbPage>{currentMeta.title}</BreadcrumbPage>
+                    <BreadcrumbPage>{meta.title}</BreadcrumbPage>
                   </BreadcrumbItem>
                 </>
               )}

@@ -14,10 +14,10 @@ import type { CollectionOrderStatus } from '@/modules/manual-payments/service'
  * 输出 Outlet，子路由永远挂不上：URL 变成详情页、页面仍是列表，症状是
  * 「导航成功但页面不切换」。
  */
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/orders')({
+export const Route = createFileRoute('/{-$locale}/_layout/settings/orders')({
   beforeLoad: () => assertPageEnabled('collection'),
   head: () =>
-    seo('/dashboard/orders', {
+    seo('/settings/orders', {
       title: m['collection.order_list_title'](),
       description: m['collection.order_list_description'](),
       locale: getRequestLocale(),

@@ -92,7 +92,7 @@ export function DashboardUserCard({ session }: { session: SessionInfo }) {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               render={
-                <Link to="/{-$locale}/dashboard/profile" params={{ locale: getRequestLocale() }} />
+                <Link to="/{-$locale}/settings/profile" params={{ locale: getRequestLocale() }} />
               }
             >
               <IconSettings size={16} aria-hidden />
@@ -101,10 +101,7 @@ export function DashboardUserCard({ session }: { session: SessionInfo }) {
             {websiteConfig.features.enableAdmin && session.user.role === 'admin' && (
               <DropdownMenuItem
                 render={
-                  <Link
-                    to="/{-$locale}/dashboard/admin/revenue"
-                    params={{ locale: getRequestLocale() }}
-                  />
+                  <Link to="/{-$locale}/admin/revenue" params={{ locale: getRequestLocale() }} />
                 }
               >
                 <IconShieldLock size={16} aria-hidden />

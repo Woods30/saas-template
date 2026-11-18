@@ -92,7 +92,7 @@ interface AdminAccountPayload {
   enabled: boolean
 }
 
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/collection-orders')({
+export const Route = createFileRoute('/{-$locale}/_layout/admin/collection-orders')({
   beforeLoad: ({ context }) => {
     // 三层门禁：collection 模块 → enableAdmin → admin 角色，缺一不可；
     // 模块关闭时整页 404，而不是渲染成 loader 的错误态。
@@ -127,7 +127,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/collec
     }
   },
   head: () =>
-    seo('/dashboard/admin/collection-orders', {
+    seo('/admin/collection-orders', {
       title: m['collection_admin.title_orders'](),
       description: m['collection_admin.description_orders'](),
       locale: getRequestLocale(),

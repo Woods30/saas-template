@@ -39,14 +39,14 @@ import {
   saveAdminRole,
 } from '@/modules/rbac/service'
 
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/admin/roles')({
+export const Route = createFileRoute('/{-$locale}/_layout/admin/roles')({
   beforeLoad: ({ context }) => {
     assertFeatureEnabled('enableAdmin')
     assertAdminRole(context.session.user.role)
   },
   loader: () => fetchAdminRoles(),
   head: () =>
-    seo('/dashboard/admin/roles', {
+    seo('/admin/roles', {
       title: m.admin_roles_title(),
       description: m.admin_roles_description(),
       locale: getRequestLocale(),

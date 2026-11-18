@@ -27,7 +27,7 @@ import {
   subscriptionStatusMessageKey,
 } from '@/modules/subscriptions/service'
 
-export const Route = createFileRoute('/{-$locale}/_layout/dashboard/billing')({
+export const Route = createFileRoute('/{-$locale}/_layout/settings/billing')({
   beforeLoad: () => assertPageEnabled('payment'),
   // 数据在路由加载阶段取好：客户端导航时内容随路由一起出现，不会先渲染空壳再补数据。
   loader: async () => {
@@ -39,7 +39,7 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/billing')({
     }
   },
   head: () =>
-    seo('/dashboard/billing', {
+    seo('/settings/billing', {
       title: m.settings_billing_title(),
       description: m.settings_billing_description(),
       locale: getRequestLocale(),
@@ -74,7 +74,7 @@ function BillingPage() {
         : m.settings_billing_checkout_cancelled(),
     clearUrl: () => {
       void router.navigate({
-        to: '/{-$locale}/dashboard/billing',
+        to: '/{-$locale}/settings/billing',
         params: { locale },
         replace: true,
       })

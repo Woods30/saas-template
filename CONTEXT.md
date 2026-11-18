@@ -72,9 +72,11 @@
 - **fetchSession()**：`src/core/auth/session.ts` 的 server function，读当前请求会话并只返回页面
   需要的字段。受保护路由在 `beforeLoad` 用它判会话；必须是 server function，因为会话
   cookie 是 httpOnly 且 `getAuth` 需要每请求 env。
-- **受保护路由**：`src/routes/{-$locale}/_layout/dashboard.tsx` 确立的模式——pathless layout
-  的 `beforeLoad` 先 `assertPageEnabled('auth')`，再用 `fetchSession()` 判会话，未登录
-  `redirect` 到登录页并带上 locale 参数。
+- **受保护路由**：`src/routes/{-$locale}/_layout/settings.tsx`（个人中心，`/settings/*`）与
+  `_layout/admin.tsx`（管理台，`/admin/*`）两棵独立子树——pathless layout 的 `beforeLoad`
+  先 `assertPageEnabled('auth')`，再用 `fetchSession()` 判会话，未登录 `redirect` 到登录页
+  并带上 locale 参数；管理台在此之上再 `assertFeatureEnabled('enableAdmin')` +
+  `assertAdminRole()`。
 - **AuthFormMessages**：`src/core/auth/validation.ts` 的校验文案契约。schema 工厂接收文案而非
   自己调 `m.*()`，使校验逻辑不依赖 Paraglide 运行时、可脱离组件单测；页面用
   `authFormMessages()` 求值。
@@ -113,7 +115,7 @@
 - **已完成**：基础设施（Sub-Plan A）、业务模块（B：认证 / 支付 / 存储 / 邮件 / Newsletter /
   通知 / D1）、营销页面与内容站（C：8 个营销 blocks + 文档站 / 博客 / 更新日志）、测试与
   部署（D：E2E / CI / CSP）、品牌化与 Landing 单页、网站源码配置与公共菜单（模块开关、
-  菜单契约、服务状态、配置文档）、工作台（`/{locale}/dashboard/*`：资料 / 安全 / 登录设备 /
+  菜单契约、服务状态、配置文档）、个人中心（`/{locale}/settings/*`：资料 / 安全 / 登录设备 /
   通知偏好 / API 密钥 / 用户管理，含 `fetchSession` 守卫）与表单统一（TanStack Form +
   Zod + shadcn `Field`）。
 - **尚未实现**：文件上传、AI 网关、PWA。`websiteConfig.features` 中对应的开关是能力边界

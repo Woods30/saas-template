@@ -1,12 +1,12 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DashboardLayout } from '@/components/dashboard/DashboardLayout'
+import { AdminConsoleLayout } from '@/components/dashboard/DashboardLayout'
 import { websiteConfig } from '@/config/website'
 import type { SessionInfo } from '@/core/auth/session'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 import type { CollectionOrder } from '@/modules/manual-payments/service'
-import { Route as AdminCollectionOrdersRoute } from '@/routes/{-$locale}/_layout/dashboard/admin/collection-orders'
+import { Route as AdminCollectionOrdersRoute } from '@/routes/{-$locale}/_layout/admin/collection-orders'
 
 /**
  * 管理员核验队列与收款账户运营：入口门禁、默认筛选、金额不符禁提交、
@@ -15,7 +15,7 @@ import { Route as AdminCollectionOrdersRoute } from '@/routes/{-$locale}/_layout
  */
 
 const routerMocks = vi.hoisted(() => ({
-  pathname: '/zh/dashboard/admin/collection-orders',
+  pathname: '/zh/admin/collection-orders',
   navigate: vi.fn(),
 }))
 
@@ -79,7 +79,7 @@ const AdminCollectionOrdersPage = AdminCollectionOrdersRoute.options
 
 beforeEach(() => {
   setLocale('zh', { reload: false })
-  routerMocks.pathname = '/zh/dashboard/admin/collection-orders'
+  routerMocks.pathname = '/zh/admin/collection-orders'
   // 打开管理台与核销模块：本套件关心的是页面行为，不是门禁开关。
   websiteConfig.features.enableAdmin = true
   websiteConfig.collection.enabled = true
@@ -359,9 +359,9 @@ describe('收款账户区块', () => {
 describe('个人中心入口', () => {
   function renderLayout(role: SessionInfo['user']['role']) {
     return render(
-      <DashboardLayout locale="zh" session={sessionWith(role)}>
+      <AdminConsoleLayout locale="zh" session={sessionWith(role)}>
         <div>内容区</div>
-      </DashboardLayout>,
+      </AdminConsoleLayout>,
     )
   }
 
@@ -388,7 +388,7 @@ describe('个人中心入口', () => {
   })
 
   it('面包屑识别核验队列页', () => {
-    routerMocks.pathname = '/zh/dashboard/admin/collection-orders'
+    routerMocks.pathname = '/zh/admin/collection-orders'
     renderLayout('admin')
     const nav = screen.getByRole('navigation', { name: 'breadcrumb' })
     expect(within(nav).getByText('核销订单核验')).toBeInTheDocument()

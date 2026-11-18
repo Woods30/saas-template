@@ -4,8 +4,8 @@ import { resolveRedirectTarget, safeInternalPath, safeSameOriginUrl } from '@/li
 describe('safeInternalPath', () => {
   it('接受站内相对路径', () => {
     expect(safeInternalPath('/pricing')).toBe('/pricing')
-    expect(safeInternalPath('/dashboard/billing?checkout=success')).toBe(
-      '/dashboard/billing?checkout=success',
+    expect(safeInternalPath('/settings/billing?checkout=success')).toBe(
+      '/settings/billing?checkout=success',
     )
     expect(safeInternalPath('/a/b#section')).toBe('/a/b#section')
     expect(safeInternalPath('/')).toBe('/')
@@ -66,8 +66,8 @@ describe('resolveRedirectTarget', () => {
 
 describe('safeSameOriginUrl', () => {
   it('接受与站点基址同源的绝对地址', () => {
-    expect(safeSameOriginUrl('https://example.com/zh/dashboard/billing?checkout=success')).toBe(
-      'https://example.com/zh/dashboard/billing?checkout=success',
+    expect(safeSameOriginUrl('https://example.com/zh/settings/billing?checkout=success')).toBe(
+      'https://example.com/zh/settings/billing?checkout=success',
     )
     expect(safeSameOriginUrl('https://example.com/pricing?checkout=cancelled')).toBe(
       'https://example.com/pricing?checkout=cancelled',
@@ -85,7 +85,7 @@ describe('safeSameOriginUrl', () => {
     expect(safeSameOriginUrl('javascript:alert(1)')).toBeUndefined()
     expect(safeSameOriginUrl('data:text/html,<script>alert(1)</script>')).toBeUndefined()
     expect(safeSameOriginUrl('//example.com/x')).toBeUndefined()
-    expect(safeSameOriginUrl('/dashboard/billing')).toBeUndefined()
+    expect(safeSameOriginUrl('/settings/billing')).toBeUndefined()
   })
 
   it('拒绝非字符串', () => {

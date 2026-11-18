@@ -27,7 +27,8 @@ const EXCLUDED_PREFIXES = [
   '/_build',
   '/.well-known',
   '/auth',
-  '/dashboard',
+  '/admin',
+  '/settings',
   '/marketing',
 ]
 
