@@ -148,6 +148,8 @@
 - `docs/adr/0005-init-replacement-table.md` —— init 用声明式替换表而非占位符 token（已随 init 废弃）。
 - `docs/adr/0008-core-modules-routes-layering.md` —— 三层分层与模块公开入口。
 - `docs/adr/0009-multi-dialect-database-and-config.md` —— 多方言数据库与配置入库。
+- `docs/adr/0010-settings-in-database.md` —— 配置注册表、密钥入库加密与 env 边界（取代 ADR-0009 的密钥与 `VITE_MODULES` 两条）。
+- `docs/adr/0011-credits-only-entitlements.md` —— 权益模型收敛为 credits-only，补齐退款、自助取消与购买发放。
 
 ## 面向 AI 代理的指导
 
