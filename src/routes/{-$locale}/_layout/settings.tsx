@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
-import { PersonalCenterLayout } from '@/components/dashboard/DashboardLayout'
+import { PersonalCenterLayout } from '@/components/settings/PersonalCenterLayout'
 import { fetchSession } from '@/core/auth/session'
 import { getRequestLocale } from '@/lib/locale'
 import { assertPageEnabled } from '@/lib/module-access'

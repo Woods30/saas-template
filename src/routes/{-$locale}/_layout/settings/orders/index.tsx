@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { settingsRoutes } from '@/config/routes'
 import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
 import { seo } from '@/lib/seo'
@@ -110,7 +111,7 @@ function OrdersPage() {
                         nativeButton={false}
                         render={
                           <Link
-                            to="/{-$locale}/settings/orders/$orderId"
+                            to={settingsRoutes.orderDetail}
                             params={{ locale, orderId: order.id }}
                           />
                         }

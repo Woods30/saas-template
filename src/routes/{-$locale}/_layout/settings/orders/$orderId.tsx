@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
+import { settingsRoutes } from '@/config/routes'
 import { websiteConfig } from '@/config/website'
 import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
@@ -225,7 +226,7 @@ function OrderDetailPage() {
           // `nativeButton={false}`：Base UI 的 Button 默认渲染 <button>，换成 <a>
           // 后必须关掉，否则开发环境会警告「丢了原生按钮语义」。
           nativeButton={false}
-          render={<Link to="/{-$locale}/settings/orders" params={{ locale }} />}
+          render={<Link to={settingsRoutes.orders} params={{ locale }} />}
         >
           {m['collection.order_back_to_list']()}
         </Button>

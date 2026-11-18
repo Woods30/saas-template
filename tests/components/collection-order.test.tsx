@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PersonalCenterLayout } from '@/components/dashboard/DashboardLayout'
+import { PersonalCenterLayout } from '@/components/settings/PersonalCenterLayout'
 import { findProduct } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import type { SessionInfo } from '@/core/auth/session'

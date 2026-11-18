@@ -3,6 +3,21 @@ import { type LinkOptions, linkOptions } from '@tanstack/react-router'
 import type { Locale } from '@/lib/locale'
 import type { SiteModule, WebsiteConfig } from './website'
 
+/**
+ * 受保护区域的菜单文案。
+ *
+ * 侧栏标签与页面标题绝大多数情况一致，因此 `label` 可省略、回落到 `title`；
+ * 少数页面两处措辞不同（侧栏求短、标题求完整）时才单独给 `label`。
+ */
+export interface NavCopy {
+  title: () => string
+  label?: () => string
+}
+
+export function navLabel(item: NavCopy): string {
+  return item.label?.() ?? item.title()
+}
+
 export type PublicTarget =
   | 'home'
   | 'docs'

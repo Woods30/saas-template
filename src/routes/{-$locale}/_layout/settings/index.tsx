@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
+import { settingsRoutes } from '@/config/routes'
 
 /**
  * `/settings` 本身不是内容页：进入工作台一律落到「资料」板块。
@@ -6,6 +7,6 @@ import { createFileRoute, redirect } from '@tanstack/react-router'
  */
 export const Route = createFileRoute('/{-$locale}/_layout/settings/')({
   beforeLoad: ({ params }) => {
-    throw redirect({ to: '/{-$locale}/settings/profile', params: { locale: params.locale } })
+    throw redirect({ to: settingsRoutes.profile, params: { locale: params.locale } })
   },
 })

@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { settingsRoutes } from '@/config/routes'
 import { useCheckoutNotice } from '@/hooks/use-checkout-notice'
 import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
@@ -74,7 +75,7 @@ function BillingPage() {
         : m.settings_billing_checkout_cancelled(),
     clearUrl: () => {
       void router.navigate({
-        to: '/{-$locale}/settings/billing',
+        to: settingsRoutes.billing,
         params: { locale },
         replace: true,
       })

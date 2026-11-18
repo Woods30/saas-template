@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
-import { AdminConsoleLayout } from '@/components/dashboard/DashboardLayout'
+import { AdminConsoleLayout } from '@/components/admin/AdminConsoleLayout'
 import { fetchSession } from '@/core/auth/session'
 import { getRequestLocale } from '@/lib/locale'
 import { assertAdminRole, assertFeatureEnabled, assertPageEnabled } from '@/lib/module-access'

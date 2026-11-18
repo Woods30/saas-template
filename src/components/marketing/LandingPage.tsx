@@ -18,6 +18,7 @@ import { createElement, useId, useState } from 'react'
 import { SourceProductDemo } from '@/components/marketing/SourceProductDemo'
 import { Cta, Faq, Features } from '@/components/sections'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { settingsRoutes } from '@/config/routes'
 import { websiteConfig } from '@/config/website'
 import { useSession } from '@/core/auth/client'
 import { startCheckout } from '@/core/payment/checkout-client'
@@ -311,7 +312,7 @@ function TemplatePricing({ price }: { price: string | null }) {
       })
       if (result.kind === 'redirect') {
         await navigate({
-          to: '/{-$locale}/settings/orders/$orderId',
+          to: settingsRoutes.orderDetail,
           params: { locale, orderId: result.orderId },
         })
         return

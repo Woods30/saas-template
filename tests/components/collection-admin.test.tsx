@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AdminConsoleLayout } from '@/components/dashboard/DashboardLayout'
+import { AdminConsoleLayout } from '@/components/admin/AdminConsoleLayout'
 import { websiteConfig } from '@/config/website'
 import type { SessionInfo } from '@/core/auth/session'
 import { setLocale } from '@/locale/paraglide/runtime.js'

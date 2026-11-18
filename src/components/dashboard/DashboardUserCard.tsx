@@ -1,13 +1,12 @@
-import { IconDotsVertical, IconLogout, IconSettings, IconShieldLock } from '@tabler/icons-react'
-import { Link } from '@tanstack/react-router'
+import { IconDotsVertical } from '@tabler/icons-react'
 import { useState } from 'react'
+import { AccountMenuLinks, isAdminUser, SignOutMenuItem } from '@/components/layout/account-menu'
 import { THEME_ICON, ThemeMenuItems, useTheme } from '@/components/theme/ThemeToggle'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
@@ -21,9 +20,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { websiteConfig } from '@/config/website'
 import type { SessionInfo } from '@/core/auth/session'
-import { signOutAndRedirect } from '@/core/auth/sign-out'
 import { getRequestLocale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
 
@@ -90,22 +87,7 @@ export function DashboardUserCard({ session }: { session: SessionInfo }) {
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              render={
-                <Link to="/{-$locale}/settings/profile" params={{ locale: getRequestLocale() }} />
-              }
-            >
-              <IconSettings size={16} aria-hidden />
-              {m.settings_user_menu()}
-            </DropdownMenuItem>
-            {websiteConfig.features.enableAdmin && session.user.role === 'admin' && (
-              <DropdownMenuItem
-                render={<Link to="/{-$locale}/admin" params={{ locale: getRequestLocale() }} />}
-              >
-                <IconShieldLock size={16} aria-hidden />
-                {m.admin_settings_feature_admin()}
-              </DropdownMenuItem>
-            )}
+            <AccountMenuLinks isAdmin={isAdminUser(session.user)} locale={getRequestLocale()} />
             {enabled && (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
@@ -118,10 +100,7 @@ export function DashboardUserCard({ session }: { session: SessionInfo }) {
               </DropdownMenuSub>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => void signOutAndRedirect()}>
-              <IconLogout size={16} aria-hidden />
-              {m.auth_logout()}
-            </DropdownMenuItem>
+            <SignOutMenuItem />
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
