@@ -13,6 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useCheckoutNotice } from '@/hooks/use-checkout-notice'
+import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
 import { assertPageEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
@@ -51,12 +52,9 @@ export const Route = createFileRoute('/{-$locale}/_layout/dashboard/billing')({
   component: BillingPage,
 })
 
+/** 金额以最小货币单位存储（分），展示前按币种小数位换算。 */
 function money(amount: number, currency: string) {
-  const digits = new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions()
-    .maximumFractionDigits
-  return new Intl.NumberFormat(getRequestLocale(), { style: 'currency', currency }).format(
-    amount / 10 ** (digits ?? 2),
-  )
+  return formatMoney(amount, currency, getRequestLocale())
 }
 
 function BillingPage() {
