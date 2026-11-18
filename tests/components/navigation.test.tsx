@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MenuItems } from '@/components/layout/MenuItems'
 import { Navbar } from '@/components/marketing/Navbar'
 import { getPublicLinkOptions, type MenuItem } from '@/config/navigation'
-import { websiteConfig } from '@/config/website'
+import { baseConfig, websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 import { getRouter } from '@/router'
@@ -32,13 +32,16 @@ vi.mock('@/core/payment/pricing', () => ({
 }))
 
 // 站点配置是模块级单例，afterEach 用快照整体复原，避免用例相互污染。
-const originalConfig = structuredClone(websiteConfig)
+// 快照取 `baseConfig` 而不是 `websiteConfig`：后者是 Proxy，structuredClone 克隆不了
+// （V8 对 Proxy 直接抛 DataCloneError）。而用例里的 `websiteConfig.docs = …` 赋值
+// 落到的正是 Proxy 的目标对象 `baseConfig`。
+const originalConfig = structuredClone(baseConfig)
 
 beforeEach(() => setLocale('en', { reload: false }))
 afterEach(() => {
   cleanup()
   setLocale('zh', { reload: false })
-  Object.assign(websiteConfig, structuredClone(originalConfig))
+  Object.assign(baseConfig, structuredClone(originalConfig))
 })
 
 /** 用真实 Router + memory history 渲染真实页面。 */

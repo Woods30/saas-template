@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { createMemoryHistory, RouterProvider } from '@tanstack/react-router'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { websiteConfig } from '@/config/website'
+import { baseConfig, websiteConfig } from '@/config/website'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 import { getRouter } from '@/router'
 
@@ -14,13 +14,16 @@ import { getRouter } from '@/router'
  */
 
 // 站点配置是模块级单例，afterEach 用快照整体复原，避免用例相互污染。
-const originalConfig = structuredClone(websiteConfig)
+// 快照取 `baseConfig` 而不是 `websiteConfig`：后者是 Proxy，structuredClone 克隆不了
+// （V8 对 Proxy 直接抛 DataCloneError）。而用例里的 `websiteConfig.docs = …` 赋值
+// 落到的正是 Proxy 的目标对象 `baseConfig`。
+const originalConfig = structuredClone(baseConfig)
 
 beforeEach(() => setLocale('en', { reload: false }))
 afterEach(() => {
   cleanup()
   setLocale('zh', { reload: false })
-  Object.assign(websiteConfig, structuredClone(originalConfig))
+  Object.assign(baseConfig, structuredClone(originalConfig))
 })
 
 /** 用真实 Router + memory history 渲染真实页面。 */

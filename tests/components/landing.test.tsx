@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LandingPage } from '@/components/marketing/LandingPage'
-import { websiteConfig } from '@/config/website'
+import { baseConfig, websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale, setLocale } from '@/locale/paraglide/runtime.js'
 
@@ -31,7 +31,7 @@ vi.mock('@/core/auth/client', () => ({
   useSession: () => ({ data: auth.session, isPending: false }),
 }))
 
-const originalConfig = structuredClone(websiteConfig)
+const originalConfig = structuredClone(baseConfig)
 let motion: MediaQueryList
 beforeEach(() => {
   auth.session = null
@@ -51,7 +51,7 @@ afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
-  Object.assign(websiteConfig, structuredClone(originalConfig))
+  Object.assign(baseConfig, structuredClone(originalConfig))
   setLocale('zh', { reload: false })
 })
 function advance(ms: number) {
