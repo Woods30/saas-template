@@ -112,6 +112,26 @@ describe('UserMenu', () => {
     expect(assign).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
   })
+
+  it('管理员展开菜单后显示「管理后台」入口，普通用户不显示', async () => {
+    mocks.useSession.mockReturnValue({
+      data: { user: { email: 'admin@example.com', name: 'AdminUser', role: 'admin' } },
+      isPending: false,
+    })
+    const { unmount } = render(<UserMenu />)
+    screen.getByRole('button', { name: 'AdminUser' }).click()
+    await waitFor(() => expect(screen.getByText('管理后台')).toBeInTheDocument())
+    unmount()
+
+    mocks.useSession.mockReturnValue({
+      data: { user: { email: 'user@example.com', name: 'NormalUser', role: 'user' } },
+      isPending: false,
+    })
+    render(<UserMenu />)
+    screen.getByRole('button', { name: 'NormalUser' }).click()
+    await waitFor(() => expect(screen.getByText('个人中心')).toBeInTheDocument())
+    expect(screen.queryByText('管理后台')).toBeNull()
+  })
 })
 
 /** 向上找到 Base UI 的 Positioner 定位容器。 */

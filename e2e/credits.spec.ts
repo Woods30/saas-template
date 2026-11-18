@@ -130,12 +130,15 @@ test.describe('Admin 订单与订阅', () => {
     await waitForHydration(page)
     await expect(page.getByRole('heading', { name: '订阅' })).toBeVisible({ timeout: 15000 })
 
-    // 侧栏入口也要在：只有页面没有入口等于没做。
+    // 独立管理台侧栏入口在管理台路由下展示；个人中心侧栏只展示个人菜单与「管理后台」切换入口。
+    // 用 href 而非 link 名称定位：面包屑末级也渲染成 `role="link"`，按名称会撞上两处。
+    await expect(page.locator('a[href="/zh/dashboard/admin/orders"]')).toBeVisible()
+    await expect(page.locator('a[href="/zh/dashboard/admin/subscriptions"]')).toBeVisible()
+    await expect(page.locator('a[href="/zh/dashboard/admin/credits"]')).toBeVisible()
+
     await page.goto('/zh/dashboard/profile')
     await waitForHydration(page)
-    // `exact` 必须开：侧栏里还有一项叫「营收与订阅」，且开启核销模块时用户侧栏也有「订单」。
-    await expect(page.locator('a[href="/zh/dashboard/admin/orders"]')).toBeVisible()
-    await expect(page.getByRole('link', { name: '订阅', exact: true })).toBeVisible()
-    await expect(page.getByRole('link', { name: '积分', exact: true })).toBeVisible()
+    await expect(page.locator('a[href="/zh/dashboard/admin/orders"]')).toHaveCount(0)
+    await expect(page.getByRole('link', { name: '管理后台', exact: true })).toBeVisible()
   })
 })

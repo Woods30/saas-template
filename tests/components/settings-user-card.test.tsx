@@ -169,6 +169,18 @@ describe('DashboardUserCard', () => {
     screen.getByText('退出登录').click()
     await waitFor(() => expect(mocks.signOutAndRedirect).toHaveBeenCalled())
   })
+
+  it('管理员展开用户卡片后显示「管理后台」入口，普通用户不显示', async () => {
+    const { unmount } = renderCard(sessionWith({ role: 'admin' }))
+    screen.getByRole('button', { name: /woods/ }).click()
+    await waitFor(() => expect(screen.getByText('管理后台')).toBeInTheDocument())
+    unmount()
+
+    renderCard(sessionWith({ role: 'user' }))
+    screen.getByRole('button', { name: /woods/ }).click()
+    await waitFor(() => expect(screen.getByText('个人中心')).toBeInTheDocument())
+    expect(screen.queryByText('管理后台')).toBeNull()
+  })
 })
 
 /**

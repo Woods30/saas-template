@@ -72,6 +72,9 @@ function AdminSettingsPage() {
   const [settings, setSettings] = useState<SettingsGroups | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState<SettingsKey | null>(null)
+  const [activeTab, setActiveTab] = useState<'general' | 'seo' | 'navigation' | 'modules' | 'all'>(
+    'general',
+  )
 
   const load = useCallback(async () => {
     try {
@@ -110,6 +113,17 @@ function AdminSettingsPage() {
     )
   }
 
+  const tabs: Array<{
+    id: 'general' | 'seo' | 'navigation' | 'modules' | 'all'
+    label: string
+  }> = [
+    { id: 'general', label: m.admin_settings_tab_general() },
+    { id: 'seo', label: m.admin_settings_tab_seo() },
+    { id: 'navigation', label: m.admin_settings_tab_navigation() },
+    { id: 'modules', label: m.admin_settings_tab_modules() },
+    { id: 'all', label: m.admin_settings_tab_all() },
+  ]
+
   return (
     <div className="space-y-6">
       <div>
@@ -123,12 +137,49 @@ function AdminSettingsPage() {
         </p>
       )}
 
-      <BrandSection settings={settings} busy={saving === 'brand'} onSave={save} />
-      <SeoSection settings={settings} busy={saving === 'seo'} onSave={save} />
-      <SocialSection settings={settings} busy={saving === 'social'} onSave={save} />
-      <PaymentSection settings={settings} busy={saving === 'payment'} onSave={save} />
-      <MailSection settings={settings} busy={saving === 'mail'} onSave={save} />
-      <ModulesSection settings={settings} busy={saving === 'modules'} onSave={save} />
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <nav
+          aria-label={m.admin_settings_title()}
+          className="-mx-4 flex shrink-0 gap-1 overflow-x-auto overflow-y-hidden border-b border-border px-4 lg:sticky lg:top-6 lg:mx-0 lg:w-48 lg:flex-col lg:overflow-visible lg:border-b-0 lg:px-0"
+        >
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              aria-current={activeTab === tab.id ? 'page' : undefined}
+              className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors lg:mb-0 lg:rounded-md lg:border-b-0 lg:px-3 lg:text-left ${
+                activeTab === tab.id
+                  ? 'border-primary text-foreground lg:bg-muted'
+                  : 'border-transparent text-muted-foreground hover:text-foreground lg:hover:bg-muted/50'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="min-w-0 flex-1 space-y-6">
+          {(activeTab === 'general' || activeTab === 'all') && (
+            <BrandSection settings={settings} busy={saving === 'brand'} onSave={save} />
+          )}
+          {(activeTab === 'seo' || activeTab === 'all') && (
+            <SeoSection settings={settings} busy={saving === 'seo'} onSave={save} />
+          )}
+          {(activeTab === 'navigation' || activeTab === 'all') && (
+            <>
+              <SocialSection settings={settings} busy={saving === 'social'} onSave={save} />
+              <MailSection settings={settings} busy={saving === 'mail'} onSave={save} />
+            </>
+          )}
+          {(activeTab === 'modules' || activeTab === 'all') && (
+            <>
+              <PaymentSection settings={settings} busy={saving === 'payment'} onSave={save} />
+              <ModulesSection settings={settings} busy={saving === 'modules'} onSave={save} />
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

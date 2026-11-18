@@ -21,7 +21,21 @@ import {
 import { linkOptions } from '@tanstack/react-router'
 import type { Locale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
-import { filterMenuItems, type MenuContext, type MenuItem } from './navigation'
+import { filterMenuItems, type MenuContext, type MenuItem, type MenuLinkItem } from './navigation'
+
+export interface AdminCollapsibleGroup {
+  id: string
+  title: string
+  icon: TablerIcon
+  items: MenuLinkItem[]
+}
+
+export interface AdminSidebarMenu {
+  groupTitle: string
+  overviewItem: MenuLinkItem
+  collapsibleGroups: AdminCollapsibleGroup[]
+  footerItems: MenuLinkItem[]
+}
 
 /** 个人中心板块的标识，同时作为路由段与菜单 id。 */
 export type SettingsSection =
@@ -310,6 +324,194 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
     },
   ]
   return filterMenuItems(items, ctx)
+}
+
+/**
+ * 独立管理台（`/dashboard/admin/*`）的树形侧栏导航。
+ *
+ * 对齐 ShipAny 管理台侧栏结构：
+ * - 顶部单列「营收与订阅」（概览）
+ * - 三组可折叠子菜单：「用户与权限」「账单与财务」「内容与运营」
+ * - 侧栏底部：「系统设置」与「个人中心」快速切换入口
+ */
+export function getAdminSidebarMenu(locale: Locale, ctx: MenuContext): AdminSidebarMenu | null {
+  if (!ctx.authenticated || ctx.role !== 'admin' || !ctx.config.features.enableAdmin) {
+    return null
+  }
+
+  const overviewItem: MenuLinkItem = {
+    kind: 'link',
+    id: 'admin-revenue',
+    title: m.settings_nav_admin_revenue(),
+    icon: IconChartBar,
+    destination: {
+      kind: 'internal',
+      options: linkOptions({ to: '/{-$locale}/dashboard/admin/revenue', params: { locale } }),
+    },
+  }
+
+  const rbacItems: MenuLinkItem[] = [
+    {
+      kind: 'link',
+      id: 'admin',
+      title: m.settings_nav_admin(),
+      icon: IconUsers,
+      destination: {
+        kind: 'internal',
+        options: linkOptions({ to: '/{-$locale}/dashboard/admin/users', params: { locale } }),
+      },
+    },
+    {
+      kind: 'link',
+      id: 'admin-roles',
+      title: m.settings_nav_admin_roles(),
+      icon: IconShieldLock,
+      destination: {
+        kind: 'internal',
+        options: linkOptions({ to: '/{-$locale}/dashboard/admin/roles', params: { locale } }),
+      },
+    },
+    {
+      kind: 'link',
+      id: 'admin-audit',
+      title: m.settings_nav_admin_audit(),
+      icon: IconClipboardList,
+      destination: {
+        kind: 'internal',
+        options: linkOptions({ to: '/{-$locale}/dashboard/admin/audit', params: { locale } }),
+      },
+    },
+  ]
+
+  const billingItems: MenuLinkItem[] = [
+    {
+      kind: 'link',
+      id: 'admin-orders',
+      title: m.settings_nav_admin_orders(),
+      icon: IconReceipt,
+      destination: {
+        kind: 'internal',
+        options: linkOptions({ to: '/{-$locale}/dashboard/admin/orders', params: { locale } }),
+      },
+    },
+    {
+      kind: 'link',
+      id: 'admin-subscriptions',
+      title: m.settings_nav_admin_subscriptions(),
+      icon: IconRepeat,
+      destination: {
+        kind: 'internal',
+        options: linkOptions({
+          to: '/{-$locale}/dashboard/admin/subscriptions',
+          params: { locale },
+        }),
+      },
+    },
+    ...(ctx.config.collection.enabled
+      ? [
+          {
+            kind: 'link' as const,
+            id: 'admin-collection-orders',
+            title: m['collection_admin.nav_orders'](),
+            icon: IconScan,
+            destination: {
+              kind: 'internal' as const,
+              options: linkOptions({
+                to: '/{-$locale}/dashboard/admin/collection-orders',
+                params: { locale },
+              }),
+            },
+          },
+        ]
+      : []),
+    {
+      kind: 'link',
+      id: 'admin-credits',
+      title: m.settings_nav_admin_credits(),
+      icon: IconCoins,
+      destination: {
+        kind: 'internal',
+        options: linkOptions({ to: '/{-$locale}/dashboard/admin/credits', params: { locale } }),
+      },
+    },
+  ]
+
+  const contentItems: MenuLinkItem[] = [
+    {
+      kind: 'link',
+      id: 'admin-content',
+      title: m.settings_nav_admin_content(),
+      icon: IconFileText,
+      destination: {
+        kind: 'internal',
+        options: linkOptions({ to: '/{-$locale}/dashboard/admin/content', params: { locale } }),
+      },
+    },
+    {
+      kind: 'link',
+      id: 'admin-tickets',
+      title: m.settings_nav_admin_tickets(),
+      icon: IconMessage2,
+      destination: {
+        kind: 'internal',
+        options: linkOptions({ to: '/{-$locale}/dashboard/admin/tickets', params: { locale } }),
+      },
+    },
+    {
+      kind: 'link',
+      id: 'admin-tasks',
+      title: m.settings_nav_admin_tasks(),
+      icon: IconSparkles,
+      destination: {
+        kind: 'internal',
+        options: linkOptions({ to: '/{-$locale}/dashboard/admin/tasks', params: { locale } }),
+      },
+    },
+  ]
+
+  const footerItems: MenuLinkItem[] = [
+    {
+      kind: 'link',
+      id: 'admin-settings',
+      title: m.settings_nav_admin_settings(),
+      icon: IconSettings,
+      destination: {
+        kind: 'internal',
+        options: linkOptions({ to: '/{-$locale}/dashboard/admin/settings', params: { locale } }),
+      },
+    },
+    {
+      kind: 'link',
+      id: 'personal-switch',
+      title: m.settings_title(),
+      icon: IconUser,
+      destination: {
+        kind: 'internal',
+        options: linkOptions({ to: '/{-$locale}/dashboard/profile', params: { locale } }),
+      },
+    },
+  ]
+
+  return {
+    groupTitle: m.settings_group_admin(),
+    overviewItem,
+    collapsibleGroups: [
+      { id: 'rbac', title: m.admin_nav_group_rbac(), icon: IconShieldLock, items: rbacItems },
+      {
+        id: 'billing',
+        title: m.admin_nav_group_billing(),
+        icon: IconCreditCard,
+        items: billingItems,
+      },
+      {
+        id: 'content',
+        title: m.admin_nav_group_content(),
+        icon: IconFileText,
+        items: contentItems,
+      },
+    ],
+    footerItems,
+  }
 }
 
 /** 每个板块的标题与说明，供页面 `head()` 与内容区标题使用。 */

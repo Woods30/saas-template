@@ -1,5 +1,6 @@
+import { IconChevronRight, IconShieldLock } from '@tabler/icons-react'
 import { Link, useRouterState } from '@tanstack/react-router'
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { DashboardUserCard } from '@/components/dashboard/DashboardUserCard'
 import { BrandLogo } from '@/components/layout/BrandLogo'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
@@ -24,10 +25,14 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar'
-import { getSettingsSectionMeta, getSettingsSections } from '@/config/settings'
+import type { MenuLinkItem } from '@/config/navigation'
+import { getAdminSidebarMenu, getSettingsSectionMeta, getSettingsSections } from '@/config/settings'
 import { websiteConfig } from '@/config/website'
 import { authClient } from '@/core/auth/client'
 import type { SessionInfo } from '@/core/auth/session'
@@ -35,14 +40,22 @@ import type { Locale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
 
 /**
- * 个人中心外壳。侧栏直接用 shadcn `sidebar`（Base UI 版），折叠、cookie 持久化
- * 与窄屏抽屉都由原件负责；菜单项来自 `src/config/settings.ts`。页面标题由面包屑
- * 末级承担，因此不渲染 `<h1>`；`DashboardUserCard` 是本路由内唯一的登出入口。
+ * 工作台与管理台外壳。侧栏直接用 shadcn `sidebar`（Base UI 版），折叠、cookie 持久化
+ * 与窄屏抽屉都由原件负责：
+ * - 个人中心（`/dashboard/*`）仅渲染个人菜单，管理员在侧栏底部提供「管理后台」切换入口；
+ * - 管理后台（`/dashboard/admin/*`）渲染独立的树形管理菜单与底部「系统设置 / 个人中心」切换入口。
+ * 页面标题由面包屑末级承担，因此不渲染 `<h1>`；`DashboardUserCard` 是本路由内唯一的登出入口。
  */
 /** 侧栏菜单项尺寸覆盖：原件 32px 行高在本仓 240px 侧栏里偏挤，这里放大到 40px。
  * 收起态原件 `size-8!` 带 important，覆盖时同样要带 `!`。 */
 const SIDEBAR_ITEM_CLASS =
   'h-10 text-[0.9375rem] [&_svg]:size-[1.125rem] group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:p-2! group-data-[collapsible=icon]:[&_svg]:size-5'
+
+function isLinkActive(item: MenuLinkItem, currentDashboardPath: string): boolean {
+  const options = item.destination.kind === 'internal' ? item.destination.options : null
+  const targetPath = options !== null && 'to' in options ? (options.to ?? '') : ''
+  return targetPath !== '' && (targetPath.split('/dashboard/')[1] ?? '') === currentDashboardPath
+}
 
 export function DashboardLayout({
   locale,
@@ -54,11 +67,12 @@ export function DashboardLayout({
   children: ReactNode
 }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
-  const groups = getSettingsSections(locale, {
+  const menuCtx = {
     config: websiteConfig,
     authenticated: true,
     role: session.user.role,
-  })
+  }
+  const allGroups = getSettingsSections(locale, menuCtx)
   // 当前板块取 `/dashboard/` 之后的一段；未注册的板块匹配不到，面包屑退化为两级。
   const currentSection = pathname.split('/dashboard/')[1]?.split('/')[0]
   /**
@@ -68,6 +82,41 @@ export function DashboardLayout({
    * 两个子页，只按第一段匹配会让两个菜单项同时命中或都不命中（用户管理抢走高亮）。
    */
   const currentDashboardPath = pathname.split('/dashboard/')[1] ?? ''
+  const isAdminRoute = currentDashboardPath === 'admin' || currentDashboardPath.startsWith('admin/')
+  const personalGroups = allGroups.filter((g) => g.kind === 'group' && g.id === 'personal')
+  const adminMenu = getAdminSidebarMenu(locale, menuCtx)
+
+  // 可折叠管理分组默认展开，且路由变化时自动展开包含当前路由的父组。
+  const [openAdminGroups, setOpenAdminGroups] = useState<Set<string>>(
+    () => new Set(['rbac', 'billing', 'content']),
+  )
+
+  useEffect(() => {
+    if (!adminMenu) return
+    setOpenAdminGroups((prev) => {
+      let changed = false
+      const next = new Set(prev)
+      for (const group of adminMenu.collapsibleGroups) {
+        if (group.items.some((sub) => isLinkActive(sub, currentDashboardPath))) {
+          if (!next.has(group.id)) {
+            next.add(group.id)
+            changed = true
+          }
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [adminMenu, currentDashboardPath])
+
+  function toggleAdminGroup(id: string) {
+    setOpenAdminGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   // 面包屑末级优先用完整路径（`admin/revenue`），匹配不到再退回第一段（`admin`）。
   const currentMeta =
     getSettingsSectionMeta(currentDashboardPath) ?? getSettingsSectionMeta(currentSection ?? '')
@@ -96,47 +145,154 @@ export function DashboardLayout({
           </Link>
         </SidebarHeader>
         <SidebarContent>
-          {groups.map((group) => {
-            if (group.kind !== 'group') return null
-            return (
-              <SidebarGroup key={group.id}>
-                <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {group.items.map((item) => {
-                      if (item.kind !== 'link') return null
-                      const options =
-                        item.destination.kind === 'internal' ? item.destination.options : null
-                      // 按目标路径判定：菜单 id 与路由段不是一一对应（`admin` 分组下有
-                      // `admin/users` 与 `admin/revenue` 两个子页），按 id 匹配会让
-                      // 「用户管理」抢走「营收与订阅」的高亮。
-                      const targetPath =
-                        options !== null && 'to' in options ? (options.to ?? '') : ''
-                      const isActive =
-                        targetPath !== '' &&
-                        (targetPath.split('/dashboard/')[1] ?? '') === currentDashboardPath
-                      const Icon = item.icon
-                      return (
-                        <SidebarMenuItem key={item.id}>
-                          <SidebarMenuButton
-                            render={options ? <Link {...options} /> : undefined}
-                            isActive={isActive}
-                            tooltip={item.title}
-                            className={SIDEBAR_ITEM_CLASS}
-                          >
-                            {Icon && <Icon aria-hidden />}
-                            <span>{item.title}</span>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      )
-                    })}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )
-          })}
+          {isAdminRoute && adminMenu ? (
+            <SidebarGroup>
+              <SidebarGroupLabel>{adminMenu.groupTitle}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {(() => {
+                    const overviewOptions =
+                      adminMenu.overviewItem.destination.kind === 'internal'
+                        ? adminMenu.overviewItem.destination.options
+                        : null
+                    const OverviewIcon = adminMenu.overviewItem.icon
+                    return (
+                      <SidebarMenuItem key={adminMenu.overviewItem.id}>
+                        <SidebarMenuButton
+                          render={overviewOptions ? <Link {...overviewOptions} /> : undefined}
+                          isActive={isLinkActive(adminMenu.overviewItem, currentDashboardPath)}
+                          tooltip={adminMenu.overviewItem.title}
+                          className={SIDEBAR_ITEM_CLASS}
+                        >
+                          {OverviewIcon && <OverviewIcon aria-hidden />}
+                          <span>{adminMenu.overviewItem.title}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    )
+                  })()}
+                  {adminMenu.collapsibleGroups.map((group) => {
+                    const open = openAdminGroups.has(group.id)
+                    const childActive = group.items.some((sub) =>
+                      isLinkActive(sub, currentDashboardPath),
+                    )
+                    const GroupIcon = group.icon
+                    return (
+                      <SidebarMenuItem key={group.id}>
+                        <SidebarMenuButton
+                          tooltip={group.title}
+                          isActive={childActive && !open}
+                          aria-expanded={open}
+                          onClick={() => toggleAdminGroup(group.id)}
+                          className={SIDEBAR_ITEM_CLASS}
+                        >
+                          <GroupIcon aria-hidden />
+                          <span>{group.title}</span>
+                          <IconChevronRight
+                            aria-hidden
+                            className={`ml-auto size-4 shrink-0 text-sidebar-foreground/70 transition-transform ${
+                              open ? 'rotate-90' : ''
+                            }`}
+                          />
+                        </SidebarMenuButton>
+                        {open && (
+                          <SidebarMenuSub>
+                            {group.items.map((sub) => {
+                              const subOptions =
+                                sub.destination.kind === 'internal' ? sub.destination.options : null
+                              const SubIcon = sub.icon
+                              return (
+                                <SidebarMenuSubItem key={sub.id}>
+                                  <SidebarMenuSubButton
+                                    render={subOptions ? <Link {...subOptions} /> : undefined}
+                                    isActive={isLinkActive(sub, currentDashboardPath)}
+                                  >
+                                    {SubIcon && <SubIcon aria-hidden />}
+                                    <span>{sub.title}</span>
+                                  </SidebarMenuSubButton>
+                                </SidebarMenuSubItem>
+                              )
+                            })}
+                          </SidebarMenuSub>
+                        )}
+                      </SidebarMenuItem>
+                    )
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ) : (
+            personalGroups.map((group) => {
+              if (group.kind !== 'group') return null
+              return (
+                <SidebarGroup key={group.id}>
+                  <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {group.items.map((item) => {
+                        if (item.kind !== 'link') return null
+                        const options =
+                          item.destination.kind === 'internal' ? item.destination.options : null
+                        const isActive = isLinkActive(item, currentDashboardPath)
+                        const Icon = item.icon
+                        return (
+                          <SidebarMenuItem key={item.id}>
+                            <SidebarMenuButton
+                              render={options ? <Link {...options} /> : undefined}
+                              isActive={isActive}
+                              tooltip={item.title}
+                              className={SIDEBAR_ITEM_CLASS}
+                            >
+                              {Icon && <Icon aria-hidden />}
+                              <span>{item.title}</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        )
+                      })}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              )
+            })
+          )}
         </SidebarContent>
         <SidebarFooter>
+          {isAdminRoute && adminMenu ? (
+            <SidebarMenu>
+              {adminMenu.footerItems.map((item) => {
+                const options =
+                  item.destination.kind === 'internal' ? item.destination.options : null
+                const Icon = item.icon
+                return (
+                  <SidebarMenuItem key={item.id}>
+                    <SidebarMenuButton
+                      render={options ? <Link {...options} /> : undefined}
+                      isActive={isLinkActive(item, currentDashboardPath)}
+                      tooltip={item.title}
+                      className={SIDEBAR_ITEM_CLASS}
+                    >
+                      {Icon && <Icon aria-hidden />}
+                      <span>{item.title}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              })}
+            </SidebarMenu>
+          ) : (
+            adminMenu && (
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    render={<Link to="/{-$locale}/dashboard/admin/revenue" params={{ locale }} />}
+                    tooltip={m.admin_settings_feature_admin()}
+                    className={SIDEBAR_ITEM_CLASS}
+                  >
+                    <IconShieldLock aria-hidden />
+                    <span>{m.admin_settings_feature_admin()}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            )
+          )}
           <DashboardUserCard session={session} />
         </SidebarFooter>
       </Sidebar>
@@ -157,11 +313,19 @@ export function DashboardLayout({
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
-                <BreadcrumbLink
-                  render={<Link to="/{-$locale}/dashboard/profile" params={{ locale }} />}
-                >
-                  {m.settings_title()}
-                </BreadcrumbLink>
+                {isAdminRoute ? (
+                  <BreadcrumbLink
+                    render={<Link to="/{-$locale}/dashboard/admin/revenue" params={{ locale }} />}
+                  >
+                    {m.admin_settings_feature_admin()}
+                  </BreadcrumbLink>
+                ) : (
+                  <BreadcrumbLink
+                    render={<Link to="/{-$locale}/dashboard/profile" params={{ locale }} />}
+                  >
+                    {m.settings_title()}
+                  </BreadcrumbLink>
+                )}
               </BreadcrumbItem>
               {currentMeta && (
                 <>

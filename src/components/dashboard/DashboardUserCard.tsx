@@ -1,4 +1,4 @@
-import { IconDotsVertical, IconLogout, IconSettings } from '@tabler/icons-react'
+import { IconDotsVertical, IconLogout, IconSettings, IconShieldLock } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { THEME_ICON, ThemeMenuItems, useTheme } from '@/components/theme/ThemeToggle'
@@ -21,6 +21,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { websiteConfig } from '@/config/website'
 import type { SessionInfo } from '@/core/auth/session'
 import { signOutAndRedirect } from '@/core/auth/sign-out'
 import { getRequestLocale } from '@/lib/locale'
@@ -97,6 +98,19 @@ export function DashboardUserCard({ session }: { session: SessionInfo }) {
               <IconSettings size={16} aria-hidden />
               {m.settings_user_menu()}
             </DropdownMenuItem>
+            {websiteConfig.features.enableAdmin && session.user.role === 'admin' && (
+              <DropdownMenuItem
+                render={
+                  <Link
+                    to="/{-$locale}/dashboard/admin/revenue"
+                    params={{ locale: getRequestLocale() }}
+                  />
+                }
+              >
+                <IconShieldLock size={16} aria-hidden />
+                {m.admin_settings_feature_admin()}
+              </DropdownMenuItem>
+            )}
             {enabled && (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>

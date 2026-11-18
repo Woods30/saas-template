@@ -149,7 +149,11 @@ function BillingPage() {
                 <p className="text-muted-foreground">{m.settings_billing_empty()}</p>
               )}
               <div className="flex flex-wrap gap-3">
-                <Button render={<Link to="/{-$locale}" params={{ locale }} hash="pricing" />}>
+                {/* 渲染成链接时必须关掉 `nativeButton`，否则开发环境警告「丢了原生按钮语义」。 */}
+                <Button
+                  render={<Link to="/{-$locale}" params={{ locale }} hash="pricing" />}
+                  nativeButton={false}
+                >
                   {m.settings_billing_view_plans()}
                 </Button>
                 {data.canManage && (

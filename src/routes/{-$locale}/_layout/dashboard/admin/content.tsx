@@ -169,10 +169,10 @@ function AdminContentPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">{m.admin_content_title()}</h2>
-          <p className="text-sm text-muted-foreground">{m.admin_content_description()}</p>
+          <h2 className="text-2xl font-semibold tracking-tight">{m.admin_content_title()}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{m.admin_content_description()}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button

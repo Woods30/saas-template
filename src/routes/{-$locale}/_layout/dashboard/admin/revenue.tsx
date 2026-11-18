@@ -1,3 +1,4 @@
+import { IconChartBar, IconCoins, IconReceipt, IconRepeat } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
 import { LocalDate } from '@/components/local-date'
 import { Badge } from '@/components/ui/badge'
@@ -70,6 +71,36 @@ function AdminRevenuePage() {
   // 页码可能因数据变少而越界（如删除了订阅），夹到有效范围而不是渲染空表。
   const currentPage = Math.min(page, totalPages)
   const pageItems = subscriptions.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const primaryBucket = revenue.buckets[0]
+  const primaryCurrency = primaryBucket?.currency ?? 'usd'
+  const totalPayments = revenue.buckets.reduce((sum, b) => sum + b.count, 0)
+
+  const kpiCards = [
+    {
+      title: m.admin_revenue_net(),
+      icon: IconChartBar,
+      value: money(primaryBucket?.net ?? 0, primaryCurrency),
+      hint: `${totalPayments} ${m.admin_revenue_payment_count()}`,
+    },
+    {
+      title: m.admin_revenue_gross(),
+      icon: IconReceipt,
+      value: money(primaryBucket?.gross ?? 0, primaryCurrency),
+      hint: primaryCurrency.toUpperCase(),
+    },
+    {
+      title: m.admin_revenue_refunded(),
+      icon: IconCoins,
+      value: money(primaryBucket?.refunded ?? 0, primaryCurrency),
+      hint: `${m.admin_revenue_failed_count()} ${revenue.failedCount}`,
+    },
+    {
+      title: m.admin_revenue_active_subscriptions(),
+      icon: IconRepeat,
+      value: String(activeSubscriptionCount),
+      hint: `${m.admin_revenue_subscriptions_title()} (${subscriptions.length})`,
+    },
+  ]
 
   return (
     <div className="space-y-8">
@@ -77,6 +108,21 @@ function AdminRevenuePage() {
         <h2 className="text-2xl font-semibold tracking-tight">{m.admin_revenue_title()}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{m.admin_revenue_description()}</p>
       </header>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {kpiCards.map((card) => (
+          <Card key={card.title}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
+              <card.icon className="size-4 text-muted-foreground" aria-hidden />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold tabular-nums">{card.value}</div>
+              <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       {revenue.buckets.length === 0 ? (
         <Card>

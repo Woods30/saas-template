@@ -142,11 +142,57 @@ describe('SettingsLayout 顶栏', () => {
     expect(users).not.toHaveAttribute('data-active')
   })
 
-  it('管理子页的面包屑末级是页面自己的标题', () => {
+  it('管理子页的面包屑末级是页面自己的标题，二级指向管理后台', () => {
     routerMocks.pathname = '/zh/dashboard/admin/revenue'
     renderLayout('admin')
+    expect(within(breadcrumb()).getByRole('link', { name: '管理后台' })).toHaveAttribute(
+      'href',
+      '/zh/dashboard/admin/revenue',
+    )
     const page = within(breadcrumb()).getByText('营收与订阅')
     expect(page).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('个人中心与管理后台侧栏菜单独立，互不混排且底部提供切换入口', () => {
+    // 1. 管理员在个人中心路由时，主菜单只渲染个人项，底部提供「管理后台」切换入口
+    routerMocks.pathname = '/zh/dashboard/profile'
+    const { unmount } = renderLayout('admin')
+    const content = document.querySelector('[data-slot="sidebar-content"]') as HTMLElement
+    const footer = document.querySelector('[data-slot="sidebar-footer"]') as HTMLElement
+    expect(within(content).getByRole('link', { name: '资料' })).toBeInTheDocument()
+    expect(within(content).queryByRole('link', { name: '用户管理' })).toBeNull()
+    expect(within(footer).getByRole('link', { name: '管理后台' })).toHaveAttribute(
+      'href',
+      '/zh/dashboard/admin/revenue',
+    )
+    unmount()
+
+    // 2. 管理员在管理后台路由时，主菜单渲染树形管理分组，底部提供「系统设置」与「个人中心」
+    routerMocks.pathname = '/zh/dashboard/admin/revenue'
+    renderLayout('admin')
+    const adminContent = document.querySelector('[data-slot="sidebar-content"]') as HTMLElement
+    const adminFooter = document.querySelector('[data-slot="sidebar-footer"]') as HTMLElement
+    expect(within(adminContent).queryByRole('link', { name: '资料' })).toBeNull()
+    expect(within(adminContent).getByRole('button', { name: '用户与权限' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(within(adminContent).getByRole('button', { name: '账单与财务' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(within(adminContent).getByRole('button', { name: '内容与运营' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(within(adminFooter).getByRole('link', { name: '系统设置' })).toHaveAttribute(
+      'href',
+      '/zh/dashboard/admin/settings',
+    )
+    expect(within(adminFooter).getByRole('link', { name: '个人中心' })).toHaveAttribute(
+      'href',
+      '/zh/dashboard/profile',
+    )
   })
 
   it('不放「返回站点」链接（logo 已是回站点出口）', () => {
