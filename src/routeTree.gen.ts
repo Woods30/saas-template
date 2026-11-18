@@ -38,6 +38,7 @@ import { Route as Char123LocaleChar125LayoutDashboardIndexRouteImport } from './
 import { Route as Char123LocaleChar125LayoutDashboardApiKeysRouteImport } from './routes/{-$locale}/_layout/dashboard/api-keys'
 import { Route as Char123LocaleChar125LayoutDashboardBillingRouteImport } from './routes/{-$locale}/_layout/dashboard/billing'
 import { Route as Char123LocaleChar125LayoutDashboardNotificationsRouteImport } from './routes/{-$locale}/_layout/dashboard/notifications'
+import { Route as Char123LocaleChar125LayoutDashboardOrdersRouteImport } from './routes/{-$locale}/_layout/dashboard/orders'
 import { Route as Char123LocaleChar125LayoutDashboardProfileRouteImport } from './routes/{-$locale}/_layout/dashboard/profile'
 import { Route as Char123LocaleChar125LayoutDashboardSecurityRouteImport } from './routes/{-$locale}/_layout/dashboard/security'
 import { Route as Char123LocaleChar125LayoutDashboardSessionsRouteImport } from './routes/{-$locale}/_layout/dashboard/sessions'
@@ -57,6 +58,8 @@ import { Route as Char123LocaleChar125LayoutDashboardAdminRevenueRouteImport } f
 import { Route as Char123LocaleChar125LayoutDashboardAdminSettingsRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/settings'
 import { Route as Char123LocaleChar125LayoutDashboardAdminSubscriptionsRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/subscriptions'
 import { Route as Char123LocaleChar125LayoutDashboardAdminUsersRouteImport } from './routes/{-$locale}/_layout/dashboard/admin/users'
+import { Route as Char123LocaleChar125LayoutDashboardOrdersIndexRouteImport } from './routes/{-$locale}/_layout/dashboard/orders/index'
+import { Route as Char123LocaleChar125LayoutDashboardOrdersOrderIdRouteImport } from './routes/{-$locale}/_layout/dashboard/orders/$orderId'
 import { Route as Char123LocaleChar125LayoutMarketingBlogIndexRouteImport } from './routes/{-$locale}/_layout/marketing/blog/index'
 import { Route as Char123LocaleChar125LayoutMarketingBlogSlugRouteImport } from './routes/{-$locale}/_layout/marketing/blog/$slug'
 import { Route as Char123LocaleChar125LayoutMarketingChangelogIndexRouteImport } from './routes/{-$locale}/_layout/marketing/changelog/index'
@@ -223,6 +226,12 @@ const Char123LocaleChar125LayoutDashboardNotificationsRoute =
     path: '/notifications',
     getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
   } as any)
+const Char123LocaleChar125LayoutDashboardOrdersRoute =
+  Char123LocaleChar125LayoutDashboardOrdersRouteImport.update({
+    id: '/orders',
+    path: '/orders',
+    getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
+  } as any)
 const Char123LocaleChar125LayoutDashboardProfileRoute =
   Char123LocaleChar125LayoutDashboardProfileRouteImport.update({
     id: '/profile',
@@ -337,6 +346,18 @@ const Char123LocaleChar125LayoutDashboardAdminUsersRoute =
     path: '/admin/users',
     getParentRoute: () => Char123LocaleChar125LayoutDashboardRoute,
   } as any)
+const Char123LocaleChar125LayoutDashboardOrdersIndexRoute =
+  Char123LocaleChar125LayoutDashboardOrdersIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => Char123LocaleChar125LayoutDashboardOrdersRoute,
+  } as any)
+const Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute =
+  Char123LocaleChar125LayoutDashboardOrdersOrderIdRouteImport.update({
+    id: '/$orderId',
+    path: '/$orderId',
+    getParentRoute: () => Char123LocaleChar125LayoutDashboardOrdersRoute,
+  } as any)
 const Char123LocaleChar125LayoutMarketingBlogIndexRoute =
   Char123LocaleChar125LayoutMarketingBlogIndexRouteImport.update({
     id: '/blog/',
@@ -391,6 +412,7 @@ export interface FileRoutesByFullPath {
   '/{-$locale}/dashboard/api-keys': typeof Char123LocaleChar125LayoutDashboardApiKeysRoute
   '/{-$locale}/dashboard/billing': typeof Char123LocaleChar125LayoutDashboardBillingRoute
   '/{-$locale}/dashboard/notifications': typeof Char123LocaleChar125LayoutDashboardNotificationsRoute
+  '/{-$locale}/dashboard/orders': typeof Char123LocaleChar125LayoutDashboardOrdersRouteWithChildren
   '/{-$locale}/dashboard/profile': typeof Char123LocaleChar125LayoutDashboardProfileRoute
   '/{-$locale}/dashboard/security': typeof Char123LocaleChar125LayoutDashboardSecurityRoute
   '/{-$locale}/dashboard/sessions': typeof Char123LocaleChar125LayoutDashboardSessionsRoute
@@ -411,8 +433,10 @@ export interface FileRoutesByFullPath {
   '/{-$locale}/dashboard/admin/settings': typeof Char123LocaleChar125LayoutDashboardAdminSettingsRoute
   '/{-$locale}/dashboard/admin/subscriptions': typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute
   '/{-$locale}/dashboard/admin/users': typeof Char123LocaleChar125LayoutDashboardAdminUsersRoute
+  '/{-$locale}/dashboard/orders/$orderId': typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute
   '/{-$locale}/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
   '/{-$locale}/marketing/legal/$slug': typeof Char123LocaleChar125LayoutMarketingLegalSlugRoute
+  '/{-$locale}/dashboard/orders/': typeof Char123LocaleChar125LayoutDashboardOrdersIndexRoute
   '/{-$locale}/marketing/blog/': typeof Char123LocaleChar125LayoutMarketingBlogIndexRoute
   '/{-$locale}/marketing/changelog/': typeof Char123LocaleChar125LayoutMarketingChangelogIndexRoute
 }
@@ -462,8 +486,10 @@ export interface FileRoutesByTo {
   '/{-$locale}/dashboard/admin/settings': typeof Char123LocaleChar125LayoutDashboardAdminSettingsRoute
   '/{-$locale}/dashboard/admin/subscriptions': typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute
   '/{-$locale}/dashboard/admin/users': typeof Char123LocaleChar125LayoutDashboardAdminUsersRoute
+  '/{-$locale}/dashboard/orders/$orderId': typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute
   '/{-$locale}/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
   '/{-$locale}/marketing/legal/$slug': typeof Char123LocaleChar125LayoutMarketingLegalSlugRoute
+  '/{-$locale}/dashboard/orders': typeof Char123LocaleChar125LayoutDashboardOrdersIndexRoute
   '/{-$locale}/marketing/blog': typeof Char123LocaleChar125LayoutMarketingBlogIndexRoute
   '/{-$locale}/marketing/changelog': typeof Char123LocaleChar125LayoutMarketingChangelogIndexRoute
 }
@@ -497,6 +523,7 @@ export interface FileRoutesById {
   '/{-$locale}/_layout/dashboard/api-keys': typeof Char123LocaleChar125LayoutDashboardApiKeysRoute
   '/{-$locale}/_layout/dashboard/billing': typeof Char123LocaleChar125LayoutDashboardBillingRoute
   '/{-$locale}/_layout/dashboard/notifications': typeof Char123LocaleChar125LayoutDashboardNotificationsRoute
+  '/{-$locale}/_layout/dashboard/orders': typeof Char123LocaleChar125LayoutDashboardOrdersRouteWithChildren
   '/{-$locale}/_layout/dashboard/profile': typeof Char123LocaleChar125LayoutDashboardProfileRoute
   '/{-$locale}/_layout/dashboard/security': typeof Char123LocaleChar125LayoutDashboardSecurityRoute
   '/{-$locale}/_layout/dashboard/sessions': typeof Char123LocaleChar125LayoutDashboardSessionsRoute
@@ -517,8 +544,10 @@ export interface FileRoutesById {
   '/{-$locale}/_layout/dashboard/admin/settings': typeof Char123LocaleChar125LayoutDashboardAdminSettingsRoute
   '/{-$locale}/_layout/dashboard/admin/subscriptions': typeof Char123LocaleChar125LayoutDashboardAdminSubscriptionsRoute
   '/{-$locale}/_layout/dashboard/admin/users': typeof Char123LocaleChar125LayoutDashboardAdminUsersRoute
+  '/{-$locale}/_layout/dashboard/orders/$orderId': typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute
   '/{-$locale}/_layout/marketing/blog/$slug': typeof Char123LocaleChar125LayoutMarketingBlogSlugRoute
   '/{-$locale}/_layout/marketing/legal/$slug': typeof Char123LocaleChar125LayoutMarketingLegalSlugRoute
+  '/{-$locale}/_layout/dashboard/orders/': typeof Char123LocaleChar125LayoutDashboardOrdersIndexRoute
   '/{-$locale}/_layout/marketing/blog/': typeof Char123LocaleChar125LayoutMarketingBlogIndexRoute
   '/{-$locale}/_layout/marketing/changelog/': typeof Char123LocaleChar125LayoutMarketingChangelogIndexRoute
 }
@@ -553,6 +582,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/dashboard/api-keys'
     | '/{-$locale}/dashboard/billing'
     | '/{-$locale}/dashboard/notifications'
+    | '/{-$locale}/dashboard/orders'
     | '/{-$locale}/dashboard/profile'
     | '/{-$locale}/dashboard/security'
     | '/{-$locale}/dashboard/sessions'
@@ -573,8 +603,10 @@ export interface FileRouteTypes {
     | '/{-$locale}/dashboard/admin/settings'
     | '/{-$locale}/dashboard/admin/subscriptions'
     | '/{-$locale}/dashboard/admin/users'
+    | '/{-$locale}/dashboard/orders/$orderId'
     | '/{-$locale}/marketing/blog/$slug'
     | '/{-$locale}/marketing/legal/$slug'
+    | '/{-$locale}/dashboard/orders/'
     | '/{-$locale}/marketing/blog/'
     | '/{-$locale}/marketing/changelog/'
   fileRoutesByTo: FileRoutesByTo
@@ -624,8 +656,10 @@ export interface FileRouteTypes {
     | '/{-$locale}/dashboard/admin/settings'
     | '/{-$locale}/dashboard/admin/subscriptions'
     | '/{-$locale}/dashboard/admin/users'
+    | '/{-$locale}/dashboard/orders/$orderId'
     | '/{-$locale}/marketing/blog/$slug'
     | '/{-$locale}/marketing/legal/$slug'
+    | '/{-$locale}/dashboard/orders'
     | '/{-$locale}/marketing/blog'
     | '/{-$locale}/marketing/changelog'
   id:
@@ -658,6 +692,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/_layout/dashboard/api-keys'
     | '/{-$locale}/_layout/dashboard/billing'
     | '/{-$locale}/_layout/dashboard/notifications'
+    | '/{-$locale}/_layout/dashboard/orders'
     | '/{-$locale}/_layout/dashboard/profile'
     | '/{-$locale}/_layout/dashboard/security'
     | '/{-$locale}/_layout/dashboard/sessions'
@@ -678,8 +713,10 @@ export interface FileRouteTypes {
     | '/{-$locale}/_layout/dashboard/admin/settings'
     | '/{-$locale}/_layout/dashboard/admin/subscriptions'
     | '/{-$locale}/_layout/dashboard/admin/users'
+    | '/{-$locale}/_layout/dashboard/orders/$orderId'
     | '/{-$locale}/_layout/marketing/blog/$slug'
     | '/{-$locale}/_layout/marketing/legal/$slug'
+    | '/{-$locale}/_layout/dashboard/orders/'
     | '/{-$locale}/_layout/marketing/blog/'
     | '/{-$locale}/_layout/marketing/changelog/'
   fileRoutesById: FileRoutesById
@@ -919,6 +956,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardNotificationsRouteImport
       parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
     }
+    '/{-$locale}/_layout/dashboard/orders': {
+      id: '/{-$locale}/_layout/dashboard/orders'
+      path: '/orders'
+      fullPath: '/{-$locale}/dashboard/orders'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardOrdersRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
+    }
     '/{-$locale}/_layout/dashboard/profile': {
       id: '/{-$locale}/_layout/dashboard/profile'
       path: '/profile'
@@ -1052,6 +1096,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardAdminUsersRouteImport
       parentRoute: typeof Char123LocaleChar125LayoutDashboardRoute
     }
+    '/{-$locale}/_layout/dashboard/orders/': {
+      id: '/{-$locale}/_layout/dashboard/orders/'
+      path: '/'
+      fullPath: '/{-$locale}/dashboard/orders/'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardOrdersIndexRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutDashboardOrdersRoute
+    }
+    '/{-$locale}/_layout/dashboard/orders/$orderId': {
+      id: '/{-$locale}/_layout/dashboard/orders/$orderId'
+      path: '/$orderId'
+      fullPath: '/{-$locale}/dashboard/orders/$orderId'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRouteImport
+      parentRoute: typeof Char123LocaleChar125LayoutDashboardOrdersRoute
+    }
     '/{-$locale}/_layout/marketing/blog/': {
       id: '/{-$locale}/_layout/marketing/blog/'
       path: '/blog'
@@ -1083,10 +1141,29 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface Char123LocaleChar125LayoutDashboardOrdersRouteChildren {
+  Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute: typeof Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute
+  Char123LocaleChar125LayoutDashboardOrdersIndexRoute: typeof Char123LocaleChar125LayoutDashboardOrdersIndexRoute
+}
+
+const Char123LocaleChar125LayoutDashboardOrdersRouteChildren: Char123LocaleChar125LayoutDashboardOrdersRouteChildren =
+  {
+    Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute:
+      Char123LocaleChar125LayoutDashboardOrdersOrderIdRoute,
+    Char123LocaleChar125LayoutDashboardOrdersIndexRoute:
+      Char123LocaleChar125LayoutDashboardOrdersIndexRoute,
+  }
+
+const Char123LocaleChar125LayoutDashboardOrdersRouteWithChildren =
+  Char123LocaleChar125LayoutDashboardOrdersRoute._addFileChildren(
+    Char123LocaleChar125LayoutDashboardOrdersRouteChildren,
+  )
+
 interface Char123LocaleChar125LayoutDashboardRouteChildren {
   Char123LocaleChar125LayoutDashboardApiKeysRoute: typeof Char123LocaleChar125LayoutDashboardApiKeysRoute
   Char123LocaleChar125LayoutDashboardBillingRoute: typeof Char123LocaleChar125LayoutDashboardBillingRoute
   Char123LocaleChar125LayoutDashboardNotificationsRoute: typeof Char123LocaleChar125LayoutDashboardNotificationsRoute
+  Char123LocaleChar125LayoutDashboardOrdersRoute: typeof Char123LocaleChar125LayoutDashboardOrdersRouteWithChildren
   Char123LocaleChar125LayoutDashboardProfileRoute: typeof Char123LocaleChar125LayoutDashboardProfileRoute
   Char123LocaleChar125LayoutDashboardSecurityRoute: typeof Char123LocaleChar125LayoutDashboardSecurityRoute
   Char123LocaleChar125LayoutDashboardSessionsRoute: typeof Char123LocaleChar125LayoutDashboardSessionsRoute
@@ -1107,6 +1184,8 @@ const Char123LocaleChar125LayoutDashboardRouteChildren: Char123LocaleChar125Layo
       Char123LocaleChar125LayoutDashboardBillingRoute,
     Char123LocaleChar125LayoutDashboardNotificationsRoute:
       Char123LocaleChar125LayoutDashboardNotificationsRoute,
+    Char123LocaleChar125LayoutDashboardOrdersRoute:
+      Char123LocaleChar125LayoutDashboardOrdersRouteWithChildren,
     Char123LocaleChar125LayoutDashboardProfileRoute:
       Char123LocaleChar125LayoutDashboardProfileRoute,
     Char123LocaleChar125LayoutDashboardSecurityRoute:

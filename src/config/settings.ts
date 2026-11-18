@@ -101,6 +101,18 @@ export function getSettingsSections(locale: Locale, ctx: MenuContext): MenuItem[
         },
         {
           kind: 'link',
+          id: 'collection-orders',
+          title: m['collection.nav_orders'](),
+          icon: IconReceipt,
+          // 核销型支付与 payment 是平级模块：模块关闭时入口消失，页面另有门禁。
+          visibility: { module: 'collection' },
+          destination: {
+            kind: 'internal',
+            options: linkOptions({ to: '/{-$locale}/dashboard/orders', params: { locale } }),
+          },
+        },
+        {
+          kind: 'link',
           id: 'api-keys',
           title: m.settings_nav_api_keys(),
           icon: IconKey,
@@ -255,6 +267,12 @@ export function getSettingsSectionMeta(section: string):
         title: m.settings_billing_title(),
         description: m.settings_billing_description(),
         icon: IconCreditCard,
+      }
+    case 'orders':
+      return {
+        title: m['collection.order_list_title'](),
+        description: m['collection.order_list_description'](),
+        icon: IconReceipt,
       }
     case 'admin':
       return {
