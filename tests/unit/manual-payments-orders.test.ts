@@ -834,6 +834,29 @@ describe('用户订单状态机与查询隔离', () => {
     expect(next.rows).toHaveLength(1)
     sqlite.close()
   })
+
+  it('列表只统计核销订单，不混入同一用户的在线结账订单', async () => {
+    const { db, sqlite } = manualPaymentDatabase()
+    await createAt(db, 'u1')
+    // 同一个用户的在线结账订单：没有核销详情，也不属于核销 provider。
+    const second = Math.floor(plusSeconds(T0, 5).getTime() / 1000)
+    sqlite
+      .prepare(
+        `INSERT INTO orders(id,order_no,user_id,provider,mode,product_id,offer_id,status,created_at,updated_at)
+         VALUES ('online-1','ord_online_1','u1','stripe','subscription','pro','monthly','created',?,?)`,
+      )
+      .run(second, second)
+
+    const page = await listUserOrders(
+      db,
+      { userId: 'u1', limit: 10, offset: 0 },
+      plusSeconds(T0, 10),
+    )
+    expect(page.total).toBe(1)
+    expect(page.rows).toHaveLength(1)
+    expect(page.rows[0]?.id).not.toBe('online-1')
+    sqlite.close()
+  })
 })
 
 describe('管理员订单列表', () => {

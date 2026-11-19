@@ -158,6 +158,17 @@ function orderRow(
   )
 }
 
+/** `orders.status`（订单行的结账尝试状态）。 */
+function orderRowStatus(
+  sqlite: ReturnType<typeof createTestDatabase>['sqlite'],
+  id: string,
+): string {
+  const row = sqlite.prepare('SELECT status FROM orders WHERE id = ?').get(id) as
+    | { status: string }
+    | undefined
+  return row?.status ?? ''
+}
+
 function paymentRows(
   sqlite: ReturnType<typeof createTestDatabase>['sqlite'],
 ): Record<string, unknown>[] {
@@ -181,6 +192,29 @@ function breakFinalSettlement(db: DB): void {
       if (!broken && values.status === 'settled') {
         broken = true
         throw new Error('结算中途失败')
+      }
+      return set(values as never)
+    }) as typeof builder.set
+    return builder
+  }) as unknown as DB['update']
+}
+
+/**
+ * 让订单状态回写（`orders.status = 'completed'`）抛错一次。
+ *
+ * 详情更新走的是 `status = 'settled'`，不受影响 —— 用来模拟「详情已落库、
+ * 订单状态还没回写就失败」，验证重试能补上订单状态。
+ */
+function breakOrderStatusSync(db: DB): void {
+  const original = db.update.bind(db)
+  let broken = false
+  db.update = ((table: unknown) => {
+    const builder = original(table as never)
+    const set = builder.set.bind(builder)
+    builder.set = ((values: Record<string, unknown>) => {
+      if (!broken && values.status === 'completed') {
+        broken = true
+        throw new Error('订单状态同步失败')
       }
       return set(values as never)
     }) as typeof builder.set
@@ -243,6 +277,7 @@ describe('核销订单结算', () => {
       offer_id: OFFER_ID,
     })
     expect(orderStatus(sqlite, order.id)).toBe('settled')
+    expect(orderRowStatus(sqlite, order.id)).toBe('completed')
     sqlite.close()
   })
 
@@ -335,6 +370,7 @@ describe('核销订单结算', () => {
     expect(rejected.status).toBe('rejected')
     expect(paymentRows(sqlite)).toHaveLength(0)
     expect(orderStatus(sqlite, order.id)).toBe('rejected')
+    expect(orderRowStatus(sqlite, order.id)).toBe('failed')
     sqlite.close()
   })
 
@@ -467,6 +503,7 @@ describe('核销订阅的手动续费', () => {
     )
     expect(settled.status).toBe('requires_refund')
     expect(orderStatus(sqlite, order.id)).toBe('requires_refund')
+    expect(orderRowStatus(sqlite, order.id)).toBe('failed')
     expect(paymentRows(sqlite)).toHaveLength(0)
     const rows = sqlite.prepare('SELECT provider FROM subscriptions').all() as {
       provider: string
@@ -525,6 +562,10 @@ describe('核销订阅的手动续费', () => {
     expect(orderStatus(sqlite, current.id)).toBe('settled')
     expect(orderStatus(sqlite, waiting.id)).toBe('canceled')
     expect(orderStatus(sqlite, duplicate.id)).toBe('requires_refund')
+    // 订单状态同步：结算完成 → completed；重复单被取消 → canceled / 需退款 → failed。
+    expect(orderRowStatus(sqlite, current.id)).toBe('completed')
+    expect(orderRowStatus(sqlite, waiting.id)).toBe('canceled')
+    expect(orderRowStatus(sqlite, duplicate.id)).toBe('failed')
     sqlite.close()
   })
 })
@@ -566,6 +607,33 @@ describe('结算崩溃恢复', () => {
     expect(paymentRows(sqlite)).toHaveLength(1)
     // 续期只加一次：周期结束时间没有因为重试而再往后推。
     expect(subscriptionRow(sqlite)?.current_period_end).toBe(periodEnd)
+    expect(orderRowStatus(sqlite, order.id)).toBe('completed')
+    sqlite.close()
+  })
+
+  it('详情已结算但订单状态同步失败时，重试把订单补成 completed', async () => {
+    const { db, sqlite } = settlementDatabase()
+    const order = insertOrder(sqlite)
+    const input = {
+      orderId: order.id,
+      reviewerId: ADMIN,
+      action: 'approve' as const,
+      observedAmount: order.payable,
+    }
+
+    breakOrderStatusSync(db)
+    await expect(reviewOrder(db, input, T0)).rejects.toThrow('订单状态同步失败')
+
+    // 详情与资金事实都已落库，只有订单行还停在 open。
+    expect(orderStatus(sqlite, order.id)).toBe('settled')
+    expect(paymentRows(sqlite)).toHaveLength(1)
+    expect(orderRowStatus(sqlite, order.id)).toBe('open')
+
+    // 终态重试不会重复写付款，但会补上订单状态。
+    const retried = await reviewOrder(db, input, T0)
+    expect(retried.status).toBe('settled')
+    expect(paymentRows(sqlite)).toHaveLength(1)
+    expect(orderRowStatus(sqlite, order.id)).toBe('completed')
     sqlite.close()
   })
 

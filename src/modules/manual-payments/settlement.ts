@@ -24,6 +24,8 @@ import {
   isUniqueConstraintError,
   type OrderRecord,
   readOrderRecordById,
+  syncOrderStatus,
+  syncOrderStatuses,
   toManualPaymentOrder,
 } from './orders'
 import {
@@ -105,7 +107,10 @@ export async function reviewOrder(
   }
 
   // 终态重复提交直接返回：同一笔核验不产生第二条付款记录。
+  // 但仍要补一次订单状态同步：上次可能在详情落库后、订单回写前失败，
+  // 不补的话订单会永远停在 open（详见 §Fix round 2）。
   if (record.detail.status === 'settled' || record.detail.status === 'requires_refund') {
+    await syncOrderStatus(db, record.order.id, record.detail.status, at)
     return toManualPaymentOrder(record.order, record.detail)
   }
   if (record.detail.status === 'settling') {
@@ -207,7 +212,7 @@ async function rejectOrder(
     if (fresh?.detail.status === 'rejected') return toView(fresh)
     throw new ManualPaymentError('INVALID_ORDER_STATE', '订单状态已变化，驳回失败')
   }
-  await syncOrderStatus(db, record.order.id, 'failed', at)
+  await syncOrderStatus(db, record.order.id, 'rejected', at)
   return toManualPaymentOrder(record.order, detail)
 }
 
@@ -468,7 +473,7 @@ async function markSettled(
     )
     .returning({ orderId: schema.manualPaymentDetails.orderId })
   if (updated.length > 0) {
-    await syncOrderStatus(db, order.id, 'completed', at)
+    await syncOrderStatus(db, order.id, 'settled', at)
     return { ...order, status: 'settled', settledAt: at, updatedAt: at }
   }
   const fresh = await readOrder(db, order.id)
@@ -511,7 +516,7 @@ async function markRequiresRefund(
     )
     .returning({ orderId: schema.manualPaymentDetails.orderId })
   if (updated.length > 0) {
-    await syncOrderStatus(db, order.id, 'failed', at)
+    await syncOrderStatus(db, order.id, 'requires_refund', at)
     return {
       ...order,
       status: 'requires_refund',
@@ -568,7 +573,7 @@ async function cleanupDuplicateOrders(db: DB, order: ManualPaymentOrder, at: Dat
       .update(schema.manualPaymentDetails)
       .set({ status: 'requires_refund', updatedAt: at })
       .where(inArray(schema.manualPaymentDetails.orderId, submitted))
-    await syncOrderStatuses(db, submitted, 'failed', at)
+    await syncOrderStatuses(db, submitted, 'requires_refund', at)
   }
 }
 
@@ -580,25 +585,6 @@ function readOrder(db: DB, orderId: string): Promise<OrderRecord | undefined> {
 /** 把两行组合成领域视图。 */
 function toView(record: OrderRecord): ManualPaymentOrder {
   return toManualPaymentOrder(record.order, record.detail)
-}
-
-/** 把核销状态同步到订单状态。 */
-async function syncOrderStatus(db: DB, orderId: string, status: string, at: Date): Promise<void> {
-  await db.update(schema.orders).set({ status, updatedAt: at }).where(eq(schema.orders.id, orderId))
-}
-
-/** 批量同步订单状态。 */
-async function syncOrderStatuses(
-  db: DB,
-  orderIds: string[],
-  status: string,
-  at: Date,
-): Promise<void> {
-  if (orderIds.length === 0) return
-  await db
-    .update(schema.orders)
-    .set({ status, updatedAt: at })
-    .where(inArray(schema.orders.id, orderIds))
 }
 
 /** 规范化金额：必须是正整数（单位：分），否则按未填处理。 */

@@ -186,17 +186,19 @@ export async function createOrder(
 
   const expiresAt = new Date(now.getTime() + MANUAL_PAYMENT_ORDER_TTL_SECONDS * 1000)
   const start = randomFingerprintStart()
-  const orderNo = newOrderNo(now)
 
   for (let offset = 0; offset < FINGERPRINT_SPAN; offset++) {
     const fingerprint = ((start - FINGERPRINT_MIN + offset) % FINGERPRINT_SPAN) + FINGERPRINT_MIN
+    // 每次重试都换一个订单号：补偿删除失败时，上一轮的行可能还占着唯一索引。
+    const orderNo = newOrderNo(now)
     const order = buildOrderRow({ input, price, orderNo, now, expiresAt })
     const detail = buildDetailRow({ order, account, price, fingerprint, now, expiresAt })
-    await db.insert(schema.orders).values(order)
     try {
+      await db.insert(schema.orders).values(order)
       await db.insert(schema.manualPaymentDetails).values(detail)
       return toManualPaymentOrder(order, detail)
     } catch (error) {
+      // 订单已插入但详情冲突时把它删掉；删除失败也不阻塞下一轮（下一轮换订单号）。
       await db.delete(schema.orders).where(eq(schema.orders.id, order.id))
       // 唯一索引说这个尾数被占了：换下一个候选。
       if (!isUniqueConstraintError(error)) throw error
@@ -354,10 +356,15 @@ export async function listUserOrders(
 
   const limit = clampLimit(input.limit)
   const offset = Math.max(0, Math.trunc(input.offset ?? 0))
+  // `orders` 与在线结账共用：只取核销订单，否则分页与 total 会被别的来源污染。
+  const ownedByUserAndProvider = and(
+    eq(schema.orders.userId, input.userId),
+    eq(schema.orders.provider, MANUAL_PAYMENT_PROVIDER),
+  )
   const orders = await db
     .select()
     .from(schema.orders)
-    .where(eq(schema.orders.userId, input.userId))
+    .where(ownedByUserAndProvider)
     .orderBy(desc(schema.orders.createdAt), desc(schema.orders.id))
     .limit(limit)
     .offset(offset)
@@ -368,7 +375,7 @@ export async function listUserOrders(
   const counted = await db
     .select({ total: count() })
     .from(schema.orders)
-    .where(eq(schema.orders.userId, input.userId))
+    .where(ownedByUserAndProvider)
 
   return {
     rows: orders.flatMap((order) => {
@@ -587,7 +594,7 @@ async function markExpired(db: DB, userId: string, orderId: string, now: Date): 
  *
  * 状态机以核销详情为准；订单行只跟随终态变化，避免两套状态互相漂移。
  */
-async function syncOrderStatus(
+export async function syncOrderStatus(
   db: DB,
   orderId: string,
   detailStatus: ManualPaymentOrderStatus,
@@ -600,7 +607,7 @@ async function syncOrderStatus(
 }
 
 /** 批量同步订单状态：用于惰性过期这类一次改多行的操作。 */
-async function syncOrderStatuses(
+export async function syncOrderStatuses(
   db: DB,
   orderIds: string[],
   detailStatus: ManualPaymentOrderStatus,
