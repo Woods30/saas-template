@@ -171,6 +171,27 @@ export function readAttribution(headers: Headers): Attribution {
   }
 }
 
+/**
+ * 把归因 cookie 合进响应。
+ *
+ * `attributionCookieHeaders` 自己判断「同名 cookie 是否已存在」，因此这里只负责复制
+ * 响应头并逐条 `append('Set-Cookie', ...)`——中间件返回的响应头可能是不可变的。
+ * body 原样透传：SSR 是流式响应，不能读取后再重建文本。
+ */
+export function withAttributionCookies(response: Response, request: Request): Response {
+  const cookies = attributionCookieHeaders(request)
+  if (cookies.length === 0) return response
+
+  const headers = new Headers(response.headers)
+  for (const cookie of cookies) headers.append('Set-Cookie', cookie)
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
 function shouldWriteReferrer(request: Request, cookieHeader: string | null): boolean {
   if (request.method !== 'GET') return false
   if (!request.headers.get('accept')?.toLowerCase().includes('text/html')) return false
