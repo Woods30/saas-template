@@ -109,8 +109,8 @@ export function getServiceStatuses(input: {
         ]
       : []
 
-  check(
-    'mail',
+  // 邮件配置的判定只写一份：需求清单与「认证要求验证」的矛盾诊断共用同一结果。
+  const mailRequirements: Array<[string, boolean, ConfigIssue['location']]> =
     config.mail.provider === 'resend'
       ? [
           ['RESEND_API_KEY', !!env.RESEND_API_KEY, '数据库配置'],
@@ -119,9 +119,24 @@ export function getServiceStatuses(input: {
       : [
           ['MAIL_FROM / CLOUDFLARE_EMAIL_SENDER', !!getMailFrom(config, env), '数据库配置'],
           ['EMAIL', bindings?.email !== false, 'Cloudflare binding'],
-        ],
-    mailManual,
-  )
+        ]
+  const mailConfigured = mailRequirements.every(([, valid]) => valid)
+
+  // 要求邮箱验证却发不出验证邮件是死锁：新用户注册后永远无法完成验证。
+  const authMailConflict: ConfigIssue[] =
+    config.auth.requireEmailVerification && !mailConfigured
+      ? [
+          {
+            key: 'mail.enabled',
+            location: 'src/config/website.ts',
+            conflict: true,
+            reason:
+              '要求邮箱验证但邮件未配置完整，新用户将永远无法登录；请补齐邮件配置，或显式设置 auth.requireEmailVerification: false',
+          },
+        ]
+      : []
+
+  check('mail', mailRequirements, mailManual, authMailConflict)
 
   check('contact', [
     ['mail.enabled', result.mail.state === 'configured', 'src/config/website.ts'],

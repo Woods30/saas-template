@@ -37,7 +37,6 @@ export function TemplatePricing({ price }: { price: string | null }) {
   const navigate = useNavigate()
   const loginUrl = `/${locale}/auth/login?redirect=${encodeURIComponent(`/${locale}/#pricing`)}`
   const manualPaymentMode = websiteConfig.payment.checkoutMode === 'manual_payments'
-  // 两条链路互斥：核销收款走核销模块，渠道支付走支付模块。
   // 两条链路互斥：核销链路看核销模块，渠道链路看支付模块。
   const enabled = manualPaymentMode
     ? websiteConfig.manualPayments.enabled

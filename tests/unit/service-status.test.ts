@@ -190,6 +190,31 @@ describe('getServiceStatuses — mail', () => {
   })
 })
 
+// 邮箱验证与邮件配置的矛盾：要求验证却发不出验证邮件是死锁。
+describe('getServiceStatuses — 邮箱验证与邮件配置矛盾', () => {
+  it('要求邮箱验证但邮件未配置完整时 mail 判为 incomplete 并标记 conflict', () => {
+    const statuses = getServiceStatuses({
+      config: makeConfig((c) => {
+        c.auth.requireEmailVerification = true
+      }),
+      serverEnv: makeServerEnv({}),
+    })
+    expect(statuses.mail.state).toBe('incomplete')
+    expect(statuses.mail.issues.find((i) => i.key === 'mail.enabled')?.conflict).toBe(true)
+  })
+
+  it('关闭邮箱验证且邮件齐全时 mail 为 configured，不报矛盾', () => {
+    const statuses = getServiceStatuses({
+      config: makeConfig((c) => {
+        c.auth.requireEmailVerification = false
+      }),
+      serverEnv: makeServerEnv({ RESEND_API_KEY: 'key', MAIL_FROM: 'noreply@jerbix.dev' }),
+    })
+    expect(statuses.mail.state).toBe('configured')
+    expect(statuses.mail.issues.some((i) => i.conflict)).toBe(false)
+  })
+})
+
 // contact 分支。
 describe('getServiceStatuses — contact', () => {
   it('关闭时为 disabled', () => {
