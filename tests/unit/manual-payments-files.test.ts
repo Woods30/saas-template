@@ -52,17 +52,19 @@ function insertOrder(
     receiptKey?: string | null
   },
 ): void {
+  const userId = options.userId ?? 'u1'
   sqlite
     .prepare(
-      `INSERT INTO manual_payment_orders(id,user_id,account_id,channel,product_id,offer_id,kind,base_amount,fingerprint,payable_amount,currency,status,qr_image_url,qr_image_key,receipt_key,expires_at,created_at,updated_at)
-       VALUES (?, ?, 'acct-main', 'alipay', 'pro', 'once', 'one_time', 1000, 1, 1001, 'cny', ?, '/manual-payments/main.png', NULL, ?, 4102444800, 1, 1)`,
+      `INSERT INTO orders(id,order_no,user_id,provider,mode,product_id,offer_id,status,created_at,updated_at)
+       VALUES (?, ?, ?, 'manual_payments', 'payment', 'pro', 'once', 'open', 1, 1)`,
     )
-    .run(
-      options.id,
-      options.userId ?? 'u1',
-      options.status ?? 'pending_payment',
-      options.receiptKey ?? null,
+    .run(options.id, `ord_test_${options.id}`, userId)
+  sqlite
+    .prepare(
+      `INSERT INTO manual_payment_details(order_id,user_id,account_id,channel,base_amount,fingerprint,payable_amount,currency,status,qr_image_url,qr_image_key,receipt_key,expires_at,created_at,updated_at)
+       VALUES (?, ?, 'acct-main', 'alipay', 1000, 1, 1001, 'cny', ?, '/manual-payments/main.png', NULL, ?, 4102444800, 1, 1)`,
     )
+    .run(options.id, userId, options.status ?? 'pending_payment', options.receiptKey ?? null)
 }
 
 /** 写一行收款账户记录。 */
@@ -162,15 +164,17 @@ describe('订单文件引用', () => {
     // 别人的订单写不进去。
     expect(await setOrderReceiptKey(db, { orderId: 'o1', userId: 'u2', key: 'k.png' })).toBe(false)
     // 已结算的订单写不进去。
-    sqlite.prepare("UPDATE manual_payment_orders SET status = 'settled' WHERE id = 'o1'").run()
+    sqlite
+      .prepare("UPDATE manual_payment_details SET status = 'settled' WHERE order_id = 'o1'")
+      .run()
     expect(await setOrderReceiptKey(db, { orderId: 'o1', userId: 'u1', key: 'k.png' })).toBe(false)
 
     sqlite
-      .prepare("UPDATE manual_payment_orders SET status = 'pending_payment' WHERE id = 'o1'")
+      .prepare("UPDATE manual_payment_details SET status = 'pending_payment' WHERE order_id = 'o1'")
       .run()
     expect(await setOrderReceiptKey(db, { orderId: 'o1', userId: 'u1', key: 'k.png' })).toBe(true)
     const row = sqlite
-      .prepare('SELECT receipt_key FROM manual_payment_orders WHERE id = ?')
+      .prepare('SELECT receipt_key FROM manual_payment_details WHERE order_id = ?')
       .get('o1') as {
       receipt_key: string
     }

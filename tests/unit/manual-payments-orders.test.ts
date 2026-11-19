@@ -36,6 +36,8 @@ import { createTestDatabase } from '../helpers/database'
  *
  * 用的都是真 SQLite（`tests/helpers/database.ts` 回放迁移）——尾数的唯一性靠
  * partial unique index 判定，假 db 验不出来。
+ *
+ * 订单由两行组成：`orders`（购买意图）与 `manual_payment_details`（核销专有字段）。
  */
 
 // --- 表结构 ------------------------------------------------------------------
@@ -55,7 +57,7 @@ function indexColumnNames(columns: readonly unknown[]): string[] {
 }
 
 describe('核销型支付的数据表', () => {
-  it('两张表都在 schema 里，列与规格一致', () => {
+  it('收款账户表与核销详情表的列与规格一致', () => {
     expect(Object.keys(getTableColumns(schema.manualPaymentAccounts))).toEqual([
       'id',
       'channel',
@@ -67,18 +69,13 @@ describe('核销型支付的数据表', () => {
       'createdAt',
       'updatedAt',
     ])
-    expect(Object.keys(getTableColumns(schema.manualPaymentOrders))).toEqual([
-      'id',
+    expect(Object.keys(getTableColumns(schema.manualPaymentDetails))).toEqual([
+      'orderId',
       'userId',
       'accountId',
       'channel',
       'qrImageUrl',
       'qrImageKey',
-      'productId',
-      'offerId',
-      'kind',
-      'interval',
-      'intervalCount',
       'baseAmount',
       'fingerprint',
       'payableAmount',
@@ -100,9 +97,9 @@ describe('核销型支付的数据表', () => {
   })
 
   it('活跃金额唯一索引覆盖收款账户与应付金额两列', () => {
-    const config = getTableConfig(schema.manualPaymentOrders)
+    const config = getTableConfig(schema.manualPaymentDetails)
     const index = config.indexes.find(
-      (item) => item.config?.name === 'manual_payment_orders_active_amount_unique',
+      (item) => item.config?.name === 'manual_payment_details_active_amount_unique',
     )
     expect(index ? indexColumnNames(index.config?.columns ?? []) : []).toEqual([
       'account_id',
@@ -112,21 +109,21 @@ describe('核销型支付的数据表', () => {
   })
 
   it('结算临界区唯一索引限制同一用户只能有一个 settling 订单', () => {
-    const config = getTableConfig(schema.manualPaymentOrders)
+    const config = getTableConfig(schema.manualPaymentDetails)
     const index = config.indexes.find(
-      (item) => item.config?.name === 'manual_payment_orders_settling_user_unique',
+      (item) => item.config?.name === 'manual_payment_details_settling_user_unique',
     )
     expect(index ? indexColumnNames(index.config?.columns ?? []) : []).toEqual(['user_id'])
     expect(index?.config?.where).toBeDefined()
   })
 
   it('订单列表与惰性过期索引存在', () => {
-    const config = getTableConfig(schema.manualPaymentOrders)
+    const config = getTableConfig(schema.manualPaymentDetails)
     const byUser = config.indexes.find(
-      (item) => item.config?.name === 'manual_payment_orders_user_status_idx',
+      (item) => item.config?.name === 'manual_payment_details_user_status_idx',
     )
     const byExpiry = config.indexes.find(
-      (item) => item.config?.name === 'manual_payment_orders_status_expires_idx',
+      (item) => item.config?.name === 'manual_payment_details_status_expires_idx',
     )
     expect(byUser ? indexColumnNames(byUser.config?.columns ?? []) : []).toEqual([
       'user_id',
@@ -143,13 +140,15 @@ describe('核销型支付的数据表', () => {
     sqlite.exec(
       "INSERT INTO users(id,name,email,created_at,updated_at) VALUES ('u1','User','u1@example.com',1,1)",
     )
-    const insert = (id: string, status: string, amount: number) =>
+    const insert = (id: string, status: string, amount: number) => {
+      insertOrderRow(sqlite, id)
       sqlite
         .prepare(
-          `INSERT INTO manual_payment_orders(id,user_id,account_id,channel,product_id,offer_id,kind,base_amount,fingerprint,payable_amount,currency,status,expires_at)
-           VALUES (?, 'u1', 'acct', 'alipay', 'pro', 'monthly', 'subscription', ?, 1, ?, 'cny', ?, 1)`,
+          `INSERT INTO manual_payment_details(order_id,user_id,account_id,channel,base_amount,fingerprint,payable_amount,currency,status,expires_at)
+           VALUES (?, 'u1', 'acct', 'alipay', ?, 1, ?, 'cny', ?, 1)`,
         )
         .run(id, amount - 1, amount, status)
+    }
 
     insert('a', 'pending_payment', 1000)
     expect(() => insert('b', 'pending_verification', 1000)).toThrow(/UNIQUE/)
@@ -165,13 +164,15 @@ describe('核销型支付的数据表', () => {
     sqlite.exec(
       "INSERT INTO users(id,name,email,created_at,updated_at) VALUES ('u1','User','u1@example.com',1,1),('u2','Other','u2@example.com',1,1)",
     )
-    const insert = (id: string, userId: string, amount: number) =>
+    const insert = (id: string, userId: string, amount: number) => {
+      insertOrderRow(sqlite, id, userId)
       sqlite
         .prepare(
-          `INSERT INTO manual_payment_orders(id,user_id,account_id,channel,product_id,offer_id,kind,base_amount,fingerprint,payable_amount,currency,status,expires_at)
-           VALUES (?, ?, 'acct', 'alipay', 'pro', 'monthly', 'subscription', ?, 1, ?, 'cny', 'settling', 1)`,
+          `INSERT INTO manual_payment_details(order_id,user_id,account_id,channel,base_amount,fingerprint,payable_amount,currency,status,expires_at)
+           VALUES (?, ?, 'acct', 'alipay', ?, 1, ?, 'cny', 'settling', 1)`,
         )
         .run(id, userId, amount - 1, amount)
+    }
 
     insert('a', 'u1', 1000)
     expect(() => insert('b', 'u1', 1001)).toThrow(/UNIQUE/)
@@ -212,7 +213,22 @@ function manualPaymentDatabase() {
   return { sqlite, db }
 }
 
-/** 直接写一行订单：用来占住尾数，模拟「别的请求已经占了这个金额」。 */
+/** 写一行 `orders`：核销详情的父行。 */
+function insertOrderRow(
+  sqlite: ReturnType<typeof createTestDatabase>['sqlite'],
+  id: string,
+  userId = 'u1',
+  status = 'open',
+): void {
+  sqlite
+    .prepare(
+      `INSERT INTO orders(id,order_no,user_id,provider,mode,product_id,offer_id,status,created_at,updated_at)
+       VALUES (?, ?, ?, 'manual_payments', 'payment', ?, ?, ?, 1, 1)`,
+    )
+    .run(id, `ord_test_${id}`, userId, PRODUCT_ID, OFFER_ID, status)
+}
+
+/** 直接写一行核销详情：用来占住尾数，模拟「别的请求已经占了这个金额」。 */
 function occupy(
   sqlite: ReturnType<typeof createTestDatabase>['sqlite'],
   options: {
@@ -226,17 +242,16 @@ function occupy(
   },
 ): void {
   const expiresAt = options.expiresAt ?? Math.floor(Date.now() / 1000) + 365 * 24 * 3600
+  insertOrderRow(sqlite, options.id, options.userId ?? 'u1')
   sqlite
     .prepare(
-      `INSERT INTO manual_payment_orders(id,user_id,account_id,channel,product_id,offer_id,kind,base_amount,fingerprint,payable_amount,currency,status,expires_at,created_at,updated_at)
-       VALUES (?, ?, ?, 'alipay', ?, ?, 'one_time', ?, ?, ?, 'cny', ?, ?, ?, ?)`,
+      `INSERT INTO manual_payment_details(order_id,user_id,account_id,channel,base_amount,fingerprint,payable_amount,currency,status,expires_at,created_at,updated_at)
+       VALUES (?, ?, ?, 'alipay', ?, ?, ?, 'cny', ?, ?, ?, ?)`,
     )
     .run(
       options.id,
       options.userId ?? 'u1',
       options.accountId ?? 'acct-main',
-      PRODUCT_ID,
-      OFFER_ID,
       BASE_AMOUNT,
       options.fingerprint,
       BASE_AMOUNT + options.fingerprint,
@@ -247,8 +262,15 @@ function occupy(
     )
 }
 
+function detailStatus(sqlite: ReturnType<typeof createTestDatabase>['sqlite'], id: string): string {
+  const row = sqlite
+    .prepare('SELECT status FROM manual_payment_details WHERE order_id = ?')
+    .get(id) as { status: string } | undefined
+  return row?.status ?? ''
+}
+
 function orderStatus(sqlite: ReturnType<typeof createTestDatabase>['sqlite'], id: string): string {
-  const row = sqlite.prepare('SELECT status FROM manual_payment_orders WHERE id = ?').get(id) as
+  const row = sqlite.prepare('SELECT status FROM orders WHERE id = ?').get(id) as
     | { status: string }
     | undefined
   return row?.status ?? ''
@@ -376,6 +398,53 @@ describe('核销订单金额分配', () => {
     sqlite.close()
   })
 
+  it('创建订单同时写 orders 与 manual_payment_details', async () => {
+    const { db, sqlite } = manualPaymentDatabase()
+    const order = await createOrder(db, {
+      userId: 'u1',
+      productId: PRODUCT_ID,
+      offerId: OFFER_ID,
+    })
+
+    // 领域视图带出对外订单号。
+    expect(order.orderNo).toMatch(/^ord_\d{14}_[A-Z0-9]{8}$/)
+
+    const intent = sqlite
+      .prepare('SELECT order_no, provider, mode, status, user_id FROM orders WHERE id = ?')
+      .get(order.id) as {
+      order_no: string
+      provider: string
+      mode: string
+      status: string
+      user_id: string
+    }
+    expect(intent).toMatchObject({
+      order_no: order.orderNo,
+      provider: 'manual_payments',
+      mode: 'payment',
+      status: 'open',
+      user_id: 'u1',
+    })
+
+    const detail = sqlite
+      .prepare(
+        'SELECT user_id, status, payable_amount, fingerprint FROM manual_payment_details WHERE order_id = ?',
+      )
+      .get(order.id) as {
+      user_id: string
+      status: string
+      payable_amount: number
+      fingerprint: number
+    }
+    expect(detail).toMatchObject({
+      user_id: 'u1',
+      status: 'pending_payment',
+      payable_amount: order.payableAmount,
+      fingerprint: order.fingerprint,
+    })
+    sqlite.close()
+  })
+
   it('应付金额等于标价加尾数且尾数落在 1 到 99', async () => {
     const { db, sqlite } = manualPaymentDatabase()
     const order = await createOrder(db, {
@@ -413,7 +482,7 @@ describe('核销订单金额分配', () => {
     expect(MANUAL_PAYMENT_ORDER_TTL_SECONDS).toBe(15 * 60)
     // D1 的 timestamp 列是整数秒：存的是裸秒整数，不是毫秒。
     const stored = sqlite
-      .prepare('SELECT created_at, expires_at FROM manual_payment_orders WHERE id = ?')
+      .prepare('SELECT created_at, expires_at FROM manual_payment_details WHERE order_id = ?')
       .get(order.id) as { created_at: number; expires_at: number }
     expect(stored.created_at).toBe(Math.floor(now.getTime() / 1000))
     expect(stored.expires_at).toBe(Math.floor(now.getTime() / 1000) + 15 * 60)
@@ -452,7 +521,7 @@ describe('核销订单金额分配', () => {
     sqlite.close()
   })
 
-  it('同一账户并发创建不会拿到相同应付金额', async () => {
+  it('同一账户下两个活跃订单的应付金额不同', async () => {
     const { db, sqlite } = manualPaymentDatabase()
     forceFingerprintStart(0)
     const [first, second] = await Promise.all([
@@ -504,7 +573,7 @@ describe('核销订单惰性过期', () => {
       { userId: 'u1', productId: PRODUCT_ID, offerId: OFFER_ID },
       now,
     )
-    expect(orderStatus(sqlite, 'stale')).toBe('expired')
+    expect(detailStatus(sqlite, 'stale')).toBe('expired')
     expect(order.fingerprint).toBe(5)
     sqlite.close()
   })
@@ -526,7 +595,7 @@ describe('核销订单惰性过期', () => {
     await expect(
       createOrder(db, { userId: 'u1', productId: PRODUCT_ID, offerId: OFFER_ID }, now),
     ).rejects.toMatchObject({ code: 'AMOUNT_POOL_EXHAUSTED' })
-    expect(orderStatus(sqlite, 'submitted')).toBe('pending_verification')
+    expect(detailStatus(sqlite, 'submitted')).toBe('pending_verification')
     sqlite.close()
   })
 
@@ -539,8 +608,26 @@ describe('核销订单惰性过期', () => {
     occupy(sqlite, { id: 'alive', fingerprint: 3 })
     const expired = await expirePendingOrders(db, 'acct-main', now)
     expect(expired).toBe(2)
-    expect(orderStatus(sqlite, 'stale-1')).toBe('expired')
-    expect(orderStatus(sqlite, 'alive')).toBe('pending_payment')
+    expect(detailStatus(sqlite, 'stale-1')).toBe('expired')
+    expect(detailStatus(sqlite, 'alive')).toBe('pending_payment')
+    sqlite.close()
+  })
+
+  it('订单过期同步把 orders 标记为 expired', async () => {
+    const { db, sqlite } = manualPaymentDatabase()
+    const order = await createOrder(
+      db,
+      { userId: 'u1', productId: PRODUCT_ID, offerId: OFFER_ID },
+      new Date('2026-01-01T00:00:00.000Z'),
+    )
+    expect(orderStatus(sqlite, order.id)).toBe('open')
+
+    const createdAt = new Date('2026-01-01T00:00:00.000Z')
+    const later = new Date(createdAt.getTime() + MANUAL_PAYMENT_ORDER_TTL_SECONDS * 1000)
+    await getUserOrder(db, 'u1', order.id, later)
+
+    expect(detailStatus(sqlite, order.id)).toBe('expired')
+    expect(orderStatus(sqlite, order.id)).toBe('expired')
     sqlite.close()
   })
 })
@@ -574,6 +661,7 @@ describe('用户订单状态机与查询隔离', () => {
         plusSeconds(T0, MANUAL_PAYMENT_ORDER_TTL_SECONDS),
       ),
     ).rejects.toMatchObject({ code: 'ORDER_EXPIRED' })
+    expect(detailStatus(sqlite, order.id)).toBe('expired')
     expect(orderStatus(sqlite, order.id)).toBe('expired')
     sqlite.close()
   })
@@ -588,7 +676,9 @@ describe('用户订单状态机与查询隔离', () => {
     )
     expect(submitted.status).toBe('pending_verification')
     expect(submitted.submittedAt?.getTime()).toBe(plusSeconds(T0, 10).getTime())
-    expect(orderStatus(sqlite, order.id)).toBe('pending_verification')
+    expect(detailStatus(sqlite, order.id)).toBe('pending_verification')
+    // 进行中的订单在订单表里仍是 open。
+    expect(orderStatus(sqlite, order.id)).toBe('open')
     sqlite.close()
   })
 
@@ -622,7 +712,7 @@ describe('用户订单状态机与查询隔离', () => {
     await expect(
       cancelOrder(db, { userId: 'u2', orderId: order.id }, plusSeconds(T0, 10)),
     ).rejects.toMatchObject({ code: 'ORDER_NOT_FOUND' })
-    expect(orderStatus(sqlite, order.id)).toBe('pending_payment')
+    expect(detailStatus(sqlite, order.id)).toBe('pending_payment')
     sqlite.close()
   })
 
@@ -640,6 +730,7 @@ describe('用户订单状态机与查询隔离', () => {
     const order = await createAt(db, 'u1')
     const canceled = await cancelOrder(db, { userId: 'u1', orderId: order.id }, plusSeconds(T0, 10))
     expect(canceled.status).toBe('canceled')
+    expect(detailStatus(sqlite, order.id)).toBe('canceled')
     expect(orderStatus(sqlite, order.id)).toBe('canceled')
     sqlite.close()
   })
@@ -651,7 +742,7 @@ describe('用户订单状态机与查询隔离', () => {
     await expect(
       cancelOrder(db, { userId: 'u1', orderId: order.id }, plusSeconds(T0, 20)),
     ).rejects.toMatchObject({ code: 'INVALID_ORDER_STATE' })
-    expect(orderStatus(sqlite, order.id)).toBe('pending_verification')
+    expect(detailStatus(sqlite, order.id)).toBe('pending_verification')
     sqlite.close()
   })
 
@@ -683,7 +774,7 @@ describe('用户订单状态机与查询隔离', () => {
         plusSeconds(T0, 30),
       ),
     ).rejects.toMatchObject({ code: 'INVALID_PAYER_NOTE' })
-    expect(orderStatus(sqlite, other.id)).toBe('pending_payment')
+    expect(detailStatus(sqlite, other.id)).toBe('pending_payment')
     sqlite.close()
   })
 
@@ -695,8 +786,8 @@ describe('用户订单状态机与查询隔离', () => {
     const later = plusSeconds(T0, MANUAL_PAYMENT_ORDER_TTL_SECONDS)
     const read = await getUserOrder(db, 'u1', pending.id, later)
     expect(read?.status).toBe('expired')
-    expect(orderStatus(sqlite, pending.id)).toBe('expired')
-    expect(orderStatus(sqlite, submitted.id)).toBe('pending_verification')
+    expect(detailStatus(sqlite, pending.id)).toBe('expired')
+    expect(detailStatus(sqlite, submitted.id)).toBe('pending_verification')
     sqlite.close()
   })
 
@@ -705,7 +796,7 @@ describe('用户订单状态机与查询隔离', () => {
     const order = await createAt(db, 'u1')
     const later = plusSeconds(T0, MANUAL_PAYMENT_ORDER_TTL_SECONDS)
     await getUserOrder(db, 'u1', order.id, later)
-    expect(orderStatus(sqlite, order.id)).toBe('expired')
+    expect(detailStatus(sqlite, order.id)).toBe('expired')
     forceFingerprintStart(order.fingerprint - 1)
     const next = await createAt(db, 'u2', later)
     expect(next.fingerprint).toBe(order.fingerprint)
@@ -752,7 +843,7 @@ describe('管理员订单列表', () => {
     return new Date(base.getTime() + seconds * 1000)
   }
 
-  it('默认只看待核验，且带上下单账号的邮箱', async () => {
+  it('管理员列表按订单状态筛选并带买家邮箱', async () => {
     const { db, sqlite } = manualPaymentDatabase()
     await createOrder(db, { userId: 'u1', productId: PRODUCT_ID, offerId: OFFER_ID }, T0)
     await createOrder(
@@ -763,7 +854,7 @@ describe('管理员订单列表', () => {
     // 把其中一单推进到待核验。
     sqlite
       .prepare(
-        "UPDATE manual_payment_orders SET status = 'pending_verification' WHERE user_id = 'u2'",
+        "UPDATE manual_payment_details SET status = 'pending_verification' WHERE user_id = 'u2'",
       )
       .run()
 
@@ -771,7 +862,9 @@ describe('管理员订单列表', () => {
     expect(page.total).toBe(1)
     expect(page.rows[0]?.userId).toBe('u2')
     // 人工对账要能认出是谁付的款。
-    expect(page.rows[0]?.userEmail).toBe('u2@example.com')
+    expect(page.rows[0]?.email).toBe('u2@example.com')
+    // 管理员列表同样带出对外订单号。
+    expect(page.rows[0]?.orderNo).toMatch(/^ord_\d{14}_[A-Z0-9]{8}$/)
     sqlite.close()
   })
 
@@ -785,7 +878,7 @@ describe('管理员订单列表', () => {
     )
     sqlite
       .prepare(
-        "UPDATE manual_payment_orders SET status = 'pending_verification' WHERE user_id = 'u2'",
+        "UPDATE manual_payment_details SET status = 'pending_verification' WHERE user_id = 'u2'",
       )
       .run()
 

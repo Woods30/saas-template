@@ -110,6 +110,7 @@ function makeOrder(overrides: Partial<ManualPaymentOrder> = {}): ManualPaymentOr
   const createdAt = new Date('2026-01-01T00:00:00.000Z')
   return {
     id: 'ord_1',
+    orderNo: 'ord_20260101000000_ABCDEF12',
     userId: 'u_1',
     accountId: 'alipay_main',
     channel: 'alipay',
@@ -187,7 +188,7 @@ describe('核验队列页', () => {
       page: {
         rows: [
           Object.assign(makeOrder(), {
-            userEmail: 'buyer@example.com',
+            email: 'buyer@example.com',
           }),
         ],
         total: 1,

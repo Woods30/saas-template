@@ -6,6 +6,9 @@
  * `order:{orderId}:settled`，付款外部 ID 是订单号；幂等由事件幂等表保证 ——
  * 崩溃重试不会写第二条付款记录。
  *
+ * 订单状态机落在 `manual_payment_details`，`orders.status` 只跟随终态
+ * （结算完成 / 过期 / 取消 / 失败），避免两套状态互相漂移。
+ *
  * 三条硬规则贯穿本文件：
  *
  * - **只有核验能写资金事实**：用户申报不写付款，核验才写；
@@ -13,25 +16,30 @@
  * - **续期不重复计算**：崩溃重试时先读库里已有的周期，再决定从哪续。
  */
 
-import { and, eq, ne } from 'drizzle-orm'
+import { and, eq, inArray, ne } from 'drizzle-orm'
 import { type DB, schema } from '@/core/db'
 import type { PaymentEvent } from '@/core/payment/types'
 import { applyPaymentEvent, occupiesSubscriptionSlot } from '@/modules/subscriptions/service'
-import { isUniqueConstraintError, toManualPaymentOrder } from './orders'
 import {
+  isUniqueConstraintError,
+  type OrderRecord,
+  readOrderRecordById,
+  toManualPaymentOrder,
+} from './orders'
+import {
+  MANUAL_PAYMENT_PROVIDER,
   ManualPaymentError,
   type ManualPaymentOrder,
   type ManualPaymentReview,
   type ReviewOrderInput,
 } from './types'
 
-/** 核销结算在支付层里的 provider 标识。 */
-export const MANUAL_PAYMENT_PROVIDER = 'manual_payments'
+export { MANUAL_PAYMENT_PROVIDER }
 
 /** 结算事件的类型标记。 */
 export const MANUAL_PAYMENT_SETTLEMENT_EVENT_TYPE = 'manual_payments.settled'
 
-type OrderRow = typeof schema.manualPaymentOrders.$inferSelect
+type DetailRow = typeof schema.manualPaymentDetails.$inferSelect
 
 /** 结算事件的固定 ID：同一订单的结算事件只有一条。 */
 export function manualPaymentSettlementEventId(orderId: string): string {
@@ -87,35 +95,35 @@ export async function reviewOrder(
   now: Date = new Date(),
 ): Promise<ManualPaymentOrder> {
   const at = truncateToSecond(now)
-  const order = await readOrder(db, input.orderId)
-  if (!order) {
+  const record = await readOrder(db, input.orderId)
+  if (!record) {
     throw new ManualPaymentError('ORDER_NOT_FOUND', '订单不存在')
   }
 
   if (input.action === 'reject') {
-    return rejectOrder(db, order, input, at)
+    return rejectOrder(db, record, input, at)
   }
 
   // 终态重复提交直接返回：同一笔核验不产生第二条付款记录。
-  if (order.status === 'settled' || order.status === 'requires_refund') {
-    return toManualPaymentOrder(order)
+  if (record.detail.status === 'settled' || record.detail.status === 'requires_refund') {
+    return toManualPaymentOrder(record.order, record.detail)
   }
-  if (order.status === 'settling') {
+  if (record.detail.status === 'settling') {
     // 崩溃重试：沿用订单上已落库的核验数据，续期不会被重复计算。
-    return settleManualPaymentOrder(db, toManualPaymentOrder(order), reviewFromOrder(order), at)
+    return settleManualPaymentOrder(db, toView(record), reviewFromDetail(record.detail), at)
   }
   if (
-    order.status !== 'pending_verification' &&
-    !(input.action === 'approve_exception' && order.status === 'expired')
+    record.detail.status !== 'pending_verification' &&
+    !(input.action === 'approve_exception' && record.detail.status === 'expired')
   ) {
     throw new ManualPaymentError(
       'INVALID_ORDER_STATE',
-      `订单当前状态为 ${order.status}，不允许核验`,
+      `订单当前状态为 ${record.detail.status}，不允许核验`,
     )
   }
 
-  const review = normalizeReview(input, order, at)
-  const locked = await lockOrder(db, order, review, at)
+  const review = normalizeReview(input, record.detail, at)
+  const locked = await lockOrder(db, record, review, at)
   return settleManualPaymentOrder(db, locked, review, at)
 }
 
@@ -164,19 +172,19 @@ interface BillingPeriod {
 /** 驳回订单：不写付款，也不写订阅。 */
 async function rejectOrder(
   db: DB,
-  order: OrderRow,
+  record: OrderRecord,
   input: ReviewOrderInput,
   at: Date,
 ): Promise<ManualPaymentOrder> {
-  if (order.status === 'rejected') return toManualPaymentOrder(order)
-  if (order.status !== 'pending_verification') {
+  if (record.detail.status === 'rejected') return toView(record)
+  if (record.detail.status !== 'pending_verification') {
     throw new ManualPaymentError(
       'INVALID_ORDER_STATE',
-      `订单当前状态为 ${order.status}，不允许驳回`,
+      `订单当前状态为 ${record.detail.status}，不允许驳回`,
     )
   }
   const updated = await db
-    .update(schema.manualPaymentOrders)
+    .update(schema.manualPaymentDetails)
     .set({
       status: 'rejected',
       reviewNote: normalizeText(input.reviewNote),
@@ -188,18 +196,19 @@ async function rejectOrder(
     })
     .where(
       and(
-        eq(schema.manualPaymentOrders.id, order.id),
-        eq(schema.manualPaymentOrders.status, 'pending_verification'),
+        eq(schema.manualPaymentDetails.orderId, record.order.id),
+        eq(schema.manualPaymentDetails.status, 'pending_verification'),
       ),
     )
     .returning()
-  const row = updated[0]
-  if (!row) {
-    const fresh = await readOrder(db, order.id)
-    if (fresh?.status === 'rejected') return toManualPaymentOrder(fresh)
+  const detail = updated[0]
+  if (!detail) {
+    const fresh = await readOrder(db, record.order.id)
+    if (fresh?.detail.status === 'rejected') return toView(fresh)
     throw new ManualPaymentError('INVALID_ORDER_STATE', '订单状态已变化，驳回失败')
   }
-  return toManualPaymentOrder(row)
+  await syncOrderStatus(db, record.order.id, 'failed', at)
+  return toManualPaymentOrder(record.order, detail)
 }
 
 /**
@@ -210,13 +219,13 @@ async function rejectOrder(
  */
 async function lockOrder(
   db: DB,
-  order: OrderRow,
+  record: OrderRecord,
   review: ManualPaymentReview,
   at: Date,
 ): Promise<ManualPaymentOrder> {
   try {
     const updated = await db
-      .update(schema.manualPaymentOrders)
+      .update(schema.manualPaymentDetails)
       .set({
         status: 'settling',
         observedAmount: review.observedAmount,
@@ -228,16 +237,16 @@ async function lockOrder(
       })
       .where(
         and(
-          eq(schema.manualPaymentOrders.id, order.id),
-          eq(schema.manualPaymentOrders.status, order.status),
+          eq(schema.manualPaymentDetails.orderId, record.order.id),
+          eq(schema.manualPaymentDetails.status, record.detail.status),
         ),
       )
       .returning()
-    const row = updated[0]
-    if (!row) {
+    const detail = updated[0]
+    if (!detail) {
       throw new ManualPaymentError('SETTLEMENT_IN_PROGRESS', '订单状态已变化，无法进入结算')
     }
-    return toManualPaymentOrder(row)
+    return toManualPaymentOrder(record.order, detail)
   } catch (error) {
     if (error instanceof ManualPaymentError) throw error
     if (isUniqueConstraintError(error)) {
@@ -254,17 +263,21 @@ async function lockOrder(
 }
 
 /** 校验核验输入，返回规范化的核验结果。 */
-function normalizeReview(input: ReviewOrderInput, order: OrderRow, at: Date): ManualPaymentReview {
+function normalizeReview(
+  input: ReviewOrderInput,
+  detail: DetailRow,
+  at: Date,
+): ManualPaymentReview {
   const observedAmount = normalizeAmount(input.observedAmount)
   const reviewNote = normalizeText(input.reviewNote)
   if (input.action === 'approve') {
     if (observedAmount === null) {
       throw new ManualPaymentError('AMOUNT_MISMATCH', '必须填写实际到账金额')
     }
-    if (observedAmount !== order.payableAmount) {
+    if (observedAmount !== detail.payableAmount) {
       throw new ManualPaymentError(
         'AMOUNT_MISMATCH',
-        `实际到账金额 ${observedAmount} 与应付金额 ${order.payableAmount} 不一致`,
+        `实际到账金额 ${observedAmount} 与应付金额 ${detail.payableAmount} 不一致`,
       )
     }
   } else {
@@ -285,15 +298,15 @@ function normalizeReview(input: ReviewOrderInput, order: OrderRow, at: Date): Ma
   }
 }
 
-/** 从订单上读回已落库的核验数据（崩溃重试时沿用，不重新计算）。 */
-function reviewFromOrder(order: OrderRow): ManualPaymentReview {
+/** 从核销详情读回已落库的核验数据（崩溃重试时沿用，不重新计算）。 */
+function reviewFromDetail(detail: DetailRow): ManualPaymentReview {
   return {
     action: 'approve',
-    observedAmount: order.observedAmount,
-    reviewNote: order.reviewNote,
-    externalReference: order.externalReference,
-    reviewedBy: order.reviewedBy ?? '',
-    reviewedAt: order.reviewedAt ?? order.updatedAt,
+    observedAmount: detail.observedAmount,
+    reviewNote: detail.reviewNote,
+    externalReference: detail.externalReference,
+    reviewedBy: detail.reviewedBy ?? '',
+    reviewedAt: detail.reviewedAt ?? detail.updatedAt,
   }
 }
 
@@ -445,22 +458,24 @@ async function markSettled(
   at: Date,
 ): Promise<ManualPaymentOrder> {
   const updated = await db
-    .update(schema.manualPaymentOrders)
+    .update(schema.manualPaymentDetails)
     .set({ status: 'settled', settledAt: at, updatedAt: at })
     .where(
       and(
-        eq(schema.manualPaymentOrders.id, order.id),
-        eq(schema.manualPaymentOrders.status, 'settling'),
+        eq(schema.manualPaymentDetails.orderId, order.id),
+        eq(schema.manualPaymentDetails.status, 'settling'),
       ),
     )
-    .returning()
-  const row = updated[0]
-  if (row) return toManualPaymentOrder(row)
+    .returning({ orderId: schema.manualPaymentDetails.orderId })
+  if (updated.length > 0) {
+    await syncOrderStatus(db, order.id, 'completed', at)
+    return { ...order, status: 'settled', settledAt: at, updatedAt: at }
+  }
   const fresh = await readOrder(db, order.id)
-  if (fresh?.status === 'settled') return toManualPaymentOrder(fresh)
+  if (fresh?.detail.status === 'settled') return toView(fresh)
   throw new ManualPaymentError(
     'INVALID_ORDER_STATE',
-    `订单当前状态为 ${fresh?.status ?? '未知'}，无法标记为已结算`,
+    `订单当前状态为 ${fresh?.detail.status ?? '未知'}，无法标记为已结算`,
   )
 }
 
@@ -479,7 +494,7 @@ async function markRequiresRefund(
 ): Promise<ManualPaymentOrder> {
   const note = [review.reviewNote, reason].filter((part) => Boolean(part)).join('；')
   const updated = await db
-    .update(schema.manualPaymentOrders)
+    .update(schema.manualPaymentDetails)
     .set({
       status: 'requires_refund',
       observedAmount: amount,
@@ -490,15 +505,25 @@ async function markRequiresRefund(
     })
     .where(
       and(
-        eq(schema.manualPaymentOrders.id, order.id),
-        eq(schema.manualPaymentOrders.status, 'settling'),
+        eq(schema.manualPaymentDetails.orderId, order.id),
+        eq(schema.manualPaymentDetails.status, 'settling'),
       ),
     )
-    .returning()
-  const row = updated[0]
-  if (row) return toManualPaymentOrder(row)
+    .returning({ orderId: schema.manualPaymentDetails.orderId })
+  if (updated.length > 0) {
+    await syncOrderStatus(db, order.id, 'failed', at)
+    return {
+      ...order,
+      status: 'requires_refund',
+      observedAmount: amount,
+      reviewNote: note,
+      reviewedBy: review.reviewedBy,
+      reviewedAt: review.reviewedAt,
+      updatedAt: at,
+    }
+  }
   const fresh = await readOrder(db, order.id)
-  if (fresh?.status === 'requires_refund') return toManualPaymentOrder(fresh)
+  if (fresh?.detail.status === 'requires_refund') return toView(fresh)
   throw new ManualPaymentError('INVALID_ORDER_STATE', '订单状态已变化，无法标记为需退款')
 }
 
@@ -509,38 +534,71 @@ async function markRequiresRefund(
  * 需退款 —— 同一账号只能有一份订阅权益。
  */
 async function cleanupDuplicateOrders(db: DB, order: ManualPaymentOrder, at: Date): Promise<void> {
-  await db
-    .update(schema.manualPaymentOrders)
-    .set({ status: 'canceled', updatedAt: at })
-    .where(
-      and(
-        eq(schema.manualPaymentOrders.userId, order.userId),
-        ne(schema.manualPaymentOrders.id, order.id),
-        eq(schema.manualPaymentOrders.kind, 'subscription'),
-        eq(schema.manualPaymentOrders.status, 'pending_payment'),
-      ),
-    )
-  await db
-    .update(schema.manualPaymentOrders)
-    .set({ status: 'requires_refund', updatedAt: at })
-    .where(
-      and(
-        eq(schema.manualPaymentOrders.userId, order.userId),
-        ne(schema.manualPaymentOrders.id, order.id),
-        eq(schema.manualPaymentOrders.kind, 'subscription'),
-        eq(schema.manualPaymentOrders.status, 'pending_verification'),
-      ),
-    )
+  const duplicates = async (status: ManualPaymentOrder['status']): Promise<string[]> => {
+    const rows = await db
+      .select({ orderId: schema.manualPaymentDetails.orderId })
+      .from(schema.orders)
+      .innerJoin(
+        schema.manualPaymentDetails,
+        eq(schema.manualPaymentDetails.orderId, schema.orders.id),
+      )
+      .where(
+        and(
+          eq(schema.orders.userId, order.userId),
+          ne(schema.orders.id, order.id),
+          eq(schema.orders.mode, 'subscription'),
+          eq(schema.manualPaymentDetails.status, status),
+        ),
+      )
+    return rows.map((row) => row.orderId)
+  }
+
+  const waiting = await duplicates('pending_payment')
+  if (waiting.length > 0) {
+    await db
+      .update(schema.manualPaymentDetails)
+      .set({ status: 'canceled', updatedAt: at })
+      .where(inArray(schema.manualPaymentDetails.orderId, waiting))
+    await syncOrderStatuses(db, waiting, 'canceled', at)
+  }
+
+  const submitted = await duplicates('pending_verification')
+  if (submitted.length > 0) {
+    await db
+      .update(schema.manualPaymentDetails)
+      .set({ status: 'requires_refund', updatedAt: at })
+      .where(inArray(schema.manualPaymentDetails.orderId, submitted))
+    await syncOrderStatuses(db, submitted, 'failed', at)
+  }
 }
 
-/** 按 ID 读取订单（管理员视角，不做归属隔离）。 */
-async function readOrder(db: DB, orderId: string): Promise<OrderRow | undefined> {
-  const rows = await db
-    .select()
-    .from(schema.manualPaymentOrders)
-    .where(eq(schema.manualPaymentOrders.id, orderId))
-    .limit(1)
-  return rows[0]
+/** 按 ID 读取订单与核销详情（管理员视角，不做归属隔离）。 */
+function readOrder(db: DB, orderId: string): Promise<OrderRecord | undefined> {
+  return readOrderRecordById(db, orderId)
+}
+
+/** 把两行组合成领域视图。 */
+function toView(record: OrderRecord): ManualPaymentOrder {
+  return toManualPaymentOrder(record.order, record.detail)
+}
+
+/** 把核销状态同步到订单状态。 */
+async function syncOrderStatus(db: DB, orderId: string, status: string, at: Date): Promise<void> {
+  await db.update(schema.orders).set({ status, updatedAt: at }).where(eq(schema.orders.id, orderId))
+}
+
+/** 批量同步订单状态。 */
+async function syncOrderStatuses(
+  db: DB,
+  orderIds: string[],
+  status: string,
+  at: Date,
+): Promise<void> {
+  if (orderIds.length === 0) return
+  await db
+    .update(schema.orders)
+    .set({ status, updatedAt: at })
+    .where(inArray(schema.orders.id, orderIds))
 }
 
 /** 规范化金额：必须是正整数（单位：分），否则按未填处理。 */

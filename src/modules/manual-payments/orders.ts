@@ -1,15 +1,21 @@
 /**
  * 核销订单：惰性过期与并发安全的应付金额分配，以及用户侧的状态机。
  *
+ * 一笔核销订单由两行组成：
+ *
+ * - `orders`：购买意图（订单号、用户、provider、商品 / 付费方式、状态）；
+ * - `manual_payment_details`：核销专有字段（收款账户、金额尾数、凭证与核验状态）。
+ *
  * 应付金额 = 标价 + 尾数，尾数取 1–99 分。同一收款账户下，活跃订单的应付金额
  * 必须全局唯一 —— 人工对着账单要能一眼分清哪笔钱对应哪张订单。
  *
- * 唯一性由数据库的 partial unique index 兜底，**不采用「先查空位再插入」**：
- * 那样并发请求会同时选中同一个尾数。这里只做随机起点 + 环形扫描，每次都真的
- * INSERT，让唯一索引来判定谁赢了。
+ * 唯一性由 `manual_payment_details` 的 partial unique index 兜底，**不采用
+ * 「先查空位再插入」**：那样并发请求会同时选中同一个尾数。这里只做随机起点 +
+ * 环形扫描，每次都真的 INSERT，让唯一索引来判定谁赢了。
  *
  * 状态机：`pending_payment → pending_verification → settling → settled`，旁路是
- * `expired`、`canceled`、`rejected`、`requires_refund`。
+ * `expired`、`canceled`、`rejected`、`requires_refund`。订单状态与核销状态同步：
+ * 过期 / 取消 / 驳回 / 结算都会回写 `orders.status`，只描述结账尝试的终态。
  *
  * 两条硬规则贯穿本文件：
  *
@@ -18,15 +24,17 @@
  *   读取，再映射成稳定的错误码，绝不「先查再无条件 UPDATE」。
  */
 
-import { and, count, desc, eq, gt, lte } from 'drizzle-orm'
+import { and, count, desc, eq, gt, inArray, lte } from 'drizzle-orm'
 import { resolveManualPaymentPrice } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import { type DB, schema } from '@/core/db'
+import { newOrderNo, type OrderStatus } from '@/modules/subscriptions/service'
 import { resolveManualPaymentAccount } from './accounts'
 import {
   type CancelOrderInput,
   type ListUserOrdersInput,
   MANUAL_PAYMENT_PAYER_NOTE_MAX_LENGTH,
+  MANUAL_PAYMENT_PROVIDER,
   ManualPaymentError,
   type ManualPaymentOrder,
   type ManualPaymentOrderStatus,
@@ -45,13 +53,77 @@ export const FINGERPRINT_MAX = 99
 
 const FINGERPRINT_SPAN = FINGERPRINT_MAX - FINGERPRINT_MIN + 1
 
-type ManualPaymentOrderRow = typeof schema.manualPaymentOrders.$inferSelect
+type OrderRow = typeof schema.orders.$inferSelect
+type DetailRow = typeof schema.manualPaymentDetails.$inferSelect
+
+/** 联表读取后重新组合出的两行。 */
+export interface OrderRecord {
+  order: OrderRow
+  detail: DetailRow
+}
+
+/**
+ * 两张表分两次读取再在内存里组合。
+ *
+ * 不用 JOIN 一次取全：sqlite-proxy 按列位置回填结果，而两张表有同名列
+ * （`user_id`、`status`、`expires_at`、`created_at`、`updated_at`），JOIN 的
+ * 结果对象会按列名去重，后面的字段全部错位。单表查询没有这个问题。
+ */
+export async function readOrderRecordById(
+  db: DB,
+  orderId: string,
+  userId?: string,
+): Promise<OrderRecord | undefined> {
+  const orderFilter =
+    userId === undefined
+      ? eq(schema.orders.id, orderId)
+      : and(eq(schema.orders.id, orderId), eq(schema.orders.userId, userId))
+  const orders = await db.select().from(schema.orders).where(orderFilter).limit(1)
+  const order = orders[0]
+  if (!order) return undefined
+  const details = await db
+    .select()
+    .from(schema.manualPaymentDetails)
+    .where(eq(schema.manualPaymentDetails.orderId, order.id))
+    .limit(1)
+  const detail = details[0]
+  if (!detail) return undefined
+  return { order, detail }
+}
+
+/** 批量读取订单的核销详情，按 `orderId` 建索引。 */
+async function readDetailsByOrderIds(db: DB, orderIds: string[]): Promise<Map<string, DetailRow>> {
+  if (orderIds.length === 0) return new Map()
+  const rows = await db
+    .select()
+    .from(schema.manualPaymentDetails)
+    .where(inArray(schema.manualPaymentDetails.orderId, orderIds))
+  return new Map(rows.map((row) => [row.orderId, row]))
+}
 
 /** 创建订单的输入。 */
 export interface CreateOrderInput {
   userId: string
   productId: string
   offerId: string
+}
+
+/**
+ * 核销状态 → 订单状态。
+ *
+ * `orders.status` 只描述结账尝试：进行中的都算 `open`，钱到账是 `completed`，
+ * 过期 / 取消 / 失败各归各的终态。驳回与需退款都属于「这次结账没成」，
+ * 统一落到 `failed`。
+ */
+const ORDER_STATUS_BY_DETAIL_STATUS: Record<ManualPaymentOrderStatus, OrderStatus> = {
+  pending_payment: 'open',
+  pending_verification: 'open',
+  settling: 'open',
+  settled: 'completed',
+  expired: 'expired',
+  canceled: 'canceled',
+  rejected: 'failed',
+  requires_refund: 'failed',
 }
 
 /**
@@ -64,16 +136,22 @@ export interface CreateOrderInput {
  */
 export async function expirePendingOrders(db: DB, accountId: string, now: Date): Promise<number> {
   const expired = await db
-    .update(schema.manualPaymentOrders)
+    .update(schema.manualPaymentDetails)
     .set({ status: 'expired', updatedAt: now })
     .where(
       and(
-        eq(schema.manualPaymentOrders.accountId, accountId),
-        eq(schema.manualPaymentOrders.status, 'pending_payment'),
-        lte(schema.manualPaymentOrders.expiresAt, now),
+        eq(schema.manualPaymentDetails.accountId, accountId),
+        eq(schema.manualPaymentDetails.status, 'pending_payment'),
+        lte(schema.manualPaymentDetails.expiresAt, now),
       ),
     )
-    .returning({ id: schema.manualPaymentOrders.id })
+    .returning({ orderId: schema.manualPaymentDetails.orderId })
+  await syncOrderStatuses(
+    db,
+    expired.map((row) => row.orderId),
+    'expired',
+    now,
+  )
   return expired.length
 }
 
@@ -81,7 +159,10 @@ export async function expirePendingOrders(db: DB, accountId: string, now: Date):
  * 创建一笔待支付的核销订单。
  *
  * 步骤：解析本地价格 → 解析收款账户 → 惰性过期该账户的待支付订单 →
- * 随机起点 + 环形扫描 99 个尾数，直接 INSERT 由唯一索引判定冲突。
+ * 随机起点 + 环形扫描 99 个尾数，先写订单再写详情，由详情表的唯一索引判定冲突。
+ *
+ * 详情写入撞上唯一索引时，刚插入的订单行要删掉再换下一个尾数 —— 否则每次冲突
+ * 都会留下一条没有详情的孤儿订单。
  */
 export async function createOrder(
   db: DB,
@@ -105,14 +186,18 @@ export async function createOrder(
 
   const expiresAt = new Date(now.getTime() + MANUAL_PAYMENT_ORDER_TTL_SECONDS * 1000)
   const start = randomFingerprintStart()
+  const orderNo = newOrderNo(now)
 
   for (let offset = 0; offset < FINGERPRINT_SPAN; offset++) {
     const fingerprint = ((start - FINGERPRINT_MIN + offset) % FINGERPRINT_SPAN) + FINGERPRINT_MIN
-    const row = buildOrder({ input, price, account, fingerprint, now, expiresAt })
+    const order = buildOrderRow({ input, price, orderNo, now, expiresAt })
+    const detail = buildDetailRow({ order, account, price, fingerprint, now, expiresAt })
+    await db.insert(schema.orders).values(order)
     try {
-      await db.insert(schema.manualPaymentOrders).values(row)
-      return toManualPaymentOrder(row)
+      await db.insert(schema.manualPaymentDetails).values(detail)
+      return toManualPaymentOrder(order, detail)
     } catch (error) {
+      await db.delete(schema.orders).where(eq(schema.orders.id, order.id))
       // 唯一索引说这个尾数被占了：换下一个候选。
       if (!isUniqueConstraintError(error)) throw error
     }
@@ -135,21 +220,21 @@ export async function submitOrder(
   input: SubmitOrderInput,
   now: Date = new Date(),
 ): Promise<ManualPaymentOrder> {
-  const order = await readOwnedOrder(db, input.userId, input.orderId)
-  if (!order) {
+  const found = await readOwnedOrder(db, input.userId, input.orderId)
+  if (!found) {
     throw new ManualPaymentError('ORDER_NOT_FOUND', '订单不存在')
   }
-  if (order.status !== 'pending_payment') {
-    throw stateError(order)
+  if (found.detail.status !== 'pending_payment') {
+    throw stateError(found.detail)
   }
-  if (isExpired(order, now)) {
-    await markExpired(db, input.userId, order.id, now)
+  if (isExpired(found.detail, now)) {
+    await markExpired(db, input.userId, found.order.id, now)
     throw new ManualPaymentError('ORDER_EXPIRED', '订单已过期')
   }
   const payerNote = normalizePayerNote(input.payerNote)
 
   const updated = await db
-    .update(schema.manualPaymentOrders)
+    .update(schema.manualPaymentDetails)
     .set({
       status: 'pending_verification',
       payerNote,
@@ -158,19 +243,19 @@ export async function submitOrder(
     })
     .where(
       and(
-        eq(schema.manualPaymentOrders.id, order.id),
-        eq(schema.manualPaymentOrders.userId, input.userId),
-        eq(schema.manualPaymentOrders.status, 'pending_payment'),
-        gt(schema.manualPaymentOrders.expiresAt, now),
+        eq(schema.manualPaymentDetails.orderId, found.order.id),
+        eq(schema.manualPaymentDetails.userId, input.userId),
+        eq(schema.manualPaymentDetails.status, 'pending_payment'),
+        gt(schema.manualPaymentDetails.expiresAt, now),
       ),
     )
     .returning()
-  const row = updated[0]
-  if (!row) {
+  const detail = updated[0]
+  if (!detail) {
     // 条件不满足（刚过期，或被并发改动）：重新读取再映射稳定错误码。
-    throw await resolveConflict(db, input.userId, order.id, now)
+    throw await resolveConflict(db, input.userId, found.order.id, now)
   }
-  return toManualPaymentOrder(row)
+  return toManualPaymentOrder(found.order, detail)
 }
 
 /**
@@ -184,35 +269,36 @@ export async function cancelOrder(
   input: CancelOrderInput,
   now: Date = new Date(),
 ): Promise<ManualPaymentOrder> {
-  const order = await readOwnedOrder(db, input.userId, input.orderId)
-  if (!order) {
+  const found = await readOwnedOrder(db, input.userId, input.orderId)
+  if (!found) {
     throw new ManualPaymentError('ORDER_NOT_FOUND', '订单不存在')
   }
-  if (order.status !== 'pending_payment') {
-    throw stateError(order)
+  if (found.detail.status !== 'pending_payment') {
+    throw stateError(found.detail)
   }
-  if (isExpired(order, now)) {
-    await markExpired(db, input.userId, order.id, now)
+  if (isExpired(found.detail, now)) {
+    await markExpired(db, input.userId, found.order.id, now)
     throw new ManualPaymentError('ORDER_EXPIRED', '订单已过期')
   }
 
   const updated = await db
-    .update(schema.manualPaymentOrders)
+    .update(schema.manualPaymentDetails)
     .set({ status: 'canceled', updatedAt: now })
     .where(
       and(
-        eq(schema.manualPaymentOrders.id, order.id),
-        eq(schema.manualPaymentOrders.userId, input.userId),
-        eq(schema.manualPaymentOrders.status, 'pending_payment'),
-        gt(schema.manualPaymentOrders.expiresAt, now),
+        eq(schema.manualPaymentDetails.orderId, found.order.id),
+        eq(schema.manualPaymentDetails.userId, input.userId),
+        eq(schema.manualPaymentDetails.status, 'pending_payment'),
+        gt(schema.manualPaymentDetails.expiresAt, now),
       ),
     )
     .returning()
-  const row = updated[0]
-  if (!row) {
-    throw await resolveConflict(db, input.userId, order.id, now)
+  const detail = updated[0]
+  if (!detail) {
+    throw await resolveConflict(db, input.userId, found.order.id, now)
   }
-  return toManualPaymentOrder(row)
+  await syncOrderStatus(db, found.order.id, 'canceled', now)
+  return toManualPaymentOrder(found.order, detail)
 }
 
 /**
@@ -228,14 +314,14 @@ export async function getUserOrder(
   orderId: string,
   now: Date = new Date(),
 ): Promise<ManualPaymentOrder | null> {
-  const order = await readOwnedOrder(db, userId, orderId)
-  if (!order) return null
-  if (order.status === 'pending_payment' && isExpired(order, now)) {
-    await markExpired(db, userId, order.id, now)
+  const found = await readOwnedOrder(db, userId, orderId)
+  if (!found) return null
+  if (found.detail.status === 'pending_payment' && isExpired(found.detail, now)) {
+    await markExpired(db, userId, found.order.id, now)
     const fresh = await readOwnedOrder(db, userId, orderId)
-    return fresh ? toManualPaymentOrder(fresh) : null
+    return fresh ? toManualPaymentOrder(fresh.order, fresh.detail) : null
   }
-  return toManualPaymentOrder(order)
+  return toManualPaymentOrder(found.order, found.detail)
 }
 
 /**
@@ -248,38 +334,55 @@ export async function listUserOrders(
   input: ListUserOrdersInput,
   now: Date = new Date(),
 ): Promise<UserOrderPage> {
-  await db
-    .update(schema.manualPaymentOrders)
+  const expired = await db
+    .update(schema.manualPaymentDetails)
     .set({ status: 'expired', updatedAt: now })
     .where(
       and(
-        eq(schema.manualPaymentOrders.userId, input.userId),
-        eq(schema.manualPaymentOrders.status, 'pending_payment'),
-        lte(schema.manualPaymentOrders.expiresAt, now),
+        eq(schema.manualPaymentDetails.userId, input.userId),
+        eq(schema.manualPaymentDetails.status, 'pending_payment'),
+        lte(schema.manualPaymentDetails.expiresAt, now),
       ),
     )
+    .returning({ orderId: schema.manualPaymentDetails.orderId })
+  await syncOrderStatuses(
+    db,
+    expired.map((row) => row.orderId),
+    'expired',
+    now,
+  )
 
   const limit = clampLimit(input.limit)
   const offset = Math.max(0, Math.trunc(input.offset ?? 0))
-  const rows = await db
+  const orders = await db
     .select()
-    .from(schema.manualPaymentOrders)
-    .where(eq(schema.manualPaymentOrders.userId, input.userId))
-    .orderBy(desc(schema.manualPaymentOrders.createdAt), desc(schema.manualPaymentOrders.id))
+    .from(schema.orders)
+    .where(eq(schema.orders.userId, input.userId))
+    .orderBy(desc(schema.orders.createdAt), desc(schema.orders.id))
     .limit(limit)
     .offset(offset)
+  const details = await readDetailsByOrderIds(
+    db,
+    orders.map((order) => order.id),
+  )
   const counted = await db
     .select({ total: count() })
-    .from(schema.manualPaymentOrders)
-    .where(eq(schema.manualPaymentOrders.userId, input.userId))
+    .from(schema.orders)
+    .where(eq(schema.orders.userId, input.userId))
 
-  return { rows: rows.map(toManualPaymentOrder), total: Number(counted[0]?.total ?? 0) }
+  return {
+    rows: orders.flatMap((order) => {
+      const detail = details.get(order.id)
+      return detail ? [toManualPaymentOrder(order, detail)] : []
+    }),
+    total: Number(counted[0]?.total ?? 0),
+  }
 }
 
 /** 管理员看到的订单：额外带上下单账号的邮箱。 */
 export interface AdminManualPaymentOrder extends ManualPaymentOrder {
   /** 下单账号的邮箱：人工对账时要能认出是谁付的款。 */
-  userEmail: string
+  email: string
 }
 
 /** 管理员订单列表的一页。 */
@@ -301,49 +404,89 @@ export async function listAllOrders(
 ): Promise<AdminOrderPage> {
   const where =
     input.status && input.status !== 'all'
-      ? eq(schema.manualPaymentOrders.status, input.status)
+      ? eq(schema.manualPaymentDetails.status, input.status)
       : undefined
 
   const rows = await db
-    .select({ order: schema.manualPaymentOrders, userEmail: schema.users.email })
-    .from(schema.manualPaymentOrders)
-    .leftJoin(schema.users, eq(schema.manualPaymentOrders.userId, schema.users.id))
+    .select({ order: schema.orders, email: schema.users.email })
+    .from(schema.orders)
+    .innerJoin(
+      schema.manualPaymentDetails,
+      eq(schema.manualPaymentDetails.orderId, schema.orders.id),
+    )
+    .leftJoin(schema.users, eq(schema.orders.userId, schema.users.id))
     .where(where)
-    .orderBy(desc(schema.manualPaymentOrders.createdAt), desc(schema.manualPaymentOrders.id))
+    .orderBy(desc(schema.orders.createdAt), desc(schema.orders.id))
     .limit(input.limit)
     .offset(input.offset)
-  const counted = await db.select({ total: count() }).from(schema.manualPaymentOrders).where(where)
+  const details = await readDetailsByOrderIds(
+    db,
+    rows.map((row) => row.order.id),
+  )
+  const counted = await db
+    .select({ total: count() })
+    .from(schema.orders)
+    .innerJoin(
+      schema.manualPaymentDetails,
+      eq(schema.manualPaymentDetails.orderId, schema.orders.id),
+    )
+    .where(where)
 
   return {
-    rows: rows.map((row) => ({
-      ...toManualPaymentOrder(row.order),
-      userEmail: row.userEmail ?? '',
-    })),
+    rows: rows.flatMap((row) => {
+      const detail = details.get(row.order.id)
+      if (!detail) return []
+      return [{ ...toManualPaymentOrder(row.order, detail), email: row.email ?? '' }]
+    }),
     total: Number(counted[0]?.total ?? 0),
   }
 }
 
-function buildOrder(params: {
+function buildOrderRow(params: {
   input: CreateOrderInput
   price: ManualPaymentPrice
+  orderNo: string
+  now: Date
+  expiresAt: Date
+}): OrderRow {
+  const { input, price, orderNo, now, expiresAt } = params
+  return {
+    id: crypto.randomUUID(),
+    orderNo,
+    userId: input.userId,
+    provider: MANUAL_PAYMENT_PROVIDER,
+    // 订单只描述购买意图：`subscription` 表示买订阅，`payment` 表示一次性商品。
+    mode: price.kind === 'subscription' ? 'subscription' : 'payment',
+    productId: input.productId,
+    offerId: input.offerId,
+    amount: null,
+    currency: null,
+    status: 'open',
+    providerSessionId: null,
+    providerUrl: null,
+    expiresAt,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+function buildDetailRow(params: {
+  order: OrderRow
   account: ResolvedManualPaymentAccount
+  price: ManualPaymentPrice
   fingerprint: number
   now: Date
   expiresAt: Date
-}): ManualPaymentOrderRow {
-  const { input, price, account, fingerprint, now, expiresAt } = params
+}): DetailRow {
+  const { order, account, price, fingerprint, now, expiresAt } = params
   return {
-    id: crypto.randomUUID(),
-    userId: input.userId,
+    orderId: order.id,
+    // 与 `orders.userId` 必须同时写入：结算临界区索引在本表上判定。
+    userId: order.userId,
     accountId: account.id,
     channel: account.channel,
     qrImageUrl: account.qrImageUrl,
     qrImageKey: account.qrImageKey,
-    productId: input.productId,
-    offerId: input.offerId,
-    kind: price.kind,
-    interval: price.interval ?? null,
-    intervalCount: price.intervalCount ?? null,
     baseAmount: price.amount,
     fingerprint,
     payableAmount: price.amount + fingerprint,
@@ -364,34 +507,50 @@ function buildOrder(params: {
   }
 }
 
-export function toManualPaymentOrder(row: ManualPaymentOrderRow): ManualPaymentOrder {
+/**
+ * 把 `orders` 与 `manual_payment_details` 两行组合成领域视图。
+ *
+ * `kind` / `interval` / `intervalCount` 不在表里：订单只存 `mode`，周期信息
+ * 属于价格配置，读取时按商品与付费方式解析；配置缺失时按「一次性」处理。
+ */
+export function toManualPaymentOrder(order: OrderRow, detail: DetailRow): ManualPaymentOrder {
+  const price = resolveManualPaymentPrice(order.productId, order.offerId)
   return {
-    ...row,
-    channel: row.channel as ManualPaymentOrder['channel'],
-    kind: row.kind as ManualPaymentOrder['kind'],
-    interval: row.interval as ManualPaymentOrder['interval'],
-    currency: row.currency as ManualPaymentOrder['currency'],
-    status: row.status as ManualPaymentOrderStatus,
+    id: order.id,
+    orderNo: order.orderNo,
+    userId: order.userId,
+    accountId: detail.accountId,
+    channel: detail.channel as ManualPaymentOrder['channel'],
+    qrImageUrl: detail.qrImageUrl,
+    qrImageKey: detail.qrImageKey,
+    productId: order.productId,
+    offerId: order.offerId,
+    kind: order.mode === 'subscription' ? 'subscription' : 'one_time',
+    interval: price?.interval ?? null,
+    intervalCount: price?.intervalCount ?? null,
+    baseAmount: detail.baseAmount,
+    fingerprint: detail.fingerprint,
+    payableAmount: detail.payableAmount,
+    currency: detail.currency as ManualPaymentOrder['currency'],
+    status: detail.status as ManualPaymentOrderStatus,
+    payerNote: detail.payerNote,
+    receiptKey: detail.receiptKey,
+    submittedAt: detail.submittedAt,
+    observedAmount: detail.observedAmount,
+    externalReference: detail.externalReference,
+    reviewNote: detail.reviewNote,
+    reviewedBy: detail.reviewedBy,
+    reviewedAt: detail.reviewedAt,
+    expiresAt: detail.expiresAt,
+    settledAt: detail.settledAt,
+    createdAt: detail.createdAt,
+    updatedAt: detail.updatedAt,
   }
 }
 
 /** 读取属于指定用户的订单；不存在或不属于该用户时返回 undefined。 */
-async function readOwnedOrder(
-  db: DB,
-  userId: string,
-  orderId: string,
-): Promise<ManualPaymentOrderRow | undefined> {
-  const rows = await db
-    .select()
-    .from(schema.manualPaymentOrders)
-    .where(
-      and(
-        eq(schema.manualPaymentOrders.id, orderId),
-        eq(schema.manualPaymentOrders.userId, userId),
-      ),
-    )
-    .limit(1)
-  return rows[0]
+function readOwnedOrder(db: DB, userId: string, orderId: string): Promise<OrderRecord | undefined> {
+  return readOrderRecordById(db, orderId, userId)
 }
 
 /**
@@ -400,23 +559,58 @@ async function readOwnedOrder(
  * 到期时刻等于当前时间即视为已过期：`expires_at` 存的是整数秒，比较时把
  * 当前时间也取整到秒，与数据库的 `lte` 判定保持一致。
  */
-function isExpired(order: ManualPaymentOrderRow, now: Date): boolean {
-  return order.expiresAt.getTime() <= now.getTime()
+function isExpired(detail: DetailRow, now: Date): boolean {
+  return detail.expiresAt.getTime() <= now.getTime()
 }
 
 /** 把已到期的待支付订单标记为过期（条件里带状态与所有者）。 */
 async function markExpired(db: DB, userId: string, orderId: string, now: Date): Promise<void> {
-  await db
-    .update(schema.manualPaymentOrders)
+  const updated = await db
+    .update(schema.manualPaymentDetails)
     .set({ status: 'expired', updatedAt: now })
     .where(
       and(
-        eq(schema.manualPaymentOrders.id, orderId),
-        eq(schema.manualPaymentOrders.userId, userId),
-        eq(schema.manualPaymentOrders.status, 'pending_payment'),
-        lte(schema.manualPaymentOrders.expiresAt, now),
+        eq(schema.manualPaymentDetails.orderId, orderId),
+        eq(schema.manualPaymentDetails.userId, userId),
+        eq(schema.manualPaymentDetails.status, 'pending_payment'),
+        lte(schema.manualPaymentDetails.expiresAt, now),
       ),
     )
+    .returning({ orderId: schema.manualPaymentDetails.orderId })
+  if (updated.length > 0) {
+    await syncOrderStatus(db, orderId, 'expired', now)
+  }
+}
+
+/**
+ * 把核销状态同步到订单状态。
+ *
+ * 状态机以核销详情为准；订单行只跟随终态变化，避免两套状态互相漂移。
+ */
+async function syncOrderStatus(
+  db: DB,
+  orderId: string,
+  detailStatus: ManualPaymentOrderStatus,
+  now: Date,
+): Promise<void> {
+  await db
+    .update(schema.orders)
+    .set({ status: ORDER_STATUS_BY_DETAIL_STATUS[detailStatus], updatedAt: now })
+    .where(eq(schema.orders.id, orderId))
+}
+
+/** 批量同步订单状态：用于惰性过期这类一次改多行的操作。 */
+async function syncOrderStatuses(
+  db: DB,
+  orderIds: string[],
+  detailStatus: ManualPaymentOrderStatus,
+  now: Date,
+): Promise<void> {
+  if (orderIds.length === 0) return
+  await db
+    .update(schema.orders)
+    .set({ status: ORDER_STATUS_BY_DETAIL_STATUS[detailStatus], updatedAt: now })
+    .where(inArray(schema.orders.id, orderIds))
 }
 
 /**
@@ -435,21 +629,21 @@ async function resolveConflict(
   if (!fresh) {
     return new ManualPaymentError('ORDER_NOT_FOUND', '订单不存在')
   }
-  if (fresh.status === 'pending_payment' && isExpired(fresh, now)) {
-    await markExpired(db, userId, fresh.id, now)
+  if (fresh.detail.status === 'pending_payment' && isExpired(fresh.detail, now)) {
+    await markExpired(db, userId, fresh.order.id, now)
     return new ManualPaymentError('ORDER_EXPIRED', '订单已过期')
   }
-  return stateError(fresh)
+  return stateError(fresh.detail)
 }
 
 /** 把订单当前状态映射成稳定错误码。 */
-function stateError(order: ManualPaymentOrderRow): ManualPaymentError {
-  if (order.status === 'expired') {
+function stateError(detail: DetailRow): ManualPaymentError {
+  if (detail.status === 'expired') {
     return new ManualPaymentError('ORDER_EXPIRED', '订单已过期')
   }
   return new ManualPaymentError(
     'INVALID_ORDER_STATE',
-    `订单当前状态为 ${order.status}，不允许该操作`,
+    `订单当前状态为 ${detail.status}，不允许该操作`,
   )
 }
 

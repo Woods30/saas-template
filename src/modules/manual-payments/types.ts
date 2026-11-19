@@ -14,6 +14,14 @@ export type {
   ManualPaymentPrice,
 } from '@/types/manual-payments'
 
+/**
+ * 人工核销在支付层里的 provider 标识。
+ *
+ * 定义在领域类型里，供下单（写 `orders.provider`）与结算（合成付款事件）
+ * 共用；`settlement.ts` 仍按原路径再导出，保持模块公开入口不变。
+ */
+export const MANUAL_PAYMENT_PROVIDER = 'manual_payments'
+
 /** 解析后的收款账户：源码配置兜底 + 数据库同 ID 覆盖的结果。 */
 export interface ResolvedManualPaymentAccount {
   id: string
@@ -40,6 +48,8 @@ export type ManualPaymentOrderStatus =
 /** 一笔核销订单的领域视图。 */
 export interface ManualPaymentOrder {
   id: string
+  /** 对外订单号：`ord_<UTC yyyyMMddHHmmss>_<8 位随机>`。 */
+  orderNo: string
   userId: string
   accountId: string
   channel: ManualPaymentChannel

@@ -312,7 +312,7 @@ function AdminManualPaymentOrdersComponent() {
         id: 'buyer',
         header: m['manual_payments_admin.col_buyer'](),
         className: 'max-w-[220px] truncate',
-        cell: (order) => order.userEmail,
+        cell: (order) => order.email,
       },
       {
         id: 'product',

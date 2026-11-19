@@ -186,6 +186,13 @@ export const manualPaymentDetails = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => ({
+    // 审核队列与过期扫描：按状态找订单。
+    statusExpiresIdx: index('manual_payment_details_status_expires_idx').on(
+      table.status,
+      table.expiresAt,
+    ),
+    // 「我的活跃订单」：按用户找订单。
+    userStatusIdx: index('manual_payment_details_user_status_idx').on(table.userId, table.status),
     // 金额唯一性按收款账户而非「商品 + offer」约束：两个商品价格区间重叠时，
     // 仍可能出现同一收款码、同一时段、同一实付金额，人工无法区分。
     activeAmountUnique: uniqueIndex('manual_payment_details_active_amount_unique')

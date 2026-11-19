@@ -37,8 +37,6 @@ interface OrderFixture {
   productId?: string
   offerId?: string
   kind?: 'subscription' | 'one_time'
-  interval?: string | null
-  intervalCount?: number | null
   status?: ManualPaymentOrderStatus
   /** 到期时间（秒）；默认一年后。 */
   expiresAt?: number
@@ -46,7 +44,24 @@ interface OrderFixture {
 
 let sequence = 0
 
-/** 直接写一行订单：结算测试要精确控制商品、周期与状态。 */
+/** 核销状态 → 订单状态（与 `orders.ts` 的同步规则一致）。 */
+const ORDER_STATUS_BY_DETAIL_STATUS: Record<string, string> = {
+  pending_payment: 'open',
+  pending_verification: 'open',
+  settling: 'open',
+  settled: 'completed',
+  expired: 'expired',
+  canceled: 'canceled',
+  rejected: 'failed',
+  requires_refund: 'failed',
+}
+
+/**
+ * 直接写一行订单：结算测试要精确控制商品、周期与状态。
+ *
+ * 一笔核销订单是两行：`orders` 描述购买意图，`manual_payment_details` 保存
+ * 核销专有字段。周期信息现在由价格配置解析，夹具不再写 `interval`。
+ */
 function insertOrder(
   sqlite: ReturnType<typeof createTestDatabase>['sqlite'],
   options: OrderFixture = {},
@@ -56,23 +71,36 @@ function insertOrder(
   const fingerprint = sequence
   const payable = BASE_AMOUNT + fingerprint
   const expiresAt = options.expiresAt ?? Math.floor(Date.now() / 1000) + 365 * 24 * 3600
+  const detailStatus = options.status ?? 'pending_verification'
+  const kind = options.kind ?? 'one_time'
   sqlite
     .prepare(
-      `INSERT INTO manual_payment_orders(id,user_id,account_id,channel,product_id,offer_id,kind,interval,interval_count,base_amount,fingerprint,payable_amount,currency,status,expires_at,created_at,updated_at)
-       VALUES (?, ?, 'acct-main', 'alipay', ?, ?, ?, ?, ?, ?, ?, ?, 'cny', ?, ?, ?, ?)`,
+      `INSERT INTO orders(id,order_no,user_id,provider,mode,product_id,offer_id,status,created_at,updated_at)
+       VALUES (?, ?, ?, 'manual_payments', ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      id,
+      `ord_test_${id}`,
+      options.userId ?? 'u1',
+      kind === 'subscription' ? 'subscription' : 'payment',
+      options.productId ?? PRODUCT_ID,
+      options.offerId ?? OFFER_ID,
+      ORDER_STATUS_BY_DETAIL_STATUS[detailStatus] ?? 'open',
+      expiresAt,
+      expiresAt,
+    )
+  sqlite
+    .prepare(
+      `INSERT INTO manual_payment_details(order_id,user_id,account_id,channel,base_amount,fingerprint,payable_amount,currency,status,expires_at,created_at,updated_at)
+       VALUES (?, ?, 'acct-main', 'alipay', ?, ?, ?, 'cny', ?, ?, ?, ?)`,
     )
     .run(
       id,
       options.userId ?? 'u1',
-      options.productId ?? PRODUCT_ID,
-      options.offerId ?? OFFER_ID,
-      options.kind ?? 'one_time',
-      options.interval ?? null,
-      options.intervalCount ?? null,
       BASE_AMOUNT,
       fingerprint,
       payable,
-      options.status ?? 'pending_verification',
+      detailStatus,
       expiresAt,
       expiresAt,
       expiresAt,
@@ -113,9 +141,9 @@ function insertSubscription(
 }
 
 function orderStatus(sqlite: ReturnType<typeof createTestDatabase>['sqlite'], id: string): string {
-  const row = sqlite.prepare('SELECT status FROM manual_payment_orders WHERE id = ?').get(id) as
-    | { status: string }
-    | undefined
+  const row = sqlite
+    .prepare('SELECT status FROM manual_payment_details WHERE order_id = ?')
+    .get(id) as { status: string } | undefined
   return row?.status ?? ''
 }
 
@@ -124,7 +152,7 @@ function orderRow(
   id: string,
 ): Record<string, unknown> {
   return (
-    (sqlite.prepare('SELECT * FROM manual_payment_orders WHERE id = ?').get(id) as
+    (sqlite.prepare('SELECT * FROM manual_payment_details WHERE order_id = ?').get(id) as
       | Record<string, unknown>
       | undefined) ?? {}
   )
@@ -322,7 +350,7 @@ describe('核销订单结算', () => {
 describe('核销订阅的手动续费', () => {
   it('没有当前订阅时从核验时间起算', async () => {
     const { db, sqlite } = settlementDatabase()
-    const order = insertOrder(sqlite, { kind: 'subscription', interval: 'month', intervalCount: 1 })
+    const order = insertOrder(sqlite, { kind: 'subscription' })
     await reviewOrder(
       db,
       {
@@ -350,7 +378,7 @@ describe('核销订阅的手动续费', () => {
 
   it('同 offer 手动续费从核验时间与当前周期结束时间的较晚者延长', async () => {
     const { db, sqlite } = settlementDatabase()
-    const first = insertOrder(sqlite, { kind: 'subscription', interval: 'month', intervalCount: 1 })
+    const first = insertOrder(sqlite, { kind: 'subscription' })
     await reviewOrder(
       db,
       {
@@ -366,8 +394,6 @@ describe('核销订阅的手动续费', () => {
     // 第二笔在当前周期结束之前核验：周期必须从当前周期结束继续往后排。
     const second = insertOrder(sqlite, {
       kind: 'subscription',
-      interval: 'month',
-      intervalCount: 1,
     })
     const later = new Date(T0.getTime() + 24 * 3600 * 1000)
     await reviewOrder(
@@ -406,7 +432,7 @@ describe('核销订阅的手动续费', () => {
 
   it('月末起算的订阅周期落在 UTC 2 月末', async () => {
     const { db, sqlite } = settlementDatabase()
-    const order = insertOrder(sqlite, { kind: 'subscription', interval: 'month', intervalCount: 1 })
+    const order = insertOrder(sqlite, { kind: 'subscription' })
     const january = new Date('2026-01-31T00:00:00.000Z')
     await reviewOrder(
       db,
@@ -428,7 +454,7 @@ describe('核销订阅的手动续费', () => {
   it('其它 provider 占位时转需退款且不写新的核销订阅', async () => {
     const { db, sqlite } = settlementDatabase()
     insertSubscription(sqlite, { provider: 'stripe', subscriptionId: 'sub_1' })
-    const order = insertOrder(sqlite, { kind: 'subscription', interval: 'month', intervalCount: 1 })
+    const order = insertOrder(sqlite, { kind: 'subscription' })
     const settled = await reviewOrder(
       db,
       {
@@ -457,7 +483,7 @@ describe('核销订阅的手动续费', () => {
       productId: PRODUCT_ID,
       offerId: 'yearly',
     })
-    const order = insertOrder(sqlite, { kind: 'subscription', interval: 'month', intervalCount: 1 })
+    const order = insertOrder(sqlite, { kind: 'subscription' })
     const settled = await reviewOrder(
       db,
       {
@@ -477,20 +503,14 @@ describe('核销订阅的手动续费', () => {
     const { db, sqlite } = settlementDatabase()
     const waiting = insertOrder(sqlite, {
       kind: 'subscription',
-      interval: 'month',
-      intervalCount: 1,
       status: 'pending_payment',
     })
     const duplicate = insertOrder(sqlite, {
       kind: 'subscription',
-      interval: 'month',
-      intervalCount: 1,
       status: 'pending_verification',
     })
     const current = insertOrder(sqlite, {
       kind: 'subscription',
-      interval: 'month',
-      intervalCount: 1,
     })
     await reviewOrder(
       db,
@@ -512,7 +532,7 @@ describe('核销订阅的手动续费', () => {
 describe('结算崩溃恢复', () => {
   it('付款已落库但订单更新失败，重试只补订单状态', async () => {
     const { db, sqlite } = settlementDatabase()
-    const order = insertOrder(sqlite, { kind: 'subscription', interval: 'month', intervalCount: 1 })
+    const order = insertOrder(sqlite, { kind: 'subscription' })
     breakFinalSettlement(db)
     await expect(
       reviewOrder(
@@ -551,7 +571,7 @@ describe('结算崩溃恢复', () => {
 
   it('续期中途失败后重试不会重复续期', async () => {
     const { db, sqlite } = settlementDatabase()
-    const first = insertOrder(sqlite, { kind: 'subscription', interval: 'month', intervalCount: 1 })
+    const first = insertOrder(sqlite, { kind: 'subscription' })
     await reviewOrder(
       db,
       {
@@ -566,8 +586,6 @@ describe('结算崩溃恢复', () => {
 
     const second = insertOrder(sqlite, {
       kind: 'subscription',
-      interval: 'month',
-      intervalCount: 1,
     })
     breakFinalSettlement(db)
     await expect(

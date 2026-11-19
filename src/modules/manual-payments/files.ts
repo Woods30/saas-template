@@ -180,13 +180,13 @@ export async function findOrderFileRef(
 ): Promise<ManualPaymentOrderFileRef | null> {
   const rows = await db
     .select({
-      id: schema.manualPaymentOrders.id,
-      userId: schema.manualPaymentOrders.userId,
-      status: schema.manualPaymentOrders.status,
-      receiptKey: schema.manualPaymentOrders.receiptKey,
+      id: schema.manualPaymentDetails.orderId,
+      userId: schema.manualPaymentDetails.userId,
+      status: schema.manualPaymentDetails.status,
+      receiptKey: schema.manualPaymentDetails.receiptKey,
     })
-    .from(schema.manualPaymentOrders)
-    .where(eq(schema.manualPaymentOrders.id, orderId))
+    .from(schema.manualPaymentDetails)
+    .where(eq(schema.manualPaymentDetails.orderId, orderId))
     .limit(1)
   const row = rows[0]
   if (!row) return null
@@ -206,16 +206,16 @@ export async function setOrderReceiptKey(
   params: { orderId: string; userId: string; key: string; now?: Date },
 ): Promise<boolean> {
   const updated = await db
-    .update(schema.manualPaymentOrders)
+    .update(schema.manualPaymentDetails)
     .set({ receiptKey: params.key, updatedAt: params.now ?? new Date() })
     .where(
       and(
-        eq(schema.manualPaymentOrders.id, params.orderId),
-        eq(schema.manualPaymentOrders.userId, params.userId),
-        inArray(schema.manualPaymentOrders.status, ['pending_payment', 'pending_verification']),
+        eq(schema.manualPaymentDetails.orderId, params.orderId),
+        eq(schema.manualPaymentDetails.userId, params.userId),
+        inArray(schema.manualPaymentDetails.status, ['pending_payment', 'pending_verification']),
       ),
     )
-    .returning({ id: schema.manualPaymentOrders.id })
+    .returning({ id: schema.manualPaymentDetails.orderId })
   return updated.length > 0
 }
 
@@ -300,12 +300,12 @@ export async function hasOrderForAccount(
   accountId: string,
 ): Promise<boolean> {
   const rows = await db
-    .select({ id: schema.manualPaymentOrders.id })
-    .from(schema.manualPaymentOrders)
+    .select({ id: schema.manualPaymentDetails.orderId })
+    .from(schema.manualPaymentDetails)
     .where(
       and(
-        eq(schema.manualPaymentOrders.userId, userId),
-        eq(schema.manualPaymentOrders.accountId, accountId),
+        eq(schema.manualPaymentDetails.userId, userId),
+        eq(schema.manualPaymentDetails.accountId, accountId),
       ),
     )
     .limit(1)
