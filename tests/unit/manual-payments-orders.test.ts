@@ -276,6 +276,26 @@ function orderStatus(sqlite: ReturnType<typeof createTestDatabase>['sqlite'], id
   return row?.status ?? ''
 }
 
+/** 让订单状态回写（`orders.status = 'canceled'`）抛错一次。 */
+function breakCancelStatusSync(db: DB): void {
+  const original = db.update.bind(db)
+  let broken = false
+  db.update = ((table: unknown) => {
+    const builder = original(table as never)
+    // 只拦 `orders` 表的回写；详情表取消时也写 `status = 'canceled'`。
+    if (table !== schema.orders) return builder
+    const set = builder.set.bind(builder)
+    builder.set = ((values: Record<string, unknown>) => {
+      if (!broken && values.status === 'canceled') {
+        broken = true
+        throw new Error('订单状态同步失败')
+      }
+      return set(values as never)
+    }) as typeof builder.set
+    return builder
+  }) as unknown as DB['update']
+}
+
 /** 把随机起点固定下来，让环形扫描的顺序可断言。 */
 function forceFingerprintStart(value: number): void {
   vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation((array) => {
@@ -753,6 +773,27 @@ describe('用户订单状态机与查询隔离', () => {
     await expect(
       cancelOrder(db, { userId: 'u1', orderId: order.id }, plusSeconds(T0, 20)),
     ).rejects.toMatchObject({ code: 'INVALID_ORDER_STATE' })
+    sqlite.close()
+  })
+
+  it('详情已取消但订单状态同步失败时，重试把订单补成 canceled', async () => {
+    const { db, sqlite } = manualPaymentDatabase()
+    const order = await createAt(db, 'u1')
+
+    breakCancelStatusSync(db)
+    await expect(
+      cancelOrder(db, { userId: 'u1', orderId: order.id }, plusSeconds(T0, 10)),
+    ).rejects.toThrow('订单状态同步失败')
+
+    // 详情已取消，订单行还停在 open。
+    expect(detailStatus(sqlite, order.id)).toBe('canceled')
+    expect(orderStatus(sqlite, order.id)).toBe('open')
+
+    // 重复取消仍抛错，但顺手补上订单状态。
+    await expect(
+      cancelOrder(db, { userId: 'u1', orderId: order.id }, plusSeconds(T0, 20)),
+    ).rejects.toMatchObject({ code: 'INVALID_ORDER_STATE' })
+    expect(orderStatus(sqlite, order.id)).toBe('canceled')
     sqlite.close()
   })
 

@@ -276,6 +276,11 @@ export async function cancelOrder(
     throw new ManualPaymentError('ORDER_NOT_FOUND', '订单不存在')
   }
   if (found.detail.status !== 'pending_payment') {
+    // 已取消的订单重复提交：上次可能在详情落库后、订单回写前失败，这里补一次
+    // 幂等同步，避免订单永远停在 open（行为仍保持抛错，见 §Fix round 3）。
+    if (found.detail.status === 'canceled') {
+      await syncOrderStatus(db, found.order.id, 'canceled', now)
+    }
     throw stateError(found.detail)
   }
   if (isExpired(found.detail, now)) {

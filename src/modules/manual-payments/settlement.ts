@@ -181,7 +181,12 @@ async function rejectOrder(
   input: ReviewOrderInput,
   at: Date,
 ): Promise<ManualPaymentOrder> {
-  if (record.detail.status === 'rejected') return toView(record)
+  // 终态重复提交直接返回，但仍补一次订单状态同步：上次可能在详情落库后、
+  // 订单回写前失败，不补的话订单会永远停在 open（详见 §Fix round 3）。
+  if (record.detail.status === 'rejected') {
+    await syncOrderStatus(db, record.order.id, 'rejected', at)
+    return toView(record)
+  }
   if (record.detail.status !== 'pending_verification') {
     throw new ManualPaymentError(
       'INVALID_ORDER_STATE',
@@ -209,7 +214,10 @@ async function rejectOrder(
   const detail = updated[0]
   if (!detail) {
     const fresh = await readOrder(db, record.order.id)
-    if (fresh?.detail.status === 'rejected') return toView(fresh)
+    if (fresh?.detail.status === 'rejected') {
+      await syncOrderStatus(db, fresh.order.id, 'rejected', at)
+      return toView(fresh)
+    }
     throw new ManualPaymentError('INVALID_ORDER_STATE', '订单状态已变化，驳回失败')
   }
   await syncOrderStatus(db, record.order.id, 'rejected', at)
@@ -477,7 +485,10 @@ async function markSettled(
     return { ...order, status: 'settled', settledAt: at, updatedAt: at }
   }
   const fresh = await readOrder(db, order.id)
-  if (fresh?.detail.status === 'settled') return toView(fresh)
+  if (fresh?.detail.status === 'settled') {
+    await syncOrderStatus(db, fresh.order.id, 'settled', at)
+    return toView(fresh)
+  }
   throw new ManualPaymentError(
     'INVALID_ORDER_STATE',
     `订单当前状态为 ${fresh?.detail.status ?? '未知'}，无法标记为已结算`,
@@ -528,7 +539,10 @@ async function markRequiresRefund(
     }
   }
   const fresh = await readOrder(db, order.id)
-  if (fresh?.detail.status === 'requires_refund') return toView(fresh)
+  if (fresh?.detail.status === 'requires_refund') {
+    await syncOrderStatus(db, fresh.order.id, 'requires_refund', at)
+    return toView(fresh)
+  }
   throw new ManualPaymentError('INVALID_ORDER_STATE', '订单状态已变化，无法标记为需退款')
 }
 

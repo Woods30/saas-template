@@ -200,19 +200,19 @@ function breakFinalSettlement(db: DB): void {
 }
 
 /**
- * 让订单状态回写（`orders.status = 'completed'`）抛错一次。
+ * 让订单状态回写（`orders.status = target`）抛错一次，默认针对 `completed`。
  *
- * 详情更新走的是 `status = 'settled'`，不受影响 —— 用来模拟「详情已落库、
- * 订单状态还没回写就失败」，验证重试能补上订单状态。
+ * 详情更新走的是核销状态（`settled` / `rejected` 等），不受影响 —— 用来模拟
+ * 「详情已落库、订单状态还没回写就失败」，验证重试能补上订单状态。
  */
-function breakOrderStatusSync(db: DB): void {
+function breakOrderStatusSync(db: DB, target: string = 'completed'): void {
   const original = db.update.bind(db)
   let broken = false
   db.update = ((table: unknown) => {
     const builder = original(table as never)
     const set = builder.set.bind(builder)
     builder.set = ((values: Record<string, unknown>) => {
-      if (!broken && values.status === 'completed') {
+      if (!broken && values.status === target) {
         broken = true
         throw new Error('订单状态同步失败')
       }
@@ -634,6 +634,30 @@ describe('结算崩溃恢复', () => {
     expect(retried.status).toBe('settled')
     expect(paymentRows(sqlite)).toHaveLength(1)
     expect(orderRowStatus(sqlite, order.id)).toBe('completed')
+    sqlite.close()
+  })
+
+  it('详情已驳回但订单状态同步失败时，重试把订单补成 failed', async () => {
+    const { db, sqlite } = settlementDatabase()
+    const order = insertOrder(sqlite)
+    const input = {
+      orderId: order.id,
+      reviewerId: ADMIN,
+      action: 'reject' as const,
+      reviewNote: '没查到这笔钱',
+    }
+
+    breakOrderStatusSync(db, 'failed')
+    await expect(reviewOrder(db, input, T0)).rejects.toThrow('订单状态同步失败')
+
+    // 详情已驳回，订单行还停在 open。
+    expect(orderStatus(sqlite, order.id)).toBe('rejected')
+    expect(orderRowStatus(sqlite, order.id)).toBe('open')
+
+    // 终态重试走早期返回，但仍会补上订单状态。
+    const retried = await reviewOrder(db, input, T0)
+    expect(retried.status).toBe('rejected')
+    expect(orderRowStatus(sqlite, order.id)).toBe('failed')
     sqlite.close()
   })
 
