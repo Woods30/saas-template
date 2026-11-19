@@ -43,6 +43,14 @@ export {
 } from './billing'
 export { beginCheckout, findCustomerId } from './checkout'
 export { applyPaymentEvent } from './events'
+export {
+  createCheckoutOrder,
+  findOrderBySessionId,
+  markOrderOpen,
+  markOrderStatus,
+  newOrderNo,
+  type OrderStatus,
+} from './orders'
 export { ACTIVE_SUBSCRIPTION_STATUSES, occupiesSubscriptionSlot } from './plan-state'
 export {
   type PaymentRecord,

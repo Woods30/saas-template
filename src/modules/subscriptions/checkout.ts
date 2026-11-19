@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { type DB, schema } from '@/core/db'
 import type { CheckoutParams, CheckoutResult, PaymentProvider } from '@/core/payment/types'
 import { applyPaymentEvent } from './events'
+import { createCheckoutOrder, markOrderOpen, markOrderStatus } from './orders'
 import { ACTIVE_SUBSCRIPTION_STATUSES, occupiesSubscriptionSlot } from './plan-state'
 
 type Db = DB
@@ -33,8 +34,32 @@ export async function beginCheckout(
   input: Omit<CheckoutParams, 'idempotencyKey'>,
 ): Promise<CheckoutResult | null> {
   const name = provider.getProviderName()
-  if (input.mode === 'payment')
-    return provider.createCheckoutSession({ ...input, idempotencyKey: crypto.randomUUID() })
+  if (input.mode === 'payment') {
+    // 一次性购买每次结账都是一次独立购买意图，先落订单再请求渠道。
+    const order = await createCheckoutOrder(db, {
+      userId: input.userId,
+      provider: name,
+      productId: input.productId,
+      offerId: input.offerId,
+      mode: input.mode,
+    })
+    let result: CheckoutResult
+    try {
+      result = await provider.createCheckoutSession({
+        ...input,
+        idempotencyKey: crypto.randomUUID(),
+      })
+    } catch (error) {
+      await markOrderStatus(db, order.id, 'failed')
+      throw error
+    }
+    await markOrderOpen(db, order.id, {
+      sessionId: result.sessionId,
+      url: result.url,
+      expiresAt: result.expiresAt,
+    })
+    return result
+  }
   const occupied = await db
     .select({ id: schema.subscriptions.id })
     .from(schema.subscriptions)
@@ -47,10 +72,19 @@ export async function beginCheckout(
     .limit(1)
   if (occupied.length) return null
   const now = Math.floor(Date.now() / 1000)
+  // 订阅订单与预留同批创建：预留是「未完成的结账」，订单是它的可统计记录。
+  const order = await createCheckoutOrder(db, {
+    userId: input.userId,
+    provider: name,
+    productId: input.productId,
+    offerId: input.offerId,
+    mode: input.mode,
+  })
   const inserted = await db
     .insert(schema.checkoutReservations)
     .values({
       userId: input.userId,
+      orderId: order.id,
       provider: name,
       token: crypto.randomUUID(),
       productId: input.productId,
@@ -60,6 +94,10 @@ export async function beginCheckout(
     })
     .onConflictDoNothing()
     .returning({ token: schema.checkoutReservations.token })
+  if (!inserted.length) {
+    // 并发请求先建了预留：本次订单没有任何预留引用，删掉以免留下孤儿订单。
+    await db.delete(schema.orders).where(eq(schema.orders.id, order.id))
+  }
   const [reservation] = await db
     .select()
     .from(schema.checkoutReservations)
@@ -139,6 +177,12 @@ export async function beginCheckout(
         eq(schema.checkoutReservations.token, reservation.token),
       ),
     )
+  if (reservation.orderId)
+    await markOrderOpen(db, reservation.orderId, {
+      sessionId: result.sessionId,
+      url: result.url,
+      expiresAt: result.expiresAt,
+    })
   // 原请求结果未知时先用原幂等键恢复，再核对其是否已完成。
   if (!inserted.length) return beginCheckout(db, provider, input)
   return result
