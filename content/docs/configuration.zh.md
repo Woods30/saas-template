@@ -20,7 +20,7 @@ updated: 2026-11-19
   kind: 'text',                 // 决定后台用什么控件、如何校验
   label: () => m.…(),           // 文案
   defaultValue: 'Jerbix',       // 库里没存时的值
-  secret: false,                // 是否加密入库、只回显末四位
+  secret: false,                // 是否加密入库、不回显明文
   envKey: 'RESEND_API_KEY',     // 只在 db:seed 时读环境变量的这个名字
 }
 ```
@@ -86,7 +86,7 @@ settings 行 → 解密 → 逐字段校验 → resolveSettingsValues → applyS
 ### 自定义配置仅服务端可读
 
 「自定义配置」tab 把不在注册表里的键存为 `custom.<key>`。键格式与保留前缀会被校验，
-密钥值同样加密入库、只回显末四位；面板自己拉取、自己保存（整表替换，不按 tab 保存）。
+密钥值同样加密入库、不回显明文；面板自己拉取、自己保存（整表替换，不按 tab 保存）。
 自定义值**不进入**公开的 `websiteConfig`，只能在服务端通过 `getCustomSetting(key)` 读取。
 
 ## 密钥加密入库
@@ -95,7 +95,7 @@ settings 行 → 解密 → 逐字段校验 → resolveSettingsValues → applyS
 
 - 密钥由 `CONFIG_ENCRYPTION_KEY` 经 `SHA-256` 派生；
 - 密文形如 `enc:v1:` + base64（iv ‖ ciphertext）；
-- 后台只回显末四位（`••••••••ab12`），留空表示**保持原值**；
+- 后台不回显明文（接口只返回掩码），输入框留空表示**保持原值**；
 - `CONFIG_ENCRYPTION_KEY` 缺失时，含密钥的配置组拒绝保存；公开参数仍可写；
 - 口令换了或丢了，旧密文解不开，字段回落默认值——只能重填。
 

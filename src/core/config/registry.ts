@@ -6,7 +6,7 @@
  *
  * 三条约束：
  * - 默认值只在这里出现一次；`createWebsiteConfig` 也从这里取初始值。
- * - `secret: true` 的字段加密入库，后台只回显末四位；未配置 `CONFIG_ENCRYPTION_KEY`
+ * - `secret: true` 的字段加密入库，后台不回显明文（接口只返回掩码）；未配置 `CONFIG_ENCRYPTION_KEY`
  *   时整组拒绝保存。
  * - `envKey` 只用于 `db:seed` 把部署环境里的旧值抄进数据库，运行期不再读 env。
  */

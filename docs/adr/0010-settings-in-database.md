@@ -21,7 +21,7 @@ ADR-0009 第 67-69 行还留了一条已知出入：模块开关仍接受 `VITE_
    tabs → groups → fields 的声明形式描述每个键（类型、默认值、是否密钥）。后台表单、
    公开配置下发、保存校验都从注册表生成，不再各写一份。
 3. **密钥入库并加密**：支付、邮件、存储、AI、Turnstile、通知 webhook、OAuth 的凭据写入
-   `settings`，值以 `enc:v1:` 前缀存 AES-256-GCM 密文；后台只回显末四位。
+   `settings`，值以 `enc:v1:` 前缀存 AES-256-GCM 密文；后台不回显明文（接口只返回掩码）。
    `CONFIG_ENCRYPTION_KEY` 缺失时**拒绝保存任何含密钥的组**，公开参数仍可写。
 4. **运行期 env 只留启动必需与防锁死项**：`BETTER_AUTH_SECRET`、`BETTER_AUTH_URL`、
    `DATABASE_*`、`CONFIG_ENCRYPTION_KEY`、Cloudflare 部署 token、`ADMIN_EMAILS`。

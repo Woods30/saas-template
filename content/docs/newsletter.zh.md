@@ -23,7 +23,7 @@ updated: 2026-11-03
    | `resend` | Resend API key + Audience ID | 都取自 Resend 后台 |
    | `beehiiv` | Beehiiv API key + Publication ID | 都取自 Beehiiv 后台 |
 
-   Beehiiv 分组里还有「发送欢迎邮件」开关，默认关闭。密钥加密入库、只回显末四位，
+   Beehiiv 分组里还有「发送欢迎邮件」开关，默认关闭。密钥加密入库、不回显明文，
    保存即生效。
 
    也可以先把对应值写进 `.env`，再跑 `pnpm db:seed` 一并写入数据库。

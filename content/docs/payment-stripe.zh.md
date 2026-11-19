@@ -13,7 +13,7 @@ Stripe 侧的金额、订阅与付款页面都在 Stripe 平台上，站内只�
 
 1. 在 Stripe 后台建商品与价格。订阅建 recurring 价格，买断建一次性价格；**每个价格填一个 `lookup_key`**，值与 `src/config/products.ts` 里 `prices` 的右侧一致（`pro_monthly`、`pro_yearly` 等）。
 2. 在后台「系统设置 → 支付」里选渠道 `stripe`，并在 Stripe 分组填 Secret key 与 Webhook secret。
-   两个密钥加密入库，只回显末四位；保存即生效。
+   两个密钥加密入库，不回显明文；保存即生效。
 3. 在 Stripe Dashboard → Developers → Webhooks 添加端点 `<站点域名>/api/webhooks/stripe`，
    把 Signing secret 填回后台的 Webhook secret 字段。
 4. 在端点的事件列表里勾选下面这些事件。

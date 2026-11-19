@@ -34,7 +34,7 @@ Prerequisites: the domain is on DNS, and you verify it as a sending domain in Re
 3. **Configure it in the admin.** Open **Settings → Mail**:
 
    - choose `resend` as the provider;
-   - enter the API key in the Resend group (encrypted at rest, masked to the last four characters);
+   - enter the API key in the Resend group (encrypted at rest, never shown in plain text);
    - enter the sender address in the Mail group (for example `noreply@<your-domain.com>`).
 
    Saving takes effect immediately — no redeploy. The sender must be a **plain email address**;

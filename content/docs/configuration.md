@@ -105,8 +105,8 @@ Fields with `secret: true` are stored encrypted with AES-GCM:
 
 - the key is derived from `CONFIG_ENCRYPTION_KEY` via `SHA-256`;
 - the ciphertext is `enc:v1:` + base64(iv ‖ ciphertext);
-- the admin only shows the last four characters (`••••••••ab12`); leaving the field blank
-  keeps the current value;
+- the admin UI never shows the secret in plain text (the API returns only a mask); leaving the
+  field blank keeps the current value;
 - when `CONFIG_ENCRYPTION_KEY` is missing, groups containing secrets are rejected; public
   parameters can still be saved;
 - if the key is lost or rotated, old ciphertexts cannot be decrypted and those fields fall
