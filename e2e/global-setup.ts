@@ -149,13 +149,18 @@ const WARMUP_PATHS = [
 /**
  * 清理本地 D1 里会影响 E2E 结账环境的残留行。
  *
- * `manual_payment_orders` 占尾数池（每账户活跃金额唯一），残留行会让本轮撞
- * `AMOUNT_POOL_EXHAUSTED`。配置行由 {@link seedE2eSettings} 逐字段覆盖，
- * 不在这里删。
+ * 核销详情占尾数池（每账户活跃金额唯一），残留行会让本轮撞
+ * `AMOUNT_POOL_EXHAUSTED`。先删详情再删订单：详情的外键指向 `orders`，
+ * 反序删除会触发外键约束。只删 `provider='manual_payments'` 的订单，
+ * 其它来源（在线结账）的订单不在这里动。
+ * 配置行由 {@link seedE2eSettings} 逐字段覆盖，不在这里删。
  */
 function resetLocalManualPaymentFixtures(): void {
   try {
-    wranglerD1(['DELETE FROM manual_payment_orders'])
+    wranglerD1([
+      'DELETE FROM manual_payment_details',
+      "DELETE FROM orders WHERE provider = 'manual_payments'",
+    ])
   } catch {
     // 表不存在（未跑迁移）等情形不算致命，后续用例会给出真正的原因。
   }

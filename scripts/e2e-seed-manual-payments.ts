@@ -57,14 +57,20 @@ export function buildFingerprintHolderSql(input: {
   /** 占位行的过期时间（Unix 秒）。 */
   expiresAt: number
 }): string {
-  const holders = []
+  const orders: string[] = []
+  const details: string[] = []
   for (let fp = 1; fp <= 99; fp++) {
     if (fp === input.exceptFingerprint) continue
-    holders.push(
-      `('${crypto.randomUUID()}', '${escapeSql(input.userId)}', '${escapeSql(input.accountId)}', 'alipay', NULL, NULL, 'e2e-holder', 'e2e-one-time', 'one_time', NULL, NULL, ${input.base}, ${fp}, ${input.base + fp}, '${escapeSql(input.currency)}', 'pending_payment', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ${input.expiresAt}, NULL, ${input.expiresAt}, ${input.expiresAt})`,
+    // 订单与详情 1:1，共用同一个 id（详情主键 `order_id`）。
+    const orderId = crypto.randomUUID()
+    orders.push(
+      `('${orderId}', 'ord_e2e_${orderId}', '${escapeSql(input.userId)}', 'manual_payments', 'payment', 'e2e-holder', 'e2e-one-time', 'open', ${input.expiresAt}, ${input.expiresAt})`,
+    )
+    details.push(
+      `('${orderId}', '${escapeSql(input.userId)}', '${escapeSql(input.accountId)}', 'alipay', NULL, NULL, ${input.base}, ${fp}, ${input.base + fp}, '${escapeSql(input.currency)}', 'pending_payment', ${input.expiresAt}, ${input.expiresAt}, ${input.expiresAt})`,
     )
   }
-  return `INSERT INTO manual_payment_orders (id, user_id, account_id, channel, qr_image_url, qr_image_key, product_id, offer_id, kind, interval, interval_count, base_amount, fingerprint, payable_amount, currency, status, payer_note, receipt_key, submitted_at, observed_amount, external_reference, review_note, reviewed_by, reviewed_at, expires_at, settled_at, created_at, updated_at) VALUES ${holders.join(', ')}`
+  return `INSERT INTO orders (id, order_no, user_id, provider, mode, product_id, offer_id, status, created_at, updated_at) VALUES ${orders.join(', ')}; INSERT INTO manual_payment_details (order_id, user_id, account_id, channel, qr_image_url, qr_image_key, base_amount, fingerprint, payable_amount, currency, status, expires_at, created_at, updated_at) VALUES ${details.join(', ')}`
 }
 
 async function main(): Promise<void> {
@@ -79,7 +85,7 @@ async function main(): Promise<void> {
     const orderId = process.argv[idx + 1]
     if (!orderId) throw new Error('--query-order 需要 <orderId>')
     const rows = executeLocalD1Json(
-      `SELECT base_amount, fingerprint FROM manual_payment_orders WHERE id = '${escapeSql(orderId)}'`,
+      `SELECT base_amount, fingerprint FROM manual_payment_details WHERE order_id = '${escapeSql(orderId)}'`,
       persistTo,
     )
     const row = rows[0]?.results?.[0]
@@ -104,8 +110,11 @@ async function main(): Promise<void> {
     if (!userId) throw new Error('本地 D1 没有任何用户，无法放置占位行')
     // 先清掉该账户除被测单外的全部活跃订单：之前用例留下的 pending_payment /
     // pending_verification 也占尾数，不清会让占位撞唯一索引、池子也不完整。
+    // 先删详情再删订单（详情外键指向 orders），并顺手清掉没有详情的核销订单，
+    // 避免每轮 fill 都留下孤儿订单行。
     executeLocalD1(
-      `DELETE FROM manual_payment_orders WHERE account_id = 'alipay-e2e' AND status IN ('pending_payment','pending_verification','settling') AND payable_amount != ${base + except}`,
+      `DELETE FROM manual_payment_details WHERE account_id = 'alipay-e2e' AND status IN ('pending_payment','pending_verification','settling') AND payable_amount != ${base + except};
+DELETE FROM orders WHERE provider = 'manual_payments' AND id NOT IN (SELECT order_id FROM manual_payment_details)`,
       persistTo,
     )
     executeLocalD1(
