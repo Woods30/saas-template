@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -47,12 +47,25 @@ export function CustomConfigPanel() {
   const [rows, setRows] = useState<EditableRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  /**
+   * 最近一次拉取的序号。
+   *
+   * TanStack Start 的客户端入口包了 `StrictMode`，开发模式下 effect 会执行两次，
+   * 两个 `fetchCustomSettings()` 并发返回；先返回的那个已把面板渲染成可编辑状态，
+   * 用户新增行之后，迟到的旧响应再把 `rows` 整体覆盖，刚输入的行就静默丢了。
+   * 只接受最新一次请求的结果，旧响应直接丢弃。
+   */
+  const loadSeq = useRef(0)
 
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current
     try {
-      setRows((await fetchCustomSettings()).map(toEditableRow))
+      const entries = await fetchCustomSettings()
+      if (seq !== loadSeq.current) return
+      setRows(entries.map(toEditableRow))
       setError(null)
     } catch {
+      if (seq !== loadSeq.current) return
       setError(m.settings_error_generic())
     }
   }, [])

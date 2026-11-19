@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type React from 'react'
+import { StrictMode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultSettingsValues, SETTING_TABS } from '@/core/config/registry'
 import { setLocale } from '@/locale/paraglide/runtime.js'
@@ -195,5 +196,39 @@ describe('系统设置页', () => {
     // 注册表字段一个都不能出现；自定义面板独立拉取 custom.* 配置。
     expect(screen.queryByLabelText('品牌名')).toBeNull()
     expect(screen.queryAllByRole('textbox')).toHaveLength(0)
+  })
+
+  /**
+   * 回归：StrictMode 下 effect 执行两次，两个拉取并发在途；最新一次先返回后用户
+   * 新增了行，迟到的旧响应不能把 `rows` 整体覆盖（否则用户输入被静默丢弃）。
+   */
+  it('迟到的旧加载不覆盖用户新增的行', async () => {
+    type Entry = { key: string; value: string; secret: boolean }
+    const pending: Array<(entries: Entry[]) => void> = []
+    mocks.fetchCustomSettings.mockImplementation(
+      () => new Promise<Entry[]>((resolve) => pending.push(resolve)),
+    )
+
+    render(
+      <StrictMode>
+        <AdminSettingsPage />
+      </StrictMode>,
+    )
+    await screen.findByLabelText('品牌名')
+    fireEvent.click(screen.getByRole('tab', { name: '自定义配置' }))
+
+    // StrictMode 让面板初次挂载的 effect 跑两次，两个拉取都在等响应。
+    await waitFor(() => expect(pending).toHaveLength(2))
+
+    // 最新一次（下标 1）先返回：面板进入可编辑状态，用户新增并填写一行。
+    await act(async () => pending[1]?.([]))
+    fireEvent.click(await screen.findByRole('button', { name: '新增条目' }))
+    const addedKey = screen.getByLabelText('键 1')
+    fireEvent.change(addedKey, { target: { value: 'user.added' } })
+
+    // 迟到的旧响应（下标 0）返回，不能覆盖刚填的行。
+    await act(async () => pending[0]?.([{ key: 'legacy.key', value: 'old', secret: false }]))
+    expect(screen.getByLabelText('键 1')).toHaveValue('user.added')
+    expect(screen.queryByText('legacy.key')).toBeNull()
   })
 })
