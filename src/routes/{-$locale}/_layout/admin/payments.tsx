@@ -146,7 +146,7 @@ function AdminPaymentsPage() {
     setRefunding(true)
     setRefundError(false)
     try {
-      await refundAdminOrder({ data: { orderId: pendingRefund.id } })
+      await refundAdminOrder({ data: { paymentId: pendingRefund.id } })
       setPendingRefund(null)
       await router.invalidate()
     } catch {

@@ -172,7 +172,7 @@ export interface AdminRefundResult {
   creditsDeducted: number
 }
 
-const refundSchema = z.object({ orderId: z.string().min(1) })
+const refundSchema = z.object({ paymentId: z.string().min(1) })
 
 /**
  * 后台全额退款。
@@ -198,7 +198,7 @@ export const refundAdminOrder = createServerFn({ method: 'POST' })
     const [payment] = await db
       .select()
       .from(schema.payments)
-      .where(eq(schema.payments.id, data.orderId))
+      .where(eq(schema.payments.id, data.paymentId))
       .limit(1)
     if (!payment) throw new Response('ORDER_NOT_FOUND', { status: 404 })
     if (
