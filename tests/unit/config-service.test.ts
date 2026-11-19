@@ -216,10 +216,16 @@ describe('按 tab 保存', () => {
     const { db, sqlite } = createTestDatabase()
     await loadSettings(db, { now: 1_000 })
 
-    await expect(saveSettingsTab(db, 'auth', { 'auth.emailEnabled': false })).resolves.toBeDefined()
+    // 用公开字段 `auth.requireEmailVerification`：关掉 `auth.emailEnabled` 会让
+    // 「至少一种可用登录方式」判定失败（其它方法默认没有凭据），与本题无关。
+    await expect(
+      saveSettingsTab(db, 'auth', { 'auth.requireEmailVerification': false }),
+    ).resolves.toBeDefined()
 
-    expect(getSettingsSnapshot()['auth.emailEnabled']).toBe(false)
-    const row = sqlite.prepare('SELECT value FROM settings WHERE key = ?').get('auth.emailEnabled')
+    expect(getSettingsSnapshot()['auth.requireEmailVerification']).toBe(false)
+    const row = sqlite
+      .prepare('SELECT value FROM settings WHERE key = ?')
+      .get('auth.requireEmailVerification')
     expect(row).toEqual({ value: 'false' })
     sqlite.close()
   })
