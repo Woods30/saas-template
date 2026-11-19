@@ -10,10 +10,12 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { requirePermissionDb } from '@/core/auth/session'
-import { maskSecret } from '@/core/config/crypto'
+import { MissingEncryptionKeyError, maskSecret } from '@/core/config/crypto'
+import { type CustomSetting, listCustomSettings, replaceCustomSettings } from '@/core/config/custom'
 import { type ProbeTarget, probeConnection } from '@/core/config/probes'
 import { type SettingTab, settingField, settingTab } from '@/core/config/registry'
 import { getSettingsSnapshot, saveSettingsTab } from '@/core/config/service'
+import { SettingsValidationError } from '@/core/config/settings'
 
 /** 可序列化到客户端的配置值形状。 */
 export type AdminJsonValue =
@@ -74,6 +76,53 @@ export const saveAdminSettings = createServerFn({ method: 'POST' })
       encryptionKey: env.CONFIG_ENCRYPTION_KEY,
     })
     return { saved: tab.id }
+  })
+
+/**
+ * 自定义配置读取。
+ *
+ * 不走 `fetchAdminSettings`：注册表之外的 `custom.*` 行不在快照里，且密钥需要
+ * 解密后回显掩码，单独查询更直接。
+ */
+export const fetchCustomSettings = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<CustomSetting[]> => {
+    const { db } = await requirePermissionDb('admin.settings.read')
+    const { getServerContext } = await import('@/lib/server-context')
+    return listCustomSettings(db, getServerContext().env.CONFIG_ENCRYPTION_KEY)
+  },
+)
+
+const customEntrySchema = z.object({
+  key: z.string(),
+  value: z.string(),
+  secret: z.boolean(),
+})
+
+const saveCustomInputSchema = z.object({ entries: z.array(customEntrySchema) })
+
+/** 整表替换自定义配置；键格式 / 保留前缀 / 密钥口令问题一律 400。 */
+export const saveCustomSettings = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => {
+    const parsed = saveCustomInputSchema.safeParse(input)
+    if (!parsed.success) throw new Response(null, { status: 400 })
+    return parsed.data
+  })
+  .handler(async ({ data }): Promise<{ saved: string }> => {
+    const { db } = await requirePermissionDb('admin.settings.write')
+    const { getServerContext } = await import('@/lib/server-context')
+    const env = getServerContext().env
+    try {
+      await replaceCustomSettings(db, data.entries, {
+        baseEnv: env,
+        encryptionKey: env.CONFIG_ENCRYPTION_KEY,
+      })
+    } catch (error) {
+      if (error instanceof SettingsValidationError || error instanceof MissingEncryptionKeyError) {
+        throw new Response(null, { status: 400 })
+      }
+      throw error
+    }
+    return { saved: 'custom' }
   })
 
 const testInputSchema = z.object({ target: z.enum(['payment', 'mail']) })

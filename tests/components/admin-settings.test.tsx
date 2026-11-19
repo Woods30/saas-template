@@ -14,12 +14,16 @@ const mocks = vi.hoisted(() => ({
   fetchAdminSettings: vi.fn(),
   saveAdminSettings: vi.fn(),
   testAdminConnection: vi.fn(),
+  fetchCustomSettings: vi.fn(),
+  saveCustomSettings: vi.fn(),
 }))
 
 vi.mock('@/core/config/admin', () => ({
   fetchAdminSettings: mocks.fetchAdminSettings,
   saveAdminSettings: mocks.saveAdminSettings,
   testAdminConnection: mocks.testAdminConnection,
+  fetchCustomSettings: mocks.fetchCustomSettings,
+  saveCustomSettings: mocks.saveCustomSettings,
 }))
 
 const AdminSettingsPage = AdminSettingsRoute.options.component as unknown as () => React.JSX.Element
@@ -29,6 +33,8 @@ beforeEach(() => {
   mocks.fetchAdminSettings.mockImplementation(async () => structuredClone(defaultSettingsValues()))
   mocks.saveAdminSettings.mockResolvedValue({ saved: 'general' })
   mocks.testAdminConnection.mockResolvedValue({ ok: true, message: 'ok' })
+  mocks.fetchCustomSettings.mockResolvedValue([])
+  mocks.saveCustomSettings.mockResolvedValue({ saved: 'custom' })
 })
 
 /** 渲染并等到首个 tab 的字段出现，避免在 Spinner 阶段断言。 */
@@ -185,8 +191,8 @@ describe('系统设置页', () => {
     await renderPage()
     fireEvent.click(screen.getByRole('tab', { name: '自定义配置' }))
 
-    expect(await screen.findByText(/自定义键值配置/)).toBeInTheDocument()
-    // 注册表字段一个都不能出现；自定义面板由 Task 8 接管。
+    expect(await screen.findByText('暂无自定义配置。')).toBeInTheDocument()
+    // 注册表字段一个都不能出现；自定义面板独立拉取 custom.* 配置。
     expect(screen.queryByLabelText('品牌名')).toBeNull()
     expect(screen.queryAllByRole('textbox')).toHaveLength(0)
   })
