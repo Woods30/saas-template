@@ -4,7 +4,7 @@ description: Stripe products, checkout, and webhook setup
 locale: en
 order: 14
 group: payment
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 Amounts, subscriptions, and the payment page all live on Stripe's side; the site only declares
@@ -56,7 +56,7 @@ an invalid signature, and 500 when processing fails — Stripe retries the latte
 - Cancellation: the in-app "Cancel subscription" button calls
   `subscriptions.update(id, { cancel_at_period_end: true })`, so it **takes effect at period
   end** and the current period stays usable.
-- Refunds: the admin orders page refunds by PaymentIntent
+- Refunds: the admin **Payments** page (`/admin/payments`) refunds Stripe rows by PaymentIntent
   (`refunds.create({ payment_intent })` with an idempotency key); `charge.refunded` reconciles
   the row afterwards.
 

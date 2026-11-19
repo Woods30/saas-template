@@ -11,6 +11,21 @@ Declare your plans once in `src/config/products.ts`; the provider (Stripe or Cre
 you get paid. The site stores no amounts — displayed prices and charged prices both come from
 the provider's price catalog.
 
+## Records: orders, payments and subscriptions
+
+The database keeps purchase intent and money facts apart:
+
+| Table | What it is | When a row is written |
+|---|---|---|
+| `orders` | A checkout attempt. Status describes the attempt, not whether money arrived. | Every checkout creation, for both subscriptions and one-time purchases. Renewals do not write one. |
+| `payments` | A confirmed money fact. Never written by a checkout redirect or a user claim. | A provider webhook, or an admin settling a manual payment. `order_id` links back when known (nullable for historical rows). |
+| `subscriptions` | A billing contract: period, renewal, cancel-at-period-end. | Subscription events from the provider or a manual-payment settlement. |
+| `manual_payment_details` | Manual-payment details, 1:1 with an order (`order_id` is the primary key): amount tail, payee account, receipt and review fields. | Together with the manual order. |
+
+A manual order writes one `orders` row (`status = open`, `provider = manual_payments`) and one
+`manual_payment_details` row (`status = pending_payment`). Admin verification writes the
+`payments` row and moves the order to `completed`.
+
 ## Plan configuration
 
 Edit `getProducts()` in `src/config/products.ts` and nothing else:
@@ -91,17 +106,36 @@ user keeps access for the paid period, then renews no more. Stripe uses
 `cancel_at_period_end`, Creem uses `mode: scheduled`. Manual-payment flows have no provider
 subscription and do not show the button.
 
+## Attribution
+
+Registration writes **first-touch** attribution into nine `users` columns: the five UTM
+parameters (`utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`), the
+referrer, country, IP and locale. Values are never overwritten afterwards — a later visit
+cannot rewrite history. An empty value means "not attributed"; the funnel displays it as
+`direct`. The admin overview reads these columns to group the conversion funnel.
+
+## Admin pages
+
+| Page | Permission | What it shows |
+|---|---|---|
+| `/admin/payments` | `admin.orders.read` / `admin.orders.write` | Confirmed payments, in four type tabs: **All / Subscription / One-time / Manual payments** (`all` is the default and is omitted from the URL). The tabs partition the data — a manual payment never shows under Subscription or One-time. |
+| `/admin/subscriptions` | `admin.subscriptions.read` | Subscription periods and statuses. |
+| `/admin/manual-payments` | `admin.orders.read` / `admin.orders.write` | Review queue for manual orders. |
+| `/admin` | any `admin.*` | KPI cards, the sign-up → checkout → paid conversion funnel (24h / 7d / 30d, grouped by UTM dimension, referrer or country; an empty value displays as `direct`), recent payments and to-dos. |
+
 ## Refunds and clawback
 
-The admin **Orders** page can issue a **full refund** on a paid order (permission
-`payments.refund`, held by the `admin` role by default):
+The admin **Payments** page (`/admin/payments`) can issue a **full refund** on a paid payment
+(permission `payments.refund`, held by the `admin` role by default). The refund button is
+rendered only for `stripe` and `creem` rows; manual-payment rows are refunded offline and never
+show it:
 
-1. a conditional state transition claims the order as `refunding`, so concurrent clicks can only
-   win once;
+1. a conditional state transition claims the payment row as `refunding`, so concurrent clicks can
+   only win once;
 2. the provider is called: Stripe by PaymentIntent, Creem by transaction ID (Creem only supports
    full refunds);
 3. on success the row becomes `refunded` / `partially_refunded`, and the credit grant issued for
-   **that order** is clawed back;
+   **that payment** is clawed back;
 4. a provider failure restores the previous status so the operator can retry; every success is
    written to the audit log.
 

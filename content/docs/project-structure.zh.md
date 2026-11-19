@@ -4,7 +4,7 @@ description: 每个目录负责什么，改东西该去哪里
 locale: zh
 order: 22
 group: develop
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 这是一张地图。找不到东西时先看这里，再去读对应文件。
@@ -29,6 +29,8 @@ updated: 2026-11-03
 | `src/lib/` | 纯逻辑：locale、SEO、模块门禁、限流、主题解析 |
 | `src/locale/` | Paraglide 产物与 locale 中间件 |
 | `src/core/cache/` `src/core/storage/` `src/core/email/` `src/modules/newsletter/` `src/core/notify/` `src/core/payment/` | 各服务模块：provider 注册表 + 抽象接口 |
+| `src/modules/subscriptions/` | 结账、资金事实（`payments`）与计费契约（`subscriptions`）、退款，以及后台查询、营收与转化漏斗 |
+| `src/modules/manual-payments/` | 人工核销：订单与 `manual_payment_details` 成对写入、收款账户与后台核验流程 |
 | `src/styles/` | `globals.css`（设计 token）、`mdx.css` |
 | `src/hooks/` | 跨页面复用的 hook |
 | `src/server.ts` / `src/router.tsx` | 服务入口（CSP nonce、env 注入）/ 路由实例 |
@@ -59,6 +61,8 @@ updated: 2026-11-03
 | 颜色、字体、圆角、阴影 | `src/styles/globals.css` |
 | 文档内容 | `content/docs/*.md` |
 | 数据库表 | `src/core/db/schema.sqlite.ts` 与 `schema.postgres.ts` 两份都改，然后 `pnpm db:setup` |
+| 付款记录、退款、后台付款页 | `src/modules/subscriptions/`（`orders` / `payments` / `subscriptions`） |
+| 人工核销流程与收款账户 | `src/modules/manual-payments/` |
 | 新增页面 | 在 `src/routes/` 下建文件，路由自动生成 |
 | 新增 API | `src/routes/api/<name>/$.ts` |
 | 新增 UI 控件 | `pnpm dlx shadcn@latest add <component> -y`，装到 `src/components/ui/` |

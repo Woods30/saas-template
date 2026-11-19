@@ -97,8 +97,20 @@ async function createOrder(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/zh\/settings\/manual-payments\/.+/)
 }
 
-/** 读本地 D1 里订单行的 base_amount 与 fingerprint（尾数占位需要精确值）。 */
-function queryOrderRow(orderId: string): { baseAmount: number; fingerprint: number } {
+interface OrderSides {
+  baseAmount: number
+  fingerprint: number
+  /** 订单 / 核销详情 / 付款三侧的存在性与状态。 */
+  orderCount: number
+  detailCount: number
+  paymentCount: number
+  orderStatus: string | null
+  provider: string | null
+  detailStatus: string | null
+}
+
+/** 读本地 D1 里订单两侧与付款的状态（尾数占位也复用 base_amount / fingerprint）。 */
+function queryOrderRow(orderId: string): OrderSides {
   const persistTo = process.env.E2E_D1_PERSIST_TO
   const args = [
     'exec',
@@ -109,8 +121,7 @@ function queryOrderRow(orderId: string): { baseAmount: number; fingerprint: numb
     ...(persistTo ? ['--persist-to', persistTo] : []),
   ]
   const out = execFileSync('pnpm', args, { encoding: 'utf8', stdio: 'pipe' })
-  const parsed = JSON.parse(out) as { baseAmount: number; fingerprint: number }
-  return parsed
+  return JSON.parse(out) as OrderSides
 }
 
 /** 占住 base 上除指定尾数外的全部 98 个尾数（委托 seed 脚本写 D1）。 */
@@ -142,6 +153,17 @@ test.describe('ManualPayment', () => {
     const userPage = await userContext.newPage()
     await login(userPage)
     await createOrder(userPage)
+    const orderId = new URL(userPage.url()).pathname.split('/').pop() ?? ''
+
+    // 下单立即写两侧：`orders`（购买意图，`open`）与 `manual_payment_details`
+    // （核销详情，`pending_payment`，主键即 order_id）。还没申报，所以尚无 `payments`。
+    const created = queryOrderRow(orderId)
+    expect(created.orderCount).toBe(1)
+    expect(created.detailCount).toBe(1)
+    expect(created.paymentCount).toBe(0)
+    expect(created.provider).toBe('manual_payments')
+    expect(created.orderStatus).toBe('open')
+    expect(created.detailStatus).toBe('pending_payment')
 
     // 详情页：精确金额、15 分钟倒计时、二维码与风险正文。
     await expect(userPage.getByTestId('payable-amount')).toHaveText(/¥[\d,]+\.\d{2}/)
@@ -198,8 +220,16 @@ test.describe('ManualPayment', () => {
     await adminPage.getByRole('button', { name: '普通通过' }).click()
     await expect(adminPage.getByText('核验已提交。')).toBeVisible()
 
-    // 用户轮询（5 秒一次）拿到已结算。
+    // 用户轮询（5 秒一次）拿到已结算；此时资金事实才落库：`payments` 一行，
+    // 订单同步为 `completed`，核销详情为 `settled`。
     await expect(userPage.getByText('已到账').first()).toBeVisible({ timeout: 15000 })
+    // 订单同步与详情结算可能是两条 UPDATE，轮询到三侧一致为止。
+    await expect
+      .poll(() => {
+        const row = queryOrderRow(orderId)
+        return `${row.paymentCount}:${row.orderStatus}:${row.detailStatus}`
+      })
+      .toBe('1:completed:settled')
     await userPage.goto('/zh/settings/billing')
     await expect(userPage.getByText('付款记录', { exact: true })).toBeVisible()
     await expect(userPage.getByText('还没有付款记录。')).toHaveCount(0)

@@ -9,6 +9,21 @@ updated: 2026-11-19
 
 套餐在 `src/config/products.ts` 声明一次，provider（Stripe 或 Creem）决定怎么收款。站内不存金额：展示价与扣款价都读 provider 的价格目录。
 
+## 记录：订单、付款与订阅
+
+数据库把购买意图与资金事实分开：
+
+| 表 | 是什么 | 何时写入 |
+|---|---|---|
+| `orders` | 一次结账尝试。状态只描述尝试，不代表钱已到账。 | 每次创建结账写一行，订阅与一次性都写；续费不写。 |
+| `payments` | 已确认的资金事实。结账跳转与用户申报都不会写它。 | 渠道 webhook，或管理员核验人工核销后写入。能归属时 `order_id` 指回订单（历史行可为空）。 |
+| `subscriptions` | 计费契约：周期、续费与期末取消。 | 订阅事件，或人工核销结算。 |
+| `manual_payment_details` | 人工核销详情，与订单 1:1（主键即 `order_id`）：金额尾数、收款账户、付款凭证与人工核验字段。 | 与人工核销订单同时写入。 |
+
+人工核销下单写一行 `orders`（`status = open`、`provider = manual_payments`）和一行
+`manual_payment_details`（`status = pending_payment`）。管理员核验通过后写入 `payments`，
+并把订单同步为 `completed`。
+
 ## 套餐配置
 
 只改 `src/config/products.ts` 的 `getProducts()`：
@@ -70,14 +85,30 @@ provider 在后台「系统设置 → 支付」里选（`stripe` / `creem`），
 Stripe 用 `cancel_at_period_end`，Creem 用 `mode: scheduled`。核销型收款没有渠道订阅，
 不显示该按钮。
 
+## 归因
+
+注册时把**首次触达**归因写入 `users` 的九个列：五个 UTM 参数（`utm_source`、`utm_medium`、
+`utm_campaign`、`utm_term`、`utm_content`）、referrer、country、IP 与 locale。写入后不再覆盖——
+再次访问改不了历史。空值表示未归因，漏斗显示为 `direct`。管理台概览读这些列给转化漏斗分组。
+
+## 管理台入口
+
+| 页面 | 权限 | 内容 |
+|---|---|---|
+| `/admin/payments` | `admin.orders.read` / `admin.orders.write` | 已确认的付款，按类型分四个 tab：**全部 / 订阅 / 一次性 / 人工核销**（`all` 为默认值，不写进 URL）。tab 是划分而不是叠加——人工核销不会出现在订阅或一次性里。 |
+| `/admin/subscriptions` | `admin.subscriptions.read` | 订阅周期与状态。 |
+| `/admin/manual-payments` | `admin.orders.read` / `admin.orders.write` | 人工核销订单的核验队列。 |
+| `/admin` | 任意 `admin.*` | KPI 卡、「注册 → 创建结账 → 付款」转化漏斗（24 小时 / 7 天 / 30 天，按 UTM 维度、referrer 或 country 分组；空值显示为 `direct`）、最近付款与待办。 |
+
 ## 退款与反扣
 
-后台「订单」页可以对已支付订单发起**全额退款**（权限点 `payments.refund`，默认
-`admin` 角色持有）：
+后台「付款」页（`/admin/payments`）可以对已支付记录发起**全额退款**（权限点
+`payments.refund`，默认 `admin` 角色持有）。退款按钮只为 `stripe` 与 `creem` 的行渲染；
+人工核销走线下退款，不显示该按钮：
 
-1. 先用条件状态转移把订单抢成 `refunding`，并发重复点击只会有一个成功；
+1. 先用条件状态转移把付款行抢成 `refunding`，并发重复点击只会有一个成功；
 2. 调 provider 退款：Stripe 按 PaymentIntent，Creem 按交易号（Creem 只支持全额）；
-3. 成功后写 `refunded` / `partially_refunded`，并反扣**该订单开出的积分批次**；
+3. 成功后写 `refunded` / `partially_refunded`，并反扣**该付款开出的积分批次**；
 4. 渠道失败时订单恢复原状态，可以重试；每次成功都写审计日志。
 
 反扣只扣到 0 为止：积分已经被消费时不会把余额打成负数，流水里记录应扣、实际扣减与

@@ -4,7 +4,7 @@ description: Stripe 商品、结账与 webhook 接入
 locale: zh
 order: 14
 group: payment
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 Stripe 侧的金额、订阅与付款页面都在 Stripe 平台上，站内只声明套餐并保留 `lookup_key`。
@@ -40,7 +40,7 @@ Stripe 侧的金额、订阅与付款页面都在 Stripe 平台上，站内只�
 - 付款：首页 `#pricing` 的购买按钮 → 服务端建 Checkout Session → 跳转 Stripe 托管的付款页 → 付款完成回到 `/settings/billing`。
 - 管理：账单页的「管理订阅」按钮 → Stripe Customer Portal，换支付方式、下发票都在那里。Portal 里能不能切换套餐由 Stripe 后台配置决定。
 - 取消：站内「取消订阅」按钮调 `subscriptions.update(id, { cancel_at_period_end: true })`，**期末生效**，本周期内仍有效。
-- 退款：后台订单页按 PaymentIntent 发起全额退款（`refunds.create({ payment_intent })`，带幂等键），`charge.refunded` 回传后对账。
+- 退款：后台「付款」页（`/admin/payments`）对 Stripe 行按 PaymentIntent 发起全额退款（`refunds.create({ payment_intent })`，带幂等键），`charge.refunded` 回传后对账。
 
 ## 价格目录与改价
 

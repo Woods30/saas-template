@@ -2,7 +2,12 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { parseEnv } from 'node:util'
-import { buildLocalD1Args, escapeSql, executeLocalD1 } from './e2e-seed-subscription'
+import {
+  buildLocalD1Args,
+  escapeSql,
+  executeLocalD1,
+  findUserIdByEmail,
+} from './e2e-seed-subscription'
 
 /** 只取 D1 JSON 输出的轻量封装（用于查询型命令）。 */
 function executeLocalD1Json(
@@ -22,8 +27,9 @@ function executeLocalD1Json(
  *
  * 子命令：
  * - `<email> [--admin]`：seed 用户 + 数据库覆盖收款账户行；
- * - `--query-order <orderId>`：输出订单行的 JSON（base_amount / fingerprint）；
- * - `--fill-fingerprints <base> <except>`：占住 base 上除 `except` 外的 98 个尾数。
+ * - `--query-order <orderId>`：输出订单两侧（orders / manual_payment_details）与付款计数；
+ * - `--fill-fingerprints <base> <except>`：占住 base 上除 `except` 外的 98 个尾数；
+ * - `--seed-payment <email> <stripe|manual_payments>`：造一条已支付记录（含订单）。
  */
 function readEnv(key: string): string {
   const parsed = parseEnv(readFileSync('.env', 'utf-8')) as Record<string, string>
@@ -73,6 +79,36 @@ export function buildFingerprintHolderSql(input: {
   return `INSERT INTO orders (id, order_no, user_id, provider, mode, product_id, offer_id, status, created_at, updated_at) VALUES ${orders.join(', ')}; INSERT INTO manual_payment_details (order_id, user_id, account_id, channel, qr_image_url, qr_image_key, base_amount, fingerprint, payable_amount, currency, status, expires_at, created_at, updated_at) VALUES ${details.join(', ')}`
 }
 
+/**
+ * 造一条「已支付」记录：在线渠道（stripe）只写 `orders` + `payments`，人工核销再写
+ * 1:1 的 `manual_payment_details`。管理台付款页读 `payments`，所以断言分 tab 与退款
+ * 按钮时必须有真实付款行，而不是只有订单。
+ */
+export function buildSeedPaymentSql(input: {
+  userId: string
+  provider: 'stripe' | 'manual_payments'
+  amount: number
+  currency: string
+  /** Unix 秒。 */
+  now: number
+}): string {
+  const quote = (value: string) => `'${escapeSql(value)}'`
+  const orderId = crypto.randomUUID()
+  const productId = input.provider === 'manual_payments' ? 'template' : 'lifetime'
+  const offerId = 'once'
+  const stamp = input.now
+  const order = `INSERT INTO orders (id, order_no, user_id, provider, mode, product_id, offer_id, amount, currency, status, created_at, updated_at) VALUES (${quote(orderId)}, ${quote(`ord_e2e_pay_${orderId}`)}, ${quote(input.userId)}, ${quote(input.provider)}, 'payment', ${quote(productId)}, ${quote(offerId)}, ${input.amount}, ${quote(input.currency)}, 'completed', ${stamp}, ${stamp})`
+  // 核销详情与订单 1:1，主键即 order_id；已结算状态与订单的 completed 对齐。
+  const detail =
+    input.provider === 'manual_payments'
+      ? `INSERT INTO manual_payment_details (order_id, user_id, account_id, channel, base_amount, fingerprint, payable_amount, currency, status, expires_at, settled_at, created_at, updated_at) VALUES (${quote(orderId)}, ${quote(input.userId)}, 'alipay-e2e', 'alipay', ${input.amount - 1}, 1, ${input.amount}, ${quote(input.currency)}, 'settled', ${stamp + 900}, ${stamp}, ${stamp}, ${stamp})`
+      : ''
+  const externalId = `${input.provider}_e2e_${orderId}`
+  const chargeId = input.provider === 'stripe' ? quote(`ch_e2e_${orderId}`) : 'NULL'
+  const payment = `INSERT INTO payments (id, user_id, order_id, provider, external_id, type, charge_id, status, amount, refunded_amount, currency, product_id, offer_id, paid_at, created_at) VALUES (${quote(crypto.randomUUID())}, ${quote(input.userId)}, ${quote(orderId)}, ${quote(input.provider)}, ${quote(externalId)}, 'one_time', ${chargeId}, 'paid', ${input.amount}, 0, ${quote(input.currency)}, ${quote(productId)}, ${quote(offerId)}, ${stamp}, ${stamp})`
+  return [order, detail, payment].filter(Boolean).join('; ')
+}
+
 async function main(): Promise<void> {
   const persistIndex = process.argv.indexOf('--persist-to')
   const persistTo = persistIndex >= 0 ? process.argv[persistIndex + 1] : undefined
@@ -84,14 +120,34 @@ async function main(): Promise<void> {
     const idx = process.argv.indexOf('--query-order')
     const orderId = process.argv[idx + 1]
     if (!orderId) throw new Error('--query-order 需要 <orderId>')
+    const escapedId = escapeSql(orderId)
     const rows = executeLocalD1Json(
-      `SELECT base_amount, fingerprint FROM manual_payment_details WHERE order_id = '${escapeSql(orderId)}'`,
+      `SELECT
+         (SELECT COUNT(*) FROM orders WHERE id = '${escapedId}') AS order_count,
+         (SELECT COUNT(*) FROM manual_payment_details WHERE order_id = '${escapedId}') AS detail_count,
+         (SELECT COUNT(*) FROM payments WHERE order_id = '${escapedId}') AS payment_count,
+         (SELECT status FROM orders WHERE id = '${escapedId}') AS order_status,
+         (SELECT provider FROM orders WHERE id = '${escapedId}') AS provider,
+         (SELECT status FROM manual_payment_details WHERE order_id = '${escapedId}') AS detail_status,
+         (SELECT base_amount FROM manual_payment_details WHERE order_id = '${escapedId}') AS base_amount,
+         (SELECT fingerprint FROM manual_payment_details WHERE order_id = '${escapedId}') AS fingerprint`,
       persistTo,
     )
     const row = rows[0]?.results?.[0]
     if (!row) throw new Error(`本地 D1 找不到订单 ${orderId}`)
     // JSON 写 stdout 供 spec 解析；提示走 stderr。
-    console.log(JSON.stringify({ baseAmount: row.base_amount, fingerprint: row.fingerprint }))
+    console.log(
+      JSON.stringify({
+        baseAmount: row.base_amount,
+        fingerprint: row.fingerprint,
+        orderCount: row.order_count,
+        detailCount: row.detail_count,
+        paymentCount: row.payment_count,
+        orderStatus: row.order_status,
+        provider: row.provider,
+        detailStatus: row.detail_status,
+      }),
+    )
     return
   }
 
@@ -132,11 +188,35 @@ DELETE FROM orders WHERE provider = 'manual_payments' AND id NOT IN (SELECT orde
     return
   }
 
+  if (process.argv.includes('--seed-payment')) {
+    const idx = process.argv.indexOf('--seed-payment')
+    const email = process.argv[idx + 1]
+    const provider = process.argv[idx + 2]
+    if (!email || !provider || !['stripe', 'manual_payments'].includes(provider)) {
+      throw new Error('--seed-payment 需要 <email> <stripe|manual_payments>')
+    }
+    const userId = findUserIdByEmail(email, persistTo)
+    if (!userId) throw new Error(`本地 D1 找不到用户 ${email}`)
+    executeLocalD1(
+      buildSeedPaymentSql({
+        userId,
+        provider: provider as 'stripe' | 'manual_payments',
+        amount: provider === 'manual_payments' ? 18_001 : 2_500,
+        currency: provider === 'manual_payments' ? 'cny' : 'usd',
+        now: Math.floor(Date.now() / 1000),
+      }),
+      persistTo,
+    )
+    console.error(`✅ 已为 ${email} 写入 ${provider} 已支付记录`)
+    return
+  }
+
   const email = process.argv[2]
   if (!email || email.startsWith('--')) {
     console.error(
       '用法：pnpm exec tsx scripts/e2e-seed-manual-payments.ts <email> [--admin]\n' +
-        '       … --query-order <orderId> | --fill-fingerprints <base> <except>',
+        '       … --query-order <orderId> | --fill-fingerprints <base> <except>\n' +
+        '       … --seed-payment <email> <stripe|manual_payments>',
     )
     process.exit(1)
   }

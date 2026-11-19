@@ -87,11 +87,11 @@ src/
 │   ├── credits/       积分余额账本（FIFO、过期、退款回滚与反扣）
 │   ├── docs/          文件型文档站（默认关闭）
 │   ├── invite-codes/  邀请码创建与积分兑换
-│   ├── manual-payments/ 人工核销（原 collection）
+│   ├── manual-payments/ 人工核销：订单与核销详情成对、收款账户、后台核验
 │   ├── newsletter/    订阅邮件
 │   ├── posts/         文章数据库 CMS
 │   ├── rbac/          角色与权限点矩阵
-│   ├── subscriptions/ 订阅生命周期与后台查询
+│   ├── subscriptions/ 结账、资金事实（payments）与计费契约（subscriptions）、退款、后台查询
 │   ├── taxonomy/      分类与标签
 │   └── tickets/       客服工单
 ├── lib/             纯逻辑：locale、seo、llms、module-access、rate-limit…
@@ -143,6 +143,11 @@ scripts/             构建与校验脚本
     （注册表默认值 + 数据库里逐字段的覆盖值）。业务凭据也进库，但以 AES-GCM 加密存储
     （`enc:v1:`），缺 `CONFIG_ENCRYPTION_KEY` 时拒绝保存含密钥的组。env 只留启动必需项，
     `pnpm db:seed` 时作为初值。见 ADR-0010。
+17. **订单与付款分离，归因只写一次**：`orders` 只记购买意图与结账尝试（`created` → `open` →
+    `completed` / `expired` / `canceled` / `failed`），`payments` 只记已确认的资金事实。用户
+    申报、结账跳转、失败支付都**不得**直接生成 `payments` 行或授予权益；人工核销必须经管理员
+    核验后才由结算流程写 `payments`。订阅续费只写 `payments` 与 `subscriptions`，不写 `orders`。
+    首次触达归因（UTM / referrer / country）在注册时写入 `users` 一次，之后不覆盖。见 ADR-0012。
 
 ## 工作方式
 

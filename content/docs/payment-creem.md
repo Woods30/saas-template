@@ -4,7 +4,7 @@ description: Creem product mapping, sandbox testing, and webhook setup
 locale: en
 order: 15
 group: payment
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 Creem is a Merchant of Record: it collects in its own name and handles tax and refunds, so the
@@ -61,7 +61,7 @@ IDs; before launch set it back to `false` and switch to production keys and prod
 | Amounts | Pre-tax; the checkout page adds tax, so the displayed price may differ from the charged total | Displayed price equals the charged amount |
 | Subscription status | `expired` is recorded as `past_due` (still recoverable); unknown statuses become `incomplete`, withholding access for now | Status is taken from Stripe as-is |
 | Cancellation | `POST /v1/subscriptions/{id}/cancel` with `mode: scheduled` takes effect at period end | `cancel_at_period_end: true` |
-| Refunds | The admin orders page refunds via `POST /v1/refunds` by transaction ID; **full refunds only** | The admin orders page refunds by PaymentIntent, partial refunds supported |
+| Refunds | The admin **Payments** page (`/admin/payments`) refunds via `POST /v1/refunds` by transaction ID; **full refunds only** | The admin **Payments** page (`/admin/payments`) refunds by PaymentIntent, partial refunds supported |
 
 Existing subscriptions do not migrate when you switch providers: switching means changing the
 merchant of record, so handle the existing subscribers yourself.
