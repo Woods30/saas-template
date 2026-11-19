@@ -20,13 +20,13 @@ import { type DB, schema } from '@/core/db'
 import { parseServerEnv, type RuntimeEnv, type ServerEnv } from '@/core/env/server'
 import { decryptSecret, encryptSecret, isEncrypted, MissingEncryptionKeyError } from './crypto'
 import { settingsToServerEnv } from './derive'
-import { defaultSettingsValues, SETTING_FIELDS, settingField } from './registry'
+import { defaultSettingsValues, SETTING_FIELDS, type SettingTabId, settingField } from './registry'
 import {
   applySettingsToConfig,
-  groupHasSecrets,
   resolveSettingsValues,
   type SettingsValues,
   validateGroupValues,
+  validateTabValues,
 } from './settings'
 
 /** 进程内缓存有效期。 */
@@ -156,30 +156,27 @@ export async function loadSettings(
   return values
 }
 
-/**
- * 写一组配置并立即生效。
- *
- * 保存是**按组**的：一次提交一张卡片。值先过注册表校验，非法直接抛错、不落库。
- * 含密钥的组要求提供 `CONFIG_ENCRYPTION_KEY` 与**明文**值；留空的密钥表示
- * 「保持原值」，不会被清空——后台回显是掩码，用户没改动时不该把密文覆盖成空。
- */
-export async function saveSettingsGroup(
-  db: DB,
-  groupId: string,
-  input: Record<string, unknown>,
-  options: SettingsLoadOptions = {},
-): Promise<SettingsValues> {
-  const validated = validateGroupValues(groupId, input)
-
-  if (groupHasSecrets(groupId)) {
-    const hasNewSecret = Object.entries(validated).some(
-      ([key, value]) => settingField(key)?.secret === true && value !== '',
-    )
-    if (hasNewSecret && !options.encryptionKey) {
-      throw new MissingEncryptionKeyError()
-    }
+/** 提交里有没有需要新写入的明文密钥；有则必须提供加密口令。 */
+function assertCanWriteSecrets(validated: SettingsValues, options: SettingsLoadOptions): void {
+  const hasNewSecret = Object.entries(validated).some(
+    ([key, value]) => settingField(key)?.secret === true && value !== '',
+  )
+  if (hasNewSecret && !options.encryptionKey) {
+    throw new MissingEncryptionKeyError()
   }
+}
 
+/**
+ * 落库并刷新进程内快照（只刷新一次）。
+ *
+ * 调用方必须已经完成校验。按字段 upsert，密钥加密；留空的密钥视为「保持原值」。
+ * 快照用「当前值 + 本次提交」重算，不走数据库，避免刚写入的密文又被读一遍。
+ */
+async function persistSettingsValues(
+  db: DB,
+  validated: SettingsValues,
+  options: SettingsLoadOptions,
+): Promise<SettingsValues> {
   const rows: Array<{ key: string; value: string; updatedAt: Date }> = []
   const updatedAt = new Date()
   for (const [key, value] of Object.entries(validated)) {
@@ -200,7 +197,6 @@ export async function saveSettingsGroup(
       .onConflictDoUpdate({ target: schema.settings.key, set: { value: row.value, updatedAt } })
   }
 
-  // 用「当前快照 + 本次提交」重算：不走数据库，避免刚写入的密文又被读一遍。
   const merged = { ...getSettingsSnapshot() }
   for (const [key, value] of Object.entries(validated)) {
     const field = settingField(key)
@@ -217,6 +213,41 @@ export async function saveSettingsGroup(
   }
   install(merged)
   return merged
+}
+
+/**
+ * 写一组配置并立即生效。
+ *
+ * 保存是**按组**的：一次提交一张卡片。值先过注册表校验，非法直接抛错、不落库。
+ * 含密钥的提交要求提供 `CONFIG_ENCRYPTION_KEY` 与**明文**值；留空的密钥表示
+ * 「保持原值」，不会被清空——后台回显是掩码，用户没改动时不该把密文覆盖成空。
+ */
+export async function saveSettingsGroup(
+  db: DB,
+  groupId: string,
+  input: Record<string, unknown>,
+  options: SettingsLoadOptions = {},
+): Promise<SettingsValues> {
+  const validated = validateGroupValues(groupId, input)
+  assertCanWriteSecrets(validated, options)
+  return persistSettingsValues(db, validated, options)
+}
+
+/**
+ * 写一个 tab 下的配置并立即生效。
+ *
+ * 一次提交一个分区，可跨该分区的多个分组；语义与按组保存一致：缺省的键跳过、
+ * tab 外的键忽略、任一字段非法则整 tab 不落库。落库与缓存刷新只做一次。
+ */
+export async function saveSettingsTab(
+  db: DB,
+  tabId: SettingTabId,
+  input: Record<string, unknown>,
+  options: SettingsLoadOptions = {},
+): Promise<SettingsValues> {
+  const validated = validateTabValues(tabId, input)
+  assertCanWriteSecrets(validated, options)
+  return persistSettingsValues(db, validated, options)
 }
 
 /** 当前生效的站点配置：与全站读 `websiteConfig` 拿到的是同一份。 */

@@ -10,8 +10,8 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { maskSecret } from '@/core/config/crypto'
 import { type ProbeTarget, probeConnection } from '@/core/config/probes'
-import { settingField, settingGroup } from '@/core/config/registry'
-import { getSettingsSnapshot, saveSettingsGroup } from '@/core/config/service'
+import { type SettingTab, settingField, settingTab } from '@/core/config/registry'
+import { getSettingsSnapshot, saveSettingsTab } from '@/core/config/service'
 import { createDbFromEnv } from '@/core/db'
 
 /** 取当前请求的管理员会话；非管理员一律 403（不回空数据）。 */
@@ -54,15 +54,22 @@ export const fetchAdminSettings = createServerFn({ method: 'GET' }).handler(
 )
 
 const saveInputSchema = z.object({
-  groupId: z.string().min(1),
+  tabId: z.string().min(1),
   values: z.record(z.string(), z.unknown()),
 })
+
+/** 按 id 取 tab；未知 id 与旧的未知分组一样返回 400。 */
+export function requireSettingTab(tabId: string): SettingTab {
+  const tab = settingTab(tabId)
+  if (!tab) throw new Response(null, { status: 400 })
+  return tab
+}
 
 export const saveAdminSettings = createServerFn({ method: 'POST' })
   .validator((input: unknown) => saveInputSchema.parse(input))
   .handler(async ({ data }): Promise<{ saved: string }> => {
     await requireAdmin()
-    if (!settingGroup(data.groupId)) throw new Response(null, { status: 400 })
+    const tab = requireSettingTab(data.tabId)
     const { getServerContext } = await import('@/lib/server-context')
     const env = getServerContext().env
     const values = { ...data.values }
@@ -74,11 +81,11 @@ export const saveAdminSettings = createServerFn({ method: 'POST' })
       }
     }
     const db = await createDbFromEnv(env)
-    await saveSettingsGroup(db, data.groupId, values, {
+    await saveSettingsTab(db, tab.id, values, {
       baseEnv: env,
       encryptionKey: env.CONFIG_ENCRYPTION_KEY,
     })
-    return { saved: data.groupId }
+    return { saved: tab.id }
   })
 
 const testInputSchema = z.object({ target: z.enum(['payment', 'mail']) })

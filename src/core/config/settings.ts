@@ -14,8 +14,10 @@ import {
   defaultSettingsValues,
   SETTING_FIELDS,
   type SettingField,
+  type SettingTabId,
   settingField,
   settingGroup,
+  settingTab,
 } from './registry'
 
 export type SettingsValues = Record<string, unknown>
@@ -153,6 +155,45 @@ export function groupHasSecrets(groupId: string): boolean {
 export function groupSecretKeys(groupId: string): string[] {
   const group = settingGroup(groupId)
   return group?.fields.filter((field) => field.secret).map((field) => field.key) ?? []
+}
+
+/**
+ * 校验一个 tab 的提交值，返回只含该 tab 各分组字段的归一化结果。
+ *
+ * 保存粒度是**按 tab** 的：后台一次提交一个分区。tab 外的键直接忽略，tab 内
+ * 任一字段非法即整个 tab 拒绝——部分分组落库、部分不落库会让页面与库长期不一致。
+ * 与 `validateGroupValues` 一样，缺省的键跳过（表示「不修改」）。
+ */
+export function validateTabValues(
+  tabId: SettingTabId,
+  input: Record<string, unknown>,
+): SettingsValues {
+  const tab = settingTab(tabId)
+  if (!tab) throw new SettingsValidationError(tabId, '配置分区不存在')
+  const result: SettingsValues = {}
+  for (const group of tab.groups) {
+    for (const field of group.fields) {
+      if (!(field.key in input)) continue
+      result[field.key] = parseFieldValue(field, input[field.key])
+    }
+  }
+  return result
+}
+
+/** tab 里是否含密钥字段：含则保存前必须有 `CONFIG_ENCRYPTION_KEY`。 */
+export function tabHasSecrets(tabId: SettingTabId): boolean {
+  const tab = settingTab(tabId)
+  return tab?.groups.some((group) => group.fields.some((field) => field.secret === true)) === true
+}
+
+/** tab 里的密钥字段键。 */
+export function tabSecretKeys(tabId: SettingTabId): string[] {
+  const tab = settingTab(tabId)
+  return (
+    tab?.groups.flatMap((group) =>
+      group.fields.filter((field) => field.secret).map((field) => field.key),
+    ) ?? []
+  )
 }
 
 function str(values: SettingsValues, key: string): string {

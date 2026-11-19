@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { baseConfig, getResolvedConfig, setResolvedConfig } from '../../src/config/website'
-import { isEncrypted } from '../../src/core/config/crypto'
+import { isEncrypted, MissingEncryptionKeyError } from '../../src/core/config/crypto'
 import { defaultSettingsValues } from '../../src/core/config/registry'
 import {
   getRuntimeServerEnv,
@@ -9,8 +9,11 @@ import {
   loadSettings,
   resetSettingsCache,
   saveSettingsGroup,
+  saveSettingsTab,
   settingsCacheFresh,
 } from '../../src/core/config/service'
+import { SettingsValidationError } from '../../src/core/config/settings'
+import { createTestDatabase } from '../helpers/database'
 
 /**
  * 配置服务：读库 → 解密 → 校验 → 装进全局；后台写完立即生效。
@@ -146,6 +149,110 @@ describe('配置服务', () => {
     await loadSettings(db, { now: 1_000 })
     expect(settingsCacheFresh(1_000)).toBe(true)
     expect(settingsCacheFresh(1_000 + 31_000)).toBe(false)
+  })
+})
+
+describe('按 tab 保存', () => {
+  beforeEach(() => {
+    setResolvedConfig(baseConfig)
+    resetSettingsCache()
+  })
+
+  it('按 tab 保存会校验该 tab 下所有分组', async () => {
+    const { db, sqlite } = createTestDatabase()
+    await loadSettings(db, { now: 1_000 })
+
+    await saveSettingsTab(db, 'general', {
+      'brand.name': 'Acme',
+      'seo.default.title': 'Acme SEO',
+      'social.github': 'https://github.com/acme',
+    })
+
+    expect(getSettingsSnapshot()['brand.name']).toBe('Acme')
+    expect(getSettingsSnapshot()['seo.default.title']).toBe('Acme SEO')
+    expect(getSettingsSnapshot()['social.github']).toBe('https://github.com/acme')
+    const count = sqlite.prepare('SELECT COUNT(*) AS count FROM settings').get() as {
+      count: number
+    }
+    expect(count.count).toBe(3)
+    sqlite.close()
+  })
+
+  it('一个分组非法则整 tab 不落库', async () => {
+    const { db, sqlite } = createTestDatabase()
+    await loadSettings(db, { now: 1_000 })
+
+    await expect(
+      saveSettingsTab(db, 'general', {
+        'brand.name': 'Acme',
+        'social.github': 'javascript:alert(1)',
+      }),
+    ).rejects.toThrow(SettingsValidationError)
+
+    const count = sqlite.prepare('SELECT COUNT(*) AS count FROM settings').get() as {
+      count: number
+    }
+    expect(count.count).toBe(0)
+    expect(getSettingsSnapshot()['brand.name']).not.toBe('Acme')
+    sqlite.close()
+  })
+
+  it('tab 内含密钥且未提供加密口令时拒绝保存', async () => {
+    const { db, sqlite } = createTestDatabase()
+    await loadSettings(db, { now: 1_000 })
+
+    await expect(
+      saveSettingsTab(db, 'auth', { 'google.clientSecret': 'client-secret' }),
+    ).rejects.toThrow(MissingEncryptionKeyError)
+
+    const count = sqlite.prepare('SELECT COUNT(*) AS count FROM settings').get() as {
+      count: number
+    }
+    expect(count.count).toBe(0)
+    sqlite.close()
+  })
+
+  it('保存后立即刷新进程内快照', async () => {
+    const { db, sqlite } = createTestDatabase()
+    await loadSettings(db, { now: 1_000 })
+
+    await saveSettingsTab(db, 'payment', { 'payment.provider': 'creem' })
+
+    expect(getSettingsSnapshot()['payment.provider']).toBe('creem')
+    expect(getResolvedConfig().payment.provider).toBe('creem')
+    expect(settingsCacheFresh()).toBe(true)
+    sqlite.close()
+  })
+
+  it('tab 之外的键被忽略，不落库也不改快照', async () => {
+    const { db, sqlite } = createTestDatabase()
+    await loadSettings(db, { now: 1_000 })
+
+    await saveSettingsTab(db, 'general', {
+      'brand.name': 'Acme',
+      'payment.provider': 'creem',
+    })
+
+    expect(getSettingsSnapshot()['payment.provider']).toBe('stripe')
+    const rows = sqlite.prepare('SELECT key FROM settings ORDER BY key').all() as Array<{
+      key: string
+    }>
+    expect(rows.map((row) => row.key)).toEqual(['brand.name'])
+    sqlite.close()
+  })
+
+  it('一个 tab 跨多个分组只刷新一次快照', async () => {
+    const { db, sqlite } = createTestDatabase()
+    await loadSettings(db, { now: 1_000 })
+    const before = getSettingsVersion()
+
+    await saveSettingsTab(db, 'general', {
+      'brand.name': 'Acme',
+      'seo.default.title': 'Acme SEO',
+    })
+
+    expect(getSettingsVersion()).toBe(before + 1)
+    sqlite.close()
   })
 })
 

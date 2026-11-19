@@ -30,6 +30,7 @@ import {
   testAdminConnection,
 } from '@/core/config/admin'
 import {
+  groupTab,
   SETTING_TABS,
   type SettingField,
   type SettingGroup,
@@ -205,7 +206,7 @@ function SettingGroupCard({
 
     setBusy(true)
     try {
-      await saveAdminSettings({ data: { groupId: group.id, values: payload } })
+      await saveAdminSettings({ data: { tabId: groupTab(group.id)?.id ?? '', values: payload } })
       const refreshed = await fetchAdminSettings()
       onSaved(refreshed)
       toast.add({ type: 'success', title: m.admin_settings_saved() })
