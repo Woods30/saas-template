@@ -14,7 +14,7 @@ const PASSWORD = '{{SECRET_1ntmkuxv}}'
 
 /** 注册并登录；核销链路的所有用例都从已登录用户出发。 */
 async function login(page: Page, role: 'user' | 'admin' = 'user'): Promise<string> {
-  const email = `manual-payments--${Date.now()}-${crypto.randomUUID().slice(0, 8)}@example.com`
+  const email = `manual-payments-${Date.now()}-${crypto.randomUUID().slice(0, 8)}@example.com`
   if (role === 'admin') {
     // seed-manual-payments 一次完成建号 + 提权 + 账户覆盖，避免两次 INSERT 撞主键。
     const args = [
@@ -80,21 +80,21 @@ async function createOrder(page: Page): Promise<void> {
   for (let attempt = 0; ; attempt++) {
     await page.getByRole('button', { name: '立即购买' }).click({ noWaitAfter: true })
     const onDetail = await page
-      .waitForURL(/\/zh\/settings\/orders\/.+/, { timeout: 8000 })
+      .waitForURL(/\/zh\/settings\/manual-payments\/.+/, { timeout: 8000 })
       .then(() => true)
       .catch(() => false)
     if (onDetail || attempt === 2) break
     if (!page.url().includes('/zh/#pricing')) await page.goto('/zh/#pricing')
   }
 
-  if (!/\/zh\/settings\/orders\/.+/.test(new URL(page.url()).pathname)) {
+  if (!/\/zh\/settings\/manual-payments\/.+/.test(new URL(page.url()).pathname)) {
     // 导航没完成但订单可能已建好（dev server 冷编译会让响应悬挂）：去列表页
     // 等订单行出现，而不是立刻点一个还不存在的链接。
     await page.goto('/zh/settings/manual-payments')
     await page.getByRole('link', { name: '查看详情' }).first().click({ timeout: 20000 })
   }
   await expect(page.getByTestId('payable-amount')).toBeVisible({ timeout: 15000 })
-  await expect(page).toHaveURL(/\/zh\/settings\/orders\/.+/)
+  await expect(page).toHaveURL(/\/zh\/settings\/manual-payments\/.+/)
 }
 
 /** 读本地 D1 里订单行的 base_amount 与 fingerprint（尾数占位需要精确值）。 */

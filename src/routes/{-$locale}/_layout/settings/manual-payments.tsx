@@ -7,7 +7,7 @@ import type { ManualPaymentOrderStatus } from '@/modules/manual-payments/service
 /**
  * 核销订单路由的父级：门禁、SEO 与列表页数据都在这里取。
  *
- * 这个文件**只做父级**，不渲染页面内容 —— TanStack 文件路由把 `orders/` 目录
+ * 这个文件**只做父级**，不渲染页面内容 —— TanStack 文件路由把 `manual-payments/` 目录
  * 下的 `index.tsx`（列表）与 `$orderId.tsx`（详情）当作它的子路由，父组件
  * 不写 `component` 时默认渲染 `<Outlet />`。如果在父组件里直接渲染列表而不
  * 输出 Outlet，子路由永远挂不上：URL 变成详情页、页面仍是列表，症状是

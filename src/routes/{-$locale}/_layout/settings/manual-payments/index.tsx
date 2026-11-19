@@ -18,7 +18,7 @@ import { manualPaymentOrderStatusMessageKey } from '../manual-payments'
 /**
  * 用户自己的核销订单列表（`/settings/manual-payments` 的 index 子路由）。
  *
- * 父路由 `orders.tsx` 只承担门禁与 SEO；列表数据在这里取。与 `billing` 页同一
+ * 父路由 `manual-payments.tsx` 只承担门禁与 SEO；列表数据在这里取。与 `billing` 页同一
  * 套路：数据在 loader 一次取回，失败交给页面渲染提示。
  */
 export const Route = createFileRoute('/{-$locale}/_layout/settings/manual-payments/')({
