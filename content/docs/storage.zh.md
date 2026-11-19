@@ -4,14 +4,14 @@ description: Cloudflare R2 的开通、绑定与文件 API
 locale: zh
 order: 7
 group: deploy
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 用户上传的文件存在 **Cloudflare R2**，经 Workers 的 `BUCKET` binding 访问，零 egress 费用。
 代码在 `src/core/storage/`。
 
-> 存储层已经实现，但仓库里**没有上传路由**：`features.enableFileUpload` 默认 `false`，
-> `src/routes/api/` 下也没有 `/api/files`。这页讲的是「要用时怎么接」。不接 R2 不影响模板运行。
+> 存储层已经实现，但仓库里**没有通用的上传路由**（`src/routes/api/` 下没有 `/api/files`）。
+> 这页讲的是「要用时怎么接」。不接 R2 不影响模板运行。
 
 ## 步骤
 
@@ -37,19 +37,8 @@ updated: 2026-11-03
    `binding` 是代码里读的名字（`env.BUCKET`），须与 `src/types/cloudflare.d.ts` 一致。没绑定
    时 `env.BUCKET` 是 `undefined`，`getStorageProvider()` 会抛错——这是预期的降级。
 
-4. **打开文件上传开关。**
-
-   ```ts
-   // src/config/website.ts
-   features: {
-     enableFileUpload: true,
-   }
-   ```
-
-   改完重新构建并部署。
-
-5. **自己加一个上传路由。** 仓库没实现上传 API，在 `src/routes/api/` 下新建路由，在里面调
-   `uploadFile`（用法见下）。
+4. **自己加一个上传路由。** 仓库没有通用的上传 API，在 `src/routes/api/` 下新建路由，
+   自己做鉴权，在里面调 `uploadFile`（用法见下）。
 
 ## 用法
 

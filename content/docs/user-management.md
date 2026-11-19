@@ -4,21 +4,31 @@ description: The role column, the admin dashboard, and promoting an admin from t
 locale: en
 order: 12
 group: auth
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 User management is built on Better Auth's admin plugin. Admins use the dashboard in the account center to see every user and change roles, ban, or delete them; the first admin comes from a CLI script.
 
-## Roles
+## Roles and permissions
 
-`users.role` is a plain text column (`src/core/db/schema.ts`) defaulting to `'user'`. This repo uses exactly two values:
+What a user may do comes from **RBAC**, not from the `users.role` column: the `roles`, `permissions`,
+`role_permissions` and `user_roles` tables in `src/core/db/schema.ts`. Built-in roles:
 
-| Value | Meaning |
+| Role | Permissions |
 |---|---|
-| `user` | Regular user — only their own account center |
-| `admin` | Admin — additionally sees the Administration group and the admin dashboard |
+| `super_admin` | `*` — everything |
+| `admin` | Every permission point except editing the role matrix |
+| `editor` | Content and support tickets |
+| `viewer` | Every `*.read` permission point |
 
-The check is an **exact match**: `assertAdminRole` accepts only `'admin'`, and rejects a signed-out or missing field outright (with a 404 rather than a 403, so the page's existence is not leaked).
+Entering the management console needs **any `admin.*` permission point** — so `editor` and `viewer`
+get in too, and each page still checks its own permission point on the server. Users without one get
+a 404 rather than a 403, so the page's existence is not leaked.
+
+`users.role` is a plain text column (`src/core/db/schema.ts`) defaulting to `'user'` that RBAC keeps in
+sync: `assignRolesToUser` writes `'admin'` when the user holds any `admin.*` permission, `'user'`
+otherwise. It is a **coarse marker**, used by Better Auth's admin plugin and the top-bar menu; it is
+not the authorization source of truth.
 
 ## Promotion
 
@@ -35,7 +45,7 @@ The script does one thing: `UPDATE users SET role = 'admin' WHERE email = ?`. `r
 
 ## The dashboard
 
-`/admin/users`, with its entry under the Administration sidebar of the admin console; `/admin` is the revenue overview. Both are bound by **two** constraints: the `features.enableAdmin` flag and the `admin` role.
+`/admin/users`, with its entry under the Administration sidebar of the admin console; `/admin` is the revenue overview. Both need any `admin.*` permission point; the pages themselves check `admin.users.read` / `admin.users.write`.
 
 - **List**: queried straight from D1 on the server (`fetchAdminUsers`), with search by email, filters on role and status, and offset paging, 20 rows per page.
 - **Set role**: `authClient.admin.setRole({ userId, role })`.
@@ -44,7 +54,12 @@ The script does one thing: `UPDATE users SET role = 'admin' WHERE email = ?`. `r
 - **Delete**: `authClient.admin.removeUser({ userId })`, which also deletes their sessions and cannot be undone.
 - **Impersonate**: `authClient.admin.impersonateUser({ userId })`, with access to that user's sessions and the ability to revoke them.
 
-> Turning off `features.enableAdmin` makes the whole `/api/auth/admin/*` HTTP surface return 404, but **the role check is not in the route layer**: a non-admin calling the plugin endpoints gets a 403 from the plugin itself. The UI gate and the API gate are both required.
+> The `/api/auth/admin/*` endpoints are the plugin's own, and the plugin authorizes on `users.role`.
+> Because that column is the coarse marker above, a read-only `viewer` also carries `'admin'` there —
+> so `src/routes/api/auth/$.ts` re-checks a **permission point** before letting a request through
+> (`admin.users.read` for the read endpoints, `admin.users.write` for everything else, including any
+> endpoint the plugin adds later). `stop-impersonating` is exempt: the impersonated user has to be able
+> to end the impersonation themselves.
 
 ## `role` and `ADMIN_EMAILS` are two different things
 
@@ -52,4 +67,6 @@ The script does one thing: `UPDATE users SET role = 'admin' WHERE email = ?`. `r
 
 ## Verify
 
-Sign in as an admin and open `/admin/users`; the user list should be there. Turn off `features.enableAdmin` and the sidebar entry disappears while the same address returns 404.
+Sign in as an admin and open `/admin/users`; the user list should be there. Remove the account's
+`admin.users.read` permission (Roles page, or the RBAC tables) and the sidebar entry disappears while
+the same address returns 404.

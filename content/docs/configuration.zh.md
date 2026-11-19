@@ -49,7 +49,7 @@ settings 行 → 解密 → 逐字段校验 → resolveSettingsValues → applyS
 | 通用 | 社交链接 | 11 个平台地址，非法或带凭据的 URL 被丢弃 |
 | 通用 | 文档站 | 独立文档站的地址与「根路径进文档」开关 |
 | 模块 | 模块 | 11 个模块开关（docs / blog / changelog / mail / contact / newsletter / payment / manualPayments / notification / analytics / auth） |
-| 模块 | 功能 | `enableI18n`、`enableFileUpload`、`enableApiKeys`、`enableAdmin`、`enableAIGateway` |
+| 用户 | 用户功能 | 用户侧开关（`userFeatures.*`）：账单、核销、API 密钥、通知 |
 | 认证 | 认证 | 邮箱验证要求、Google 登录凭据、Turnstile 站点与服务端 key |
 | 支付 | 支付 | 渠道与结账链路（`provider` / `manual_payments`） |
 | 支付 | Stripe / Creem | 各自的密钥与 webhook 密钥；Creem 另有商品映射与沙箱开关 |

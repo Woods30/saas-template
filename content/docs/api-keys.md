@@ -4,7 +4,7 @@ description: Turn on the API key feature and let users create and delete their o
 locale: en
 order: 11
 group: auth
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 API keys let users issue their own calling credentials. Keys live in the `apikey` table and **plaintext never reaches the database** — the plugin hashes the full key with SHA-256 before storing it, and the list endpoint returns only a prefix, so an issued key can never be read back.
@@ -13,14 +13,10 @@ API keys let users issue their own calling credentials. Keys live in the `apikey
 
 ## Steps
 
-1. **Turn on the feature flag.**
+1. **Turn on the user feature.** In the admin **Settings** page, open the **Users** tab and enable
+   `userFeatures.apiKeys`. It is off you can also set it as the default in `src/config/website.ts`.
 
-   ```ts
-   // src/config/website.ts
-   features: { enableApiKeys: true },
-   ```
-
-2. **Open the keys page.** It lives at `/settings/api-keys` and its entry sits in the account center sidebar. With the flag off, the page 404s and the whole `/api/auth/api-key/*` endpoint group 404s too (`src/routes/api/auth/$.ts`).
+2. **Open the keys page.** It lives at `/settings/api-keys` and its entry sits in the account center sidebar. With the switch off, the page 404s and the whole `/api/auth/api-key/*` endpoint group 404s too (`src/routes/api/auth/$.ts`).
 
 3. **Create.** Enter a name and pick an expiry → `authClient.apiKey.create({ name, expiresIn })`. The `key` in the response is **plaintext** and appears only in that one response; the page shows it once in a dialog and then it is gone. A user who did not save it has to delete the key and create a new one.
 
@@ -57,5 +53,5 @@ Expiry only matters **at creation time**: the plugin converts it into an `expire
 
 ## Notes
 
-- **Turning off `features.enableApiKeys` only stops the HTTP endpoints.** A direct server-side `verifyApiKey` call is a function call and bypasses the route gate, so already-issued keys still verify. To stop verification as well, check `websiteConfig.features.enableApiKeys` in your own route.
+- **Turning off `userFeatures.apiKeys` only stops the HTTP endpoints.** A direct server-side `verifyApiKey` call is a function call and bypasses the route gate, so already-issued keys still verify. To stop verification as well, check `websiteConfig.userFeatures.apiKeys` in your own route.
 - Plaintext appears only in the create response and is never returned again.

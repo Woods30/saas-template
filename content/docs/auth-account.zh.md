@@ -4,7 +4,7 @@ description: 登录后的账号设置区：资料、安全、设备与各板块�
 locale: zh
 order: 10
 group: auth
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 个人中心是登录后的账号设置区，地址在 `/{locale}/settings/*`，入口在导航栏的用户菜单里。
@@ -21,8 +21,8 @@ updated: 2026-11-03
 | `/settings/sessions` | 登录设备 | 看已登录设备，单个吊销或一次性注销其它设备 |
 | `/settings/notifications` | 通知偏好 | 订阅与退订邮件，需 `newsletter` 模块 |
 | `/settings/billing` | 账单 | 订阅状态、续费日期与交易记录，需 `payment` 模块 |
-| `/settings/api-keys` | API 密钥 | 创建与删除密钥，需 `features.enableApiKeys`，见 [API 密钥](./api-keys) |
-| `/admin/users` | 用户管理 | 改角色、封禁、删除、模拟登录，需 `admin` 角色且 `features.enableAdmin` 打开，见 [用户与管理员](./user-management) |
+| `/settings/api-keys` | API 密钥 | 创建与删除密钥，需 `userFeatures.apiKeys`，见 [API 密钥](./api-keys) |
+| `/admin/users` | 用户管理 | 改角色、封禁、删除、模拟登录，需持有任意 `admin.*` 权限，见 [用户与管理员](./user-management) |
 | `/admin` | 营收 | 收入与订阅总览，门禁同「用户管理」 |
 
 `/settings` 本身不是内容页，进入后直接落到「资料」。

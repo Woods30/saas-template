@@ -4,7 +4,7 @@ description: The account area behind sign-in: profile, security, devices, and se
 locale: en
 order: 10
 group: auth
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 The account area behind sign-in lives at `/{locale}/settings/*` and is reachable from the user menu in the navbar. Opening it while signed out redirects to `/{locale}/auth/login`.
@@ -20,8 +20,8 @@ The account area behind sign-in lives at `/{locale}/settings/*` and is reachable
 | `/settings/sessions` | Sessions | See signed-in devices, revoke one or sign out all other devices |
 | `/settings/notifications` | Notifications | Subscribe and unsubscribe from mail; needs the `newsletter` module |
 | `/settings/billing` | Billing | Subscription state, renewal date, and transactions; needs the `payment` module |
-| `/settings/api-keys` | API keys | Create and delete keys; needs `features.enableApiKeys`, see [API Keys](./api-keys) |
-| `/admin/users` | Users | Change roles, ban, delete, impersonate; needs the `admin` role and `features.enableAdmin`, see [Users and Roles](./user-management) |
+| `/settings/api-keys` | API keys | Create and delete keys; needs `userFeatures.apiKeys`, see [API Keys](./api-keys) |
+| `/admin/users` | Users | Change roles, ban, delete, impersonate; needs any `admin.*` permission, see [Users and Roles](./user-management) |
 | `/admin` | Revenue | Revenue and subscription overview; same gate as Users |
 
 `/settings` is not a page of its own — it lands on Profile.

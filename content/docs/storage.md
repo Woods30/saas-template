@@ -4,12 +4,12 @@ description: Enabling, binding, and using Cloudflare R2
 locale: en
 order: 7
 group: deploy
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 User uploads live in **Cloudflare R2**, reached through the Workers `BUCKET` binding with zero egress fees. The code is in `src/core/storage/`.
 
-> The storage layer is implemented, but the repository ships **no upload route**: `features.enableFileUpload` is `false` by default and there is no `/api/files` route under `src/routes/api/`. This page covers how to wire it up when you need it. Not connecting R2 does not affect the template.
+> The storage layer is implemented, but the repository ships **no generic upload route**: there is no `/api/files` endpoint under `src/routes/api/`. This page covers how to wire it up when you need it. Not connecting R2 does not affect the template.
 
 ## Steps
 
@@ -33,18 +33,8 @@ User uploads live in **Cloudflare R2**, reached through the Workers `BUCKET` bin
 
    The `binding` is the name code reads (`env.BUCKET`) and must match `src/types/cloudflare.d.ts`. Without the binding `env.BUCKET` is `undefined` and `getStorageProvider()` throws — that is the intended degradation.
 
-4. **Turn on the file upload flag.**
-
-   ```ts
-   // src/config/website.ts
-   features: {
-     enableFileUpload: true,
-   }
-   ```
-
-   Rebuild and redeploy afterwards.
-
-5. **Add your own upload route.** The repository has no upload API; create a route under `src/routes/api/` and call `uploadFile` inside it (see the usage below).
+4. **Add your own upload route.** The repository has no generic upload API; create a route under
+   `src/routes/api/`, authorize it yourself, and call `uploadFile` inside it (see the usage below).
 
 ## Usage
 

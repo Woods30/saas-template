@@ -4,7 +4,7 @@ description: 开启 API 密钥功能，用户自助创建与删除密钥
 locale: zh
 order: 11
 group: auth
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 API 密钥让用户在自己的账号下签发调用凭据。密钥存在 `apikey` 表，**明文不入库**——插件对完整密钥
@@ -14,12 +14,8 @@ API 密钥让用户在自己的账号下签发调用凭据。密钥存在 `apike
 
 ## 步骤
 
-1. **打开功能开关。**
-
-   ```ts
-   // src/config/website.ts
-   features: { enableApiKeys: true },
-   ```
+1. **打开用户功能开关。** 管理后台**系统设置** → **用户** tab，打开 `userFeatures.apiKeys`。
+   也可以在 `src/config/website.ts` 里改默认值。
 
 2. **进入密钥页。** 地址 `/settings/api-keys`，入口在个人中心侧边栏。开关关掉时页面 404，
    `/api/auth/api-key/*` 这一组端点也整体 404（`src/routes/api/auth/$.ts`）。
@@ -68,7 +64,7 @@ if (!result.valid) return new Response('Unauthorized', { status: 401 })
 
 ## 注意事项
 
-- **关闭 `features.enableApiKeys` 只停掉 HTTP 端点。** 服务端直接调 `verifyApiKey` 走函数调用，
+- **关闭 `userFeatures.apiKeys` 只停掉 HTTP 端点。** 服务端直接调 `verifyApiKey` 走函数调用，
   绕过路由门禁，已签发密钥仍能通过校验。要连校验一起停用，得在自己的业务路由里再判一次
-  `websiteConfig.features.enableApiKeys`。
+  `websiteConfig.userFeatures.apiKeys`。
 - 明文只在创建响应里出现一次，之后任何接口都不再返回。

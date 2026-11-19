@@ -52,7 +52,7 @@ Settings are organised as tabs containing group cards; each card saves on its ow
 | General | Social | 11 platform URLs; invalid or credential-bearing URLs are dropped |
 | General | Docs | External docs site URL and the "docs at the root path" switch |
 | Modules | Modules | 11 module switches (docs / blog / changelog / mail / contact / newsletter / payment / manualPayments / notification / analytics / auth) |
-| Modules | Features | `enableI18n`, `enableFileUpload`, `enableApiKeys`, `enableAdmin`, `enableAIGateway` |
+| Users | User features | User-side switches (`userFeatures.*`): billing, manual payments, API keys, notifications |
 | Auth | Auth | Email-verification requirement, Google credentials, Turnstile site and secret keys |
 | Payment | Payment | Provider and checkout mode (`provider` / `manual_payments`) |
 | Payment | Stripe / Creem | Provider keys and webhook secrets; Creem also has a product map and sandbox flag |
