@@ -1,4 +1,4 @@
-import { IconChartBar, IconCoins, IconReceipt, IconRepeat } from '@tabler/icons-react'
+import { IconChartBar, IconRepeat, IconScan, IconUsers } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useMemo } from 'react'
 import { DataTable, type DataTableColumn } from '@/components/data-table/data-table'
@@ -6,142 +6,141 @@ import { LocalDate } from '@/components/local-date'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { adminRoutes } from '@/config/routes'
-import { DEFAULT_PAGE_SIZE } from '@/core/db/paging'
 import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
 import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import {
-  type AdminBillingResult,
-  fetchAdminBilling,
+  type AdminOrder,
+  FUNNEL_DIMENSIONS,
+  type FunnelDimension,
+  type FunnelRange,
+  fetchAdminOverview,
+  paymentStatusMessageKey,
   productNameForProductId,
-  subscriptionStatusMessageKey,
 } from '@/modules/subscriptions/service'
+import { ConversionFunnel } from './-conversion-funnel'
 
 /**
- * 管理台营收与订阅总览。
+ * 管理台概览。
  *
- * 数据在路由 loader 里取（服务端），权限在 loader 的 server function 里再校验一次：
- * 只靠 `beforeLoad` 隐藏入口拦不住直接调用。
+ * 首屏回答四件事：规模（用户）、收入（30 天营收）、留存（活跃订阅）与待办
+ * （待核销）。漏斗与最近付款放在下面，漏斗范围 / 维度写进 URL，刷新与分享
+ * 都能停在同一个视图上。数据在 loader 里取，权限由 server function 再校验。
  */
+const RANGE_VALUES = ['24h', '7d', '30d'] as const
+
+interface AdminOverviewSearch {
+  range?: FunnelRange
+  groupBy?: FunnelDimension
+}
+
 export const Route = createFileRoute('/{-$locale}/_layout/admin/')({
-  loader: () => fetchAdminBilling(),
-  // 页码放 URL：刷新与分享链接能停在原页，也符合「URL 即状态」的路由数据流。
-  // 返回可选字段：首页不带 `?page=1`，菜单链接就不必逐处补 search。
-  validateSearch: (search: Record<string, unknown>): { page?: number } => {
-    const parsed = Number(search.page)
-    // 返回值**必须带键**（哪怕值是 `undefined`）。返回字面量 `{}` 时路由不会重写
-    // URL，`?page=1` 这类默认值就会一直挂在地址栏上。
-    return { page: Number.isInteger(parsed) && parsed > 1 ? parsed : undefined }
+  // 返回的每个键都必须存在（值为 `undefined` 时 Router 会省略）；默认值不写进 URL。
+  validateSearch: (search: Record<string, unknown>): AdminOverviewSearch => {
+    const rawRange = search.range
+    const range =
+      typeof rawRange === 'string' &&
+      rawRange !== '30d' &&
+      (RANGE_VALUES as readonly string[]).includes(rawRange)
+        ? (rawRange as FunnelRange)
+        : undefined
+    const rawGroupBy = search.groupBy
+    const groupBy =
+      typeof rawGroupBy === 'string' &&
+      rawGroupBy !== 'utm_source' &&
+      (FUNNEL_DIMENSIONS as readonly string[]).includes(rawGroupBy)
+        ? (rawGroupBy as FunnelDimension)
+        : undefined
+    return { range, groupBy }
   },
+  loaderDeps: ({ search }) => ({
+    range: search.range ?? '30d',
+    groupBy: search.groupBy ?? 'utm_source',
+  }),
+  loader: ({ deps }) => fetchAdminOverview({ data: deps }),
   head: () => adminHead(adminRoutes.overview),
-  component: AdminRevenuePage,
+  component: AdminOverviewPage,
 })
 
 /** 金额以最小货币单位存储（分），展示前按币种小数位换算。 */
-function money(amount: number, currency: string) {
+function money(amount: number, currency: string): string {
   return formatMoney(amount, currency, getRequestLocale())
 }
 
-function AdminRevenuePage() {
-  const data = Route.useLoaderData() as AdminBillingResult
-  const locale = getRequestLocale()
-  const { revenue, subscriptions, activeSubscriptionCount } = data
-  const { page = 1 } = Route.useSearch()
+function AdminOverviewPage() {
+  const data = Route.useLoaderData()
+  const { range = '30d', groupBy = 'utm_source' } = Route.useSearch()
   const navigate = Route.useNavigate()
-  const totalPages = Math.max(1, Math.ceil(subscriptions.length / DEFAULT_PAGE_SIZE))
-  // 页码可能因数据变少而越界（如删除了订阅），夹到有效范围而不是渲染空表。
-  const currentPage = Math.min(page, totalPages)
-  const pageItems = subscriptions.slice(
-    (currentPage - 1) * DEFAULT_PAGE_SIZE,
-    currentPage * DEFAULT_PAGE_SIZE,
-  )
-  const primaryBucket = revenue.buckets[0]
-  const primaryCurrency = primaryBucket?.currency ?? 'usd'
-  const totalPayments = revenue.buckets.reduce((sum, b) => sum + b.count, 0)
+  const locale = getRequestLocale()
+  const { users, revenue30d, todos } = data
 
   const kpiCards = [
     {
-      title: m.admin_revenue_net(),
+      title: m.admin_overview_total_users(),
+      icon: IconUsers,
+      value: String(users.total),
+      hint: `+${users.new24h} ${m.admin_overview_new_users_24h()}`,
+    },
+    {
+      title: m.admin_overview_revenue_30d(),
       icon: IconChartBar,
-      value: money(primaryBucket?.net ?? 0, primaryCurrency),
-      hint: `${totalPayments} ${m.admin_revenue_payment_count()}`,
-    },
-    {
-      title: m.admin_revenue_gross(),
-      icon: IconReceipt,
-      value: money(primaryBucket?.gross ?? 0, primaryCurrency),
-      hint: primaryCurrency.toUpperCase(),
-    },
-    {
-      title: m.admin_revenue_refunded(),
-      icon: IconCoins,
-      value: money(primaryBucket?.refunded ?? 0, primaryCurrency),
-      hint: `${m.admin_revenue_failed_count()} ${revenue.failedCount}`,
+      value: money(revenue30d.amount, revenue30d.currency),
+      hint: revenue30d.currency.toUpperCase(),
     },
     {
       title: m.admin_revenue_active_subscriptions(),
       icon: IconRepeat,
-      value: String(activeSubscriptionCount),
-      hint: `${m.admin_revenue_subscriptions_title()} (${subscriptions.length})`,
+      value: String(data.activeSubscriptions),
+      hint: '',
+    },
+    {
+      title: m.admin_overview_pending_reviews(),
+      icon: IconScan,
+      value: String(data.pendingManualReviews),
+      hint: m.admin_overview_pending_reviews_hint(),
     },
   ]
 
-  const columns = useMemo<DataTableColumn<(typeof subscriptions)[number]>[]>(
+  const todoItems = [
+    { label: m.admin_overview_todo_pending_reviews(), value: todos.pendingManualReviews },
+    { label: m.admin_overview_todo_open_tickets(), value: todos.openTickets },
+    { label: m.admin_overview_todo_failed_payments(), value: todos.failedPayments24h },
+  ]
+
+  // 列定义随语言变化；`m.*()` 在渲染期求值，因此依赖里带上 locale。
+  const columns = useMemo<DataTableColumn<AdminOrder>[]>(
     () => [
       {
         id: 'user',
-        header: m.admin_revenue_col_user(),
+        header: m.admin_payments_col_user(),
         className: 'max-w-[220px] truncate',
-        cell: (subscription) => subscription.email || subscription.userId,
+        cell: (payment) => payment.email || payment.userId || '—',
       },
       {
-        id: 'plan',
-        header: m.admin_revenue_col_plan(),
-        cell: (subscription) =>
-          productNameForProductId(subscription.productId) ?? subscription.productId ?? '—',
-      },
-      {
-        id: 'status',
-        header: m.admin_revenue_col_status(),
-        cell: (subscription) => (
-          <div className="flex flex-wrap items-center gap-1">
-            <Badge variant={subscription.status === 'active' ? 'default' : 'secondary'}>
-              {m[subscriptionStatusMessageKey(subscription.status)]()}
-            </Badge>
-            {subscription.cancelAtPeriodEnd && (
-              <Badge variant="outline">{m.admin_revenue_cancel_at_period_end()}</Badge>
-            )}
-          </div>
-        ),
+        id: 'product',
+        header: m.admin_payments_col_product(),
+        cell: (payment) => productNameForProductId(payment.productId) ?? payment.productId ?? '—',
       },
       {
         id: 'amount',
-        header: m.admin_revenue_col_amount(),
-        cell: (subscription) =>
-          subscription.amount != null && subscription.currency
-            ? money(subscription.amount, subscription.currency)
-            : '—',
+        header: m.admin_payments_col_amount(),
+        cell: (payment) => formatMoney(payment.amount, payment.currency, locale),
       },
       {
-        id: 'period',
-        header: m.admin_revenue_col_period(),
-        cell: (subscription) =>
-          subscription.interval === 'month'
-            ? m.settings_billing_interval_month()
-            : subscription.interval === 'year'
-              ? m.settings_billing_interval_year()
-              : '—',
+        id: 'status',
+        header: m.admin_payments_col_status(),
+        cell: (payment) => (
+          <Badge variant={payment.status === 'paid' ? 'default' : 'secondary'}>
+            {m[paymentStatusMessageKey(payment.status)]()}
+          </Badge>
+        ),
       },
       {
-        id: 'startedAt',
-        header: m.admin_revenue_col_started_at(),
-        cell: (subscription) => <LocalDate value={subscription.createdAt} locale={locale} />,
-      },
-      {
-        id: 'renewsAt',
-        header: m.admin_revenue_col_renews_at(),
-        cell: (subscription) => <LocalDate value={subscription.currentPeriodEnd} locale={locale} />,
+        id: 'paidAt',
+        header: m.admin_payments_col_paid_at(),
+        className: 'hidden lg:table-cell',
+        cell: (payment) => <LocalDate value={payment.paidAt} locale={locale} />,
       },
     ],
     [locale],
@@ -158,98 +157,58 @@ function AdminRevenuePage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold tabular-nums">{card.value}</div>
-              <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>
+              {card.hint ? <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p> : null}
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {revenue.buckets.length === 0 ? (
-        <Card>
-          <CardContent className="py-6">
-            <p className="text-sm text-muted-foreground">{m.admin_revenue_empty()}</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {revenue.buckets.map((bucket) => (
-            <Card key={bucket.currency}>
-              <CardHeader>
-                <CardTitle className="uppercase">{bucket.currency}</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Metric
-                  label={m.admin_revenue_net()}
-                  value={money(bucket.net, bucket.currency)}
-                  emphasis
-                />
-                <Metric
-                  label={m.admin_revenue_gross()}
-                  value={money(bucket.gross, bucket.currency)}
-                />
-                <Metric
-                  label={m.admin_revenue_refunded()}
-                  value={money(bucket.refunded, bucket.currency)}
-                />
-                <Metric
-                  label={m.admin_revenue_payment_count()}
-                  value={String(bucket.count)}
-                  hint={`${m.admin_revenue_failed_count()} ${revenue.failedCount}`}
-                />
-              </CardContent>
-            </Card>
-          ))}
-          {revenue.buckets.length > 1 && (
-            <p className="text-xs text-muted-foreground">{m.admin_revenue_multi_currency_note()}</p>
-          )}
-        </div>
-      )}
+      <ConversionFunnel
+        report={data.funnel}
+        range={range}
+        groupBy={groupBy}
+        onRangeChange={(next) =>
+          void navigate({
+            search: (previous) => ({ ...previous, range: next === '30d' ? undefined : next }),
+          })
+        }
+        onGroupByChange={(next) =>
+          void navigate({
+            search: (previous) => ({
+              ...previous,
+              groupBy: next === 'utm_source' ? undefined : next,
+            }),
+          })
+        }
+      />
 
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-lg font-semibold">{m.admin_revenue_subscriptions_title()}</h3>
-          <p className="text-sm text-muted-foreground">
-            {m.admin_revenue_active_subscriptions()} {activeSubscriptionCount} /{' '}
-            {subscriptions.length}
-          </p>
-        </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <section className="space-y-4 lg:col-span-2">
+          <h3 className="text-lg font-semibold">{m.admin_overview_recent_payments()}</h3>
+          <DataTable
+            columns={columns}
+            data={data.recentPayments}
+            rowKey={(payment) => payment.id}
+            emptyTitle={m.admin_payments_empty()}
+          />
+        </section>
 
-        <DataTable
-          columns={columns}
-          data={pageItems}
-          rowKey={(subscription) => subscription.id}
-          emptyTitle={m.admin_revenue_empty()}
-          pagination={{
-            page: currentPage,
-            pageSize: DEFAULT_PAGE_SIZE,
-            total: subscriptions.length,
-            onPageChange: (next) =>
-              void navigate({ search: { page: next > 1 ? next : undefined } }),
-          }}
-        />
-      </section>
-    </div>
-  )
-}
-
-function Metric({
-  label,
-  value,
-  hint,
-  emphasis,
-}: {
-  label: string
-  value: string
-  hint?: string
-  emphasis?: boolean
-}) {
-  return (
-    <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={emphasis ? 'mt-1 text-2xl font-semibold' : 'mt-1 text-xl font-medium'}>
-        {value}
-      </p>
-      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+        <section className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>{m.admin_overview_todos()}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {todoItems.map((item) => (
+                <div key={item.label} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">{item.label}</span>
+                  <span className="text-lg font-semibold tabular-nums">{item.value}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </section>
+      </div>
     </div>
   )
 }

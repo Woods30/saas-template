@@ -46,7 +46,6 @@ describe('列表页 search 参数规范化', () => {
   })
 
   it.each([
-    ['admin 概览', AdminOverviewRoute],
     ['admin 付款', AdminPaymentsRoute],
     ['admin 订阅', AdminSubscriptionsRoute],
     ['admin 审计日志', AdminAuditRoute],
@@ -59,7 +58,6 @@ describe('列表页 search 参数规范化', () => {
   })
 
   it.each([
-    ['admin 概览', AdminOverviewRoute],
     ['admin 付款', AdminPaymentsRoute],
     ['admin 订阅', AdminSubscriptionsRoute],
     ['admin 审计日志', AdminAuditRoute],
@@ -72,7 +70,6 @@ describe('列表页 search 参数规范化', () => {
   })
 
   it.each([
-    ['admin 概览', AdminOverviewRoute],
     ['admin 付款', AdminPaymentsRoute],
     ['admin 订阅', AdminSubscriptionsRoute],
     ['admin 审计日志', AdminAuditRoute],
@@ -85,11 +82,14 @@ describe('列表页 search 参数规范化', () => {
     expect(validate(route, { page: 'abc' }).page).toBeUndefined()
   })
 
-  it('admin 概览：默认页码也返回 page 键（否则路由不重写 URL）', () => {
-    // TanStack Router 只在 validateSearch 返回**带键**对象时才把规范化结果写回 URL；
-    // 返回 `{}` 会让 `?page=1` 一直留在地址栏上。
-    expect(Object.keys(validate(AdminOverviewRoute, { page: '1' }))).toContain('page')
-    expect(Object.keys(validate(AdminOverviewRoute, {}))).toContain('page')
+  it('admin 概览：漏斗默认值不写进 URL，非默认值保留', () => {
+    // 概览没有分页：它的 search 只有时间窗口与分组维度。
+    expect(validate(AdminOverviewRoute, { range: '30d' }).range).toBeUndefined()
+    expect(validate(AdminOverviewRoute, { groupBy: 'utm_source' }).groupBy).toBeUndefined()
+    expect(validate(AdminOverviewRoute, { range: '7d' }).range).toBe('7d')
+    expect(validate(AdminOverviewRoute, { groupBy: 'country' }).groupBy).toBe('country')
+    expect(validate(AdminOverviewRoute, { range: 'bogus' }).range).toBeUndefined()
+    expect(validate(AdminOverviewRoute, { groupBy: 'plan' }).groupBy).toBeUndefined()
   })
 
   it('付款状态：「全部」是默认值，不进 URL', () => {
