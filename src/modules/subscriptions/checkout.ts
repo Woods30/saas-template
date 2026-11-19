@@ -213,8 +213,10 @@ export async function beginCheckout(
       if (occupiesSubscriptionSlot(subscription.status)) return null
     }
     if (session.status !== 'open') {
-      // 会话已终态：旧的结账尝试到此为止，订单也必须收尾，否则残留永久 `open` 行。
-      if (reservation.orderId) await markOrderStatus(db, reservation.orderId, 'expired')
+      // 只有 `expired`（被放弃）才把订单收尾为 expired。`complete` 的订单已由上面的
+      // 对账事件收尾为 completed，钱也收到了，绝不能降级；只是丢掉预留、重开结账。
+      if (session.status !== 'complete' && reservation.orderId)
+        await markOrderStatus(db, reservation.orderId, 'expired')
       // token 条件防止并发请求删除后来创建的新预留。
       await db
         .delete(schema.checkoutReservations)

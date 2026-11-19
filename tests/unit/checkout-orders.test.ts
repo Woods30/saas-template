@@ -210,10 +210,14 @@ describe('在线结账写订单', () => {
     sqlite.close()
   })
 
-  /** 预留里已有 url + sessionId，但订单的 provider_session_id 仍为空。 */
+  /** 预留里已有 url + sessionId；默认订单的 provider_session_id 仍为空。 */
   function seedReservedSession(
     sqlite: ReturnType<typeof createTestDatabase>['sqlite'],
-    sessionId = 'cs_reserved',
+    {
+      sessionId = 'cs_reserved',
+      orderStatus = 'open',
+      orderSessionId = null,
+    }: { sessionId?: string; orderStatus?: string; orderSessionId?: string | null } = {},
   ): string {
     const orderId = 'o_reserved'
     sqlite
@@ -229,8 +233,8 @@ describe('在线结账写订单', () => {
         'subscription',
         'pro',
         'monthly',
-        'open',
-        null,
+        orderStatus,
+        orderSessionId,
       )
     sqlite
       .prepare(
@@ -289,6 +293,57 @@ describe('在线结账写订单', () => {
     const oldOrder = orders.find((order) => order.id === oldOrderId)
     const newOrder = orders.find((order) => order.id !== oldOrderId)
     expect(oldOrder?.status).toBe('expired')
+    expect(newOrder).toMatchObject({ status: 'open', provider_session_id: 'cs_new' })
+    sqlite.close()
+  })
+
+  it('会话已完成但订阅已取消时，订单保持 completed 并重新开单', async () => {
+    const { db, sqlite } = createTestDatabase()
+    seedUser(sqlite, 'u1')
+    // 钱已经收到、订单已经 completed；订阅随后被取消，不占名额。
+    const oldOrderId = seedReservedSession(sqlite, {
+      sessionId: 'cs_complete',
+      orderStatus: 'completed',
+      orderSessionId: 'cs_complete',
+    })
+    const subscription = {
+      id: 'sub_canceled',
+      userId: 'u1',
+      customerId: null,
+      priceId: 'p1',
+      reference: null,
+      productId: 'pro',
+      offerId: 'monthly',
+      amount: 18_000,
+      currency: 'usd',
+      interval: 'month',
+      intervalCount: 1,
+      currentPeriodStart: 100,
+      currentPeriodEnd: 200,
+      cancelAtPeriodEnd: false,
+      status: 'canceled' as const,
+    }
+    const provider = fakeProvider({
+      retrieveCheckoutSession: async () => ({
+        status: 'complete',
+        subscriptionId: subscription.id,
+      }),
+      retrieveSubscription: async () => subscription,
+      createCheckoutSession: async () => ({
+        url: 'https://pay.test/new',
+        sessionId: 'cs_new',
+        expiresAt: 1_800_000_000,
+      }),
+    })
+
+    const result = await beginCheckout(db, provider, checkoutInput('subscription'))
+
+    // 取消的订阅不占名额，必须允许重新结账。
+    expect(result?.sessionId).toBe('cs_new')
+    const orders = readOrders(sqlite)
+    expect(orders).toHaveLength(2)
+    expect(orders.find((order) => order.id === oldOrderId)?.status).toBe('completed')
+    const newOrder = orders.find((order) => order.id !== oldOrderId)
     expect(newOrder).toMatchObject({ status: 'open', provider_session_id: 'cs_new' })
     sqlite.close()
   })
