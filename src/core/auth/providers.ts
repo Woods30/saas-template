@@ -2,6 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { type WebsiteConfig, websiteConfig } from '@/config/website'
 import type { RuntimeEnv } from '@/core/env/server'
 import { emailPasswordEnabled } from './flow'
+import { socialProviderOptions } from './social-providers'
 
 /** 各登录方式在当前部署中是否可用。 */
 export interface AuthProviderAvailability {
@@ -24,10 +25,11 @@ export function getAuthProviderAvailability(
   env: RuntimeEnv,
   config: WebsiteConfig = websiteConfig,
 ): AuthProviderAvailability {
+  const providers = socialProviderOptions(config, env)
   return {
     email: emailPasswordEnabled(config),
-    google: !!(config.auth.googleEnabled && env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
-    github: !!(config.auth.githubEnabled && env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
+    google: providers.google !== undefined,
+    github: providers.github !== undefined,
   }
 }
 

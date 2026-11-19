@@ -78,10 +78,13 @@ describe('getMailFrom', () => {
 
 // mail 分支。
 describe('getServiceStatuses — mail', () => {
-  it('关闭时为 disabled 且不产出 issues（即便 secret 齐全）', () => {
+  it('关闭时为 disabled 且不产出必填项 issues（即便 secret 齐全）', () => {
     const statuses = getServiceStatuses({
       config: makeConfig((c) => {
         c.mail.enabled = false
+        // 默认要求邮箱验证；关闭后「验证 vs 邮件」的矛盾不再成立，
+        // 才能单独验证「模块关闭时不报必填项缺失」。
+        c.auth.requireEmailVerification = false
       }),
       serverEnv: makeServerEnv({ RESEND_API_KEY: 'synthetic-secret', MAIL_FROM: 'a@jerbix.dev' }),
     })
@@ -212,6 +215,19 @@ describe('getServiceStatuses — 邮箱验证与邮件配置矛盾', () => {
     })
     expect(statuses.mail.state).toBe('configured')
     expect(statuses.mail.issues.some((i) => i.conflict)).toBe(false)
+  })
+
+  it('邮件模块关闭时同样判为矛盾（sendAuthEmail 不会发信）', () => {
+    const statuses = getServiceStatuses({
+      config: makeConfig((c) => {
+        c.mail.enabled = false
+        c.auth.requireEmailVerification = true
+      }),
+      serverEnv: makeServerEnv({ RESEND_API_KEY: 'key', MAIL_FROM: 'noreply@jerbix.dev' }),
+    })
+    // state 仍是 disabled（模块没开），但矛盾必须在 issues 里可见。
+    expect(statuses.mail.state).toBe('disabled')
+    expect(statuses.mail.issues.find((i) => i.key === 'mail.enabled')?.conflict).toBe(true)
   })
 })
 
@@ -710,15 +726,21 @@ describe('formatServiceDiagnostics', () => {
     expect(text).toContain('MAIL_FROM')
   })
 
-  it('全部关闭时不产生 incomplete，且不输出任何字段值', () => {
+  it('全部关闭时不产生 incomplete，但已存在的配置矛盾仍会列出', () => {
     const result = formatServiceDiagnostics(
       statusesOf({
-        config: makeAllDisabledConfig(),
+        config: makeAllDisabledConfig((c) => {
+          // 默认要求邮箱验证；邮件模块关闭时这是死锁，必须作为「冲突」列出，
+          // 同时又不能把 disabled 模块算成 incomplete。
+          c.auth.requireEmailVerification = true
+        }),
         serverEnv: makeServerEnv({ RESEND_API_KEY: 'synthetic-secret' }),
       }),
     )
     expect(result.hasIncomplete).toBe(false)
-    expect(result.lines.join('\n')).not.toContain('synthetic-secret')
+    const text = result.lines.join('\n')
+    expect(text).toContain('[冲突] mail.enabled')
+    expect(text).not.toContain('synthetic-secret')
   })
 
   it('manual 项标注「部署核对」且不计入 incomplete', () => {

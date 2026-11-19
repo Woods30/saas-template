@@ -347,9 +347,23 @@ export const baseConfig = createWebsiteConfig(publicEnv)
  */
 let resolvedConfig: WebsiteConfig | undefined
 
+/**
+ * 配置安装代号：每次 `setResolvedConfig`（含 TTL 重读）自增。
+ *
+ * 按配置快照缓存的实例（如 better-auth）用它判断缓存是否仍对应当前配置；
+ * `getSettingsVersion()` 只覆盖后台保存，不覆盖 TTL 重读，故不能用它。
+ */
+let configEpoch = 0
+
 /** 装上生效配置（服务端读到数据库配置后调用）。 */
 export function setResolvedConfig(config: WebsiteConfig): void {
   resolvedConfig = config
+  configEpoch += 1
+}
+
+/** 当前配置安装代号。 */
+export function getConfigEpoch(): number {
+  return configEpoch
 }
 
 /** 当前生效配置；未装载时等于出厂配置。 */

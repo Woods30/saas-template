@@ -93,7 +93,11 @@ export function getServiceStatuses(input: {
           ? 'incomplete'
           : 'configured',
       // manual 核对项仅用于部署提示，不参与 completeness 判定。
-      issues: config[name].enabled ? [...issues, ...conflictIssues, ...manualIssues] : [],
+      // 冲突项在模块关闭时仍要列出：例如「要求邮箱验证但邮件模块关闭」是配置矛盾，
+      // 不是「未启用」能掩盖的正常状态；此时 state 仍为 disabled，不影响完整性判定。
+      issues: config[name].enabled
+        ? [...issues, ...conflictIssues, ...manualIssues]
+        : [...conflictIssues],
     }
   }
 
@@ -110,16 +114,19 @@ export function getServiceStatuses(input: {
       : []
 
   // 邮件配置的判定只写一份：需求清单与「认证要求验证」的矛盾诊断共用同一结果。
-  const mailRequirements: Array<[string, boolean, ConfigIssue['location']]> =
-    config.mail.provider === 'resend'
-      ? [
+  // 必须包含 `mail.enabled`：邮件模块关闭时 `sendAuthEmail` 同样不会发信。
+  const mailRequirements: Array<[string, boolean, ConfigIssue['location']]> = [
+    ['mail.enabled', config.mail.enabled, 'src/config/website.ts'],
+    ...(config.mail.provider === 'resend'
+      ? ([
           ['RESEND_API_KEY', !!env.RESEND_API_KEY, '数据库配置'],
           ['MAIL_FROM', !!env.MAIL_FROM, '数据库配置'],
-        ]
-      : [
+        ] satisfies Array<[string, boolean, ConfigIssue['location']]>)
+      : ([
           ['MAIL_FROM / CLOUDFLARE_EMAIL_SENDER', !!getMailFrom(config, env), '数据库配置'],
           ['EMAIL', bindings?.email !== false, 'Cloudflare binding'],
-        ]
+        ] satisfies Array<[string, boolean, ConfigIssue['location']]>)),
+  ]
   const mailConfigured = mailRequirements.every(([, valid]) => valid)
 
   // 要求邮箱验证却发不出验证邮件是死锁：新用户注册后永远无法完成验证。

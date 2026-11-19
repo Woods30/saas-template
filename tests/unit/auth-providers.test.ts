@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { baseConfig, setResolvedConfig, type WebsiteConfig } from '@/config/website'
-import { createAuth } from '@/core/auth/auth'
+import { createAuth, getAuth } from '@/core/auth/auth'
 import { getAuthProviderAvailability } from '@/core/auth/providers'
 import { parseServerEnv, type RuntimeEnv } from '@/core/env/server'
 import { gate } from '@/routes/api/auth/$'
@@ -33,7 +33,7 @@ function fakeD1() {
   } as unknown as D1Database
 }
 
-function makeAuthEnv(extra: Partial<RuntimeEnv> = {}) {
+function makeAuthEnv(extra: Partial<RuntimeEnv> & { DB?: D1Database } = {}) {
   return {
     DB: fakeD1(),
     BETTER_AUTH_SECRET: 'test-secret-test-secret-test-secret',
@@ -130,6 +130,56 @@ describe('better-auth 登录方式注册', () => {
 
     const flagOff = await authOptions(makeConfig({ githubEnabled: false }), creds)
     expect(flagOff.socialProviders?.github).toBeUndefined()
+  })
+})
+
+/**
+ * 实例缓存必须跟随配置安装代号重建。
+ *
+ * 实例把登录方式快照在构造时；只在首次建实例、之后永远命中缓存，会让后台保存后的
+ * 可见性与实际注册脱节（页面隐藏了表单，端点却仍然可用）。
+ */
+describe('认证实例随配置安装重建', () => {
+  it('邮箱开关保存后返回新实例，emailAndPassword 跟随变化', async () => {
+    const db = fakeD1()
+    setResolvedConfig(makeConfig({ emailEnabled: true }))
+    try {
+      const env = makeAuthEnv({ DB: db })
+      const first = await getAuth(env)
+      expect((await first.$context).options.emailAndPassword?.enabled).toBe(true)
+
+      // 走安装路径：setResolvedConfig 会 bump 配置代号。
+      setResolvedConfig(makeConfig({ emailEnabled: false }))
+
+      const second = await getAuth(env)
+      expect(second).not.toBe(first)
+      expect((await second.$context).options.emailAndPassword?.enabled).toBe(false)
+    } finally {
+      setResolvedConfig(baseConfig)
+    }
+  })
+
+  it('社交开关保存后返回新实例，socialProviders 跟随变化', async () => {
+    const db = fakeD1()
+    const creds = {
+      DB: db,
+      GITHUB_CLIENT_ID: 'id',
+      GITHUB_CLIENT_SECRET: 'secret',
+    }
+    setResolvedConfig(makeConfig({ githubEnabled: true }))
+    try {
+      const env = makeAuthEnv(creds)
+      const first = await getAuth(env)
+      expect((await first.$context).options.socialProviders?.github).toBeDefined()
+
+      setResolvedConfig(makeConfig({ githubEnabled: false }))
+
+      const second = await getAuth(env)
+      expect(second).not.toBe(first)
+      expect((await second.$context).options.socialProviders?.github).toBeUndefined()
+    } finally {
+      setResolvedConfig(baseConfig)
+    }
   })
 })
 
