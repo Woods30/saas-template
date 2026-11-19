@@ -18,7 +18,7 @@ The database keeps purchase intent and money facts apart:
 | Table | What it is | When a row is written |
 |---|---|---|
 | `orders` | A checkout attempt. Status describes the attempt, not whether money arrived. | Every checkout creation, for both subscriptions and one-time purchases. Renewals do not write one. |
-| `payments` | A confirmed money fact. Never written by a checkout redirect or a user claim. | A provider webhook, or an admin settling a manual payment. `order_id` links back when known (nullable for historical rows). |
+| `payments` | A confirmed money fact. Never written by a checkout redirect or a user claim. | A provider webhook, or an admin settling a manual payment. `order_id` is filled only when the completing event itself carries a session id — one-time payments and manual settlements. Subscription first payments are recorded by a separate invoice event without a session id, so they stay `null` (historical rows may also be `null`). |
 | `subscriptions` | A billing contract: period, renewal, cancel-at-period-end. | Subscription events from the provider or a manual-payment settlement. |
 | `manual_payment_details` | Manual-payment details, 1:1 with an order (`order_id` is the primary key): amount tail, payee account, receipt and review fields. | Together with the manual order. |
 

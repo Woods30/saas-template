@@ -29,8 +29,11 @@
 2. **新增 `manual_payment_details` 表**，与 `orders` 1:1。金额尾数、收款账户、付款凭证、
    核验人 / 理由、有效期等核销专有字段放这里；金额唯一与结算临界区两条专用索引也留在这张表。
    现有 `collection_orders` 丢弃，不迁历史（模板仓不承诺跨版本迁移，且 core 分支无生产数据）。
-3. **`payments` 保持资金事实**，新增可空 `order_id` 外键。历史行留空；新付款写入时关联
-   对应订单。核销付款的 `externalId` 仍是订单 id，但不把它当外键用。
+3. **`payments` 保持资金事实**，新增可空 `order_id` 外键。历史行留空；新付款**仅在完成
+   事件本身携带 session id 时**回填订单——即一次性付款与人工核销。订阅首笔付款由独立的
+   发票事件（Stripe `invoice.paid`）记录、不带 session id，故保持 `null`；不用「按用户猜
+   最近订单」之类的启发式补，否则续费会错挂到已完成的结账尝试上。核销付款的 `externalId`
+   仍是订单 id，但不把它当外键用。
 4. **`subscriptions` 保持独立的计费契约**。管理台保留两个入口：付款（读 `payments`）
    与订阅（读 `subscriptions`），核销审核另占一个入口（读 `orders` + `manual_payment_details`）。
 5. **漏斗口径**：`users LEFT JOIN orders LEFT JOIN payments`，三档为「注册 → 创建结账 →

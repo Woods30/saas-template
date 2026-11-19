@@ -120,6 +120,9 @@ pnpm exec wrangler d1 execute DB --remote \
 
 ## 注意事项
 
+- **已有数据库需重跑基线。** 拉取含新 schema 的版本后，已有的本地或部署库要执行
+  `pnpm db:setup`（必要时再跑 `pnpm db:migrate:local`）应用新基线，否则要等到运行期首次
+  写入才失败。
 - **两份 schema 要同步改。** 新增表必须同时改 `schema.sqlite.ts` 与 `schema.postgres.ts`；
   `tests/unit/schema-parity.test.ts` 会逐表逐列比对，但索引与约束靠 code review。
 - **检查生成的 SQL 再提交。** `db:generate` 对重命名列会理解成「删旧列 + 加新列」，会丢数据；加列比重命名列安全。
