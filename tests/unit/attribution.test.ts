@@ -133,6 +133,19 @@ describe('attributionCookieHeaders — referrer', () => {
     ])
   })
 
+  it('同站 first_referrer cookie 不阻断后续外部来源', () => {
+    const request = new Request('https://example.com/pricing', {
+      headers: {
+        accept: 'text/html',
+        referer: 'https://www.google.com/search',
+        cookie: `first_referrer=${encodeURIComponent('https://example.com/pricing')}`,
+      },
+    })
+    expect(attributionCookieHeaders(request)).toEqual([
+      `${REFERRER_COOKIE}=${encodeURIComponent('https://www.google.com/search')}; ${UTM_MAX_AGE}`,
+    ])
+  })
+
   it('站内跳转的 referrer 不写 cookie', () => {
     const request = new Request('https://example.com/pricing', {
       headers: {

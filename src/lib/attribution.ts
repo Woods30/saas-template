@@ -130,8 +130,9 @@ export function attributionCookieHeaders(request: Request): string[] {
     cookies.push(`${key}=${sanitized}; ${ATTRIBUTION_COOKIE_ATTRIBUTES}`)
   }
 
-  if (shouldWriteReferrer(request, cookieHeader)) {
-    const referrer = sanitizeReferrer(request.headers.get('referer') ?? '', [url.hostname])
+  const selfHosts = [url.hostname]
+  if (shouldWriteReferrer(request, cookieHeader, selfHosts)) {
+    const referrer = sanitizeReferrer(request.headers.get('referer') ?? '', selfHosts)
     if (referrer) {
       cookies.push(
         `${REFERRER_COOKIE}=${encodeURIComponent(referrer)}; ${ATTRIBUTION_COOKIE_ATTRIBUTES}`,
@@ -198,10 +199,14 @@ export function withAttributionCookies(response: Response, request: Request): Re
   })
 }
 
-function shouldWriteReferrer(request: Request, cookieHeader: string | null): boolean {
+function shouldWriteReferrer(
+  request: Request,
+  cookieHeader: string | null,
+  selfHosts: string[],
+): boolean {
   if (request.method !== 'GET') return false
   if (!request.headers.get('accept')?.toLowerCase().includes('text/html')) return false
-  return !hasCookieValue(cookieHeader, REFERRER_COOKIE)
+  return !hasCookieValue(cookieHeader, REFERRER_COOKIE, selfHosts)
 }
 
 /**
@@ -211,11 +216,16 @@ function shouldWriteReferrer(request: Request, cookieHeader: string | null): boo
  * 读取侧把这类值映射为「未归因」，写入侧若把它当作「已存在」，一个伪造/历史空 cookie
  * 就会永久挡住后续有效参数（30 天窗口）。
  */
-function hasCookieValue(cookieHeader: string | null, name: string): boolean {
+function hasCookieValue(
+  cookieHeader: string | null,
+  name: string,
+  selfHosts: string[] = [],
+): boolean {
   const raw = readCookieValue(cookieHeader, name)
   if (raw === undefined) return false
   const decoded = decodeCookieValue(raw)
-  const sanitized = name === REFERRER_COOKIE ? sanitizeReferrer(decoded) : sanitizeUtm(decoded)
+  const sanitized =
+    name === REFERRER_COOKIE ? sanitizeReferrer(decoded, selfHosts) : sanitizeUtm(decoded)
   return sanitized !== ''
 }
 
