@@ -17,6 +17,17 @@ export const users = sqliteTable('users', {
   emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   name: text('name'),
   image: text('image'),
+  // 首次触达归因：注册时由自定义 server entry 写入，之后不覆盖。
+  // 缺值统一为空串而不是 null，漏斗分组不必再处理 NULL 分支。
+  utmSource: text('utm_source').notNull().default(''),
+  utmMedium: text('utm_medium').notNull().default(''),
+  utmCampaign: text('utm_campaign').notNull().default(''),
+  utmTerm: text('utm_term').notNull().default(''),
+  utmContent: text('utm_content').notNull().default(''),
+  referrer: text('referrer').notNull().default(''),
+  country: text('country').notNull().default(''),
+  ip: text('ip').notNull().default(''),
+  locale: text('locale').notNull().default(''),
   role: text('role').notNull().default('user'),
   banned: integer('banned', { mode: 'boolean' }).default(false),
   banReason: text('ban_reason'),
@@ -79,6 +90,96 @@ export const verifications = sqliteTable('verifications', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 })
 
+// ---------------------------------------------------------------------------
+// 订单组：orders / manual_payment_details
+//
+// `orders` 只描述购买意图（每次创建结账一行，续费不写），`payments` 只记已确认的
+// 资金事实。核销渠道专有的金额尾数、收款账户、凭证与核验状态放在与订单 1:1 的
+// `manual_payment_details`，通用订单表不被渠道细节污染。
+// ---------------------------------------------------------------------------
+
+export const orders = sqliteTable(
+  'orders',
+  {
+    id: text('id').primaryKey(),
+    orderNo: text('order_no').notNull().unique(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    /** `subscription` | `payment`：这次结账买的是订阅还是一次性商品。 */
+    mode: text('mode').notNull(),
+    productId: text('product_id').notNull(),
+    offerId: text('offer_id').notNull(),
+    // 金额与币种由渠道价格目录决定；创建订单时还不知道，渠道回调后才有。
+    amount: integer('amount'),
+    currency: text('currency'),
+    /** `created` | `open` | `completed` | `expired` | `canceled` | `failed`。 */
+    status: text('status').notNull().default('created'),
+    providerSessionId: text('provider_session_id'),
+    providerUrl: text('provider_url'),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    userCreatedIdx: index('orders_user_created_idx').on(table.userId, table.createdAt),
+    statusCreatedIdx: index('orders_status_created_idx').on(table.status, table.createdAt),
+    // 渠道会话幂等：同一 provider 的同一 session 只对应一个订单；未开单前为空。
+    providerSessionUnique: uniqueIndex('orders_provider_session_unique')
+      .on(table.provider, table.providerSessionId)
+      .where(sql`provider_session_id IS NOT NULL`),
+  }),
+)
+
+/** 核销型支付的订单详情：与 `orders` 1:1，主键即订单 id。 */
+export const manualPaymentDetails = sqliteTable(
+  'manual_payment_details',
+  {
+    orderId: text('order_id')
+      .primaryKey()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    // `orders.userId` 的冗余副本：结算临界区索引要在本表上判定。
+    // 写入时必须与订单的 userId 同时落库，否则临界区形同虚设。
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // 收款账户快照 ID，不设外键：账户可能只存在于源码配置里。
+    accountId: text('account_id').notNull(),
+    channel: text('channel').notNull(),
+    qrImageUrl: text('qr_image_url'),
+    qrImageKey: text('qr_image_key'),
+    baseAmount: integer('base_amount').notNull(),
+    fingerprint: integer('fingerprint').notNull(),
+    payableAmount: integer('payable_amount').notNull(),
+    currency: text('currency').notNull(),
+    status: text('status').notNull(),
+    payerNote: text('payer_note'),
+    receiptKey: text('receipt_key'),
+    submittedAt: integer('submitted_at', { mode: 'timestamp' }),
+    observedAmount: integer('observed_amount'),
+    externalReference: text('external_reference'),
+    reviewNote: text('review_note'),
+    reviewedBy: text('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+    reviewedAt: integer('reviewed_at', { mode: 'timestamp' }),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+    settledAt: integer('settled_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    // 金额唯一性按收款账户而非「商品 + offer」约束：两个商品价格区间重叠时，
+    // 仍可能出现同一收款码、同一时段、同一实付金额，人工无法区分。
+    activeAmountUnique: uniqueIndex('manual_payment_details_active_amount_unique')
+      .on(table.accountId, table.payableAmount)
+      .where(sql`status IN ('pending_payment','pending_verification','settling')`),
+    // 同一账号只允许一个结算临界区。
+    settlingUserUnique: uniqueIndex('manual_payment_details_settling_user_unique')
+      .on(table.userId)
+      .where(sql`status = 'settling'`),
+  }),
+)
+
 // 业务表
 /** 服务商订阅按外部 ID 幂等；账号购买名额由 Checkout 预留与状态守卫控制。 */
 export const subscriptions = sqliteTable(
@@ -121,6 +222,8 @@ export const payments = sqliteTable(
   {
     id: text('id').primaryKey(),
     userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+    // 历史付款没有订单，留空；新付款关联对应订单。
+    orderId: text('order_id').references(() => orders.id, { onDelete: 'set null' }),
     provider: text('provider').notNull().default('stripe'),
     externalId: text('external_id').notNull(),
     type: text('type').notNull(),
@@ -146,6 +249,7 @@ export const payments = sqliteTable(
       table.externalId,
     ),
     userIdx: index('payments_user_idx').on(table.userId),
+    orderIdx: index('payments_order_idx').on(table.orderId),
     chargeIdx: index('payments_charge_idx').on(table.provider, table.chargeId),
   }),
 )
@@ -155,6 +259,8 @@ export const checkoutReservations = sqliteTable('checkout_reservations', {
   userId: text('user_id')
     .primaryKey()
     .references(() => users.id, { onDelete: 'cascade' }),
+  // 订阅重试复用同一订单：预留是「未完成的结账」，订单是它的可统计记录。
+  orderId: text('order_id').references(() => orders.id, { onDelete: 'set null' }),
   provider: text('provider').notNull(),
   token: text('token').notNull(),
   productId: text('product_id').notNull(),
