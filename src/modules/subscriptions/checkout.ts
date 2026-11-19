@@ -28,6 +28,30 @@ export async function findCustomerId(
   return [...subscriptions, ...payments].find((row) => row.customerId)?.customerId ?? undefined
 }
 
+/**
+ * 复用已有预留时，把会话字段补写到订单上。
+ *
+ * 归一只看订单的 `provider_session_id`（`findOrderBySessionId`）：旧版本预留、或渠道
+ * 失败后重试时，会话可能只写进了预留，订单仍是空。这里幂等补写——订单已有会话就不动。
+ */
+async function openOrderFromReservation(
+  db: Db,
+  reservation: typeof schema.checkoutReservations.$inferSelect,
+): Promise<void> {
+  if (!reservation.orderId || !reservation.sessionId || !reservation.url) return
+  const [order] = await db
+    .select({ providerSessionId: schema.orders.providerSessionId })
+    .from(schema.orders)
+    .where(eq(schema.orders.id, reservation.orderId))
+    .limit(1)
+  if (!order || order.providerSessionId) return
+  await markOrderOpen(db, reservation.orderId, {
+    sessionId: reservation.sessionId,
+    url: reservation.url,
+    expiresAt: reservation.expiresAt,
+  })
+}
+
 export async function beginCheckout(
   db: Db,
   provider: PaymentProvider,
@@ -189,6 +213,8 @@ export async function beginCheckout(
       if (occupiesSubscriptionSlot(subscription.status)) return null
     }
     if (session.status !== 'open') {
+      // 会话已终态：旧的结账尝试到此为止，订单也必须收尾，否则残留永久 `open` 行。
+      if (reservation.orderId) await markOrderStatus(db, reservation.orderId, 'expired')
       // token 条件防止并发请求删除后来创建的新预留。
       await db
         .delete(schema.checkoutReservations)
@@ -208,12 +234,15 @@ export async function beginCheckout(
   ) {
     throw new Error('CHECKOUT_PENDING')
   }
-  if (reservation.url && reservation.sessionId)
+  if (reservation.url && reservation.sessionId) {
+    // 复用预留前先把会话写回订单，否则付款回调按 session 找不到订单、无法归属。
+    await openOrderFromReservation(db, reservation)
     return {
       url: reservation.url,
       sessionId: reservation.sessionId,
       expiresAt: reservation.expiresAt,
     }
+  }
   // 崩溃重试使用同一份请求及幂等键；不能在 Stripe 已创建 session 后改请求。
   const request = JSON.parse(reservation.request) as Omit<CheckoutParams, 'idempotencyKey'>
   const result = await provider.createCheckoutSession({

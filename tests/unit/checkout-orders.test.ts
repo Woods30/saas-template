@@ -210,6 +210,89 @@ describe('在线结账写订单', () => {
     sqlite.close()
   })
 
+  /** 预留里已有 url + sessionId，但订单的 provider_session_id 仍为空。 */
+  function seedReservedSession(
+    sqlite: ReturnType<typeof createTestDatabase>['sqlite'],
+    sessionId = 'cs_reserved',
+  ): string {
+    const orderId = 'o_reserved'
+    sqlite
+      .prepare(
+        `INSERT INTO orders(id,order_no,user_id,provider,mode,product_id,offer_id,status,provider_session_id)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        orderId,
+        'ord_reserved_1',
+        'u1',
+        'stripe',
+        'subscription',
+        'pro',
+        'monthly',
+        'open',
+        null,
+      )
+    sqlite
+      .prepare(
+        `INSERT INTO checkout_reservations(user_id,order_id,provider,token,product_id,offer_id,request,session_id,url,expires_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        'u1',
+        orderId,
+        'stripe',
+        'tok_reserved',
+        'pro',
+        'monthly',
+        JSON.stringify({ ...checkoutInput('subscription'), expiresAt: 1_800_000_000 }),
+        sessionId,
+        'https://pay.test/reserved',
+        1_800_000_000,
+      )
+    return orderId
+  }
+
+  it('复用已有预留时把会话写回订单', async () => {
+    const { db, sqlite } = createTestDatabase()
+    seedUser(sqlite, 'u1')
+    const orderId = seedReservedSession(sqlite)
+
+    const result = await beginCheckout(db, fakeProvider(), checkoutInput('subscription'))
+
+    expect(result?.sessionId).toBe('cs_reserved')
+    expect(readOrders(sqlite)).toHaveLength(1)
+    const [order] = sqlite
+      .prepare('SELECT id, status, provider_session_id FROM orders WHERE id = ?')
+      .all(orderId) as Array<{ id: string; status: string; provider_session_id: string | null }>
+    expect(order).toMatchObject({ status: 'open', provider_session_id: 'cs_reserved' })
+    sqlite.close()
+  })
+
+  it('会话已终态时旧订单标记 expired 并重新开单', async () => {
+    const { db, sqlite } = createTestDatabase()
+    seedUser(sqlite, 'u1')
+    const oldOrderId = seedReservedSession(sqlite)
+    const provider = fakeProvider({
+      retrieveCheckoutSession: async () => ({ status: 'expired', subscriptionId: null }),
+      createCheckoutSession: async () => ({
+        url: 'https://pay.test/new',
+        sessionId: 'cs_new',
+        expiresAt: 1_800_000_000,
+      }),
+    })
+
+    const result = await beginCheckout(db, provider, checkoutInput('subscription'))
+
+    expect(result?.sessionId).toBe('cs_new')
+    const orders = readOrders(sqlite)
+    expect(orders).toHaveLength(2)
+    const oldOrder = orders.find((order) => order.id === oldOrderId)
+    const newOrder = orders.find((order) => order.id !== oldOrderId)
+    expect(oldOrder?.status).toBe('expired')
+    expect(newOrder).toMatchObject({ status: 'open', provider_session_id: 'cs_new' })
+    sqlite.close()
+  })
+
   it('对账已完成会话时订单标记 completed', async () => {
     const { db, sqlite } = createTestDatabase()
     seedUser(sqlite, 'u1')

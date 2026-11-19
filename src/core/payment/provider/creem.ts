@@ -229,6 +229,9 @@ export function normalizeCreemEvent(
   }
 
   if (type === 'checkout.completed') {
+    // checkout 对象自身的 id 与 `createCheckoutSession` 存进 `providerSessionId` 的
+    // `session.id` 是同一个值；业务层只靠它把付款事实归回订单。
+    result.checkoutId = str(object.id) ?? undefined
     const metadata = asObject(object.metadata) ?? {}
     const product = asObject(object.product)
     const order = asObject(object.order)
