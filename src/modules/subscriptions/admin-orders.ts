@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import { and, count, desc, eq, inArray } from 'drizzle-orm'
+import { and, count, desc, eq, inArray, ne, type SQL } from 'drizzle-orm'
 import { z } from 'zod'
 import { type DB, schema } from '@/core/db'
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@/core/db/paging'
@@ -12,6 +12,15 @@ import { clawbackCreditsForRefund } from './credits'
  * 同一行上。与订阅列表分开，因为两者的状态集合不同——支付有
  * `partially_refunded`，订阅没有。
  */
+
+/**
+ * 人工核销在 `payments.provider` 上的标识。
+ *
+ * 与 manual-payments 模块的 `MANUAL_PAYMENT_PROVIDER` 同值。这里本地定义而不是
+ * 跨模块引入：两模块本就互相依赖（manual-payments → subscriptions），再反向引入
+ * 会形成循环；provider 标识是稳定的字符串契约，重复一次比循环依赖安全。
+ */
+const MANUAL_PAYMENT_PROVIDER = 'manual_payments'
 
 /** 付款状态筛选。`all` 表示不过滤。 */
 export type AdminOrderStatusFilter = 'all' | 'paid' | 'failed' | 'refunded' | 'partially_refunded'
@@ -41,6 +50,7 @@ export interface AdminOrder {
 }
 
 export interface AdminPaymentsQuery {
+  tab?: AdminPaymentTab
   status?: AdminOrderStatusFilter
   limit?: number
   offset?: number
@@ -53,6 +63,36 @@ export interface AdminOrdersResult {
 }
 
 /**
+ * 组合类型与状态筛选。
+ *
+ * 类型口径互斥：订阅付款只看 `type`；渠道一次性购买要排除人工核销
+ * （人工核销也记 `one_time`，但它的资金事实由管理员核验产生，归到单独一档）；
+ * 人工核销只看 provider。计数查询复用同一 `where`，两者口径不会走偏。
+ */
+function paymentsWhere(query: AdminPaymentsQuery): SQL | undefined {
+  const conditions: SQL[] = []
+  const status = query.status ?? 'all'
+  if (status !== 'all') conditions.push(eq(schema.payments.status, status))
+
+  switch (query.tab ?? 'all') {
+    case 'subscription':
+      conditions.push(eq(schema.payments.type, 'subscription'))
+      break
+    case 'one_time':
+      conditions.push(eq(schema.payments.type, 'one_time'))
+      conditions.push(ne(schema.payments.provider, MANUAL_PAYMENT_PROVIDER))
+      break
+    case 'manual_payments':
+      conditions.push(eq(schema.payments.provider, MANUAL_PAYMENT_PROVIDER))
+      break
+    default:
+      break
+  }
+
+  return conditions.length > 0 ? and(...conditions) : undefined
+}
+
+/**
  * 查付款列表。
  *
  * 左连接用户表而非内连接：外键未强制时（历史数据、直接写库）支付行可能指向
@@ -62,8 +102,7 @@ export async function queryAdminPayments(
   db: DB,
   query: AdminPaymentsQuery = {},
 ): Promise<AdminOrdersResult> {
-  const status = query.status ?? 'all'
-  const where = status === 'all' ? undefined : eq(schema.payments.status, status)
+  const where = paymentsWhere(query)
   const limit = query.limit ?? DEFAULT_PAGE_SIZE
   const offset = query.offset ?? 0
 
@@ -102,6 +141,7 @@ export async function queryAdminPayments(
 }
 
 const paymentsQuerySchema = z.object({
+  tab: z.enum(['all', 'subscription', 'one_time', 'manual_payments']).default('all'),
   status: z.enum(['all', 'paid', 'failed', 'refunded', 'partially_refunded']).default('all'),
   limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
   offset: z.number().int().min(0).default(0),

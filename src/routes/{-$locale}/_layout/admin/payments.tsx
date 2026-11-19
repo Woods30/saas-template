@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { adminRoutes } from '@/config/routes'
 import { DEFAULT_PAGE_SIZE } from '@/core/db/paging'
 import { formatMoney } from '@/lib/format'
@@ -31,6 +32,7 @@ import { m } from '@/locale/paraglide/messages.js'
 import {
   type AdminOrder,
   type AdminOrderStatusFilter,
+  type AdminPaymentTab,
   fetchAdminPayments,
   paymentStatusMessageKey,
   productNameForProductId,
@@ -52,19 +54,31 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/payments')({
   validateSearch: (search: Record<string, unknown>): AdminPaymentsSearch => {
     const parsed = Number(search.page)
     const page = Number.isInteger(parsed) && parsed > 1 ? parsed : undefined
-    const raw = search.status
+    const rawStatus = search.status
     const status =
-      typeof raw === 'string' &&
-      raw !== 'all' &&
-      ORDER_STATUSES.includes(raw as AdminOrderStatusFilter)
-        ? (raw as AdminOrderStatusFilter)
+      typeof rawStatus === 'string' &&
+      rawStatus !== 'all' &&
+      ORDER_STATUSES.includes(rawStatus as AdminOrderStatusFilter)
+        ? (rawStatus as AdminOrderStatusFilter)
         : undefined
-    return { page, status }
+    const rawTab = search.tab
+    const tab =
+      typeof rawTab === 'string' &&
+      rawTab !== 'all' &&
+      PAYMENT_TABS.includes(rawTab as AdminPaymentTab)
+        ? (rawTab as AdminPaymentTab)
+        : undefined
+    return { page, status, tab }
   },
-  loaderDeps: ({ search }) => ({ page: search.page ?? 1, status: search.status ?? 'all' }),
+  loaderDeps: ({ search }) => ({
+    page: search.page ?? 1,
+    status: search.status ?? 'all',
+    tab: search.tab ?? 'all',
+  }),
   loader: ({ deps }) =>
     fetchAdminPayments({
       data: {
+        tab: deps.tab,
         status: deps.status,
         limit: DEFAULT_PAGE_SIZE,
         offset: (deps.page - 1) * DEFAULT_PAGE_SIZE,
@@ -83,9 +97,23 @@ const ORDER_STATUSES: AdminOrderStatusFilter[] = [
   'partially_refunded',
 ]
 
+/** 可选的类型 tab 值；`all` 为默认值，不写进 URL。 */
+const PAYMENT_TABS: AdminPaymentTab[] = ['all', 'subscription', 'one_time', 'manual_payments']
+
 interface AdminPaymentsSearch {
   page?: number
   status?: AdminOrderStatusFilter
+  tab?: AdminPaymentTab
+}
+
+/** tab 选项：必须渲染期构造，否则切换语言后选项仍是旧文案。 */
+function tabItems() {
+  return [
+    { value: 'all', label: m.admin_payments_tab_all() },
+    { value: 'subscription', label: m.admin_payments_tab_subscription() },
+    { value: 'one_time', label: m.admin_payments_tab_one_time() },
+    { value: 'manual_payments', label: m.admin_payments_tab_manual_payments() },
+  ]
 }
 
 /** 筛选下拉的选项：必须渲染期构造，否则切换语言后选项仍是旧文案。 */
@@ -99,9 +127,14 @@ function statusItems() {
   ]
 }
 
+/** 只有接支付渠道的提供方才有可退的收款；人工核销的退款走线下，不给按钮。 */
+function isRefundableProvider(provider: string): boolean {
+  return provider === 'stripe' || provider === 'creem'
+}
+
 function AdminPaymentsPage() {
   const data = Route.useLoaderData()
-  const { page = 1, status = 'all' } = Route.useSearch()
+  const { page = 1, status = 'all', tab = 'all' } = Route.useSearch()
   const navigate = Route.useNavigate()
   const router = useRouter()
   const locale = getRequestLocale()
@@ -177,6 +210,7 @@ function AdminPaymentsPage() {
         id: 'actions',
         header: '',
         cell: (order) =>
+          isRefundableProvider(order.provider) &&
           (order.status === 'paid' || order.status === 'partially_refunded') &&
           order.refundedAmount < order.amount ? (
             <Button variant="outline" size="sm" onClick={() => setPendingRefund(order)}>
@@ -190,6 +224,27 @@ function AdminPaymentsPage() {
 
   return (
     <>
+      <Tabs
+        value={tab}
+        onValueChange={(value) =>
+          void navigate({
+            search: (previous) => ({
+              ...previous,
+              tab: value === 'all' ? undefined : (value as AdminPaymentTab),
+              page: undefined,
+            }),
+          })
+        }
+        className="mb-4"
+      >
+        <TabsList aria-label={m.admin_payments_title()}>
+          {PAYMENT_TABS.map((value) => (
+            <TabsTrigger key={value} value={value}>
+              {tabItems().find((item) => item.value === value)?.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
       <DataTable
         columns={columns}
         data={data.orders}

@@ -92,10 +92,17 @@ describe('列表页 search 参数规范化', () => {
     expect(Object.keys(validate(AdminOverviewRoute, {}))).toContain('page')
   })
 
-  it('订单状态：「全部」是默认值，不进 URL', () => {
+  it('付款状态：「全部」是默认值，不进 URL', () => {
     expect(validate(AdminPaymentsRoute, { status: 'all' }).status).toBeUndefined()
     expect(validate(AdminPaymentsRoute, { status: 'paid' }).status).toBe('paid')
     expect(validate(AdminPaymentsRoute, { status: 'bogus' }).status).toBeUndefined()
+  })
+
+  it('付款类型：「全部」是默认值，不进 URL，未知类型被丢弃', () => {
+    expect(validate(AdminPaymentsRoute, { tab: 'all' }).tab).toBeUndefined()
+    expect(validate(AdminPaymentsRoute, { tab: 'subscription' }).tab).toBe('subscription')
+    expect(validate(AdminPaymentsRoute, { tab: 'manual_payments' }).tab).toBe('manual_payments')
+    expect(validate(AdminPaymentsRoute, { tab: 'bogus' }).tab).toBeUndefined()
   })
 
   it('订阅状态：「全部」是默认值，不进 URL', () => {
