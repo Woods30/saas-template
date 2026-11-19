@@ -9,6 +9,7 @@ import {
   sanitizeReferrer,
   sanitizeUtm,
   UTM_COOKIE_KEYS,
+  withAttributionCookies,
 } from '@/lib/attribution'
 
 const UTM_MAX_AGE = 'Max-Age=2592000; Path=/; SameSite=Lax'
@@ -77,6 +78,13 @@ describe('attributionCookieHeaders — UTM', () => {
     const request = new Request('https://example.com/pricing?utm_source=%3C%3E')
     expect(attributionCookieHeaders(request)).toEqual([])
   })
+
+  it('空值 utm cookie 不阻断后续有效参数', () => {
+    const request = new Request('https://example.com/pricing?utm_source=spring', {
+      headers: { cookie: 'utm_source=' },
+    })
+    expect(attributionCookieHeaders(request)).toEqual([`utm_source=spring; ${UTM_MAX_AGE}`])
+  })
 })
 
 describe('attributionCookieHeaders — referrer', () => {
@@ -85,6 +93,19 @@ describe('attributionCookieHeaders — referrer', () => {
       headers: {
         accept: 'text/html,application/xhtml+xml',
         referer: 'https://www.google.com/search?q=saas',
+      },
+    })
+    expect(attributionCookieHeaders(request)).toEqual([
+      `${REFERRER_COOKIE}=${encodeURIComponent('https://www.google.com/search')}; ${UTM_MAX_AGE}`,
+    ])
+  })
+
+  it('空值 first_referrer cookie 不阻断后续外部来源', () => {
+    const request = new Request('https://example.com/pricing', {
+      headers: {
+        accept: 'text/html',
+        referer: 'https://www.google.com/search',
+        cookie: 'first_referrer=',
       },
     })
     expect(attributionCookieHeaders(request)).toEqual([
@@ -175,6 +196,43 @@ describe('readAttribution', () => {
     expect(attribution.country).toBe('')
     expect(attribution.ip).toBe('198.51.100.7')
     expect(attribution.locale).toBe('')
+  })
+
+  it('readAttribution 过滤伪造的同站 referrer，外部来源保留', () => {
+    const cookieFor = (url: string) =>
+      new Headers({ host: 'example.com', cookie: `first_referrer=${encodeURIComponent(url)}` })
+
+    expect(readAttribution(cookieFor('https://example.com/pricing')).referrer).toBe('')
+    expect(readAttribution(cookieFor('https://app.example.com/pricing')).referrer).toBe('')
+    expect(readAttribution(cookieFor('https://www.google.com/search?a=1')).referrer).toBe(
+      'https://www.google.com/search',
+    )
+  })
+})
+
+describe('withAttributionCookies', () => {
+  it('保留既有 Set-Cookie 并追加归因 Set-Cookie', () => {
+    const request = new Request('https://example.com/pricing?utm_source=spring')
+    const response = new Response('ok', {
+      headers: {
+        'Content-Type': 'text/plain',
+        'Set-Cookie': 'NEXT_LOCALE=zh; Path=/; SameSite=Lax',
+      },
+    })
+
+    const result = withAttributionCookies(response, request)
+    expect(result.status).toBe(200)
+    expect(result.headers.get('content-type')).toBe('text/plain')
+    expect(result.headers.getSetCookie()).toEqual([
+      'NEXT_LOCALE=zh; Path=/; SameSite=Lax',
+      `utm_source=spring; ${UTM_MAX_AGE}`,
+    ])
+  })
+
+  it('没有归因 cookie 时原样返回同一响应对象', () => {
+    const request = new Request('https://example.com/pricing')
+    const response = new Response('ok')
+    expect(withAttributionCookies(response, request)).toBe(response)
   })
 })
 

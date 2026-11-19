@@ -124,7 +124,7 @@ export function attributionCookieHeaders(request: Request): string[] {
   for (const key of UTM_COOKIE_KEYS) {
     const value = url.searchParams.get(key)
     if (value === null) continue
-    if (readCookieValue(cookieHeader, key) !== undefined) continue
+    if (hasCookieValue(cookieHeader, key)) continue
     const sanitized = sanitizeUtm(value)
     if (!sanitized) continue
     cookies.push(`${key}=${sanitized}; ${ATTRIBUTION_COOKIE_ATTRIBUTES}`)
@@ -155,8 +155,14 @@ export function readAttribution(headers: Headers): Attribution {
     return raw === undefined ? '' : sanitizeUtm(decodeCookieValue(raw))
   }
 
+  // 同站来源在写入侧会被过滤；读取时也按同一规则清洗，伪造 `first_referrer` 同样失效。
+  const host = headers.get('host')
+  const selfHosts = host ? [host] : []
   const referrerRaw = readCookieValue(cookieHeader, REFERRER_COOKIE)
-  const referrer = referrerRaw === undefined ? '' : sanitizeReferrer(decodeCookieValue(referrerRaw))
+  const referrer =
+    referrerRaw === undefined || referrerRaw === ''
+      ? ''
+      : sanitizeReferrer(decodeCookieValue(referrerRaw), selfHosts)
 
   return {
     utmSource: readUtm('utm_source'),
@@ -195,7 +201,18 @@ export function withAttributionCookies(response: Response, request: Request): Re
 function shouldWriteReferrer(request: Request, cookieHeader: string | null): boolean {
   if (request.method !== 'GET') return false
   if (!request.headers.get('accept')?.toLowerCase().includes('text/html')) return false
-  return readCookieValue(cookieHeader, REFERRER_COOKIE) === undefined
+  return !hasCookieValue(cookieHeader, REFERRER_COOKIE)
+}
+
+/**
+ * cookie 是否存在有效值。
+ *
+ * 空值（`utm_source=`）与缺失同等看待：读取侧把空值映射为「未归因」，写入侧若把它
+ * 当作「已存在」，一个空 cookie 就会永久挡住后续有效参数（30 天窗口）。
+ */
+function hasCookieValue(cookieHeader: string | null, name: string): boolean {
+  const value = readCookieValue(cookieHeader, name)
+  return value !== undefined && value !== ''
 }
 
 function decodeCookieValue(value: string): string {
@@ -220,7 +237,12 @@ function isSameSite(hostname: string, selfHost: string): boolean {
   try {
     normalized = normalizeHostname(new URL(trimmed).hostname)
   } catch {
-    normalized = normalizeHostname(trimmed.split(':')[0] ?? '')
+    try {
+      // `host` 头没有协议（`example.com:3000`），补一个 scheme 让 URL 解析端口与 IPv6。
+      normalized = normalizeHostname(new URL(`http://${trimmed}`).hostname)
+    } catch {
+      normalized = normalizeHostname(trimmed.split(':')[0] ?? '')
+    }
   }
 
   if (!normalized) return false
