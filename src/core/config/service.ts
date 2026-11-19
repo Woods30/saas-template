@@ -16,6 +16,7 @@ import {
   setResolvedConfig,
   type WebsiteConfig,
 } from '@/config/website'
+import { socialProviderOptions } from '@/core/auth/social-providers'
 import { type DB, schema } from '@/core/db'
 import { parseServerEnv, type RuntimeEnv, type ServerEnv } from '@/core/env/server'
 import { decryptSecret, encryptSecret, isEncrypted, MissingEncryptionKeyError } from './crypto'
@@ -247,24 +248,36 @@ export async function saveSettingsTab(
   options: SettingsLoadOptions = {},
 ): Promise<SettingsValues> {
   const validated = validateTabValues(tabId, input)
-  if (tabId === 'auth') assertAtLeastOneAuthMethod(validated)
+  if (tabId === 'auth') assertAtLeastOneAuthMethod(validated, options)
   assertCanWriteSecrets(validated, options)
   return persistSettingsValues(db, validated, options)
 }
 
 /**
- * 认证 tab 必须至少保留一种登录方式。
+ * 认证 tab 必须至少保留一种**可用**的登录方式。
  *
  * 不能放进 `validateTabValues`：它只看本次提交的键，单独提交
  * `auth.emailEnabled: false` 时看不到另外两个开关。这里把提交值合到当前快照上
  * 再判，得到的才是保存后的真实状态。
+ *
+ * 「可用」与登录页同源：社交登录要求开关打开**且**两个凭据齐备
+ * （`socialProviderOptions`）。只看开关会出现「GitHub 开着但没填凭据、邮箱又关了」
+ * 的提交通过，而三种方法实际都不可用，管理员被锁在门外。
  */
-function assertAtLeastOneAuthMethod(validated: SettingsValues): void {
-  const prospective = { ...getSettingsSnapshot(), ...validated }
-  const enabled = ['auth.emailEnabled', 'auth.googleEnabled', 'auth.githubEnabled'].some(
-    (key) => prospective[key] === true,
-  )
-  if (!enabled) throw new SettingsValidationError('auth', '至少保留一种登录方式')
+function assertAtLeastOneAuthMethod(validated: SettingsValues, options: SettingsLoadOptions): void {
+  const prospective = { ...getSettingsSnapshot() }
+  for (const [key, value] of Object.entries(validated)) {
+    // 空密钥表示保持原值（与 `persistSettingsValues` 一致），不能把凭据判成缺失。
+    if (settingField(key)?.secret === true && value === '') continue
+    prospective[key] = value
+  }
+  const env = settingsToServerEnv(prospective, options.baseEnv ?? parseServerEnv({}))
+  const providers = socialProviderOptions(applySettingsToConfig(baseConfig, prospective), env)
+  const usable =
+    prospective['auth.emailEnabled'] === true ||
+    providers.google !== undefined ||
+    providers.github !== undefined
+  if (!usable) throw new SettingsValidationError('auth', '至少保留一种登录方式')
 }
 
 /** 当前生效的站点配置：与全站读 `websiteConfig` 拿到的是同一份。 */

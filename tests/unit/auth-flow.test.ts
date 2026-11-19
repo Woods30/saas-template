@@ -96,6 +96,23 @@ describe('saveSettingsTab — auth', () => {
       reason: '至少保留一种登录方式',
     })
   })
+
+  it('GitHub 开启但缺凭据、邮箱关闭时保存被拒绝', async () => {
+    setResolvedConfig(baseConfig)
+    resetSettingsCache()
+    // 凭据默认是空串：开关打开但 `socialProviderOptions` 不会启用该 provider，
+    // 实际可用方法为零，保存必须被拒，否则管理员会被锁在门外。
+    await expect(
+      saveSettingsTab({} as never, 'auth', {
+        'auth.emailEnabled': false,
+        'auth.googleEnabled': false,
+        'auth.githubEnabled': true,
+      }),
+    ).rejects.toMatchObject({
+      name: 'SettingsValidationError',
+      field: 'auth',
+    })
+  })
 })
 
 describe('认证页面不再依赖模块开关', () => {
