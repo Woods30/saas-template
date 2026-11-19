@@ -35,27 +35,42 @@ export function registerSignupSideEffects(): void {
   registerUserCreatedHook(async ({ db, user }) => {
     const { defaultRole, signupCredits } = websiteConfig.users
 
+    // 两个动作各自 try/catch：分配角色失败不该连带吞掉赠积分（反之亦然）。
+    // 失败只记日志——账号已落库，后置动作不该把注册接口打回错误。
     if (defaultRole !== 'user') {
-      // 系统发起的注册动作，不经过 HTTP，因此直接用通配权限作为天花板。
-      await assignRolesToUser(db, {
-        actorPermissions: ['*'],
-        targetUserId: user.id,
-        assignments: [{ roleName: defaultRole }],
-      })
+      try {
+        // 系统发起的注册动作，不经过 HTTP，因此直接用通配权限作为天花板。
+        await assignRolesToUser(db, {
+          actorPermissions: ['*'],
+          targetUserId: user.id,
+          assignments: [{ roleName: defaultRole }],
+        })
+      } catch (error) {
+        console.warn('[auth] 注册默认角色分配失败:', error)
+      }
     }
 
-    if (signupCredits.enabled && signupCredits.amount > 0) {
-      const expiresAt =
-        signupCredits.validDays > 0
-          ? new Date(Date.now() + signupCredits.validDays * 86_400_000)
-          : undefined
-      await grantCredits(db, {
-        userId: user.id,
-        amount: signupCredits.amount,
-        source: SIGNUP_CREDITS_SOURCE,
-        idempotencyKey: `signup:${user.id}`,
-        expiresAt,
-      })
+    // 正整数校验：小数 / 0 / 负数都在这里挡下，不放进 `grantCredits` 再被吞掉。
+    if (
+      signupCredits.enabled &&
+      Number.isInteger(signupCredits.amount) &&
+      signupCredits.amount > 0
+    ) {
+      try {
+        const expiresAt =
+          signupCredits.validDays > 0
+            ? new Date(Date.now() + signupCredits.validDays * 86_400_000)
+            : undefined
+        await grantCredits(db, {
+          userId: user.id,
+          amount: signupCredits.amount,
+          source: SIGNUP_CREDITS_SOURCE,
+          idempotencyKey: `signup:${user.id}`,
+          expiresAt,
+        })
+      } catch (error) {
+        console.warn('[auth] 注册赠积分发放失败:', error)
+      }
     }
   })
 }

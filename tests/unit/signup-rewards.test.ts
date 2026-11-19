@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { getSettingsNav } from '@/config/settings-nav'
 import { baseConfig, createWebsiteConfig } from '@/config/website'
 import { runUserCreatedHooks } from '@/core/auth/user-hooks'
@@ -32,6 +32,7 @@ const originalSignupCredits = { ...baseConfig.users.signupCredits }
 afterEach(() => {
   baseConfig.users.defaultRole = originalDefaultRole
   baseConfig.users.signupCredits = { ...originalSignupCredits }
+  vi.restoreAllMocks()
 })
 
 async function runSignup(db: DB, id: string): Promise<void> {
@@ -87,6 +88,9 @@ describe('注册默认角色', () => {
     const { sqlite, db } = createTestDatabase()
     seedUser(sqlite, 'u_plain')
     baseConfig.users.defaultRole = 'user'
+    // 没有这个 'user' 特判时 `assignRolesToUser('user')` 会抛 RBAC_ROLE_NOT_FOUND，
+    // 被钩子吞掉后 user_roles 仍为空。所以光看绑定为空是假绿——必须钉住「没有告警」。
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     await runSignup(db, 'u_plain')
 
@@ -95,6 +99,7 @@ describe('注册默认角色', () => {
       role: string
     }
     expect(row.role).toBe('user')
+    expect(warn).not.toHaveBeenCalled()
   })
 })
 
@@ -141,11 +146,15 @@ describe('注册赠积分', () => {
     seedUser(sqlite, 'u_zero')
     baseConfig.users.defaultRole = 'user'
     baseConfig.users.signupCredits = { enabled: true, amount: 0, validDays: 0, description: '' }
+    // 去掉正整数守卫时 `grantCredits` 会抛错、被钩子吞掉，流水依然为空——假绿。
+    // 钉住「没有告警」才能证明是守卫挡住了，而不是异常被吞了。
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     await runSignup(db, 'u_zero')
 
     expect(balanceOf(sqlite, 'u_zero')).toBe(0)
     expect(transactionCount(sqlite, 'u_zero')).toBe(0)
+    expect(warn).not.toHaveBeenCalled()
   })
 })
 

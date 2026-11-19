@@ -260,6 +260,15 @@ describe('applySettingsToConfig', () => {
     expect(resolve('user')).toBe('user')
     expect(resolve('bogus')).toBe('user')
   })
+
+  it('默认角色出厂值为 user（绝不能默认 viewer —— 那是提权）', () => {
+    // 三条都钉死：把任一处默认值改回 viewer 都必须变红。viewer 持有全部
+    // `admin.*.read`，默认授予等于把管理台开给每个注册用户。
+    expect(defaultSettingsValues()['users.defaultRole']).toBe('user')
+    expect(baseConfig.users.defaultRole).toBe('user')
+    const field = SETTING_FIELDS.find((item) => item.key === 'users.defaultRole')
+    expect(field?.defaultValue).toBe('user')
+  })
 })
 
 describe('清理已移除的配置行', () => {
