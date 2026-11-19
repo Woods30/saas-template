@@ -1,6 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isEncrypted, MissingEncryptionKeyError, maskSecret } from '../../src/core/config/crypto'
+import {
+  decryptSecret,
+  isEncrypted,
+  MissingEncryptionKeyError,
+  maskSecret,
+} from '../../src/core/config/crypto'
 import {
   isReservedCustomKey,
   listCustomSettings,
@@ -105,7 +110,15 @@ describe('键规则', () => {
 
   it('保留前缀与 custom. 前缀被拒绝', async () => {
     const { db, sqlite } = createTestDatabase()
-    for (const key of ['features.x', 'modules.auth.token', 'brand.custom', 'custom.foo']) {
+    for (const key of [
+      'features.x',
+      'modules',
+      'modules.auth.token',
+      'modules..auth',
+      'Modules.x',
+      'brand.custom',
+      'custom.foo',
+    ]) {
       await expect(
         replaceCustomSettings(db, [{ key, value: 'x', secret: false }]),
       ).rejects.toBeInstanceOf(SettingsValidationError)
@@ -140,7 +153,9 @@ describe('键规则', () => {
   it('isReservedCustomKey 覆盖注册表键、顶层前缀与额外保留项', () => {
     expect(isReservedCustomKey('brand.name')).toBe(true)
     expect(isReservedCustomKey('brand.custom')).toBe(true)
+    expect(isReservedCustomKey('modules')).toBe(true)
     expect(isReservedCustomKey('modules.auth')).toBe(true)
+    expect(isReservedCustomKey('modules..auth')).toBe(true)
     expect(isReservedCustomKey('modules.anything')).toBe(true)
     expect(isReservedCustomKey('features')).toBe(true)
     expect(isReservedCustomKey('features.flags')).toBe(true)
@@ -212,6 +227,38 @@ describe('密钥条目', () => {
       replaceCustomSettings(db, [{ key: 'api_token', value: '', secret: true }]),
     ).resolves.toBeUndefined()
     expect(storedValue(sqlite, 'custom.api_token').v).toBe(ciphertext)
+    sqlite.close()
+  })
+
+  it('改名后未改动的掩码仍保留原密文，旧键被删除', async () => {
+    const { db, sqlite } = createTestDatabase()
+    await replaceCustomSettings(
+      db,
+      [{ key: 'old_token', value: 'original-secret', secret: true }],
+      { encryptionKey: KEY },
+    )
+    const ciphertext = storedValue(sqlite, 'custom.old_token').v
+
+    await replaceCustomSettings(
+      db,
+      [
+        {
+          key: 'new_token',
+          value: maskSecret('original-secret'),
+          secret: true,
+          originalKey: 'old_token',
+        },
+      ],
+      { encryptionKey: KEY },
+    )
+
+    expect(storedRows(sqlite).map((row) => row.key)).toEqual(['custom.new_token'])
+    const stored = storedValue(sqlite, 'custom.new_token')
+    expect(stored.v).toBe(ciphertext)
+    await expect(decryptSecret(stored.v, KEY)).resolves.toBe('original-secret')
+
+    const list = await listCustomSettings(db, KEY)
+    expect(list).toEqual([{ key: 'new_token', value: maskSecret('original-secret'), secret: true }])
     sqlite.close()
   })
 })

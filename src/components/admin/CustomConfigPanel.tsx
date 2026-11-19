@@ -29,7 +29,12 @@ let nextRowUid = 0
 
 function toEditableRow(entry: CustomSetting): EditableRow {
   nextRowUid += 1
-  return { ...entry, uid: `custom-row-${nextRowUid}` }
+  return {
+    ...entry,
+    // 新增行没有旧键；已加载的行记住原键，改名后仍能找回原密文。
+    originalKey: entry.key === '' ? undefined : entry.key,
+    uid: `custom-row-${nextRowUid}`,
+  }
 }
 
 /**
@@ -100,7 +105,12 @@ export function CustomConfigPanel() {
     try {
       await saveCustomSettings({
         data: {
-          entries: rows.map((row) => ({ key: row.key, value: row.value, secret: row.secret })),
+          entries: rows.map((row) => ({
+            key: row.key,
+            value: row.value,
+            secret: row.secret,
+            originalKey: row.originalKey,
+          })),
         },
       })
       await load()

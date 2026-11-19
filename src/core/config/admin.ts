@@ -96,6 +96,7 @@ const customEntrySchema = z.object({
   key: z.string(),
   value: z.string(),
   secret: z.boolean(),
+  originalKey: z.string().optional(),
 })
 
 const saveCustomInputSchema = z.object({ entries: z.array(customEntrySchema) })

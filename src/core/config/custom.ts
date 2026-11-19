@@ -25,6 +25,11 @@ export interface CustomSetting {
   key: string
   value: string
   secret: boolean
+  /**
+   * 编辑前的键（仅后台表单使用）。用户改名时，掩码 / 空值仍需按**旧键**找回
+   * 原密文；新建行为 `undefined`。读取接口不会返回该字段。
+   */
+  originalKey?: string
 }
 
 /** 存储键前缀。 */
@@ -173,10 +178,12 @@ export async function replaceCustomSettings(
     let stored: string
 
     if (entry.secret) {
+      // 以 `••••` 开头的值一律视为「没改」：这是 B2 的既定取舍，代价是真实密钥
+      // 恰好以该前缀开头时无法保存。改名时按 originalKey 找回旧密文。
       const keepExisting = entry.value === '' || entry.value.startsWith(MASK_PREFIX)
       if (keepExisting) {
-        // 掩码或空值表示保持原密文；新键没有原值时就存空字符串。
-        const previous = existing.get(storageKey)
+        const previousKey = `${CUSTOM_PREFIX}${entry.originalKey ?? entry.key}`
+        const previous = existing.get(previousKey)
         stored = previous?.s === true ? previous.v : ''
       } else {
         if (!options.encryptionKey) throw new MissingEncryptionKeyError()
@@ -193,6 +200,18 @@ export async function replaceCustomSettings(
     })
   }
 
+  // 先写后删：D1 每条语句自动提交，若先删再写，写到一半失败会丢掉整张表。
+  // 反过来最坏只是留下多余旧行（下次保存会清掉），已有数据不会丢。
+  for (const row of rows) {
+    await db
+      .insert(schema.settings)
+      .values(row)
+      .onConflictDoUpdate({
+        target: schema.settings.key,
+        set: { value: row.value, updatedAt: row.updatedAt },
+      })
+  }
+
   // 删除不再提交的 custom.* 行；注册表行不匹配 like 条件，不会被碰到。
   const keepKeys = rows.map((row) => row.key)
   const customRows = like(schema.settings.key, `${CUSTOM_PREFIX}%`)
@@ -203,16 +222,6 @@ export async function replaceCustomSettings(
         ? customRows
         : and(customRows, notInArray(schema.settings.key, keepKeys)),
     )
-
-  for (const row of rows) {
-    await db
-      .insert(schema.settings)
-      .values(row)
-      .onConflictDoUpdate({
-        target: schema.settings.key,
-        set: { value: row.value, updatedAt: row.updatedAt },
-      })
-  }
 }
 
 /**
