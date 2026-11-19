@@ -10,6 +10,7 @@ import { isPostgresDialect, resolveDatabaseProvider } from '@/core/db/provider'
 import { getRequestScoped } from '@/core/db/request-scope'
 import { sendMail } from '@/core/email'
 import { parseServerEnv, type RuntimeEnv } from '@/core/env/server'
+import { readAttribution } from '@/lib/attribution'
 
 /**
  * 已创建的实例，按 D1 binding 复用。
@@ -141,6 +142,34 @@ export async function createAuth(env: Env) {
     },
     user: {
       deleteUser: { enabled: true },
+      /**
+       * 首次触达归因列。`input: false` 让 better-auth 拒绝客户端请求体里的同名字段——
+       * 归因只能由下面的 create 钩子从请求 cookie / 请求头写入。
+       */
+      additionalFields: {
+        utmSource: { type: 'string', required: false, defaultValue: '', input: false },
+        utmMedium: { type: 'string', required: false, defaultValue: '', input: false },
+        utmCampaign: { type: 'string', required: false, defaultValue: '', input: false },
+        utmTerm: { type: 'string', required: false, defaultValue: '', input: false },
+        utmContent: { type: 'string', required: false, defaultValue: '', input: false },
+        referrer: { type: 'string', required: false, defaultValue: '', input: false },
+        country: { type: 'string', required: false, defaultValue: '', input: false },
+        ip: { type: 'string', required: false, defaultValue: '', input: false },
+        locale: { type: 'string', required: false, defaultValue: '', input: false },
+      },
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          /**
+           * 归因只写一次：只在 create 前合并，之后的 update 不会覆盖。
+           * `ctx` 为 null（服务端直接调用 / 测试）或没有 headers 时回退空值，不抛错。
+           */
+          before: async (user, ctx) => ({
+            data: { ...user, ...readAttribution(ctx?.headers ?? new Headers()) },
+          }),
+        },
+      },
     },
   })
 }

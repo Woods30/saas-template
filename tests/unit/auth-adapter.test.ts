@@ -174,7 +174,8 @@ describe('邮箱验证接线', () => {
         expect.any(Request),
         expect.any(Object),
       )
-      expect('databaseHooks' in ctx.options).toBe(false)
+      // 归因钩子已注册；它只合并 create 数据，不影响邮件验证接线。
+      expect(ctx.options.databaseHooks?.user?.create?.before).toBeTypeOf('function')
     } finally {
       websiteConfig.mail.enabled = previous
     }

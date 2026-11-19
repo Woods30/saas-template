@@ -29,6 +29,7 @@ import { parseServerEnv, type RuntimeEnv } from './core/env/server'
 import { buildNotificationProviderRegistry } from './core/notify/service'
 import { buildPaymentProviderRegistry } from './core/payment'
 import { R2StorageProvider } from './core/storage/provider/r2'
+import { attributionCookieHeaders } from './lib/attribution'
 import { LOCALE_COOKIE_NAME, readCookieValue, readLocaleCookie } from './lib/locale'
 import {
   addNonceToInlineScripts,
@@ -125,7 +126,7 @@ export default {
           const result = await fetch(request)
           return applySecurityHeaders(result, request, locale, nonce)
         })
-        return response
+        return withAttributionCookies(response, request)
       },
     )
   },
@@ -202,6 +203,27 @@ function applySecurityHeaders(
   return new Response(withNonce.body, {
     status: withNonce.status,
     statusText: withNonce.statusText,
+    headers,
+  })
+}
+
+/**
+ * 追加首次触达归因 cookie。
+ *
+ * `attributionCookieHeaders` 自己判断「同名 cookie 是否已存在」，因此这里只负责把
+ * 需要下发的 `Set-Cookie` 合进响应。中间件返回的响应头可能是不可变的，先复制一份
+ * 再 `append`；同时保留原始 body（SSR 是流式响应，不能读取后再重建文本）。
+ */
+function withAttributionCookies(response: Response, request: Request): Response {
+  const cookies = attributionCookieHeaders(request)
+  if (cookies.length === 0) return response
+
+  const headers = new Headers(response.headers)
+  for (const cookie of cookies) headers.append('Set-Cookie', cookie)
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
     headers,
   })
 }
