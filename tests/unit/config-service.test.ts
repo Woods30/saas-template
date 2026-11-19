@@ -212,6 +212,18 @@ describe('按 tab 保存', () => {
     sqlite.close()
   })
 
+  it('tab 内有密钥但只提交公开字段时可保存（无需口令）', async () => {
+    const { db, sqlite } = createTestDatabase()
+    await loadSettings(db, { now: 1_000 })
+
+    await expect(saveSettingsTab(db, 'auth', { 'auth.emailEnabled': false })).resolves.toBeDefined()
+
+    expect(getSettingsSnapshot()['auth.emailEnabled']).toBe(false)
+    const row = sqlite.prepare('SELECT value FROM settings WHERE key = ?').get('auth.emailEnabled')
+    expect(row).toEqual({ value: 'false' })
+    sqlite.close()
+  })
+
   it('保存后立即刷新进程内快照', async () => {
     const { db, sqlite } = createTestDatabase()
     await loadSettings(db, { now: 1_000 })

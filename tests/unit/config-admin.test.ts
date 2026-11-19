@@ -22,4 +22,15 @@ describe('saveAdminSettings', () => {
   it('已知 tab 解析为对应分区', () => {
     expect(requireSettingTab('general').id).toBe('general')
   })
+
+  it('分组 id 不是 tab，同样返回 400', () => {
+    let thrown: unknown
+    try {
+      requireSettingTab('brand')
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(Response)
+    expect((thrown as Response).status).toBe(400)
+  })
 })
