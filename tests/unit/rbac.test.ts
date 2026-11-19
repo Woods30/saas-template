@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_PERMISSIONS,
+  DEFAULT_ROLES,
   findCeilingViolation,
   isAdminPermission,
   loadUserPermissions,
@@ -52,6 +54,23 @@ describe('RBAC 纯函数匹配与权限天花板', () => {
     expect(isAdminPermission('admin.users.read')).toBe(true)
     expect(isAdminPermission('*')).toBe(true)
     expect(isAdminPermission('profile.read')).toBe(false)
+  })
+})
+
+describe('权限目录：AI 任务写权限', () => {
+  it('admin.tasks.write 存在，viewer 只读、editor 不涉及、admin 具备', () => {
+    expect(DEFAULT_PERMISSIONS.map((permission) => permission.code)).toContain('admin.tasks.write')
+
+    const viewer = DEFAULT_ROLES.find((role) => role.name === 'viewer')
+    expect(viewer?.permissions).toContain('admin.tasks.read')
+    // viewer 只取 `.read`：不能发起任务、给自己铸造积分或取消他人任务。
+    expect(viewer?.permissions).not.toContain('admin.tasks.write')
+
+    const admin = DEFAULT_ROLES.find((role) => role.name === 'admin')
+    expect(admin?.permissions).toContain('admin.tasks.write')
+
+    const editor = DEFAULT_ROLES.find((role) => role.name === 'editor')
+    expect(editor?.permissions).not.toContain('admin.tasks.write')
   })
 })
 

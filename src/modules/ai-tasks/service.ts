@@ -401,7 +401,7 @@ export const createDemoAdminAiTask = createServerFn({ method: 'POST' })
   .validator((input: unknown) => createDemoTaskSchema.parse(input))
   .handler(async ({ data }): Promise<AiTaskRecord> => {
     const { requirePermissionDb } = await import('@/modules/rbac/service')
-    const { db, adminId } = await requirePermissionDb('admin.tasks.read')
+    const { db, adminId } = await requirePermissionDb('admin.tasks.write')
 
     if (data.costCredits > 0) {
       await grantCredits(db, {
@@ -444,7 +444,7 @@ export const refreshAdminAiTask = createServerFn({ method: 'POST' })
   .validator((input: unknown) => taskActionSchema.parse(input))
   .handler(async ({ data }): Promise<AiTaskRecord> => {
     const { requirePermissionDb } = await import('@/modules/rbac/service')
-    const { db } = await requirePermissionDb('admin.tasks.read')
+    const { db } = await requirePermissionDb('admin.tasks.write')
     return refreshAiTask(db, { taskId: data.taskId })
   })
 
@@ -453,7 +453,7 @@ export const cancelAdminAiTask = createServerFn({ method: 'POST' })
   .validator((input: unknown) => taskActionSchema.parse(input))
   .handler(async ({ data }): Promise<AiTaskRecord> => {
     const { requirePermissionDb } = await import('@/modules/rbac/service')
-    const { db, adminId } = await requirePermissionDb('admin.tasks.read')
+    const { db, adminId } = await requirePermissionDb('admin.tasks.write')
     const canceled = await cancelAiTask(db, {
       taskId: data.taskId,
       reason: `Canceled by admin ${adminId}`,

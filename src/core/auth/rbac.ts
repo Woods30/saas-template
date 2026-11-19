@@ -154,6 +154,13 @@ export const DEFAULT_PERMISSIONS: readonly PermissionSeed[] = [
     description: '查看 AI 异步生成任务队列与积分预扣状态',
   },
   {
+    code: 'admin.tasks.write',
+    resource: 'admin.tasks',
+    action: 'write',
+    title: '发起与取消 AI 任务',
+    description: '发起测试 AI 任务、刷新任务状态并取消任务（含积分预扣与退回）',
+  },
+  {
     code: 'admin.content.read',
     resource: 'admin.content',
     action: 'read',
