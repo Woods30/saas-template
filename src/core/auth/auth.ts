@@ -2,15 +2,55 @@ import { apiKey } from '@better-auth/api-key'
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import { betterAuth } from 'better-auth/minimal'
 import { admin } from 'better-auth/plugins/admin'
-import { websiteConfig } from '@/config/website'
+import { type WebsiteConfig, websiteConfig } from '@/config/website'
 import { sendAuthEmailForRequest } from '@/core/auth/emails'
-import { requiresEmailVerification } from '@/core/auth/flow'
+import { emailPasswordEnabled, requiresEmailVerification } from '@/core/auth/flow'
 import { createDbFromEnv, schema } from '@/core/db'
 import { isPostgresDialect, resolveDatabaseProvider } from '@/core/db/provider'
 import { getRequestScoped } from '@/core/db/request-scope'
 import { sendMail } from '@/core/email'
 import { parseServerEnv, type RuntimeEnv } from '@/core/env/server'
 import { readAttribution } from '@/lib/attribution'
+
+/** 社交登录凭据（来自数据库配置合成后的运行期 env）。 */
+type SocialCredentials = Pick<
+  RuntimeEnv,
+  'GOOGLE_CLIENT_ID' | 'GOOGLE_CLIENT_SECRET' | 'GITHUB_CLIENT_ID' | 'GITHUB_CLIENT_SECRET'
+>
+
+/** better-auth 的 `socialProviders` 选项。 */
+export interface SocialProviderOptions {
+  google?: { clientId: string; clientSecret: string }
+  github?: { clientId: string; clientSecret: string }
+}
+
+/**
+ * 注册哪些社交登录 provider。
+ *
+ * 方法开关与两个凭据缺一不可：只配 clientId 时 better-auth 也不会启用该 provider，
+ * 提前判掉才能让页面可见性与服务端注册保持一致。
+ */
+export function getSocialProviders(
+  runtime: SocialCredentials,
+  config: WebsiteConfig = websiteConfig,
+): SocialProviderOptions {
+  return {
+    google:
+      config.auth.googleEnabled && runtime.GOOGLE_CLIENT_ID && runtime.GOOGLE_CLIENT_SECRET
+        ? {
+            clientId: runtime.GOOGLE_CLIENT_ID,
+            clientSecret: runtime.GOOGLE_CLIENT_SECRET,
+          }
+        : undefined,
+    github:
+      config.auth.githubEnabled && runtime.GITHUB_CLIENT_ID && runtime.GITHUB_CLIENT_SECRET
+        ? {
+            clientId: runtime.GITHUB_CLIENT_ID,
+            clientSecret: runtime.GITHUB_CLIENT_SECRET,
+          }
+        : undefined,
+  }
+}
 
 /**
  * 已创建的实例，按 D1 binding 复用。
@@ -91,7 +131,7 @@ export async function createAuth(env: Env) {
       },
     },
     emailAndPassword: {
-      enabled: true,
+      enabled: emailPasswordEnabled(),
       // 读显式配置，不随 `mail.enabled` 隐式降级：邮箱在下游是身份依据。
       requireEmailVerification: requiresEmailVerification(),
       minPasswordLength: 8,
@@ -131,15 +171,7 @@ export async function createAuth(env: Env) {
         )
       },
     },
-    socialProviders: {
-      google:
-        runtime.GOOGLE_CLIENT_ID && runtime.GOOGLE_CLIENT_SECRET
-          ? {
-              clientId: runtime.GOOGLE_CLIENT_ID,
-              clientSecret: runtime.GOOGLE_CLIENT_SECRET,
-            }
-          : undefined,
-    },
+    socialProviders: getSocialProviders(runtime),
     user: {
       deleteUser: { enabled: true },
       /**

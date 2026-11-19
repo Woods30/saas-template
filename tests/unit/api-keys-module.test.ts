@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * `features.enableApiKeys` 门禁：auth 开着但该开关关闭时，`/api/auth/api-key/*`
+ * `userFeatures.apiKeys` 门禁：该功能开关关闭时，`/api/auth/api-key/*`
  * 必须 404 且不进 better-auth handler，否则用户能绕过 UI 直接建 key。
  */
 
@@ -37,8 +37,8 @@ function getHandler(route: unknown, method: 'GET' | 'POST'): Handler {
 }
 
 /** 用覆盖后的 websiteConfig 重新导入 auth 路由。 */
-async function importAuthRouteWithFeatures(features: {
-  enableApiKeys: boolean
+async function importAuthRouteWithFeatures(userFeatures: {
+  apiKeys: boolean
 }): Promise<{ Route: unknown }> {
   vi.resetModules()
   vi.doMock('@/config/website', async () => {
@@ -48,26 +48,22 @@ async function importAuthRouteWithFeatures(features: {
     const base = actual.createWebsiteConfig(parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' }))
     return {
       ...actual,
-      // auth 与 mail 显式打开：它们默认随部署场景变化，而这里只关心 api-key 端点的门禁
-      // （auth 要求邮箱验证，邮件没配齐会被判成 incomplete 而返回 503）。
       websiteConfig: {
         ...base,
-        auth: { ...base.auth, enabled: true },
-        mail: { ...base.mail, enabled: true },
-        features: { ...base.features, ...features },
+        userFeatures: { ...base.userFeatures, ...userFeatures },
       },
     }
   })
   return import('@/routes/api/auth/$')
 }
 
-describe('features.enableApiKeys 门禁', () => {
+describe('userFeatures.apiKeys 门禁', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('enableApiKeys 关闭时 GET /api/auth/api-key/list 返回 404，且不进入 better-auth', async () => {
-    const { Route } = await importAuthRouteWithFeatures({ enableApiKeys: false })
+  it('apiKeys 关闭时 GET /api/auth/api-key/list 返回 404，且不进入 better-auth', async () => {
+    const { Route } = await importAuthRouteWithFeatures({ apiKeys: false })
     const handler = getHandler(Route, 'GET')
     const res = await handler({
       request: new Request('https://jerbix.dev/api/auth/api-key/list'),
@@ -77,8 +73,8 @@ describe('features.enableApiKeys 门禁', () => {
     expect(mocks.getAuth).not.toHaveBeenCalled()
   })
 
-  it('enableApiKeys 关闭时 POST /api/auth/api-key/create 返回 404，且不进入 better-auth', async () => {
-    const { Route } = await importAuthRouteWithFeatures({ enableApiKeys: false })
+  it('apiKeys 关闭时 POST /api/auth/api-key/create 返回 404，且不进入 better-auth', async () => {
+    const { Route } = await importAuthRouteWithFeatures({ apiKeys: false })
     const handler = getHandler(Route, 'POST')
     const res = await handler({
       request: new Request('https://jerbix.dev/api/auth/api-key/create', {
@@ -90,8 +86,8 @@ describe('features.enableApiKeys 门禁', () => {
     expect(mocks.getAuth).not.toHaveBeenCalled()
   })
 
-  it('enableApiKeys 关闭不影响非 api-key 的 auth 端点', async () => {
-    const { Route } = await importAuthRouteWithFeatures({ enableApiKeys: false })
+  it('apiKeys 关闭不影响非 api-key 的 auth 端点', async () => {
+    const { Route } = await importAuthRouteWithFeatures({ apiKeys: false })
     const handler = getHandler(Route, 'GET')
     const res = await handler({
       request: new Request('https://jerbix.dev/api/auth/session'),
@@ -100,8 +96,8 @@ describe('features.enableApiKeys 门禁', () => {
     expect(mocks.getAuth).toHaveBeenCalled()
   })
 
-  it('enableApiKeys 开启时 api-key 端点放行到 better-auth', async () => {
-    const { Route } = await importAuthRouteWithFeatures({ enableApiKeys: true })
+  it('apiKeys 开启时 api-key 端点放行到 better-auth', async () => {
+    const { Route } = await importAuthRouteWithFeatures({ apiKeys: true })
     const handler = getHandler(Route, 'GET')
     const res = await handler({
       request: new Request('https://jerbix.dev/api/auth/api-key/list'),

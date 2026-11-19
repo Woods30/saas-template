@@ -175,7 +175,7 @@ describe('applySettingsToConfig', () => {
       'features.enableAdmin': false,
       'modules.auth': false,
     })
-    // 能力开关与认证总闸已移出注册表：旧库里残留的取值不能再改变输出。
+    // 能力开关已移出注册表：旧库里残留的取值不能再改变输出。
     expect(config.features).toEqual({
       enableI18n: true,
       enableFileUpload: false,
@@ -183,7 +183,6 @@ describe('applySettingsToConfig', () => {
       enableAdmin: true,
       enableAIGateway: false,
     })
-    expect(config.auth.enabled).toBe(true)
   })
 
   it('三个认证方法开关映射到 auth', () => {

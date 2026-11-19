@@ -274,26 +274,6 @@ export function getServiceStatuses(input: {
   }
   check('analytics', analytics)
 
-  // auth 没有运行期必需的 env：secret 缺失时 better-auth 退回开发期密钥，
-  // 生产环境由 `validateProdServerEnv` 在部署前校验。
-  // 唯一的死锁组合是「要求邮箱验证却发不出验证邮件」，故单列一条配置矛盾诊断。
-  check(
-    'auth',
-    [],
-    [],
-    config.auth.requireEmailVerification && result.mail.state !== 'configured'
-      ? [
-          {
-            key: 'mail.enabled',
-            location: 'src/config/website.ts',
-            conflict: true,
-            reason:
-              '要求邮箱验证但邮件未配置完整，新用户将永远无法登录；请补齐邮件配置，或显式设置 auth.requireEmailVerification: false',
-          },
-        ]
-      : [],
-  )
-
   return result
 }
 

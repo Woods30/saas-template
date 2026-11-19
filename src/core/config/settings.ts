@@ -329,10 +329,6 @@ export function applySettingsToConfig(
       },
     },
     auth: {
-      // `modules.auth` 已从注册表移除。消费方（settings-nav、account-menu、
-      // AdminConsoleLayout、api/auth/$）仍读这个形状，先固定为原默认值 `true`，
-      // Task 6 再连同类型一起删除这层过渡形状。
-      enabled: true,
       emailEnabled: bool(values, 'auth.emailEnabled'),
       googleEnabled: bool(values, 'auth.googleEnabled'),
       githubEnabled: bool(values, 'auth.githubEnabled'),

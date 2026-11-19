@@ -36,7 +36,6 @@ export type ServiceModule =
   | 'manualPayments'
   | 'notification'
   | 'analytics'
-  | 'auth'
 export type SiteModule = 'docs' | 'blog' | 'changelog' | ServiceModule
 
 export interface WebsiteConfig {
@@ -171,13 +170,6 @@ export interface WebsiteConfig {
   /** Turnstile 的**公开**站点 key；secret 只在服务端配置里。 */
   captcha: { siteKey?: string }
   auth: {
-    /**
-     * 认证总闸，仅为过渡形状保留。
-     *
-     * 注册表里的 `modules.auth` 已移除，认证可用性改由三个方法开关决定；
-     * 这个字段固定为 `true`，Task 6 删除。
-     */
-    enabled: boolean
     /** 邮箱 + 密码登录。 */
     emailEnabled: boolean
     /** Google 登录：还需配齐 clientId / clientSecret 才会真正启用。 */
@@ -309,7 +301,6 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       analytics: { enabled: false, providers: [], config: {} },
       captcha: {},
       auth: {
-        enabled: true,
         emailEnabled: true,
         googleEnabled: true,
         githubEnabled: false,

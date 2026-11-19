@@ -24,6 +24,7 @@ import { defaultSettingsValues, SETTING_FIELDS, type SettingTabId, settingField 
 import {
   applySettingsToConfig,
   resolveSettingsValues,
+  SettingsValidationError,
   type SettingsValues,
   validateGroupValues,
   validateTabValues,
@@ -246,8 +247,24 @@ export async function saveSettingsTab(
   options: SettingsLoadOptions = {},
 ): Promise<SettingsValues> {
   const validated = validateTabValues(tabId, input)
+  if (tabId === 'auth') assertAtLeastOneAuthMethod(validated)
   assertCanWriteSecrets(validated, options)
   return persistSettingsValues(db, validated, options)
+}
+
+/**
+ * 认证 tab 必须至少保留一种登录方式。
+ *
+ * 不能放进 `validateTabValues`：它只看本次提交的键，单独提交
+ * `auth.emailEnabled: false` 时看不到另外两个开关。这里把提交值合到当前快照上
+ * 再判，得到的才是保存后的真实状态。
+ */
+function assertAtLeastOneAuthMethod(validated: SettingsValues): void {
+  const prospective = { ...getSettingsSnapshot(), ...validated }
+  const enabled = ['auth.emailEnabled', 'auth.googleEnabled', 'auth.githubEnabled'].some(
+    (key) => prospective[key] === true,
+  )
+  if (!enabled) throw new SettingsValidationError('auth', '至少保留一种登录方式')
 }
 
 /** 当前生效的站点配置：与全站读 `websiteConfig` 拿到的是同一份。 */

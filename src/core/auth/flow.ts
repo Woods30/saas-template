@@ -17,6 +17,15 @@ export function requiresEmailVerification(config: WebsiteConfig = websiteConfig)
   return config.auth.requireEmailVerification
 }
 
+/**
+ * 是否启用邮箱 + 密码登录。与 `getAuth` 的 `emailAndPassword.enabled` 同源。
+ *
+ * 登录 / 注册页据此隐藏邮箱表单；关闭后页面只保留社交登录。
+ */
+export function emailPasswordEnabled(config: WebsiteConfig = websiteConfig): boolean {
+  return config.auth.emailEnabled
+}
+
 /** 注册成功后的去向。 */
 export type SignUpOutcome = 'signed_in' | 'awaiting_verification'
 

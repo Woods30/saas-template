@@ -7,11 +7,9 @@ import { authFormMessages } from '@/components/auth/formMessages'
 import { SubmitButton } from '@/components/auth/SubmitButton'
 import { authClient } from '@/core/auth/client'
 import { createResetSchema, MIN_PASSWORD_LENGTH } from '@/core/auth/validation'
-import { assertPageEnabled } from '@/lib/module-access'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/auth/reset-password')({
-  beforeLoad: () => assertPageEnabled('auth'),
   component: ResetPasswordPage,
 })
 

@@ -16,13 +16,12 @@ function makeServerEnv(extra: Record<string, string> = {}): RuntimeEnv {
 /**
  * 构造独立配置，避免用例之间互相污染。
  *
- * auth 与 mail 的开关逐项写死：本文件测的是 `getServiceStatuses` 的分支逻辑，
+ * mail 的开关逐项写死：本文件测的是 `getServiceStatuses` 的分支逻辑，
  * 各仓的默认开关不同（可全关），依赖默认值会让用例无谓变红。
  */
 function makeConfig(mutate?: (config: WebsiteConfig) => void): WebsiteConfig {
   const config = createWebsiteConfig(parsePublicEnv({}))
   config.mail.enabled = true
-  config.auth.enabled = true
   mutate?.(config)
   return config
 }
@@ -39,7 +38,6 @@ function makeAllDisabledConfig(mutate?: (config: WebsiteConfig) => void): Websit
   config.payment.enabled = false
   config.notification.enabled = false
   config.analytics.enabled = false
-  config.auth.enabled = true
   mutate?.(config)
   return config
 }
@@ -541,60 +539,6 @@ describe('getServiceStatuses — analytics', () => {
   })
 })
 
-// auth 分支。
-describe('getServiceStatuses — auth', () => {
-  it('显式关闭邮箱验证时，邮件未配置不阻止密码登录', () => {
-    const statuses = getServiceStatuses({
-      config: makeConfig((c) => {
-        c.auth.requireEmailVerification = false
-      }),
-      serverEnv: makeServerEnv({}),
-    })
-    expect(statuses.auth.state).toBe('configured')
-  })
-
-  it('显式要求验证但邮件未配置时判为 incomplete：否则新用户永远无法登录', () => {
-    const statuses = getServiceStatuses({
-      config: makeConfig((c) => {
-        c.auth.requireEmailVerification = true
-      }),
-      serverEnv: makeServerEnv({}),
-    })
-    expect(statuses.auth.state).toBe('incomplete')
-    expect(statuses.auth.issues.map((i) => i.key)).toContain('mail.enabled')
-  })
-
-  it('要求验证且邮件配置齐全时为 configured', () => {
-    const statuses = getServiceStatuses({
-      config: makeConfig((c) => {
-        c.mail.enabled = true
-      }),
-      serverEnv: makeServerEnv({ RESEND_API_KEY: 'key', MAIL_FROM: 'noreply@jerbix.dev' }),
-    })
-    expect(statuses.auth.state).toBe('configured')
-  })
-
-  it('关闭邮箱验证时不依赖邮件配置（无邮件部署的唯一放行方式）', () => {
-    const statuses = getServiceStatuses({
-      config: makeConfig((c) => {
-        c.auth.requireEmailVerification = false
-      }),
-      serverEnv: makeServerEnv({}),
-    })
-    expect(statuses.auth.state).toBe('configured')
-  })
-
-  it('auth 关闭时不受该组合约束', () => {
-    const statuses = getServiceStatuses({
-      config: makeConfig((c) => {
-        c.auth.enabled = false
-      }),
-      serverEnv: makeServerEnv({}),
-    })
-    expect(statuses.auth.state).toBe('disabled')
-  })
-})
-
 // 凭据不外泄。
 describe('getServiceStatuses — 凭据不外泄', () => {
   it('序列化结果不含任何合成 secret 值', () => {
@@ -744,11 +688,7 @@ describe('formatServiceDiagnostics', () => {
   it('全部关闭时不产生 incomplete，且不输出任何字段值', () => {
     const result = formatServiceDiagnostics(
       statusesOf({
-        // auth 默认要求邮箱验证，缺 mail 时必然 incomplete；本用例只验证无 incomplete
-        // 时的输出与脱敏，故关掉验证。
-        config: makeAllDisabledConfig((c) => {
-          c.auth.requireEmailVerification = false
-        }),
+        config: makeAllDisabledConfig(),
         serverEnv: makeServerEnv({ RESEND_API_KEY: 'synthetic-secret' }),
       }),
     )
@@ -775,8 +715,6 @@ describe('formatServiceDiagnostics', () => {
       statusesOf({
         config: makeAllDisabledConfig((c) => {
           c.payment.enabled = true
-          // 同上：只验证齐全时 configured 且不泄漏 secret，故关掉邮箱验证。
-          c.auth.requireEmailVerification = false
         }),
         serverEnv: makeServerEnv({
           STRIPE_SECRET_KEY: 'synthetic-stripe-key',

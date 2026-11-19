@@ -8,11 +8,9 @@ import { SubmitButton } from '@/components/auth/SubmitButton'
 import { authClient } from '@/core/auth/client'
 import { createForgotSchema } from '@/core/auth/validation'
 import { getRequestLocale } from '@/lib/locale'
-import { assertPageEnabled } from '@/lib/module-access'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/auth/forgot-password')({
-  beforeLoad: () => assertPageEnabled('auth'),
   component: ForgotPasswordPage,
 })
 
