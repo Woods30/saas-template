@@ -17,12 +17,11 @@ import { fetchCustomSettings, saveCustomSettings } from '@/core/config/admin'
 import { type CustomSetting, isValidCustomKey } from '@/core/config/custom'
 import { m } from '@/locale/paraglide/messages.js'
 
-/** 后台回显的密钥掩码前缀；与 `crypto.maskSecret` 保持一致。 */
-const MASK_PREFIX = '••••'
-
 /** 表格行：服务端数据加一个本地 uid，作为 React key（键可被编辑，不能当 key）。 */
 interface EditableRow extends CustomSetting {
   uid: string
+  /** 密钥是否已配置；掩码本身不进输入框，只用它决定 placeholder。 */
+  configured: boolean
 }
 
 let nextRowUid = 0
@@ -31,6 +30,10 @@ function toEditableRow(entry: CustomSetting): EditableRow {
   nextRowUid += 1
   return {
     ...entry,
+    // 密钥值不回显：掩码一旦成为输入框的 value，新输入会追加在掩码后面，
+    // 提交时又被当成「没改」，新密钥就被静默丢弃。空值表示保持原值。
+    value: entry.secret ? '' : entry.value,
+    configured: entry.secret && entry.value !== '',
     // 新增行没有旧键；已加载的行记住原键，改名后仍能找回原密文。
     originalKey: entry.key === '' ? undefined : entry.key,
     uid: `custom-row-${nextRowUid}`,
@@ -91,9 +94,9 @@ export function CustomConfigPanel() {
       (prev) =>
         prev?.map((row, i) => {
           if (i !== index) return row
-          // 从密钥切回普通值时，掩码不能当成真实值保存。
-          const value = !checked && row.value.startsWith(MASK_PREFIX) ? '' : row.value
-          return { ...row, secret: checked, value }
+          // 掩码从未进入输入框，切回普通值时不需要额外清理；切到密钥时保留已输入
+          // 的值（用户可能正想把它改存为密钥）。切回普通值后不再是「已配置密钥」。
+          return { ...row, secret: checked, configured: checked ? row.configured : false }
         }) ?? prev,
     )
   }
@@ -176,6 +179,13 @@ export function CustomConfigPanel() {
                     <Input
                       value={row.value}
                       aria-label={`${m.admin_settings_custom_value()} ${index + 1}`}
+                      placeholder={
+                        row.secret
+                          ? row.configured
+                            ? m.admin_settings_secret_configured()
+                            : m.admin_settings_secret_unset()
+                          : undefined
+                      }
                       onChange={(event) => updateRow(index, { value: event.target.value })}
                     />
                   </TableCell>

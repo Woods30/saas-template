@@ -52,7 +52,8 @@ import { m } from '@/locale/paraglide/messages.js'
  * - 左侧（窄屏顶部）是 tab 导航，切换 tab 只显示该 tab 的分组；
  * - 草稿按 tab 保存，切走再切回来不丢未保存的输入；重新拉取后回到服务端值；
  * - 每个 tab 顶部只有一个保存按钮，提交该 tab 所有分组的字段——收起的分组也算；
- * - 每个分组是可折叠卡片，默认展开；密钥只回显末四位、留空表示不修改。
+ * - 每个分组是可折叠卡片，默认展开；密钥输入框不回显掩码，留空表示不修改，
+ *   是否已配置用 placeholder 表达。
  */
 export const Route = createFileRoute('/{-$locale}/_layout/admin/settings')({
   head: () => adminHead(adminRoutes.settings),
@@ -67,7 +68,10 @@ function seedDraft(tab: SettingTab, values: AdminSettingsValues): Draft {
   const draft: Draft = {}
   for (const group of tab.groups) {
     for (const field of group.fields) {
-      draft[field.key] = values[field.key]
+      // 密钥字段的草稿一律留空：服务端只回显掩码，把掩码填进输入框会让新输入
+      // 追加在掩码后面，提交时又被当成「没改」而静默丢弃。是否已配置由
+      // placeholder 表达，空值表示保持原值。
+      draft[field.key] = field.secret ? '' : values[field.key]
     }
   }
   return draft
@@ -77,10 +81,13 @@ function seedDraft(tab: SettingTab, values: AdminSettingsValues): Draft {
 function SettingInput({
   field,
   value,
+  placeholder,
   onChange,
 }: {
   field: SettingField
   value: unknown
+  /** 仅密钥字段使用：值不在输入框里回显，用占位文案表达是否已配置。 */
+  placeholder?: string
   onChange: (next: unknown) => void
 }) {
   const id = `setting-${field.key.replace(/\./g, '-')}`
@@ -172,6 +179,7 @@ function SettingInput({
         id={id}
         type={inputType}
         value={String(value ?? '')}
+        placeholder={placeholder}
         onChange={(e) =>
           onChange(field.kind === 'number' ? Number(e.target.value) : e.target.value)
         }
@@ -185,10 +193,13 @@ function SettingInput({
 function SettingGroupCard({
   group,
   draft,
+  values,
   onChange,
 }: {
   group: SettingGroup
   draft: Draft
+  /** 服务端值：密钥字段只在这里有掩码，用来判断「是否已配置」。 */
+  values: AdminSettingsValues
   onChange: (key: string, next: unknown) => void
 }) {
   const [open, setOpen] = useState(true)
@@ -233,6 +244,13 @@ function SettingGroupCard({
                 key={field.key}
                 field={field}
                 value={draft[field.key]}
+                placeholder={
+                  field.secret
+                    ? values[field.key] === '' || values[field.key] === undefined
+                      ? m.admin_settings_secret_unset()
+                      : m.admin_settings_secret_configured()
+                    : undefined
+                }
                 onChange={(next) => onChange(field.key, next)}
               />
             ))}
@@ -271,8 +289,9 @@ function buildPayload(
   for (const group of tab.groups) {
     for (const field of group.fields) {
       const value = draft[field.key]
-      // 密钥：与初始掩码相同表示没改，不提交（服务端会保持原值）。
-      if (field.secret && value === values[field.key]) continue
+      // 密钥：草稿从空值起步，仍是空值表示没改，不提交（服务端保持原值）。
+      // 旧客户端回传掩码时也按「没改」处理。
+      if (field.secret && (value === '' || value === values[field.key])) continue
       if (field.kind === 'list') {
         payload[field.key] =
           typeof value === 'string'
@@ -417,6 +436,7 @@ function AdminSettingsPage() {
                     key={group.id}
                     group={group}
                     draft={draft}
+                    values={values}
                     onChange={setField}
                   />
                 ))}

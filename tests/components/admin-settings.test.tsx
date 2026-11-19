@@ -198,6 +198,94 @@ describe('系统设置页', () => {
     expect(screen.queryAllByRole('textbox')).toHaveLength(0)
   })
 
+  it('已配置密钥的掩码不进输入框，新输入按明文提交', async () => {
+    mocks.fetchAdminSettings.mockImplementation(async () => ({
+      ...structuredClone(defaultSettingsValues()),
+      'github.clientId': 'configured-client-id',
+      'github.clientSecret': '••••••••wxyz',
+    }))
+
+    await renderPage()
+    fireEvent.click(screen.getByRole('tab', { name: '认证与安全' }))
+
+    const secret = await screen.findByLabelText('GitHub Client Secret')
+    // 掩码一旦成为 value，新输入会追加在掩码后面并被服务端当成「没改」。
+    expect(secret).toHaveValue('')
+    expect(secret).toHaveAttribute('placeholder', '已配置，留空不修改')
+
+    fireEvent.change(secret, { target: { value: 'brand-new-secret' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(mocks.saveAdminSettings).toHaveBeenCalledTimes(1))
+
+    const call = mocks.saveAdminSettings.mock.calls[0]?.[0] as {
+      data: { values: Record<string, unknown> }
+    }
+    expect(call.data.values['github.clientSecret']).toBe('brand-new-secret')
+    expect(JSON.stringify(call.data.values)).not.toContain('••••')
+  })
+
+  it('未输入新密钥时不提交该字段，旧值保持', async () => {
+    mocks.fetchAdminSettings.mockImplementation(async () => ({
+      ...structuredClone(defaultSettingsValues()),
+      'github.clientSecret': '••••••••wxyz',
+    }))
+
+    await renderPage()
+    fireEvent.click(screen.getByRole('tab', { name: '认证与安全' }))
+    await screen.findByLabelText('GitHub Client Secret')
+
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(mocks.saveAdminSettings).toHaveBeenCalledTimes(1))
+
+    const call = mocks.saveAdminSettings.mock.calls[0]?.[0] as {
+      data: { values: Record<string, unknown> }
+    }
+    expect(call.data.values).not.toHaveProperty('github.clientSecret')
+  })
+
+  it('自定义密钥行不回显掩码，新输入按明文提交', async () => {
+    mocks.fetchCustomSettings.mockResolvedValue([
+      { key: 'api.token', value: '••••••••wxyz', secret: true },
+    ])
+
+    await renderPage()
+    fireEvent.click(screen.getByRole('tab', { name: '自定义配置' }))
+
+    const value = await screen.findByLabelText('值 1')
+    expect(value).toHaveValue('')
+    expect(value).toHaveAttribute('placeholder', '已配置，留空不修改')
+
+    fireEvent.change(value, { target: { value: 'plain-new-token' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(mocks.saveCustomSettings).toHaveBeenCalledTimes(1))
+
+    const call = mocks.saveCustomSettings.mock.calls[0]?.[0] as {
+      data: { entries: Array<{ key: string; value: string; secret: boolean }> }
+    }
+    expect(call.data.entries).toEqual([
+      { key: 'api.token', value: 'plain-new-token', secret: true, originalKey: 'api.token' },
+    ])
+  })
+
+  it('自定义密钥未输入时提交空值，服务端保持原密文', async () => {
+    mocks.fetchCustomSettings.mockResolvedValue([
+      { key: 'api.token', value: '••••••••wxyz', secret: true },
+    ])
+
+    await renderPage()
+    fireEvent.click(screen.getByRole('tab', { name: '自定义配置' }))
+    await screen.findByLabelText('值 1')
+
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(mocks.saveCustomSettings).toHaveBeenCalledTimes(1))
+
+    const call = mocks.saveCustomSettings.mock.calls[0]?.[0] as {
+      data: { entries: Array<{ key: string; value: string; secret: boolean }> }
+    }
+    expect(call.data.entries[0]?.value).toBe('')
+    expect(call.data.entries[0]?.secret).toBe(true)
+  })
+
   /**
    * 回归：StrictMode 下 effect 执行两次，两个拉取并发在途；最新一次先返回后用户
    * 新增了行，迟到的旧响应不能把 `rows` 整体覆盖（否则用户输入被静默丢弃）。
