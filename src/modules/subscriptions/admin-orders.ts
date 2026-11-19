@@ -65,9 +65,10 @@ export interface AdminOrdersResult {
 /**
  * 组合类型与状态筛选。
  *
- * 类型口径互斥：订阅付款只看 `type`；渠道一次性购买要排除人工核销
- * （人工核销也记 `one_time`，但它的资金事实由管理员核验产生，归到单独一档）；
- * 人工核销只看 provider。计数查询复用同一 `where`，两者口径不会走偏。
+ * 类型口径是一个划分，不是重叠视图：订阅与渠道一次性都排除人工核销
+ * （人工核销按商品类型也会写 `subscription` / `one_time`，但资金事实由管理员
+ * 核验产生，统一归入单独一档）；人工核销只看 provider，不再按 type 细分。
+ * 计数查询复用同一 `where`，两者口径不会走偏。
  */
 function paymentsWhere(query: AdminPaymentsQuery): SQL | undefined {
   const conditions: SQL[] = []
@@ -77,6 +78,7 @@ function paymentsWhere(query: AdminPaymentsQuery): SQL | undefined {
   switch (query.tab ?? 'all') {
     case 'subscription':
       conditions.push(eq(schema.payments.type, 'subscription'))
+      conditions.push(ne(schema.payments.provider, MANUAL_PAYMENT_PROVIDER))
       break
     case 'one_time':
       conditions.push(eq(schema.payments.type, 'one_time'))

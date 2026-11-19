@@ -163,6 +163,25 @@ describe('付款类型 tab', () => {
     expect(result.total).toBe(1)
   })
 
+  it('人工核销的订阅型付款只出现在 manual_payments tab，不重复计入 subscription', async () => {
+    const { sqlite, db } = createTestDatabase()
+    // 核销链路按商品类型也写 `type = 'subscription'`；四档必须是划分而非重叠视图。
+    seedPayment(sqlite, {
+      id: 'manual_sub',
+      type: 'subscription',
+      provider: 'manual_payments',
+      createdAt: 100,
+    })
+
+    const subscription = await queryAdminPayments(db, { tab: 'subscription' })
+    expect(subscription.orders).toEqual([])
+    expect(subscription.total).toBe(0)
+
+    const manual = await queryAdminPayments(db, { tab: 'manual_payments' })
+    expect(manual.orders.map((order) => order.id)).toEqual(['manual_sub'])
+    expect(manual.total).toBe(1)
+  })
+
   it('状态筛选与类型筛选叠加', async () => {
     const { sqlite, db } = createTestDatabase()
     seedPayment(sqlite, { id: 'sub_paid', type: 'subscription', status: 'paid', createdAt: 300 })
