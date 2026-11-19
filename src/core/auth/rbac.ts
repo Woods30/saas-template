@@ -1,12 +1,18 @@
 /**
- * RBAC 权限匹配、天花板与出厂目录（纯函数与常量，不碰数据库，客户端与脚本均可安全导入）。
+ * RBAC 权限匹配、天花板与出厂目录（纯函数与常量，客户端与脚本均可安全导入）。
  *
  * 借鉴 ShipAny 的通配与天花板规则：
  * - `*` 匹配全部权限点；
  * - `admin.users.*` 匹配 `admin.users.` 前缀下的所有动作；
  * - 权限天花板（privilege ceiling）：任何操作者只能授予、修改或移除**自己已持有**的权限，
  *   防止只拿到 `admin.roles.write` 的管理员给自己或他人挂上 `*` 提权。
+ *
+ * `loadUserPermissions` 是唯一会读库的成员：它只接收 `DB` 句柄、不碰请求上下文/env，
+ * 所以模块仍可在客户端导入（`schema` 本身就是客户端安全的纯数据）。
  */
+import { eq, inArray } from 'drizzle-orm'
+import type { DB } from '@/core/db'
+import { permissions, rolePermissions, roles, userRoles, users } from '@/core/db/schema'
 
 export const ROLES = {
   SUPER_ADMIN: 'super_admin',
@@ -270,6 +276,80 @@ export function matchAllPermissions(
 /** 判断权限码是否代表后台访问能力（`*` / `admin` / `admin.*`）。 */
 export function isAdminPermission(code: string): boolean {
   return code === '*' || code === 'admin' || code.startsWith('admin.')
+}
+
+/**
+ * 管理台入口的判定：持有任意 `admin.*` 权限点（或 `*` / `admin`）。
+ *
+ * 不能写成 `matchPermission('admin.*', permissions)`：目标值是前缀通配时，
+ * `matchPermission` 只认持有相同或更宽的通配，持有具体 `admin.users.read` 的
+ * `admin` / `editor` 会被判为不通过。反过来问「持有的权限点里有没有一个落在
+ * `admin` 域」才是「任意 `admin.*` 权限」的本意。
+ */
+export function hasAdminAccess(permissionCodes: readonly string[]): boolean {
+  return permissionCodes.some(isAdminPermission)
+}
+
+/**
+ * 解析指定用户当前生效的权限码集合。
+ *
+ * - 用户有 `user_roles` 绑定时，汇总所有 `active` 且未过期角色的权限点；
+ * - 没有任何绑定（或绑定全部失效）时回退 `users.role`：`admin` / `super_admin`
+ *   映射为 `['*']`，保证存量管理员账号仍然可用；
+ * - 其余情况返回空数组（fail-closed）。
+ *
+ * 放在 `core` 而不是 RBAC 模块里，是因为 `fetchSession` 的会话读取属于基础设施，
+ * 不能反向依赖业务模块。模块的 `getUserPermissions` 是这里的薄封装。
+ */
+export async function loadUserPermissions(
+  db: DB,
+  userId: string,
+  now: Date = new Date(),
+): Promise<string[]> {
+  if (!userId) return []
+
+  const assignedRows = await db
+    .select({
+      roleId: userRoles.roleId,
+      roleStatus: roles.status,
+      expiresAt: userRoles.expiresAt,
+    })
+    .from(userRoles)
+    .innerJoin(roles, eq(userRoles.roleId, roles.id))
+    .where(eq(userRoles.userId, userId))
+
+  if (assignedRows.length > 0) {
+    const activeRoleIds = assignedRows
+      .filter(
+        (row) =>
+          row.roleStatus === 'active' &&
+          (row.expiresAt === null || row.expiresAt.getTime() > now.getTime()),
+      )
+      .map((row) => row.roleId)
+
+    if (activeRoleIds.length === 0) return []
+
+    const permRows = await db
+      .select({ code: permissions.code })
+      .from(rolePermissions)
+      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+      .where(inArray(rolePermissions.roleId, activeRoleIds))
+
+    return Array.from(new Set(permRows.map((p) => p.code))).sort()
+  }
+
+  const userRow = await db
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+
+  const legacyRole = userRow[0]?.role
+  if (legacyRole === ROLES.ADMIN || legacyRole === ROLES.SUPER_ADMIN) {
+    return ['*']
+  }
+
+  return []
 }
 
 /**

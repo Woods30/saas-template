@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   findCeilingViolation,
   isAdminPermission,
+  loadUserPermissions,
   matchAllPermissions,
   matchAnyPermission,
   matchPermission,
@@ -168,5 +169,59 @@ describe('RBAC 数据库服务', () => {
     await expect(assertUserPermission(db, null, 'admin.users.read')).rejects.toMatchObject({
       status: 403,
     })
+  })
+
+  it('loadUserPermissions 对 users.role = admin / super_admin 回退通配权限', async () => {
+    const { sqlite, db } = createTestDatabase()
+    await ensureDefaultRbac(db)
+    seedUser(sqlite, 'u_role_admin')
+    seedUser(sqlite, 'u_role_super')
+
+    // 尚无 user_roles 绑定时才走 `users.role` 兜底。
+    sqlite.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run('u_role_admin')
+    sqlite.prepare("UPDATE users SET role = 'super_admin' WHERE id = ?").run('u_role_super')
+
+    expect(await loadUserPermissions(db, 'u_role_admin')).toEqual(['*'])
+    expect(await loadUserPermissions(db, 'u_role_super')).toEqual(['*'])
+  })
+
+  it('loadUserPermissions 返回生效角色的并集，且排除过期分配', async () => {
+    const { sqlite, db } = createTestDatabase()
+    await ensureDefaultRbac(db)
+    seedUser(sqlite, 'u_union')
+
+    const now = new Date('2026-06-01T00:00:00Z')
+    const future = new Date('2026-06-02T00:00:00Z')
+    const past = new Date('2026-05-31T00:00:00Z')
+
+    await assignRolesToUser(db, {
+      actorPermissions: ['*'],
+      targetUserId: 'u_union',
+      assignments: [
+        { roleName: 'editor', expiresAt: future },
+        { roleName: 'viewer', expiresAt: past },
+      ],
+    })
+
+    const held = await loadUserPermissions(db, 'u_union', now)
+    // editor 的并集在；viewer 已过期，不能带进任何只读权限之外的额外权限。
+    expect(held).toContain('admin.content.read')
+    expect(held).toContain('admin.tickets.read')
+    // 过期角色不得出现在结果里：viewer 的 admin.orders.read 只可能来自它。
+    expect(held).not.toContain('admin.orders.read')
+  })
+
+  it('getUserPermissions 与 loadUserPermissions 结果一致（薄委托）', async () => {
+    const { sqlite, db } = createTestDatabase()
+    await ensureDefaultRbac(db)
+    seedUser(sqlite, 'u_same')
+
+    await assignRolesToUser(db, {
+      actorPermissions: ['*'],
+      targetUserId: 'u_same',
+      assignments: [{ roleName: 'editor' }],
+    })
+
+    expect(await getUserPermissions(db, 'u_same')).toEqual(await loadUserPermissions(db, 'u_same'))
   })
 })

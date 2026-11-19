@@ -1,11 +1,12 @@
-import { createServerFn, createServerOnlyFn } from '@tanstack/react-start'
-import { asc, count, eq, inArray } from 'drizzle-orm'
+import { createServerFn } from '@tanstack/react-start'
+import { asc, count, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   DEFAULT_PERMISSIONS,
   DEFAULT_ROLES,
   findCeilingViolation,
   isAdminPermission,
+  loadUserPermissions,
   matchPermission,
   type PermissionSeed,
   permissionIdOf,
@@ -14,6 +15,7 @@ import {
   roleIdOf,
   SYSTEM_ROLE_NAMES,
 } from '@/core/auth/rbac'
+import { requirePermissionDb } from '@/core/auth/session'
 import type { DB } from '@/core/db'
 import { permissions, rolePermissions, roles, userRoles, users } from '@/core/db/schema'
 import { safeRecordAuditLog } from '@/modules/audit/service'
@@ -199,63 +201,17 @@ export async function listRolesWithPermissions(db: DB): Promise<RoleWithPermissi
 }
 
 /**
- * 解析指定用户当前生效的权限码集合。
+ * 解析指定用户当前生效的权限码集合（`core/auth/rbac` 的薄封装）。
  *
- * - 若该用户在 `user_roles` 中有绑定记录，则汇总所有 `active` 且未过期角色的权限；
- * - 若该用户在 `user_roles` 中尚无记录，则回退检查 `users.role` 字段（`admin` / `super_admin` 映射为 `['*']`），
- *   保证存量管理员账号与单元测试平滑过渡。
+ * 实现在 `src/core/auth/rbac.ts`：`fetchSession` 这类基础设施也要读权限，
+ * 不能反向依赖业务模块，因此 SQL 只保留一份，这里只做委托。
  */
-export async function getUserPermissions(
+export function getUserPermissions(
   db: DB,
   userId: string,
   now: Date = new Date(),
 ): Promise<string[]> {
-  if (!userId) return []
-
-  const assignedRows = await db
-    .select({
-      roleId: userRoles.roleId,
-      roleStatus: roles.status,
-      expiresAt: userRoles.expiresAt,
-    })
-    .from(userRoles)
-    .innerJoin(roles, eq(userRoles.roleId, roles.id))
-    .where(eq(userRoles.userId, userId))
-
-  if (assignedRows.length > 0) {
-    const activeRoleIds = assignedRows
-      .filter(
-        (row) =>
-          row.roleStatus === 'active' &&
-          (row.expiresAt === null || row.expiresAt.getTime() > now.getTime()),
-      )
-      .map((row) => row.roleId)
-
-    if (activeRoleIds.length === 0) {
-      return []
-    }
-
-    const permRows = await db
-      .select({ code: permissions.code })
-      .from(rolePermissions)
-      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-      .where(inArray(rolePermissions.roleId, activeRoleIds))
-
-    return Array.from(new Set(permRows.map((p) => p.code))).sort()
-  }
-
-  const userRow = await db
-    .select({ role: users.role })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1)
-
-  const legacyRole = userRow[0]?.role
-  if (legacyRole === ROLES.ADMIN || legacyRole === ROLES.SUPER_ADMIN) {
-    return ['*']
-  }
-
-  return []
+  return loadUserPermissions(db, userId, now)
 }
 
 /** 判断指定用户在 `now` 时刻是否具备 `permissionCode` 权限。 */
@@ -507,27 +463,11 @@ export async function assertUserPermission(
 
 /**
  * 服务端权限守卫：读取当前请求会话、解析 RBAC 权限点并校验 `requiredPermission`。
+ *
+ * 实现在 `src/core/auth/session.ts`：`core/config` 与 `core/auth` 的管理台接口也要用，
+ * 而 `core` 不得反向依赖业务模块。这里只做再导出，模块内部与既有调用点继续从这里取。
  */
-export const requirePermissionDb = createServerOnlyFn(
-  async (
-    requiredPermission: string,
-  ): Promise<{ db: DB; adminId: string; permissions: string[] }> => {
-    const [{ getServerContext }, { getAuth }, { getRequestHeaders }, { createDbFromEnv }] =
-      await Promise.all([
-        import('@/lib/server-context'),
-        import('@/core/auth/auth'),
-        import('@tanstack/react-start/server'),
-        import('@/core/db'),
-      ])
-    const env = getServerContext().env
-    const session = await (await getAuth(env)).api.getSession({ headers: getRequestHeaders() })
-    const userId = session?.user.id
-    if (!userId) throw new Response(null, { status: 403 })
-    const db = await createDbFromEnv(env)
-    const held = await assertUserPermission(db, userId, requiredPermission)
-    return { db, adminId: userId, permissions: held }
-  },
-)
+export { requirePermissionDb }
 
 export interface AdminRolesOverview {
   roles: RoleWithPermissions[]

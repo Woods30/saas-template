@@ -8,14 +8,12 @@ import { getServerContext } from '@/lib/server-context'
  * 功能开关必须在进入 handler 前拦下（返回 404），否则用户能绕过 UI 直接调用插件端点。
  * 认证没有模块总闸：是否开放由三个登录方法开关决定，且只影响 UI 与服务端注册，
  * 不应把整个 API 变成 404。
- * 角色门禁不在此处：由插件自身在 handler 内判定。
+ * 角色门禁不在此处：`admin` 插件在 handler 内判定角色，管理台自身另有
+ * 权限点门禁（见 `src/routes/{-$locale}/_layout/admin.tsx`）。
  */
 export function gate(request: Request): Response | undefined {
   const path = new URL(request.url).pathname
-  const gated = [
-    { prefix: '/api/auth/api-key', enabled: websiteConfig.userFeatures.apiKeys },
-    { prefix: '/api/auth/admin', enabled: websiteConfig.features.enableAdmin },
-  ]
+  const gated = [{ prefix: '/api/auth/api-key', enabled: websiteConfig.userFeatures.apiKeys }]
   if (gated.some(({ prefix, enabled }) => path.startsWith(prefix) && !enabled)) {
     return Response.json({ error: 'MODULE_DISABLED' }, { status: 404 })
   }

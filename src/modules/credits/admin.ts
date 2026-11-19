@@ -194,8 +194,8 @@ const deductSchema = z.object({
 export const fetchAdminCredits = createServerFn({ method: 'GET' })
   .validator((input: unknown) => balancesQuerySchema.parse(input))
   .handler(async ({ data }): Promise<AdminCreditBalancesResult> => {
-    const { requireAdminDb } = await import('@/core/auth/session')
-    const { db } = await requireAdminDb()
+    const { requirePermissionDb } = await import('@/core/auth/session')
+    const { db } = await requirePermissionDb('admin.credits.read')
     return queryAdminCreditBalances(db, data)
   })
 
@@ -203,8 +203,8 @@ export const fetchAdminCredits = createServerFn({ method: 'GET' })
 export const fetchAdminCreditTransactions = createServerFn({ method: 'GET' })
   .validator((input: unknown) => transactionsQuerySchema.parse(input))
   .handler(async ({ data }): Promise<AdminCreditTransactionsResult> => {
-    const { requireAdminDb } = await import('@/core/auth/session')
-    const { db } = await requireAdminDb()
+    const { requirePermissionDb } = await import('@/core/auth/session')
+    const { db } = await requirePermissionDb('admin.credits.read')
     return queryAdminCreditTransactions(db, data)
   })
 
@@ -217,11 +217,11 @@ export const fetchAdminCreditTransactions = createServerFn({ method: 'GET' })
 export const grantAdminCredits = createServerFn({ method: 'POST' })
   .validator((input: unknown) => grantSchema.parse(input))
   .handler(async ({ data }): Promise<{ balance: number }> => {
-    const [{ requireAdminDb }, { safeRecordAuditLog }] = await Promise.all([
+    const [{ requirePermissionDb }, { safeRecordAuditLog }] = await Promise.all([
       import('@/core/auth/session'),
       import('@/modules/audit/service'),
     ])
-    const { db, adminId } = await requireAdminDb()
+    const { db, adminId } = await requirePermissionDb('admin.credits.write')
     const result = await grantCredits(db, {
       userId: data.userId,
       amount: data.amount,
@@ -249,11 +249,11 @@ export const grantAdminCredits = createServerFn({ method: 'POST' })
 export const deductAdminCredits = createServerFn({ method: 'POST' })
   .validator((input: unknown) => deductSchema.parse(input))
   .handler(async ({ data }): Promise<{ balance: number }> => {
-    const [{ requireAdminDb }, { safeRecordAuditLog }] = await Promise.all([
+    const [{ requirePermissionDb }, { safeRecordAuditLog }] = await Promise.all([
       import('@/core/auth/session'),
       import('@/modules/audit/service'),
     ])
-    const { db, adminId } = await requireAdminDb()
+    const { db, adminId } = await requirePermissionDb('admin.credits.write')
     const result = await consumeCredits(db, {
       userId: data.userId,
       amount: data.amount,

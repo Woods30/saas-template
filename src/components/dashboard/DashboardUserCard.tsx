@@ -1,6 +1,6 @@
 import { IconDotsVertical } from '@tabler/icons-react'
 import { useState } from 'react'
-import { AccountMenuLinks, isAdminUser, SignOutMenuItem } from '@/components/layout/account-menu'
+import { AccountMenuLinks, canEnterAdmin, SignOutMenuItem } from '@/components/layout/account-menu'
 import { THEME_ICON, ThemeMenuItems, useTheme } from '@/components/theme/ThemeToggle'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -87,7 +87,10 @@ export function DashboardUserCard({ session }: { session: SessionInfo }) {
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <AccountMenuLinks isAdmin={isAdminUser(session.user)} locale={getRequestLocale()} />
+            <AccountMenuLinks
+              isAdmin={canEnterAdmin(session.permissions)}
+              locale={getRequestLocale()}
+            />
             {enabled && (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>

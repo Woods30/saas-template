@@ -167,7 +167,7 @@ describe('applySettingsToConfig', () => {
     expect(config.metadata.name.length).toBeGreaterThan(0)
   })
 
-  it('features.* 不再影响站点配置', () => {
+  it('旧库里残留的 features.* / modules.auth 取值不产生任何输出', () => {
     const config = applySettingsToConfig(baseConfig, {
       ...defaultSettingsValues(),
       'features.enableI18n': false,
@@ -175,14 +175,8 @@ describe('applySettingsToConfig', () => {
       'features.enableAdmin': false,
       'modules.auth': false,
     })
-    // 能力开关已移出注册表：旧库里残留的取值不能再改变输出。
-    expect(config.features).toEqual({
-      enableI18n: true,
-      enableFileUpload: false,
-      enableApiKeys: true,
-      enableAdmin: true,
-      enableAIGateway: false,
-    })
+    // 能力开关已整体移除：残留取值既不生效，也不该在输出里留下痕迹。
+    expect('features' in config).toBe(false)
   })
 
   it('三个认证方法开关映射到 auth', () => {

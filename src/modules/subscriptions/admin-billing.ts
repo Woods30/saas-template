@@ -6,8 +6,8 @@ import { BILLING_ACTIVE_STATUSES } from './plan-state'
  * 管理台账单总览的 server function。
  *
  * 权限必须在服务端再校验：server function 是可被直接调用的 HTTP 端点，
- * 只靠菜单隐藏拦不住。非管理员一律 403，不回空数据——避免把「被拒绝」伪装成
- * 「没有记录」。
+ * 只靠菜单隐藏拦不住。缺 `admin.subscriptions.read` 一律 403，不回空数据——
+ * 避免把「被拒绝」伪装成「没有记录」。
  */
 
 /** 订阅列表的一行（含购买者邮箱）。 */
@@ -38,19 +38,12 @@ const ACTIVE_STATUSES = new Set<string>(BILLING_ACTIVE_STATUSES)
 
 export const fetchAdminBilling = createServerFn({ method: 'GET' }).handler(
   async (): Promise<AdminBillingResult> => {
-    const [{ getServerContext }, { getAuth }, { getRequestHeaders }] = await Promise.all([
-      import('@/lib/server-context'),
-      import('@/core/auth/auth'),
-      import('@tanstack/react-start/server'),
-    ])
     const { desc, eq } = await import('drizzle-orm')
-    const { createDbFromEnv, schema } = await import('@/core/db')
-
-    const env = getServerContext().env
-    const session = await (await getAuth(env)).api.getSession({ headers: getRequestHeaders() })
-    if (session?.user.role !== 'admin') throw new Response(null, { status: 403 })
-
-    const db = await createDbFromEnv(env)
+    const [{ requirePermissionDb }, { schema }] = await Promise.all([
+      import('@/core/auth/session'),
+      import('@/core/db'),
+    ])
+    const { db } = await requirePermissionDb('admin.subscriptions.read')
 
     const [subscriptionRows, paymentRows] = await Promise.all([
       db

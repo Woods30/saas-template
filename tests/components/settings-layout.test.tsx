@@ -72,7 +72,7 @@ function renderAdmin(role: SessionInfo['user']['role'] = 'admin') {
   )
 }
 
-/** 与用户卡片测试同形的会话。 */
+/** 与用户卡片测试同形的会话；`'admin'` 角色对应通配权限，其余为空（fail-closed）。 */
 function sessionWith(role: SessionInfo['user']['role'] = 'user'): SessionInfo {
   return {
     user: {
@@ -83,6 +83,7 @@ function sessionWith(role: SessionInfo['user']['role'] = 'user'): SessionInfo {
       image: null,
       role,
     },
+    permissions: role === 'admin' ? ['*'] : [],
     impersonating: false,
   }
 }

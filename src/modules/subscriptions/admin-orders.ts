@@ -158,8 +158,8 @@ const paymentsQuerySchema = z.object({
 export const fetchAdminPayments = createServerFn({ method: 'GET' })
   .validator((input: unknown) => paymentsQuerySchema.parse(input))
   .handler(async ({ data }): Promise<AdminOrdersResult> => {
-    const { requireAdminDb } = await import('@/core/auth/session')
-    const { db } = await requireAdminDb()
+    const { requirePermissionDb } = await import('@/core/auth/session')
+    const { db } = await requirePermissionDb('admin.orders.read')
     return queryAdminPayments(db, data)
   })
 
@@ -189,7 +189,7 @@ export const refundAdminOrder = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<AdminRefundResult> => {
     const [{ requirePermissionDb }, { safeRecordAuditLog }, { getPaymentProvider }] =
       await Promise.all([
-        import('@/modules/rbac/service'),
+        import('@/core/auth/session'),
         import('@/modules/audit/service'),
         import('@/core/payment'),
       ])

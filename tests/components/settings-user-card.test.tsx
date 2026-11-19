@@ -84,16 +84,18 @@ function renderCard(session: SessionInfo) {
 }
 
 function sessionWith(overrides: Partial<SessionInfo['user']> = {}): SessionInfo {
+  const user = {
+    id: 'u_1',
+    name: 'woods',
+    email: 'woods@example.com',
+    emailVerified: true,
+    image: null,
+    role: 'user',
+    ...overrides,
+  }
   return {
-    user: {
-      id: 'u_1',
-      name: 'woods',
-      email: 'woods@example.com',
-      emailVerified: true,
-      image: null,
-      role: 'user',
-      ...overrides,
-    },
+    user,
+    permissions: user.role === 'admin' ? ['*'] : [],
     impersonating: false,
   }
 }

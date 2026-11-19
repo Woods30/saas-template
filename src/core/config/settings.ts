@@ -354,15 +354,6 @@ export function applySettingsToConfig(
     captcha: {
       ...(str(values, 'turnstile.siteKey') ? { siteKey: str(values, 'turnstile.siteKey') } : {}),
     },
-    features: {
-      // `features.*` 已从注册表移除；输出形状保留到 Task 6。取值固定为原默认值，
-      // 避免库里旧的存储覆盖失效时，`enableAdmin` / `enableApiKeys` 等静默翻成 false。
-      enableI18n: true,
-      enableFileUpload: false,
-      enableApiKeys: true,
-      enableAdmin: true,
-      enableAIGateway: false,
-    },
   }
 }
 

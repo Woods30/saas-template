@@ -108,7 +108,7 @@ const subscriptionsQuerySchema = z.object({
 export const fetchAdminSubscriptions = createServerFn({ method: 'GET' })
   .validator((input: unknown) => subscriptionsQuerySchema.parse(input))
   .handler(async ({ data }): Promise<AdminSubscriptionsResult> => {
-    const { requireAdminDb } = await import('@/core/auth/session')
-    const { db } = await requireAdminDb()
+    const { requirePermissionDb } = await import('@/core/auth/session')
+    const { db } = await requirePermissionDb('admin.subscriptions.read')
     return queryAdminSubscriptions(db, data)
   })

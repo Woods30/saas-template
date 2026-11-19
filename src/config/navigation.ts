@@ -66,8 +66,6 @@ export function getPublicLinkOptions(target: PublicTarget, locale: Locale, hash?
 
 export type MenuVisibility = {
   module?: SiteModule
-  // 功能开关与服务模块是两套：后者有 `.enabled`，前者本身就是布尔值。
-  feature?: keyof WebsiteConfig['features']
   /** 静态营销页开关（`pages.*`）：没有服务模块，但可以按站点定位关闭。 */
   page?: keyof WebsiteConfig['pages']
   authenticated?: boolean
@@ -123,7 +121,6 @@ export function filterMenuItems(items: readonly MenuItem[], ctx: MenuContext): M
   for (const item of items) {
     const rule = item.visibility
     if (rule?.module && !ctx.config[rule.module].enabled) continue
-    if (rule?.feature && !ctx.config.features[rule.feature]) continue
     if (rule?.page && !ctx.config.pages[rule.page]) continue
     if (rule?.authenticated !== undefined && rule.authenticated !== ctx.authenticated) continue
     if (rule?.roles && (!ctx.authenticated || !ctx.role || !rule.roles.includes(ctx.role))) continue

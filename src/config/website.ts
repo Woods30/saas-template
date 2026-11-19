@@ -220,13 +220,6 @@ export interface WebsiteConfig {
     default: { title: string; description: string; keywords: string[] }
     locales: Record<string, { title?: string; description?: string; keywords?: string[] }>
   }
-  features: {
-    enableI18n: boolean
-    enableFileUpload: boolean
-    enableApiKeys: boolean
-    enableAdmin: boolean
-    enableAIGateway: boolean
-  }
 }
 
 /**
@@ -318,13 +311,6 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       },
       social: {},
       seo: { default: { title: '', description: '', keywords: [] }, locales: {} },
-      features: {
-        enableI18n: true,
-        enableFileUpload: false,
-        enableApiKeys: true,
-        enableAdmin: true,
-        enableAIGateway: false,
-      },
     },
     defaultSettingsValues(),
   )

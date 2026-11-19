@@ -287,14 +287,10 @@ describe('websiteConfig', () => {
     expect('description' in metadata).toBe(false)
   })
 
-  it('features 为显式布尔开关，能力清单固定', async () => {
+  it('不再暴露 features 能力开关层', async () => {
     const { website } = await loadModules(CUSTOM_BASE_URL)
-    const { features } = website.websiteConfig
-    // 能力开关的默认值是部署场景的决定（各仓可全关），
-    // 这里只钉住「清单固定 + 取值都是布尔」。
-    expect(Object.keys(features).sort()).toEqual(
-      ['enableAIGateway', 'enableAdmin', 'enableApiKeys', 'enableFileUpload', 'enableI18n'].sort(),
-    )
-    expect(Object.values(features).every((value) => typeof value === 'boolean')).toBe(true)
+    // 能力开关已拆散：认证方法进 `auth.*Enabled`，用户中心能力进 `userFeatures.*`，
+    // 管理台入口改由 RBAC 权限点决定。
+    expect('features' in website.websiteConfig).toBe(false)
   })
 })

@@ -156,6 +156,7 @@ function sessionWith(role: SessionInfo['user']['role'] = 'user'): SessionInfo {
       image: null,
       role,
     },
+    permissions: role === 'admin' ? ['*'] : [],
     impersonating: false,
   }
 }

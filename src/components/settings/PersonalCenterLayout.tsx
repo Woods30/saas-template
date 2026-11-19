@@ -7,6 +7,7 @@ import {
   toSectionMeta,
   useSectionPath,
 } from '@/components/dashboard/DashboardShell'
+import { canEnterAdmin } from '@/components/layout/account-menu'
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -41,7 +42,7 @@ export function PersonalCenterLayout({
   const section = useSectionPath('settings')
   const items = getSettingsNav(websiteConfig)
   const meta = toSectionMeta(findSettingsNavItem(section))
-  const canEnterAdmin = websiteConfig.features.enableAdmin && session.user.role === 'admin'
+  const canSwitchToAdmin = canEnterAdmin(session.permissions)
 
   return (
     <DashboardShell
@@ -74,7 +75,7 @@ export function PersonalCenterLayout({
         </SidebarGroup>
       }
       footer={
-        canEnterAdmin && (
+        canSwitchToAdmin && (
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton

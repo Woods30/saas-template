@@ -17,14 +17,15 @@ import {
   setAccountQrImageKey,
   validateManualPaymentImage,
 } from '@/modules/manual-payments/service'
+import { hasPermission } from '@/modules/rbac/service'
 
 /**
  * 收款码的上传 / 读取端点。
  *
  * 安全约束：
  *
- * - **上传只有管理员能做**：运行时授权只看 `session.user.role === 'admin'`；
- *   `enableAdmin` 是能力开关，`ADMIN_EMAILS` 是发信白名单，两者都不参与授权。
+ * - **上传要 `admin.orders.write`**：授权只看服务端解析出的 RBAC 权限点，
+ *   不看角色；`ADMIN_EMAILS` 是发信白名单，不参与授权。
  * - **不接受客户端指定的 R2 key**：key 由账户 ID 与扩展名在服务端派生，
  *   客户端传什么 key 都不作数。
  * - **读取只给管理员与该账户的订单所有者**，其他人一律 404，不泄漏资源是否存在。
@@ -45,8 +46,10 @@ export const Route = createFileRoute('/api/manual-payments/accounts/$accountId/q
         const { env } = getServerContext()
         const session = await (await getAuth(env)).api.getSession({ headers: request.headers })
         if (!session) return errorResponse('UNAUTHENTICATED')
-        // 只有管理员能改收款账户的收款码。
-        if (session.user.role !== 'admin') {
+
+        // 只有持有收款核销写权限的人能改收款码。
+        const db = await createDbFromEnv(env)
+        if (!(await hasPermission(db, session.user.id, 'admin.orders.write'))) {
           return errorResponse('FORBIDDEN')
         }
 
@@ -63,7 +66,6 @@ export const Route = createFileRoute('/api/manual-payments/accounts/$accountId/q
           return errorResponse('STORAGE_UNAVAILABLE')
         }
 
-        const db = await createDbFromEnv(env)
         const configured = websiteConfig.manualPayments.accounts.find(
           (account) => account.id === params.accountId,
         )
@@ -142,9 +144,9 @@ export const Route = createFileRoute('/api/manual-payments/accounts/$accountId/q
         const account = await findAccountFileRef(db, params.accountId)
         if (!account) return errorResponse('NO_MANUAL_PAYMENT_ACCOUNT')
 
-        // 管理员与该账户的订单所有者可读；其他人一律 404。
-        const isAdmin = session.user.role === 'admin'
-        if (!isAdmin && !(await hasOrderForAccount(db, session.user.id, params.accountId))) {
+        // 持收款核销读权限者与该账户的订单所有者可读；其他人一律 404。
+        const canReview = await hasPermission(db, session.user.id, 'admin.orders.read')
+        if (!canReview && !(await hasOrderForAccount(db, session.user.id, params.accountId))) {
           return errorResponse('ORDER_NOT_FOUND')
         }
         if (!account.qrImageKey) {

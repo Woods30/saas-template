@@ -81,7 +81,7 @@ const SETTINGS_NAV: SettingsNavItem[] = [
     icon: IconKey,
     title: () => m.settings_api_keys_title(),
     description: () => m.settings_api_keys_description(),
-    visible: (config) => config.features.enableApiKeys,
+    visible: (config) => config.userFeatures.apiKeys,
   },
 ]
 

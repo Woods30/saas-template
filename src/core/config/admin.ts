@@ -4,27 +4,16 @@
  * 读：返回当前生效的字段值（进程内快照，与页面看到的完全一致）；密钥只回显末四位。
  * 写：按 tab 校验 → 落库（密钥加密）→ 立即刷新进程内快照，保存完前台立刻生效。
  *
- * 权限：只认 `role === 'admin'`。
+ * 权限：读设置要 `admin.settings.read`，写设置与测试连接要 `admin.settings.write`；
+ * 一律服务端按 RBAC 权限点校验，不回空数据。
  */
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
+import { requirePermissionDb } from '@/core/auth/session'
 import { maskSecret } from '@/core/config/crypto'
 import { type ProbeTarget, probeConnection } from '@/core/config/probes'
 import { type SettingTab, settingField, settingTab } from '@/core/config/registry'
 import { getSettingsSnapshot, saveSettingsTab } from '@/core/config/service'
-import { createDbFromEnv } from '@/core/db'
-
-/** 取当前请求的管理员会话；非管理员一律 403（不回空数据）。 */
-async function requireAdmin(): Promise<void> {
-  const [{ getServerContext }, { getAuth }, { getRequestHeaders }] = await Promise.all([
-    import('@/lib/server-context'),
-    import('@/core/auth/auth'),
-    import('@tanstack/react-start/server'),
-  ])
-  const env = getServerContext().env
-  const session = await (await getAuth(env)).api.getSession({ headers: getRequestHeaders() })
-  if (session?.user.role !== 'admin') throw new Response(null, { status: 403 })
-}
 
 /** 可序列化到客户端的配置值形状。 */
 export type AdminJsonValue =
@@ -40,7 +29,7 @@ export type AdminSettingsValues = Record<string, AdminJsonValue>
 
 export const fetchAdminSettings = createServerFn({ method: 'GET' }).handler(
   async (): Promise<AdminSettingsValues> => {
-    await requireAdmin()
+    await requirePermissionDb('admin.settings.read')
     const values = getSettingsSnapshot()
     const masked: AdminSettingsValues = {}
     for (const [key, value] of Object.entries(values)) {
@@ -68,7 +57,7 @@ export function requireSettingTab(tabId: string): SettingTab {
 export const saveAdminSettings = createServerFn({ method: 'POST' })
   .validator((input: unknown) => saveInputSchema.parse(input))
   .handler(async ({ data }): Promise<{ saved: string }> => {
-    await requireAdmin()
+    const { db } = await requirePermissionDb('admin.settings.write')
     const tab = requireSettingTab(data.tabId)
     const { getServerContext } = await import('@/lib/server-context')
     const env = getServerContext().env
@@ -80,7 +69,6 @@ export const saveAdminSettings = createServerFn({ method: 'POST' })
         delete values[key]
       }
     }
-    const db = await createDbFromEnv(env)
     await saveSettingsTab(db, tab.id, values, {
       baseEnv: env,
       encryptionKey: env.CONFIG_ENCRYPTION_KEY,
@@ -93,7 +81,8 @@ const testInputSchema = z.object({ target: z.enum(['payment', 'mail']) })
 export const testAdminConnection = createServerFn({ method: 'POST' })
   .validator((input: unknown) => testInputSchema.parse(input))
   .handler(async ({ data }): Promise<{ ok: boolean; message: string }> => {
-    await requireAdmin()
+    // 只需要「有没有写权限」；探针不碰数据库。
+    await requirePermissionDb('admin.settings.write')
     const { getServerContext } = await import('@/lib/server-context')
     const env = getServerContext().env
     const values = getSettingsSnapshot()

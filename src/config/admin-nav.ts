@@ -26,8 +26,10 @@ import type { WebsiteConfig } from './website'
  * 菜单项同时是**页面元数据的唯一来源**：标题、说明、图标只在这里写一次，
  * 侧栏、面包屑与 `<title>` 都从同一份数据取，不再各写一套文案。
  *
- * 权限由路由 `beforeLoad` 保证（非管理员根本进不来），因此这里不做角色过滤，
- * 只按模块开关决定是否出现核销订单入口。
+ * 入口由路由 `beforeLoad` 保证（不持任意 `admin.*` 权限根本进不来）。这里**不做
+ * 逐项权限过滤**：`editor` / `viewer` 同样进得来，但点进没有权限的页面时对应的
+ * server function 会 403、页面渲染不出数据。逐项隐藏是后续改进项，不是正确性依赖。
+ * 当前只按模块开关决定是否出现核销订单入口。
  */
 export interface AdminNavItem extends NavCopy {
   /** 路由段，同时作为 DOM key 与测试锚点。 */

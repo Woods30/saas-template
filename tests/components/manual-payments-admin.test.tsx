@@ -74,7 +74,6 @@ vi.mock('@/modules/manual-payments/server', async (importOriginal) => {
 // `websiteConfig` 是 Proxy（`structuredClone` 克隆不了），这里只留快照用到的字段。
 const originalManualPaymentEnabled = websiteConfig.manualPayments.enabled
 const originalManualPaymentAccounts = websiteConfig.manualPayments.accounts
-const originalEnableAdmin = websiteConfig.features.enableAdmin
 
 const AdminManualPaymentOrdersPage = AdminManualPaymentOrdersRoute.options
   .component as unknown as () => React.JSX.Element
@@ -82,8 +81,7 @@ const AdminManualPaymentOrdersPage = AdminManualPaymentOrdersRoute.options
 beforeEach(() => {
   setLocale('zh', { reload: false })
   routerMocks.pathname = '/zh/admin/manual-payments'
-  // 打开管理台与核销模块：本套件关心的是页面行为，不是门禁开关。
-  websiteConfig.features.enableAdmin = true
+  // 打开核销模块：本套件关心的是页面行为，不是模块开关。
   websiteConfig.manualPayments.enabled = true
   websiteConfig.manualPayments.accounts = [
     {
@@ -103,7 +101,6 @@ beforeEach(() => {
 afterEach(() => {
   websiteConfig.manualPayments.enabled = originalManualPaymentEnabled
   websiteConfig.manualPayments.accounts = originalManualPaymentAccounts
-  websiteConfig.features.enableAdmin = originalEnableAdmin
 })
 
 function makeOrder(overrides: Partial<ManualPaymentOrder> = {}): ManualPaymentOrder {
@@ -154,6 +151,7 @@ function stubLoaderData(payload: Record<string, unknown>, accounts: unknown[] = 
   )
 }
 
+/** `'admin'` 角色对应通配权限；其余角色给空权限（fail-closed）。 */
 function sessionWith(role: SessionInfo['user']['role'] = 'admin'): SessionInfo {
   return {
     user: {
@@ -164,6 +162,7 @@ function sessionWith(role: SessionInfo['user']['role'] = 'admin'): SessionInfo {
       image: null,
       role,
     },
+    permissions: role === 'admin' ? ['*'] : [],
     impersonating: false,
   }
 }
@@ -380,24 +379,33 @@ describe('个人中心入口', () => {
     )
   }
 
-  it('角色、功能开关与模块三者都满足才显示入口', () => {
+  it('持 admin.* 权限且模块开启时显示入口', () => {
     renderLayout('admin')
     expect(screen.getByText('核销审核')).toBeInTheDocument()
   })
 
-  it('非管理员不显示入口', () => {
+  it('不持任何 admin.* 权限时不显示入口', () => {
     renderLayout('user')
     expect(screen.queryByText('核销审核')).toBeNull()
   })
 
-  it('模块关闭时不显示入口', () => {
-    websiteConfig.manualPayments.enabled = false
-    renderLayout('admin')
-    expect(screen.queryByText('核销审核')).toBeNull()
+  it('editor 只持内容权限时照样能进入管理台（侧栏不做权限过滤）', () => {
+    // 管理台入口判定是「任意 admin.* 权限」，所以 editor / viewer 都进得来。
+    // 侧栏目前不做逐项权限过滤：数据访问由每个 server function 的权限点把守，
+    // 点进去拿不到数据即 403。逐项隐藏留给后续任务，这里只钉住「不再因角色被挡」。
+    render(
+      <AdminConsoleLayout
+        locale="zh"
+        session={{ ...sessionWith('user'), permissions: ['admin.content.read'] }}
+      >
+        <div>内容区</div>
+      </AdminConsoleLayout>,
+    )
+    expect(screen.getByText('内容区')).toBeInTheDocument()
   })
 
-  it('功能开关关闭时不显示入口', () => {
-    websiteConfig.features.enableAdmin = false
+  it('模块关闭时不显示入口', () => {
+    websiteConfig.manualPayments.enabled = false
     renderLayout('admin')
     expect(screen.queryByText('核销审核')).toBeNull()
   })

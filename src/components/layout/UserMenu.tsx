@@ -1,6 +1,6 @@
 import { IconUser } from '@tabler/icons-react'
 import type { ReactNode } from 'react'
-import { AccountMenuLinks, isAdminUser, SignOutMenuItem } from '@/components/layout/account-menu'
+import { AccountMenuLinks, hasAdminRole, SignOutMenuItem } from '@/components/layout/account-menu'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -30,7 +30,7 @@ export function UserMenu({ guestFallback }: UserMenuProps) {
 
   const label = session.user.name ?? session.user.email
   const locale = getRequestLocale()
-  const isAdmin = isAdminUser(session.user)
+  const isAdmin = hasAdminRole(session.user.role)
 
   return (
     <DropdownMenu>

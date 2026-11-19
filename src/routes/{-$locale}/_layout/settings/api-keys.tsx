@@ -32,13 +32,13 @@ import { type ApiKeyEntry, fetchApiKeys } from '@/core/auth/api-keys'
 import { authClient } from '@/core/auth/client'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { getRequestLocale } from '@/lib/locale'
-import { assertFeatureEnabled } from '@/lib/module-access'
+import { assertUserFeatureEnabled } from '@/lib/module-access'
 import { settingsHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/_layout/settings/api-keys')({
   // 功能开关关闭时整页 404：与菜单项消失同源，路由本身始终保留。
-  beforeLoad: () => assertFeatureEnabled('enableApiKeys'),
+  beforeLoad: () => assertUserFeatureEnabled('apiKeys'),
   validateSearch: (search: Record<string, unknown>): { q?: string } => {
     const q = typeof search.q === 'string' ? search.q : ''
     return { q: q || undefined }

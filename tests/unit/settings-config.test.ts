@@ -18,7 +18,6 @@ function createConfig(
   overrides: {
     newsletter?: boolean
     apiKeys?: boolean
-    admin?: boolean
     payment?: boolean
     manualPayments?: boolean
   } = {},
@@ -29,10 +28,9 @@ function createConfig(
     newsletter: { ...config.newsletter, enabled: overrides.newsletter ?? false },
     payment: { ...config.payment, enabled: overrides.payment ?? false },
     manualPayments: { ...config.manualPayments, enabled: overrides.manualPayments ?? false },
-    features: {
-      ...config.features,
-      enableApiKeys: overrides.apiKeys ?? false,
-      enableAdmin: overrides.admin ?? false,
+    userFeatures: {
+      ...config.userFeatures,
+      apiKeys: overrides.apiKeys ?? false,
     },
   }
 }

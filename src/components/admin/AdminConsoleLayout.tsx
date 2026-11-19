@@ -7,6 +7,7 @@ import {
   toSectionMeta,
   useSectionPath,
 } from '@/components/dashboard/DashboardShell'
+import { canEnterAdmin } from '@/components/layout/account-menu'
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -85,7 +86,7 @@ export function AdminConsoleLayout({
   }
 
   // 路由 `beforeLoad` 已经拦过；这里再兜一层，避免有人绕过路由直接挂载布局。
-  if (!websiteConfig.features.enableAdmin || session.user.role !== 'admin') return null
+  if (!canEnterAdmin(session.permissions)) return null
 
   return (
     <DashboardShell

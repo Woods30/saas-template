@@ -1,112 +1,121 @@
 import { describe, expect, it, vi } from 'vitest'
-import { assertAdminRole } from '@/lib/module-access'
+import { baseConfig, createWebsiteConfig, type WebsiteConfig } from '@/config/website'
+import { DEFAULT_ROLES, matchPermission, ROLES } from '@/core/auth/rbac'
+import { resolveSessionPermissions, toSessionInfo } from '@/core/auth/session'
+import { SETTING_FIELDS } from '@/core/config/registry'
+import { parsePublicEnv } from '@/core/env/public'
+import { assertAdminAccess, assertUserFeatureEnabled } from '@/lib/module-access'
 
 /**
- * Admin 门禁的两层：功能开关关闭时整体 404；非 admin 抛 `notFound()`，不泄漏
- * 「页面存在但你没权限」。角色只认 `'admin'`，`undefined` 一律拒绝。
+ * 管理台门禁：任意 `admin.*` 权限即可进入。
+ *
+ * 判定用 404 而非 403，不向非管理员泄漏「页面存在但你没权限」。角色只认 RBAC
+ * 权限点：`editor` 持有内容 / 工单权限，同样能进管理台；`super_admin` 的 `*`
+ * 覆盖一切。
  */
 
-const mocks = vi.hoisted(() => ({
-  handler: vi.fn(async () => Response.json({ users: [] })),
-  getAuth: vi.fn(),
-}))
+const editorPermissions = DEFAULT_ROLES.find((role) => role.name === ROLES.EDITOR)?.permissions
+const viewerPermissions = DEFAULT_ROLES.find((role) => role.name === ROLES.VIEWER)?.permissions
 
-vi.mock('@/core/auth/auth', () => ({
-  getAuth: (...args: unknown[]) => {
-    mocks.getAuth(...args)
-    return { handler: mocks.handler }
-  },
-}))
-
-vi.mock('@/lib/server-context', () => ({
-  getServerContext: () => ({
-    env: { RESEND_API_KEY: 're_synthetic', MAIL_FROM: 'test@example.com' },
-  }),
-  als: {
-    getStore: () => ({ env: { RESEND_API_KEY: 're_synthetic', MAIL_FROM: 'test@example.com' } }),
-  },
-}))
-
-type Handler = (ctx: { request: Request }) => Promise<Response>
-
-function getHandler(route: unknown, method: 'GET' | 'POST'): Handler {
-  const handlers = (route as { options?: { server?: { handlers?: Record<string, unknown> } } })
-    .options?.server?.handlers
-  const handler = handlers?.[method]
-  if (typeof handler !== 'function') throw new Error(`${method} handler 缺失`)
-  return handler as Handler
+/** 断言抛出的确实是 `notFound()` 标记。 */
+function expectNotFound(fn: () => unknown): void {
+  let thrown: unknown
+  try {
+    fn()
+  } catch (error) {
+    thrown = error
+  }
+  expect(thrown).toBeDefined()
+  expect((thrown as { isNotFound?: boolean }).isNotFound).toBe(true)
 }
 
-async function importAuthRouteWithAdminFlag(enableAdmin: boolean): Promise<{ Route: unknown }> {
-  vi.resetModules()
-  vi.doMock('@/config/website', async () => {
-    const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
-    const { parsePublicEnv } =
-      await vi.importActual<typeof import('@/core/env/public')>('@/core/env/public')
-    const base = actual.createWebsiteConfig(parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' }))
-    return {
-      ...actual,
-      // mail 显式打开：默认随部署场景变化，而这里只关心 admin 端点的门禁。
-      websiteConfig: {
-        ...base,
-        mail: { ...base.mail, enabled: true },
-        features: { ...base.features, enableAdmin },
-      },
-    }
-  })
-  return import('@/routes/api/auth/$')
+function rawSession(): Parameters<typeof toSessionInfo>[0] {
+  return {
+    user: {
+      id: 'u_1',
+      name: 'woods',
+      email: 'woods@example.com',
+      emailVerified: true,
+      image: null,
+      role: 'user',
+    },
+    session: { token: 't_1' },
+  } as Parameters<typeof toSessionInfo>[0]
 }
 
-describe('features.enableAdmin 门禁', () => {
-  it('关闭时 /api/auth/admin/list-users 返回 404，且不进入 better-auth', async () => {
-    const { Route } = await importAuthRouteWithAdminFlag(false)
-    const res = await getHandler(
-      Route,
-      'GET',
-    )({
-      request: new Request('https://jerbix.dev/api/auth/admin/list-users'),
-    })
-    expect(res.status).toBe(404)
-    expect(await res.json()).toEqual({ error: 'MODULE_DISABLED' })
-    expect(mocks.getAuth).not.toHaveBeenCalled()
+describe('管理台权限门禁', () => {
+  it('持 admin.* 的 editor 能通过管理台门禁', () => {
+    expect(editorPermissions).toBeDefined()
+    expect(() => assertAdminAccess(editorPermissions)).not.toThrow()
   })
 
-  it('关闭时不影响非 admin 的 auth 端点', async () => {
-    const { Route } = await importAuthRouteWithAdminFlag(false)
-    const res = await getHandler(
-      Route,
-      'GET',
-    )({
-      request: new Request('https://jerbix.dev/api/auth/session'),
-    })
-    expect(res.status).toBe(200)
-    expect(mocks.getAuth).toHaveBeenCalled()
+  it('只有 user 角色的用户被 notFound', () => {
+    expectNotFound(() => assertAdminAccess([]))
+    expectNotFound(() => assertAdminAccess(undefined))
   })
 
-  it('开启时 admin 端点放行到 better-auth', async () => {
-    const { Route } = await importAuthRouteWithAdminFlag(true)
-    const res = await getHandler(
-      Route,
-      'GET',
-    )({
-      request: new Request('https://jerbix.dev/api/auth/admin/list-users'),
-    })
-    expect(res.status).toBe(200)
-    expect(mocks.getAuth).toHaveBeenCalled()
+  it('只读审计员同样持有 admin.* 权限，可以进入管理台', () => {
+    expect(() => assertAdminAccess(viewerPermissions)).not.toThrow()
+  })
+
+  it('super_admin 的 * 覆盖 admin.*', () => {
+    expect(() => assertAdminAccess(['*'])).not.toThrow()
+  })
+
+  it('非 admin 前缀的业务权限（如 payments.refund）不算管理台入口', () => {
+    expectNotFound(() => assertAdminAccess(['payments.refund']))
+  })
+
+  it('admin 精确匹配目标权限；editor 读不到设置', () => {
+    const adminPermissions =
+      DEFAULT_ROLES.find((role) => role.name === ROLES.ADMIN)?.permissions ?? []
+    expect(matchPermission('admin.settings.read', adminPermissions)).toBe(true)
+    expect(matchPermission('admin.settings.read', editorPermissions ?? [])).toBe(false)
   })
 })
 
-describe('assertAdminRole', () => {
-  it("role 为 'admin' 时不抛", () => {
-    expect(() => assertAdminRole('admin')).not.toThrow()
+describe('fetchSession 的权限点', () => {
+  it('fetchSession 返回权限点列表', () => {
+    const info = toSessionInfo(rawSession(), ['admin.users.read', 'admin.orders.read'])
+    expect(info.permissions).toEqual(['admin.users.read', 'admin.orders.read'])
+    expect(info.user.role).toBe('user')
   })
 
-  it.each([['user'], ['viewer'], [''], [undefined]])('role 为 %s 时抛 notFound', (role) => {
-    expect(() => assertAdminRole(role as string | undefined)).toThrow()
+  it('读取权限点失败时返回空数组而不是抛错', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const permissions = await resolveSessionPermissions('u_1', async () => {
+      throw new Error('database unavailable')
+    })
+    expect(permissions).toEqual([])
+    expect(console.warn).toHaveBeenCalled()
+    vi.restoreAllMocks()
   })
 
-  it('不匹配大小写或前缀变体', () => {
-    expect(() => assertAdminRole('Admin')).toThrow()
-    expect(() => assertAdminRole('administrator')).toThrow()
+  it('读取成功时原样返回权限点，不走空数组兜底', async () => {
+    const permissions = await resolveSessionPermissions('u_1', async () => ['admin.users.read'])
+    expect(permissions).toEqual(['admin.users.read'])
+  })
+})
+
+describe('用户中心功能开关', () => {
+  it('关闭时抛 notFound', () => {
+    const config: WebsiteConfig = {
+      ...baseConfig,
+      userFeatures: { ...baseConfig.userFeatures, apiKeys: false },
+    }
+    expectNotFound(() => assertUserFeatureEnabled('apiKeys', config))
+  })
+
+  it('开启时不抛错', () => {
+    expect(() => assertUserFeatureEnabled('apiKeys', baseConfig)).not.toThrow()
+  })
+})
+
+describe('features 已从站点配置移除', () => {
+  it('WebsiteConfig 与注册表都不再携带 features', () => {
+    const config = createWebsiteConfig(parsePublicEnv({}))
+    expect('features' in config).toBe(false)
+    expect('features' in baseConfig).toBe(false)
+    expect(SETTING_FIELDS.some((field) => field.key.startsWith('features.'))).toBe(false)
   })
 })

@@ -15,6 +15,7 @@ import {
   setOrderReceiptKey,
   validateManualPaymentImage,
 } from '@/modules/manual-payments/service'
+import { hasPermission } from '@/modules/rbac/service'
 
 /**
  * 付款凭证的上传 / 读取端点。
@@ -137,9 +138,9 @@ export const Route = createFileRoute('/api/manual-payments/orders/$orderId/recei
         const db = await createDbFromEnv(env)
         const order = await findOrderFileRef(db, params.orderId)
         if (!order) return errorResponse('ORDER_NOT_FOUND')
-        // 管理员核验时要看凭证；其他人一律按「订单不存在」处理。
-        const isAdmin = session.user.role === 'admin'
-        if (!isAdmin && order.userId !== session.user.id) {
+        // 持收款核销读权限者核验时要看凭证；其他人一律按「订单不存在」处理。
+        const canReview = await hasPermission(db, session.user.id, 'admin.orders.read')
+        if (!canReview && order.userId !== session.user.id) {
           return errorResponse('ORDER_NOT_FOUND')
         }
         if (!order.receiptKey) {

@@ -37,20 +37,14 @@ const querySchema = z.object({
 export const fetchAdminUsers = createServerFn({ method: 'GET' })
   .validator((input: unknown) => querySchema.parse(input))
   .handler(async ({ data }): Promise<AdminUsersResult> => {
-    const [{ getServerContext }, { getAuth }, { getRequestHeaders }] = await Promise.all([
-      import('@/lib/server-context'),
-      import('@/core/auth/auth'),
-      import('@tanstack/react-start/server'),
-    ])
     const { asc, count } = await import('drizzle-orm')
-    const { createDbFromEnv, schema } = await import('@/core/db')
+    const [{ requirePermissionDb }, { schema }] = await Promise.all([
+      import('@/core/auth/session'),
+      import('@/core/db'),
+    ])
+    // 缺权限一律 403：不回空列表，避免把「被拒绝」伪装成「没有用户」。
+    const { db } = await requirePermissionDb('admin.users.read')
 
-    const env = getServerContext().env
-    const session = await (await getAuth(env)).api.getSession({ headers: getRequestHeaders() })
-    // 非管理员一律 403：不回空列表，避免把「被拒绝」伪装成「没有用户」。
-    if (session?.user.role !== 'admin') throw new Response(null, { status: 403 })
-
-    const db = await createDbFromEnv(env)
     const { users } = schema
     const where = buildUserWhere(users, data)
 

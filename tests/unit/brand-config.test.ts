@@ -83,14 +83,8 @@ describe('出厂值来自配置注册表', () => {
     expect(config.docs.enabled).toBe(defaults['modules.docs'])
     expect(config.blog.enabled).toBe(defaults['modules.blog'])
     expect(config.payment.enabled).toBe(defaults['modules.payment'])
-    // `features` 已移出注册表，过渡期按固定默认值输出；Task 6 删除。
-    expect(config.features).toEqual({
-      enableI18n: true,
-      enableFileUpload: false,
-      enableApiKeys: true,
-      enableAdmin: true,
-      enableAIGateway: false,
-    })
+    // 能力开关（`features.*`）已整体移除：站点配置里不再有这一层。
+    expect('features' in config).toBe(false)
   })
 
   it('工厂调用之间互不影响', () => {

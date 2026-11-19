@@ -2,7 +2,7 @@ import { IconLogout, IconSettings, IconShieldLock } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { adminRoutes, settingsRoutes } from '@/config/routes'
-import { websiteConfig } from '@/config/website'
+import { hasAdminAccess } from '@/core/auth/rbac'
 import { signOutAndRedirect } from '@/core/auth/sign-out'
 import type { Locale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
@@ -14,9 +14,25 @@ import { m } from '@/locale/paraglide/messages.js'
  * 但「个人中心 / 管理后台 / 退出」三项完全一致，集中在这里避免文案与路径漂移。
  */
 
-/** 管理台入口的可见性：角色 + 功能开关双重约束。 */
-export function isAdminUser(user: { role?: string | null }): boolean {
-  return websiteConfig.features.enableAdmin && user.role === 'admin'
+/**
+ * 管理台入口的可见性（权威判定）：持有任意 `admin.*` 权限点。
+ *
+ * 与服务端门禁（路由 `beforeLoad`、server function）用的是同一个判定
+ * （`hasAdminAccess`），否则会出现「菜单显示但点进去 404」的错位。
+ */
+export function canEnterAdmin(permissions: readonly string[] | undefined): boolean {
+  return hasAdminAccess(permissions ?? [])
+}
+
+/**
+ * 客户端会话只有 `user.role`，没有权限点列表，因此这里用它的同步标记。
+ *
+ * `users.role` 由 RBAC 分配（`assignRolesToUser`）按「是否持有任意 `admin.*`
+ * 权限」同步，正常路径下与 `canEnterAdmin` 同真同假。它只是入口提示：真正的
+ * 门禁在路由与服务端，标记陈旧最多是多显示 / 少显示一个菜单项。
+ */
+export function hasAdminRole(role: string | null | undefined): boolean {
+  return role === 'admin'
 }
 
 /** 个人中心与管理台入口；`isAdmin` 决定是否渲染管理后台入口。 */
