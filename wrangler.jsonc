@@ -34,7 +34,7 @@
   // 但需绑支付方式），API 无法代劳——`wrangler r2 bucket list` 与
   // `POST /r2/buckets` 均返回 code 10042。开通后取消下面注释并重新部署即可。
   //
-  // 运行时不依赖它：`features.enableFileUpload` 为 false，文件上传路径不会执行；
+  // 运行时不依赖它：仓库没有通用的上传路由，只有核销的收款码 / 凭证用到对象存储；
   // `src/server.ts` 在无该 binding 时得到 `undefined`，storage provider 相应降级。
   // "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "saas-template-uploads" }],
   // KV 命名空间（cache + newsletter status + rate limit）。

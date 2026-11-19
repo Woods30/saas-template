@@ -68,5 +68,6 @@ The script does one thing: `UPDATE users SET role = 'admin' WHERE email = ?`. `r
 ## Verify
 
 Sign in as an admin and open `/admin/users`; the user list should be there. Remove the account's
-`admin.users.read` permission (Roles page, or the RBAC tables) and the sidebar entry disappears while
-the same address returns 404.
+`admin.*` permissions (Roles page, or the RBAC tables) and the sidebar entry disappears while the
+same address returns 404. Removing only `admin.users.read` keeps the console reachable — the entry
+needs any `admin.*` permission — but that page's own request then fails.

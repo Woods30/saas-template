@@ -57,7 +57,6 @@ Every condition in `visibility` must hold for an entry to render:
 | Field | Meaning |
 |---|---|
 | `module` | Module switch, e.g. `{ module: 'payment' }` |
-| `feature` | Feature switch, e.g. `{ feature: 'enableApiKeys' }` |
 | `page` | Static page switch, e.g. `{ page: 'waitlist' }` |
 | `authenticated` | Whether sign-in is required |
 | `roles` | Role allowlist, e.g. `{ roles: ['admin'] }` |

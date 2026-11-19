@@ -55,7 +55,7 @@ describe('个人中心导航', () => {
     ])
   })
 
-  it('payment / manualPayments / enableApiKeys 各自控制对应入口', () => {
+  it('payment / manualPayments / apiKeys 各自控制对应入口', () => {
     const config = createConfig({ payment: true, manualPayments: true, apiKeys: true })
     expect(getSettingsNav(config).map((item) => item.id)).toEqual([
       'profile',

@@ -34,7 +34,7 @@ const ADMIN_ENDPOINT_PERMISSIONS: Record<string, string> = {
   'list-users': 'admin.users.read',
   'get-user': 'admin.users.read',
   'list-user-sessions': 'admin.users.read',
-  'user-has-permission': 'admin.users.read',
+  'has-permission': 'admin.users.read',
 }
 
 const ADMIN_PREFIX = '/api/auth/admin/'

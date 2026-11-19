@@ -73,5 +73,6 @@ pnpm db:admin:remote <your-email>   # 线上 D1
 
 ## 验证
 
-登录管理台账号后打开 `/admin/users`，应能看到用户列表；去掉该账号的 `admin.users.read`
-权限（角色页或 RBAC 表），侧栏入口消失，同一地址 404。
+登录管理台账号后打开 `/admin/users`，应能看到用户列表；去掉该账号的全部 `admin.*` 权限
+（角色页或 RBAC 表），侧栏入口消失，同一地址 404。只去掉 `admin.users.read` 时管理台仍进得去
+（入口只要求任意 `admin.*` 权限），但这一页自己的请求会被拒。
