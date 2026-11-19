@@ -6,7 +6,7 @@ import {
   parseSeedOverrides,
   seedValues,
 } from '../../scripts/db-seed'
-import { DEFAULT_PERMISSIONS, DEFAULT_ROLES } from '../../src/core/auth/rbac'
+import { DEFAULT_PERMISSIONS, DEFAULT_ROLES, permissionIdOf } from '../../src/core/auth/rbac'
 import { defaultSettingsValues, SETTING_FIELDS } from '../../src/core/config/registry'
 import { createTestDatabase } from '../helpers/database'
 
@@ -145,6 +145,43 @@ describe('种子 SQL', () => {
     const sql = buildSeedSql(values, false, 'sqlite')
     expect(sql).toContain("O''Brien")
     expect(sql).not.toContain("'O'Brien'")
+  })
+})
+
+describe('RBAC 种子：权限目录按 upsert 同步', () => {
+  it('permissions 始终 upsert，roles 仍保持默认不覆盖', () => {
+    const sql = buildRbacSeedSql(false, 'sqlite')
+    const permissionLines = sql
+      .split('\n')
+      .filter((line) => line.startsWith('INSERT INTO permissions '))
+    expect(permissionLines).toHaveLength(DEFAULT_PERMISSIONS.length)
+    for (const line of permissionLines) {
+      expect(line).toContain('ON CONFLICT (code) DO UPDATE')
+      expect(line).not.toContain('DO NOTHING')
+    }
+
+    const roleLines = sql.split('\n').filter((line) => line.startsWith('INSERT INTO roles '))
+    expect(roleLines).toHaveLength(DEFAULT_ROLES.length)
+    for (const line of roleLines) expect(line).toContain('ON CONFLICT (name) DO NOTHING')
+  })
+
+  it('老库缺少新权限时，非 --force 播种也会补出来', () => {
+    const { sqlite } = createTestDatabase()
+    sqlite.exec(buildRbacSeedSql(false, 'sqlite'))
+
+    // 模拟升级前的库：权限目录里没有 admin.tasks.write。
+    sqlite
+      .prepare('DELETE FROM role_permissions WHERE permission_id = ?')
+      .run(permissionIdOf('admin.tasks.write'))
+    sqlite.prepare('DELETE FROM permissions WHERE code = ?').run('admin.tasks.write')
+
+    sqlite.exec(buildRbacSeedSql(false, 'sqlite'))
+    expect(
+      sqlite
+        .prepare('SELECT COUNT(*) AS n FROM permissions WHERE code = ?')
+        .get('admin.tasks.write'),
+    ).toMatchObject({ n: 1 })
+    sqlite.close()
   })
 })
 

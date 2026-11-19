@@ -197,5 +197,10 @@ pnpm db:cleanup:settings:remote   # remote D1
 The script deletes only the `features.*` keys and `modules.auth`, leaving all other settings
 untouched. Run it once after deploying an upgrade that crosses this change.
 
+After any upgrade, run `pnpm db:seed` once to sync the permission catalog (for example the
+`admin.tasks.write` permission added for AI task changes). Permission rows are upserted even
+without `--force`, because they are catalog data rather than user data; roles and settings keep
+their no-overwrite semantics.
+
 To change the brand and support address, use `--brand` / `--tagline` / `--email`, or edit them
 in the admin.

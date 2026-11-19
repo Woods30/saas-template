@@ -173,7 +173,7 @@ export function buildRbacSeedSql(force: boolean, dialect: Dialect): string {
   const lines: string[] = []
 
   for (const perm of DEFAULT_PERMISSIONS) {
-    lines.push(permissionSql(perm, force, now))
+    lines.push(permissionSql(perm, now))
   }
   for (const role of DEFAULT_ROLES) {
     lines.push(roleSql(role, force, now))
@@ -187,11 +187,14 @@ export function buildRbacSeedSql(force: boolean, dialect: Dialect): string {
   return `${lines.join('\n')}\n`
 }
 
-function permissionSql(perm: PermissionSeed, force: boolean, now: string): string {
+/**
+ * 权限点是**目录数据**，不是用户数据：老库升级后必须补出新增的权限码，
+ * 否则新代码引用的权限点永远不存在。因此无论 `--force` 与否都 upsert。
+ * `roles` / `settings` 仍保持「默认不覆盖」的语义。
+ */
+function permissionSql(perm: PermissionSeed, now: string): string {
   const id = permissionIdOf(perm.code)
-  const conflict = force
-    ? `ON CONFLICT (code) DO UPDATE SET resource = EXCLUDED.resource, action = EXCLUDED.action, title = EXCLUDED.title, description = EXCLUDED.description, updated_at = ${now}`
-    : 'ON CONFLICT (code) DO NOTHING'
+  const conflict = `ON CONFLICT (code) DO UPDATE SET resource = EXCLUDED.resource, action = EXCLUDED.action, title = EXCLUDED.title, description = EXCLUDED.description, updated_at = ${now}`
   return `INSERT INTO permissions (id, code, resource, action, title, description, created_at, updated_at) VALUES (${sqlString(id)}, ${sqlString(perm.code)}, ${sqlString(perm.resource)}, ${sqlString(perm.action)}, ${sqlString(perm.title)}, ${sqlNullableString(perm.description)}, ${now}, ${now}) ${conflict};`
 }
 

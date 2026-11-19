@@ -175,4 +175,8 @@ pnpm db:cleanup:settings:remote   # 远端 D1
 
 脚本只删除 `features.*` 键与 `modules.auth`，其它配置原样保留。跨这次变更升级后跑一次即可。
 
+任何版本升级后都跑一次 `pnpm db:seed` 同步权限目录（例如 AI 任务变更新增的
+`admin.tasks.write`）。权限是目录数据而非用户数据，即使不加 `--force` 也会 upsert；
+`roles` 与 `settings` 仍保持「默认不覆盖」的语义。
+
 想改品牌与支持邮箱，用 `--brand` / `--tagline` / `--email`，或直接进后台。
