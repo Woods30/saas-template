@@ -7,12 +7,11 @@
  * - 权限天花板（privilege ceiling）：任何操作者只能授予、修改或移除**自己已持有**的权限，
  *   防止只拿到 `admin.roles.write` 的管理员给自己或他人挂上 `*` 提权。
  *
- * `loadUserPermissions` 是唯一会读库的成员：它只接收 `DB` 句柄、不碰请求上下文/env，
- * 所以模块仍可在客户端导入（`schema` 本身就是客户端安全的纯数据）。
+ * `loadUserPermissions` 是唯一会读库的成员。它只接收 `DB` 句柄、不碰请求上下文/env，
+ * 且驱动与表定义都在函数体内**动态导入**——本模块被客户端组件静态导入
+ * （`account-menu.tsx`、`module-access.ts` 取纯判定函数），顶层不能牵进 drizzle。
  */
-import { eq, inArray } from 'drizzle-orm'
 import type { DB } from '@/core/db'
-import { permissions, rolePermissions, roles, userRoles, users } from '@/core/db/schema'
 
 export const ROLES = {
   SUPER_ADMIN: 'super_admin',
@@ -307,6 +306,9 @@ export async function loadUserPermissions(
   now: Date = new Date(),
 ): Promise<string[]> {
   if (!userId) return []
+
+  const { eq, inArray } = await import('drizzle-orm')
+  const { permissions, rolePermissions, roles, userRoles, users } = await import('@/core/db/schema')
 
   const assignedRows = await db
     .select({
