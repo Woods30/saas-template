@@ -114,6 +114,20 @@ describe('转化漏斗', () => {
     expect(report.rows).toEqual([{ value: 'direct', signups: 1, checkouts: 0, paid: 0 }])
   })
 
+  it('以注入的 now 为窗口边界', async () => {
+    const { sqlite, db } = createTestDatabase()
+    // now 取未来时刻，与真实时钟拉开距离：若实现忽略注入值，7d 窗口会把
+    // 10 天前注册的用户也算进来，断言才有区分力。
+    const now = new Date(Date.now() + 20 * DAY * 1000)
+    seedUser(sqlite, 'ten-days', { createdAt: Math.floor(now.getTime() / 1000) - 10 * DAY })
+
+    const wide = await getFunnelReport(db, { range: '30d', groupBy: 'utm_source' }, now)
+    const narrow = await getFunnelReport(db, { range: '7d', groupBy: 'utm_source' }, now)
+
+    expect(wide.totals.signups).toBe(1)
+    expect(narrow.totals.signups).toBe(0)
+  })
+
   it('创建过结账但未付款只计入 checkouts', async () => {
     const { sqlite, db } = createTestDatabase()
     seedUser(sqlite, 'u1')

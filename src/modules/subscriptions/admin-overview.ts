@@ -11,7 +11,7 @@ import {
 } from './admin-funnel'
 import { type AdminOrder, queryAdminPayments } from './admin-orders'
 import { type AdminPaymentRow, summarizeRevenue } from './admin-query'
-import { ACTIVE_SUBSCRIPTION_STATUSES } from './plan-state'
+import { BILLING_ACTIVE_STATUSES } from './plan-state'
 
 /**
  * 管理台概览。
@@ -86,7 +86,7 @@ export async function queryAdminOverview(
     db
       .select({ value: count() })
       .from(schema.subscriptions)
-      .where(inArray(schema.subscriptions.status, [...ACTIVE_SUBSCRIPTION_STATUSES])),
+      .where(inArray(schema.subscriptions.status, [...BILLING_ACTIVE_STATUSES])),
     db
       .select({ value: count() })
       .from(schema.manualPaymentDetails)
@@ -96,10 +96,14 @@ export async function queryAdminOverview(
       .select({ value: count() })
       .from(schema.payments)
       .where(and(eq(schema.payments.status, 'failed'), gte(schema.payments.createdAt, since24h))),
-    getFunnelReport(db, {
-      range: input.range ?? '30d',
-      groupBy: input.groupBy ?? 'utm_source',
-    }),
+    getFunnelReport(
+      db,
+      {
+        range: input.range ?? '30d',
+        groupBy: input.groupBy ?? 'utm_source',
+      },
+      now,
+    ),
     queryAdminPayments(db, RECENT_PAYMENTS_QUERY),
   ])
 

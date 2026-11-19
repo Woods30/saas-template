@@ -1,5 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import { type AdminPaymentRow, type RevenueSummary, summarizeRevenue } from './admin-query'
+import { BILLING_ACTIVE_STATUSES } from './plan-state'
 
 /**
  * 管理台账单总览的 server function。
@@ -32,8 +33,8 @@ export interface AdminBillingResult {
   activeSubscriptionCount: number
 }
 
-/** 未终止的订阅状态：这些才占用「每账号一份订阅」的名额。 */
-const ACTIVE_STATUSES = new Set(['active', 'trialing', 'past_due'])
+/** 正在计费中的订阅状态：与概览的「活跃订阅」KPI 同一口径。 */
+const ACTIVE_STATUSES = new Set<string>(BILLING_ACTIVE_STATUSES)
 
 export const fetchAdminBilling = createServerFn({ method: 'GET' }).handler(
   async (): Promise<AdminBillingResult> => {

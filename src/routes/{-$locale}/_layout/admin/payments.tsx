@@ -2,7 +2,6 @@ import { IconReceipt } from '@tabler/icons-react'
 import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { DataTable, type DataTableColumn } from '@/components/data-table/data-table'
-import { LocalDate } from '@/components/local-date'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,7 +12,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -25,7 +23,6 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { adminRoutes } from '@/config/routes'
 import { DEFAULT_PAGE_SIZE } from '@/core/db/paging'
-import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
 import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
@@ -34,10 +31,9 @@ import {
   type AdminOrderStatusFilter,
   type AdminPaymentTab,
   fetchAdminPayments,
-  paymentStatusMessageKey,
-  productNameForProductId,
   refundAdminOrder,
 } from '@/modules/subscriptions/service'
+import { paymentColumns } from './-payment-columns'
 
 /**
  * 管理台付款列表。
@@ -161,53 +157,10 @@ function AdminPaymentsPage() {
   }
 
   // 列定义随语言变化；`m.*()` 在渲染期求值，因此依赖里带上 locale。
+  // 明细页在共享列之外追加「已退款」「创建时间」和本地操作列。
   const columns = useMemo<DataTableColumn<AdminOrder>[]>(
     () => [
-      {
-        id: 'user',
-        header: m.admin_payments_col_user(),
-        className: 'max-w-[220px] truncate',
-        cell: (order) => order.email || order.userId || '—',
-      },
-      {
-        id: 'product',
-        header: m.admin_payments_col_product(),
-        cell: (order) => productNameForProductId(order.productId) ?? order.productId ?? '—',
-      },
-      {
-        id: 'amount',
-        header: m.admin_payments_col_amount(),
-        cell: (order) => formatMoney(order.amount, order.currency, locale),
-      },
-      {
-        id: 'refunded',
-        header: m.admin_payments_col_refunded(),
-        cell: (order) =>
-          order.refundedAmount > 0
-            ? formatMoney(order.refundedAmount, order.currency, locale)
-            : '—',
-      },
-      {
-        id: 'status',
-        header: m.admin_payments_col_status(),
-        cell: (order) => (
-          <Badge variant={order.status === 'paid' ? 'default' : 'secondary'}>
-            {m[paymentStatusMessageKey(order.status)]()}
-          </Badge>
-        ),
-      },
-      {
-        id: 'paidAt',
-        header: m.admin_payments_col_paid_at(),
-        className: 'hidden lg:table-cell',
-        cell: (order) => <LocalDate value={order.paidAt} locale={locale} />,
-      },
-      {
-        id: 'createdAt',
-        header: m.admin_payments_col_created_at(),
-        className: 'hidden xl:table-cell',
-        cell: (order) => <LocalDate value={order.createdAt} locale={locale} />,
-      },
+      ...paymentColumns({ locale, refunded: true, createdAt: true }),
       {
         id: 'actions',
         header: '',

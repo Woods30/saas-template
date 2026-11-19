@@ -11,3 +11,6 @@ export const ACTIVE_SUBSCRIPTION_STATUSES = [
 export function occupiesSubscriptionSlot(status: string): boolean {
   return (ACTIVE_SUBSCRIPTION_STATUSES as readonly string[]).includes(status)
 }
+
+/** 正在计费中的订阅状态：用于「活跃订阅」类指标，区别于「占用名额」。 */
+export const BILLING_ACTIVE_STATUSES = ['active', 'trialing', 'past_due'] as const

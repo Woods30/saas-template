@@ -147,6 +147,8 @@ describe('管理台概览', () => {
 
     seedSubscription(sqlite, 's1', 'new', 'active')
     seedSubscription(sqlite, 's2', 'old', 'canceled')
+    // 仍占名额但已不在计费中：不计入对外展示的「活跃订阅」。
+    seedSubscription(sqlite, 's3', 'old', 'paused')
     seedManualReview(sqlite, 'm1', 'new', 'pending_verification', 1001)
     seedManualReview(sqlite, 'm2', 'new', 'pending_payment', 1002)
     seedTicket(sqlite, 't1', 'new', 'open')

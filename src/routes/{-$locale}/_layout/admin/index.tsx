@@ -1,9 +1,7 @@
 import { IconChartBar, IconRepeat, IconScan, IconUsers } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useMemo } from 'react'
-import { DataTable, type DataTableColumn } from '@/components/data-table/data-table'
-import { LocalDate } from '@/components/local-date'
-import { Badge } from '@/components/ui/badge'
+import { DataTable } from '@/components/data-table/data-table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { adminRoutes } from '@/config/routes'
 import { formatMoney } from '@/lib/format'
@@ -11,15 +9,14 @@ import { getRequestLocale } from '@/lib/locale'
 import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import {
-  type AdminOrder,
   FUNNEL_DIMENSIONS,
+  FUNNEL_RANGES,
   type FunnelDimension,
   type FunnelRange,
   fetchAdminOverview,
-  paymentStatusMessageKey,
-  productNameForProductId,
 } from '@/modules/subscriptions/service'
 import { ConversionFunnel } from './-conversion-funnel'
+import { paymentColumns } from './-payment-columns'
 
 /**
  * 管理台概览。
@@ -28,7 +25,7 @@ import { ConversionFunnel } from './-conversion-funnel'
  * （待核销）。漏斗与最近付款放在下面，漏斗范围 / 维度写进 URL，刷新与分享
  * 都能停在同一个视图上。数据在 loader 里取，权限由 server function 再校验。
  */
-const RANGE_VALUES = ['24h', '7d', '30d'] as const
+const RANGE_VALUES = Object.keys(FUNNEL_RANGES) as FunnelRange[]
 
 interface AdminOverviewSearch {
   range?: FunnelRange
@@ -109,42 +106,8 @@ function AdminOverviewPage() {
   ]
 
   // 列定义随语言变化；`m.*()` 在渲染期求值，因此依赖里带上 locale。
-  const columns = useMemo<DataTableColumn<AdminOrder>[]>(
-    () => [
-      {
-        id: 'user',
-        header: m.admin_payments_col_user(),
-        className: 'max-w-[220px] truncate',
-        cell: (payment) => payment.email || payment.userId || '—',
-      },
-      {
-        id: 'product',
-        header: m.admin_payments_col_product(),
-        cell: (payment) => productNameForProductId(payment.productId) ?? payment.productId ?? '—',
-      },
-      {
-        id: 'amount',
-        header: m.admin_payments_col_amount(),
-        cell: (payment) => formatMoney(payment.amount, payment.currency, locale),
-      },
-      {
-        id: 'status',
-        header: m.admin_payments_col_status(),
-        cell: (payment) => (
-          <Badge variant={payment.status === 'paid' ? 'default' : 'secondary'}>
-            {m[paymentStatusMessageKey(payment.status)]()}
-          </Badge>
-        ),
-      },
-      {
-        id: 'paidAt',
-        header: m.admin_payments_col_paid_at(),
-        className: 'hidden lg:table-cell',
-        cell: (payment) => <LocalDate value={payment.paidAt} locale={locale} />,
-      },
-    ],
-    [locale],
-  )
+  // 与付款列表共用同一份定义，只开启共有列。
+  const columns = useMemo(() => paymentColumns({ locale }), [locale])
 
   return (
     <div className="space-y-8">

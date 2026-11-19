@@ -100,9 +100,17 @@ function filterConditions(columns: DimensionColumns, filters: FunnelInput['filte
   })
 }
 
-/** 一次查出 funnel 的 totals、分组行与筛选选项。 */
-export async function getFunnelReport(db: DB, input: FunnelInput): Promise<FunnelReport> {
-  const since = new Date(Date.now() - FUNNEL_RANGES[input.range])
+/**
+ * 一次查出 funnel 的 totals、分组行与筛选选项。
+ *
+ * `now` 由调用方注入（概览页把它与其余 KPI 对齐到同一时刻）；省略时取当前时间。
+ */
+export async function getFunnelReport(
+  db: DB,
+  input: FunnelInput,
+  now: Date = new Date(),
+): Promise<FunnelReport> {
+  const since = new Date(now.getTime() - FUNNEL_RANGES[input.range])
   const columns = dimensionColumns()
   const column = columns[input.groupBy]
   const groupValue = groupedValue(column)
