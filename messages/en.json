@@ -322,7 +322,7 @@
   "admin_settings_user_feature_notifications": "Notification preferences",
   "admin_settings_user_features_description": "Controls which user center entries are shown; module switches still decide whether the capability exists.",
   "admin_settings_users_default_role": "Default role",
-  "admin_settings_users_default_role_hint": "Role assigned automatically to new users.",
+  "admin_settings_users_default_role_hint": "Role assigned automatically to new users; \"User\" grants no backend role.",
   "admin_subscriptions_col_amount": "Amount",
   "admin_subscriptions_col_created_at": "Started",
   "admin_subscriptions_col_interval": "Interval",

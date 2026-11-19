@@ -322,7 +322,7 @@
   "admin_settings_user_feature_notifications": "通知偏好",
   "admin_settings_user_features_description": "控制个人中心各功能入口是否展示；模块开关仍决定能力是否存在。",
   "admin_settings_users_default_role": "默认角色",
-  "admin_settings_users_default_role_hint": "新注册用户自动获得的角色。",
+  "admin_settings_users_default_role_hint": "新注册用户自动获得的角色；普通用户不授予任何后台角色。",
   "admin_subscriptions_col_amount": "金额",
   "admin_subscriptions_col_created_at": "开始时间",
   "admin_subscriptions_col_interval": "周期",

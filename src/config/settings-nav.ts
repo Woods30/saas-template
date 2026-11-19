@@ -56,7 +56,7 @@ const SETTINGS_NAV: SettingsNavItem[] = [
     icon: IconBell,
     title: () => m.settings_notifications_title(),
     description: () => m.settings_notifications_description(),
-    visible: (config) => config.newsletter.enabled,
+    visible: (config) => config.newsletter.enabled && config.userFeatures.notifications,
   },
   {
     id: 'billing',
@@ -64,7 +64,7 @@ const SETTINGS_NAV: SettingsNavItem[] = [
     icon: IconCreditCard,
     title: () => m.settings_billing_title(),
     description: () => m.settings_billing_description(),
-    visible: (config) => config.payment.enabled,
+    visible: (config) => config.payment.enabled && config.userFeatures.billing,
   },
   {
     id: 'manual-payments',
@@ -73,7 +73,7 @@ const SETTINGS_NAV: SettingsNavItem[] = [
     title: () => m['manual_payments.order_list_title'](),
     label: () => m['manual_payments.nav_orders'](),
     description: () => m['manual_payments.order_list_description'](),
-    visible: (config) => config.manualPayments.enabled,
+    visible: (config) => config.manualPayments.enabled && config.userFeatures.manualPayments,
   },
   {
     id: 'api-keys',

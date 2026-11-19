@@ -234,8 +234,8 @@ export const SETTING_TABS: readonly SettingTab[] = [
             kind: 'select',
             label: m.admin_settings_users_default_role,
             hint: m.admin_settings_users_default_role_hint,
-            defaultValue: 'viewer',
-            options: ['viewer', 'editor'],
+            defaultValue: 'user',
+            options: ['user', 'viewer', 'editor'],
           },
           boolean('signupCredits.enabled', m.admin_settings_signup_credits_enabled, false),
           {

@@ -200,7 +200,14 @@ export interface WebsiteConfig {
   }
   /** 用户注册行为：默认角色与注册赠积分。 */
   users: {
-    defaultRole: 'viewer' | 'editor'
+    /**
+     * 新注册用户自动获得的 RBAC 角色。
+     *
+     * `'user'` 表示不分配任何角色（`users.role` 保持 `'user'`，权限为空）——这是
+     * 安全默认：`viewer` 持有全部 `admin.*.read`，默认授予等于把管理台开给每个
+     * 注册用户。
+     */
+    defaultRole: 'user' | 'viewer' | 'editor'
     signupCredits: {
       enabled: boolean
       amount: number
@@ -306,7 +313,7 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
         notifications: true,
       },
       users: {
-        defaultRole: 'viewer',
+        defaultRole: 'user',
         signupCredits: { enabled: false, amount: 0, validDays: 0, description: '' },
       },
       social: {},

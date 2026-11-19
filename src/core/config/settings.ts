@@ -341,9 +341,14 @@ export function applySettingsToConfig(
       notifications: bool(values, 'userFeatures.notifications'),
     },
     users: {
-      // TODO(task 7): 注册用户时把这个配置落到账号上。运行时 `users.role` 只有
-      // `user | admin`，而 `viewer` / `editor` 来自 RBAC 目录，映射规则由 Task 7 定。
-      defaultRole: str(values, 'users.defaultRole') === 'editor' ? 'editor' : 'viewer',
+      // 注册时的默认 RBAC 角色。`user` 表示不分配角色；未知取值一律 fail-safe 到
+      // `user`，绝不回落到 `viewer`（viewer 持有全部 `admin.*.read`，默认授予即提权）。
+      defaultRole:
+        str(values, 'users.defaultRole') === 'viewer'
+          ? 'viewer'
+          : str(values, 'users.defaultRole') === 'editor'
+            ? 'editor'
+            : 'user',
       signupCredits: {
         enabled: bool(values, 'signupCredits.enabled'),
         amount: num(values, 'signupCredits.amount', 0),

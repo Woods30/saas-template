@@ -6,6 +6,7 @@ import { getConfigEpoch, websiteConfig } from '@/config/website'
 import { sendAuthEmailForRequest } from '@/core/auth/emails'
 import { emailPasswordEnabled, requiresEmailVerification } from '@/core/auth/flow'
 import { socialProviderOptions } from '@/core/auth/social-providers'
+import { runUserCreatedHooks } from '@/core/auth/user-hooks'
 import { createDbFromEnv, schema } from '@/core/db'
 import { isPostgresDialect, resolveDatabaseProvider } from '@/core/db/provider'
 import { getRequestScoped } from '@/core/db/request-scope'
@@ -161,6 +162,13 @@ export async function createAuth(env: Env) {
           before: async (user, ctx) => ({
             data: { ...user, ...readAttribution(ctx?.headers ?? new Headers()) },
           }),
+          /**
+           * 注册后置动作（默认角色、注册赠积分）。钩子内部各自吞错：账号已经落库，
+           * 后置动作失败不该让注册接口返回错误。复用上面同一个 `db` 句柄。
+           */
+          after: async (user) => {
+            await runUserCreatedHooks({ db, user: { id: user.id, email: user.email } })
+          },
         },
       },
     },

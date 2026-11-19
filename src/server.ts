@@ -42,9 +42,14 @@ import { defaultTheme, parseTheme, setServerThemeGetter, THEME_COOKIE_NAME } fro
 import { registerServerLocaleStrategy } from './locale/middleware'
 import { paraglideMiddleware } from './locale/paraglide/server.js'
 import { buildNewsletterProviderRegistry } from './modules/newsletter/service'
+import { registerSignupSideEffects } from './modules/rbac/signup'
 
 // 模块加载期注册，早于任何请求进入 paraglideMiddleware。
 registerServerLocaleStrategy()
+
+// 注册后置动作（默认角色、注册赠积分）：注册进 `core/auth/user-hooks`，
+// 由 better-auth 的 `user.create.after` 触发。
+registerSignupSideEffects()
 
 // 注入服务端读取器：SSR 时经 ALS 取值，避免把 `node:async_hooks` 带进客户端 bundle。
 setServerThemeGetter(() => getServerContext().theme)

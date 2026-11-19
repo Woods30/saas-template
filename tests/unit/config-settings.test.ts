@@ -248,19 +248,17 @@ describe('applySettingsToConfig', () => {
     })
   })
 
-  it('默认角色只接受 editor，其余取值回落 viewer', () => {
-    expect(
+  it('默认角色映射三个已知取值，未知取值 fail-safe 到 user', () => {
+    const resolve = (value: string) =>
       applySettingsToConfig(baseConfig, {
         ...defaultSettingsValues(),
-        'users.defaultRole': 'editor',
-      }).users.defaultRole,
-    ).toBe('editor')
-    expect(
-      applySettingsToConfig(baseConfig, {
-        ...defaultSettingsValues(),
-        'users.defaultRole': 'bogus',
-      }).users.defaultRole,
-    ).toBe('viewer')
+        'users.defaultRole': value,
+      }).users.defaultRole
+
+    expect(resolve('editor')).toBe('editor')
+    expect(resolve('viewer')).toBe('viewer')
+    expect(resolve('user')).toBe('user')
+    expect(resolve('bogus')).toBe('user')
   })
 })
 
