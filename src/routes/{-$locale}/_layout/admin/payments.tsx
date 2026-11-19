@@ -138,6 +138,8 @@ function AdminPaymentsPage() {
   const navigate = Route.useNavigate()
   const router = useRouter()
   const locale = getRequestLocale()
+  // 文案按请求语言在渲染期求值，先算一次再渲染，避免每个触发器重建一遍数组。
+  const tabs = tabItems()
   const [pendingRefund, setPendingRefund] = useState<AdminOrder | null>(null)
   const [refunding, setRefunding] = useState(false)
   const [refundError, setRefundError] = useState(false)
@@ -238,9 +240,9 @@ function AdminPaymentsPage() {
         className="mb-4"
       >
         <TabsList aria-label={m.admin_payments_title()}>
-          {PAYMENT_TABS.map((value) => (
-            <TabsTrigger key={value} value={value}>
-              {tabItems().find((item) => item.value === value)?.label}
+          {tabs.map((item) => (
+            <TabsTrigger key={item.value} value={item.value}>
+              {item.label}
             </TabsTrigger>
           ))}
         </TabsList>
