@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { findAdminNavItem, getAdminNav, isAdminNavActive } from '@/config/admin-nav'
+import {
+  findAdminNavItem,
+  firstAdminNavItem,
+  getAdminNav,
+  isAdminNavActive,
+} from '@/config/admin-nav'
 import { navLabel } from '@/config/navigation'
-import { pathOf, sectionOf } from '@/config/routes'
+import { adminRoutes, pathOf, sectionOf, settingsRoutes } from '@/config/routes'
 import { findSettingsNavItem, getSettingsNav, isSettingsNavActive } from '@/config/settings-nav'
 import { createWebsiteConfig } from '@/config/website'
 import { parsePublicEnv } from '@/core/env/public'
@@ -94,11 +99,28 @@ describe('个人中心导航', () => {
   })
 })
 
+/** `editor` 内置角色的权限点：内容与工单的读写。 */
+const EDITOR_PERMISSIONS = [
+  'admin.content.read',
+  'admin.content.write',
+  'admin.tickets.read',
+  'admin.tickets.write',
+] as const
+
+const navItemIds = (nav: ReturnType<typeof getAdminNav>) => ({
+  overview: nav.overview?.id,
+  groups: nav.groups.map((group) => ({
+    id: group.id,
+    items: group.items.map((item) => item.id),
+  })),
+  footer: nav.footer.map((item) => item.id),
+})
+
 describe('管理台导航', () => {
   it('三个可折叠分组 + 概览 + 底部两项', () => {
     const nav = getAdminNav(createConfig())
     expect(nav.groups.map((group) => group.id)).toEqual(['rbac', 'billing', 'content'])
-    expect(pathOf(nav.overview.to)).toBe('/admin')
+    expect(nav.overview && pathOf(nav.overview.to)).toBe('/admin')
     expect(nav.footer.map((item) => item.id)).toEqual(['settings', 'personal-switch'])
     expect(pathOf(nav.footer[1]?.to ?? '/{-$locale}/admin')).toBe('/settings/profile')
   })
@@ -118,7 +140,12 @@ describe('管理台导航', () => {
 
   it('菜单项同时提供面包屑使用的标题与说明', () => {
     const nav = getAdminNav(createConfig())
-    for (const item of [nav.overview, ...nav.groups.flatMap((group) => group.items)]) {
+    const items = [
+      ...(nav.overview ? [nav.overview] : []),
+      ...nav.groups.flatMap((group) => group.items),
+    ]
+    expect(items.length).toBeGreaterThan(0)
+    for (const item of items) {
       expect(item.title()).toBeTruthy()
       expect(item.description()).toBeTruthy()
       expect(item.icon).toBeTruthy()
@@ -149,10 +176,72 @@ describe('管理台导航', () => {
     const nav = getAdminNav(createConfig())
     const users = nav.groups.find((group) => group.id === 'rbac')?.items[0]
     expect(users?.id).toBe('users')
-    if (!users) return
+    if (!users || !nav.overview) return
     expect(isAdminNavActive(nav.overview, '')).toBe(true)
     expect(isAdminNavActive(users, '')).toBe(false)
     expect(isAdminNavActive(users, 'users')).toBe(true)
+  })
+
+  it('传权限时逐项过滤：editor 只保留内容与工单', () => {
+    const nav = getAdminNav(createConfig(), EDITOR_PERMISSIONS)
+    expect(navItemIds(nav)).toEqual({
+      // 概览要 admin.orders.read，editor 没有。
+      overview: undefined,
+      // rbac（users/roles/audit）与 billing（payments/...）整组被丢弃。
+      groups: [{ id: 'content', items: ['content', 'tickets'] }],
+      // 系统设置需 admin.settings.read；切回个人中心无权限要求，始终保留。
+      footer: ['personal-switch'],
+    })
+  })
+
+  it("通配符 '*' 保留全部菜单项", () => {
+    const nav = getAdminNav(createConfig({ manualPayments: true }), ['*'])
+    expect(navItemIds(nav)).toEqual({
+      overview: 'revenue',
+      groups: [
+        { id: 'rbac', items: ['users', 'roles', 'audit'] },
+        { id: 'billing', items: ['payments', 'subscriptions', 'manual-payments', 'credits'] },
+        { id: 'content', items: ['content', 'tickets', 'tasks'] },
+      ],
+      footer: ['settings', 'personal-switch'],
+    })
+  })
+
+  it('逐级通配符覆盖具体权限点', () => {
+    const nav = getAdminNav(createConfig(), ['admin.content.*', 'admin.settings.*'])
+    expect(navItemIds(nav)).toEqual({
+      overview: undefined,
+      groups: [{ id: 'content', items: ['content'] }],
+      footer: ['settings', 'personal-switch'],
+    })
+  })
+
+  it('不传权限时菜单树不受影响（元数据解析依赖这一点）', () => {
+    expect(navItemIds(getAdminNav(createConfig()))).toEqual({
+      overview: 'revenue',
+      groups: [
+        { id: 'rbac', items: ['users', 'roles', 'audit'] },
+        { id: 'billing', items: ['payments', 'subscriptions', 'credits'] },
+        { id: 'content', items: ['content', 'tickets', 'tasks'] },
+      ],
+      footer: ['settings', 'personal-switch'],
+    })
+  })
+
+  it('索引页重定向以第一个可访问项为准', () => {
+    const config = createConfig()
+    // editor：概览被过滤，第一个可访问项是内容。
+    expect(firstAdminNavItem(getAdminNav(config, EDITOR_PERMISSIONS))?.to).toBe(adminRoutes.content)
+    // 只有系统设置权限：分组与概览都空，落到底部「系统设置」。
+    expect(firstAdminNavItem(getAdminNav(config, ['admin.settings.read']))?.to).toBe(
+      adminRoutes.settings,
+    )
+    // 持 admin.orders.read：概览本身可访问，不产生重定向目标偏差。
+    expect(firstAdminNavItem(getAdminNav(config, ['admin.orders.read']))?.id).toBe('revenue')
+    // 只有无法映射到菜单的权限：退到始终可见的个人中心。
+    expect(firstAdminNavItem(getAdminNav(config, ['admin.users.write']))?.to).toBe(
+      settingsRoutes.profile,
+    )
   })
 })
 

@@ -118,10 +118,16 @@ cannot rewrite history. An empty value means "not attributed"; the funnel displa
 
 | Page | Permission | What it shows |
 |---|---|---|
-| `/admin/payments` | `admin` role | Confirmed payments, in four type tabs: **All / Subscription / One-time / Manual payments** (`all` is the default and is omitted from the URL). The tabs partition the data — a manual payment never shows under Subscription or One-time. |
-| `/admin/subscriptions` | `admin` role | Subscription periods and statuses. |
+| `/admin/payments` | `admin.orders.read` | Confirmed payments, in four type tabs: **All / Subscription / One-time / Manual payments** (`all` is the default and is omitted from the URL). The tabs partition the data — a manual payment never shows under Subscription or One-time. |
+| `/admin/subscriptions` | `admin.subscriptions.read` | Subscription periods and statuses. |
 | `/admin/manual-payments` | `admin.orders.read` / `admin.orders.write` | Review queue for manual orders. |
+| `/admin/credits` | `admin.credits.read` | Credit ledger and manual grants (`admin.credits.write`). |
 | `/admin` | `admin.orders.read` | KPI cards, the sign-up → checkout → paid conversion funnel (24h / 7d / 30d, grouped by UTM dimension, referrer or country; an empty value displays as `direct`), recent payments and to-dos. |
+
+These permissions also drive the sidebar: an item whose permission the user lacks is hidden,
+and a group with no visible item disappears. A user without `admin.orders.read` cannot open
+`/admin` itself; the index redirects to their first accessible menu item. Hiding entries is
+convenience only — every server function checks the same permission again.
 
 ## Refunds and clawback
 

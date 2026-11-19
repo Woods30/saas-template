@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { chromium, request } from '@playwright/test'
+import { buildRbacSeedSql } from '../scripts/db-seed'
 
 /**
  * 仅 Playwright 的 server 入口安装传输层 mock，不修改产品源码。
@@ -46,6 +47,7 @@ async function startTestServer() {
     BETTER_AUTH_URL: base.origin,
     VITE_BASE_URL: base.origin,
   })
+  seedRbacCatalog()
   seedE2eSettings()
   const sdkPath = fileURLToPath(import.meta.resolve('resend'))
   const transportModule = '\0e2e:resend-transport'
@@ -202,7 +204,27 @@ const E2E_SETTINGS: ReadonlyArray<readonly [key: string, value: unknown]> = [
   ['mail.provider', 'resend'],
   ['mail.from', 'e2e@example.invalid'],
   ['resend.apiKey', 're_e2e_synthetic_never_send'],
+  // 社交登录可见性：GitHub 需要方法开关与两个凭据齐全才注册（见
+  // `socialProviderOptions`）。E2E 只断言按钮出现，不会真的跳转 GitHub。
+  ['auth.githubEnabled', true],
+  ['github.clientId', 'e2e-github-client-id'],
+  ['github.clientSecret', 'e2e-github-client-secret'],
 ]
+
+/**
+ * 保证内置 RBAC 角色 / 权限点存在。
+ *
+ * `pnpm db:seed` 会写它们，但 E2E 直接起 vite dev、不跑 seed。`editor` 菜单过滤
+ * 用例需要 `user_roles → role_editor` 的外键目标存在，所以这里复用 `db-seed` 的
+ * 同一份定义（`ON CONFLICT DO NOTHING`，重复执行无副作用）。
+ */
+function seedRbacCatalog(): void {
+  try {
+    wranglerD1([buildRbacSeedSql(false, 'sqlite')])
+  } catch {
+    // 表不存在（未跑迁移）时交给用例暴露真正原因。
+  }
+}
 
 /** 把 {@link E2E_SETTINGS} 覆盖进本地 D1。 */
 function seedE2eSettings(): void {

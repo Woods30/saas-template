@@ -50,9 +50,12 @@ export function AdminConsoleLayout({
   children: ReactNode
 }) {
   const section = useSectionPath('admin')
-  const nav = useMemo(() => getAdminNav(websiteConfig), [])
+  // 标题 / 面包屑始终从完整菜单树取：当前页可能因权限未显示在侧栏，但 `<title>`
+  // 仍需正确。侧栏另用带权限的过滤结果。
+  const fullNav = useMemo(() => getAdminNav(websiteConfig), [])
+  const nav = useMemo(() => getAdminNav(websiteConfig, session.permissions), [session.permissions])
   // 详情页（若将来有）沿用所属列表页的标题。
-  const meta = toSectionMeta(findAdminNavItem(nav, section.split('/')[0] ?? ''))
+  const meta = toSectionMeta(findAdminNavItem(fullNav, section.split('/')[0] ?? ''))
 
   const [openGroups, setOpenGroups] = useState<Set<string>>(
     () => new Set(nav.groups.map((group) => group.id)),
@@ -100,9 +103,11 @@ export function AdminConsoleLayout({
           <SidebarGroupLabel>{m.settings_group_admin()}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <NavButton item={nav.overview} locale={locale} section={section} />
-              </SidebarMenuItem>
+              {nav.overview && (
+                <SidebarMenuItem>
+                  <NavButton item={nav.overview} locale={locale} section={section} />
+                </SidebarMenuItem>
+              )}
               {nav.groups.map((group) => {
                 const open = openGroups.has(group.id)
                 const childActive = group.items.some((item) => isAdminNavActive(item, section))

@@ -43,6 +43,24 @@ describe('buildUserSeedSql', () => {
     })
     expect(sql).not.toContain('role')
   })
+
+  it('editor 绑定 role_editor，并把 users.role 同步为 admin', () => {
+    // 菜单过滤用例需要真实的 RBAC 权限点；`users.role` 只是同步标记，必须与
+    // `assignRolesToUser` 的写法一致（持有任意 admin.* 权限即为 admin）。
+    const sql = buildUserSeedSql({
+      id: 'e2e-user-4',
+      email: 'editor@example.com',
+      name: '内容编辑',
+      passwordHash: 'salt:hash',
+      role: 'editor',
+    })
+    expect(sql).toContain('INSERT INTO users (id, email, name, email_verified, role)')
+    expect(sql).toContain("'admin'")
+    expect(sql).toContain('INSERT INTO user_roles (id, user_id, role_id)')
+    expect(sql).toContain("'role_editor'")
+    // `users.role` 不能写 'editor'：它不是合法的同步标记值。
+    expect(sql).not.toContain(", 'editor'")
+  })
 })
 
 describe('buildLocalD1Args', () => {

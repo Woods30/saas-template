@@ -95,10 +95,15 @@ Stripe 用 `cancel_at_period_end`，Creem 用 `mode: scheduled`。核销型收�
 
 | 页面 | 权限 | 内容 |
 |---|---|---|
-| `/admin/payments` | `admin` 角色 | 已确认的付款，按类型分四个 tab：**全部 / 订阅 / 一次性 / 人工核销**（`all` 为默认值，不写进 URL）。tab 是划分而不是叠加——人工核销不会出现在订阅或一次性里。 |
-| `/admin/subscriptions` | `admin` 角色 | 订阅周期与状态。 |
+| `/admin/payments` | `admin.orders.read` | 已确认的付款，按类型分四个 tab：**全部 / 订阅 / 一次性 / 人工核销**（`all` 为默认值，不写进 URL）。tab 是划分而不是叠加——人工核销不会出现在订阅或一次性里。 |
+| `/admin/subscriptions` | `admin.subscriptions.read` | 订阅周期与状态。 |
 | `/admin/manual-payments` | `admin.orders.read` / `admin.orders.write` | 人工核销订单的核验队列。 |
+| `/admin/credits` | `admin.credits.read` | 积分账本与手工发放（`admin.credits.write`）。 |
 | `/admin` | `admin.orders.read` | KPI 卡、「注册 → 创建结账 → 付款」转化漏斗（24 小时 / 7 天 / 30 天，按 UTM 维度、referrer 或 country 分组；空值显示为 `direct`）、最近付款与待办。 |
+
+这些权限点同时决定侧栏显隐：用户没有某项权限时，对应入口隐藏；分组内全部入口都被隐藏时，
+整组消失。没有 `admin.orders.read` 的用户打不开 `/admin` 本身，索引页会重定向到其第一个
+可访问的菜单项。隐藏入口只是使用便利——每个 server function 会再按同一权限点校验一次。
 
 ## 退款与反扣
 

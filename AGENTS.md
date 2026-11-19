@@ -47,6 +47,7 @@ Drizzle ORM（多方言：SQLite / D1 / PostgreSQL）、Vitest + Playwright。
 | `pnpm db:setup` | 按 `DATABASE_PROVIDER` 生成 schema 生成物与首份基线迁移 |
 | `pnpm db:generate` / `pnpm db:migrate:local` | Drizzle 迁移 |
 | `pnpm db:seed` | 写入种子数据（配置默认值等） |
+| `pnpm db:cleanup:settings` | 清理已从注册表移除的孤儿配置键（`features.*` / `modules.auth`） |
 | `pnpm content:build` | 生成 `.content-collections/`（构建前置） |
 
 > `pnpm test` 会先跑 `locale:compile`，在非交互环境可能被提问卡住。CI 里用
@@ -148,6 +149,14 @@ scripts/             构建与校验脚本
     申报、结账跳转、失败支付都**不得**直接生成 `payments` 行或授予权益；人工核销必须经管理员
     核验后才由结算流程写 `payments`。订阅续费只写 `payments` 与 `subscriptions`，不写 `orders`。
     首次触达归因（UTM / referrer / country）在注册时写入 `users` 一次，之后不覆盖。见 ADR-0012。
+18. **系统设置九分栏、单栏保存**：后台「系统设置」按 9 个 tab 组织（基础与外观 / 用户 /
+    内容 / 认证与安全 / 支付 / 邮件 / 分析 / 通知 / 自定义），每个 tab 顶部只有一个保存按钮，
+    提交该 tab 的全部分组（收起的分组也算），分组折叠只影响视图。配置字段只在登记表声明。
+    `features.*` 与 `modules.auth` 已移除：认证由三个登录方法开关控制，保存时至少保留一个。
+    管理台入口要求任意 `admin.*` 权限（`hasAdminAccess`，不是 `matchPermission('admin.*')`），
+    侧栏再按每项的 `permission` 逐项过滤；用户中心的 `userFeatures.*` 只决定入口显隐，模块
+    开关决定能力是否存在。自定义配置（`custom.*`）不进入公开配置，仅服务端可读。老库升级后
+    跑一次 `pnpm db:cleanup:settings` 清掉 `features.*` 与 `modules.auth`。见 ADR-0013。
 
 ## 工作方式
 

@@ -1,9 +1,12 @@
 import { IconChartBar, IconRepeat, IconScan, IconUsers } from '@tabler/icons-react'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useMemo } from 'react'
 import { DataTable } from '@/components/data-table/data-table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { firstAdminNavItem, getAdminNav } from '@/config/admin-nav'
 import { adminRoutes } from '@/config/routes'
+import { websiteConfig } from '@/config/website'
+import { matchPermission } from '@/core/auth/rbac'
 import { formatMoney } from '@/lib/format'
 import { getRequestLocale } from '@/lib/locale'
 import { adminHead } from '@/lib/page-head'
@@ -50,6 +53,18 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/')({
         ? (rawGroupBy as FunnelDimension)
         : undefined
     return { range, groupBy }
+  },
+  /**
+   * 概览页的数据需要 `admin.orders.read`；没有该权限的合法管理台用户
+   * （例如只有内容 / 工单权限的 `editor`）不应落到 loader 报错页，而是重定向到
+   * 自己第一个能打开的菜单项。顺序与侧栏一致：概览 → 分组 → 底部。
+   */
+  beforeLoad: ({ context, params }) => {
+    const { permissions } = context.session
+    if (matchPermission('admin.orders.read', permissions)) return
+    const target = firstAdminNavItem(getAdminNav(websiteConfig, permissions))
+    if (!target) return
+    throw redirect({ to: target.to, params: { locale: params.locale } })
   },
   loaderDeps: ({ search }) => ({
     range: search.range ?? '30d',

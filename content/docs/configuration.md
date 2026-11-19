@@ -43,25 +43,59 @@ consumers.
 
 ## Admin tabs
 
-Settings are organised as tabs containing group cards; each card saves on its own:
+Settings are organised as nine tabs. Each tab has **one Save button** at the top and submits
+every group in that tab, including collapsed ones. Group cards can be collapsed individually;
+collapsing is a view state and does not affect saving. Switching tabs keeps unsaved drafts,
+and saving one tab leaves drafts in the other tabs untouched.
 
 | Tab | Group | Content |
 |---|---|---|
-| General | Brand | Site name, tagline, accented glyph in the wordmark |
-| General | SEO | Default title / description / keywords, plus per-locale overrides |
-| General | Social | 11 platform URLs; invalid or credential-bearing URLs are dropped |
-| General | Docs | External docs site URL and the "docs at the root path" switch |
-| Modules | Modules | 11 module switches (docs / blog / changelog / mail / contact / newsletter / payment / manualPayments / notification / analytics / auth) |
-| Users | User features | User-side switches (`userFeatures.*`): billing, manual payments, API keys, notifications |
-| Auth | Auth | Email-verification requirement, Google credentials, Turnstile site and secret keys |
+| General & Appearance | Brand | Site name, tagline, accented glyph in the wordmark |
+| General & Appearance | SEO | Default title / description / keywords, plus per-locale overrides |
+| General & Appearance | Social | 11 platform URLs; invalid or credential-bearing URLs are dropped |
+| Users | User center features | Entry switches (`userFeatures.*`): billing, manual payments, API keys, notification preferences |
+| Users | Registration | Default role for new users (`user` / `viewer` / `editor`) and sign-up credits (enabled / amount / valid days / description) |
+| Content | Content modules | docs / blog / changelog / contact switches |
+| Content | Docs | External docs site URL and the "docs at the root path" switch |
+| Auth & security | Sign-in methods | Email / Google / GitHub switches and the email-verification requirement |
+| Auth & security | Google / GitHub / Turnstile | OAuth credentials and Turnstile site / secret keys |
+| Payment | Payment modules | payment / manualPayments switches |
 | Payment | Payment | Provider and checkout mode (`provider` / `manual_payments`) |
 | Payment | Stripe / Creem | Provider keys and webhook secrets; Creem also has a product map and sandbox flag |
 | Payment | Manual payments | Verification SLA and payee accounts (QR images live in the repo) |
-| Mail | Mail | Provider, support address, sender address |
-| Mail | Resend / Cloudflare Email | Provider credentials |
-| Mail | Newsletter | Newsletter provider (resend / beehiiv) and credentials |
+| Email | Email modules | mail / newsletter switches |
+| Email | Mail | Provider, support address, sender address |
+| Email | Resend / Cloudflare Email | Provider credentials |
+| Email | Newsletter | Newsletter provider (resend / beehiiv) and credentials |
+| Analytics | Analytics modules | analytics switch |
 | Analytics | Analytics | Multiple providers (GA / Plausible / Umami / Clarity) and their public IDs |
+| Notification | Notification modules | notification switch |
 | Notification | Notification | Provider (Discord / Feishu) and webhook URL |
+| Custom | — | Arbitrary `custom.<key>` key-value rows, including secrets |
+
+### Module switches vs user-center feature switches
+
+Module switches decide whether a capability exists: when a module is off, its pages and APIs
+return 404. User-center feature switches (`userFeatures.*`) only decide whether an **entry**
+appears in the user center; they do not enable or disable the underlying module. For example,
+`modules.payment` can be on while `userFeatures.billing` is off, which keeps the capability
+but hides the billing page from users.
+
+### Authentication has no master switch
+
+`modules.auth` was removed. Authentication availability is decided by the three method
+switches (`auth.emailEnabled` / `auth.googleEnabled` / `auth.githubEnabled`); at least one must
+stay on. Saving a tab with all three off is rejected, so the admin cannot lock themselves out
+through the UI. Directly editing the database can still disable every method — that remains an
+operational risk.
+
+### Custom settings are server-only
+
+The **Custom** tab stores arbitrary keys that are not in the registry as `custom.<key>`. Key
+format and reserved prefixes are validated, secret values are encrypted and masked like
+registry secrets, and the panel fetches and saves its own table (whole-table replacement, not
+per tab). Custom values do **not** enter the public `websiteConfig`; they are readable only on
+the server through `getCustomSetting(key)`.
 
 ## Secrets at rest
 
@@ -90,6 +124,20 @@ Never store `CONFIG_ENCRYPTION_KEY` next to the database backup. See
 
 The runtime snapshot has a 30-second TTL; the saving isolate refreshes immediately, others
 follow within 30 seconds.
+
+## Admin access
+
+Entering the admin console requires **any** `admin.*` permission (`*` and the bare `admin`
+permission also count). The check is `hasAdminAccess(permissions)`; it is not
+`matchPermission('admin.*', permissions)`, which would reject holders of a concrete permission
+such as `admin.content.read`. Users without admin access get a 404, not a 403, so the console's
+existence is not disclosed.
+
+Inside the console, menu items are filtered by their own permission: a user holding only
+`admin.content.read` / `admin.tickets.read` sees the Content group but not Users, Roles, Audit,
+Billing, Credits or Settings. A group whose items are all filtered out is not rendered. Each
+server function repeats the same permission check, so hiding an entry is convenience, not the
+security boundary.
 
 ## Gating
 
@@ -133,6 +181,19 @@ pnpm db:seed           # registry defaults + values from .env
 
 `db:seed` only fills missing fields (`DO NOTHING`) so admin edits survive; pass `--force` to
 overwrite everything. It also deletes keys that are no longer in the registry.
+
+### Upgrading from an older release
+
+`features.*` and `modules.auth` are gone. An existing installation may still hold rows for
+them; they are ignored at runtime, but removing them keeps the table honest:
+
+```bash
+pnpm db:cleanup:settings          # local D1
+pnpm db:cleanup:settings:remote   # remote D1
+```
+
+The script deletes only the `features.*` keys and `modules.auth`, leaving all other settings
+untouched. Run it once after deploying an upgrade that crosses this change.
 
 To change the brand and support address, use `--brand` / `--tagline` / `--email`, or edit them
 in the admin.

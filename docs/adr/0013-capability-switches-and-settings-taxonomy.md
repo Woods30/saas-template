@@ -21,9 +21,12 @@ ShipAny 的做法不同：没有实例级能力开关；API 密钥归 user featu
    由权限点取代。能力是否可用改由依赖配置是否齐备决定。
 2. **删除 `modules.auth` 总开关**。认证可用性由「邮箱登录 / Google 登录 / GitHub 登录」
    三个方法开关决定；保存设置时至少保留一个，防止把自己锁在门外。新增 GitHub OAuth。
-3. **管理台门禁改为权限点**：`matchPermission('admin.*', permissions)` 为真即可进入。
-   `super_admin` 持 `*`、`admin` 持全部 admin 权限、`editor` 持内容 / 工单权限也能进，
-   菜单项与接口再按权限点逐项显隐与校验。
+3. **管理台门禁改为权限点**：`hasAdminAccess(permissions)` 为真即可进入——它判断「持有的
+   权限点里有没有落在 `admin` 域」，而不是 `matchPermission('admin.*', permissions)`（后者
+   只认持有 `*`，会把持具体权限点的 `admin` / `editor` 一起挡住）。`super_admin` 持 `*`、
+   `admin` 持全部 admin 权限、`editor` 持内容 / 工单权限都能进。菜单项按各自的 `permission`
+   逐项显隐（空分组整组丢弃），接口再按权限点逐个校验；没有 `admin.orders.read` 的用户
+   访问 `/admin` 会重定向到第一个可访问菜单项。
 4. **新增用户中心功能开关**：账单 / 人工核销 / API 密钥 / 通知偏好，控制个人中心入口
    是否展示；与模块开关分开——模块开关决定能力是否存在，功能开关决定入口是否出现。
 5. **系统设置重新分类为 9 个 tab**：基础与外观 / 用户 / 内容模块 / 认证与安全 / 支付 /

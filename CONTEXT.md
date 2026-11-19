@@ -114,9 +114,12 @@
 - **受保护路由**：`src/routes/{-$locale}/_layout/settings.tsx`（个人中心，`/settings/*`）与
   `_layout/admin.tsx`（管理台，`/admin/*`）两棵独立子树——pathless layout 的 `beforeLoad`
   先用 `fetchSession()` 判会话，未登录 `redirect` 到登录页并带上 locale 参数；管理台在此
-  之上再校验「任意 `admin.*` 权限」（`matchPermission('admin.*', permissions)`）。`editor`
-  可进管理台，但菜单与接口按权限点逐项显隐/校验。外壳（侧栏、面包屑、页面标题）由
-  `components/dashboard/DashboardShell` 统一渲染，页面自己不再写标题块。
+  之上再校验「任意 `admin.*` 权限」（`hasAdminAccess(permissions)`；不能写成
+  `matchPermission('admin.*', …)`，那会挡住持有具体权限点的 `admin` / `editor`）。`editor`
+  可进管理台，但侧栏菜单按每项的 `permission` 逐项过滤、空分组整组不渲染，接口再按权限点
+  逐个校验；没有 `admin.orders.read` 的用户访问 `/admin` 会被重定向到第一个可访问菜单项。
+  外壳（侧栏、面包屑、页面标题）由 `components/dashboard/DashboardShell` 统一渲染，页面
+  自己不再写标题块。
 - **AuthFormMessages**：`src/core/auth/validation.ts` 的校验文案契约。schema 工厂接收文案而非
   自己调 `m.*()`，使校验逻辑不依赖 Paraglide 运行时、可脱离组件单测；页面用
   `authFormMessages()` 求值。

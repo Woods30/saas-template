@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { parseEnv } from 'node:util'
 import { resolvePriceReference } from '../src/config/products'
+import { roleIdOf } from '../src/core/auth/rbac'
 
 /**
  * 为 E2E 写入一条「已订阅」记录：E2E 不能真打 Stripe，故直接写本地 D1。
@@ -111,8 +112,14 @@ export function buildUserSeedSql(user: {
   email: string
   name: string
   passwordHash: string
-  /** 角色；管理台用例需要 `'admin'`。不传则按数据库默认值 `'user'`。 */
-  role?: 'user' | 'admin'
+  /**
+   * 角色；管理台用例需要 `'admin'`。不传则按数据库默认值 `'user'`。
+   *
+   * `'editor'` 走 RBAC 绑定：写一行 `user_roles` → `role_editor`，并把 `users.role`
+   * 同步成 `'admin'`。这不是特例，而是 `assignRolesToUser` 的同步标记——持有任意
+   * `admin.*` 权限的用户，`users.role` 都会被写成 `'admin'`。
+   */
+  role?: 'user' | 'admin' | 'editor'
 }): string {
   const quote = (value: string) => `'${escapeSql(value)}'`
   const columns = ['id', 'email', 'name', 'email_verified']
@@ -121,10 +128,19 @@ export function buildUserSeedSql(user: {
   // 「这个账号本来是不是管理员」。
   if (user.role) {
     columns.push('role')
-    values.push(quote(user.role))
+    values.push(quote(user.role === 'editor' ? 'admin' : user.role))
   }
-  return `INSERT INTO users (${columns.join(', ')}) VALUES (${values.join(', ')});
-INSERT INTO accounts (id, user_id, account_id, provider_id, password) VALUES (${quote(`account_${user.id}`)}, ${quote(user.id)}, ${quote(user.id)}, 'credential', ${quote(user.passwordHash)});`
+  const statements = [
+    `INSERT INTO users (${columns.join(', ')}) VALUES (${values.join(', ')});`,
+    `INSERT INTO accounts (id, user_id, account_id, provider_id, password) VALUES (${quote(`account_${user.id}`)}, ${quote(user.id)}, ${quote(user.id)}, 'credential', ${quote(user.passwordHash)});`,
+  ]
+  if (user.role === 'editor') {
+    // 角色行由 `e2e/global-setup.ts` 用 `buildRbacSeedSql` 保证存在。
+    statements.push(
+      `INSERT INTO user_roles (id, user_id, role_id) VALUES (${quote(`userrole_${user.id}`)}, ${quote(user.id)}, ${quote(roleIdOf('editor'))});`,
+    )
+  }
+  return statements.join('\n')
 }
 
 /**
@@ -160,8 +176,8 @@ export async function seedVerifiedUser(input: {
   email: string
   name: string
   password: string
-  /** 角色；管理台用例需要 `'admin'`。 */
-  role?: 'user' | 'admin'
+  /** 角色；管理台用例需要 `'admin'`，菜单过滤用例需要 `'editor'`。 */
+  role?: 'user' | 'admin' | 'editor'
 }): Promise<void> {
   const { hashPassword } = await import('better-auth/crypto')
   executeLocalD1(

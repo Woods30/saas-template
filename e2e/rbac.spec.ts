@@ -93,4 +93,52 @@ test.describe('Admin 角色权限与审计日志', () => {
     await expect(page.getByRole('link', { name: '角色与权限', exact: true }).first()).toBeVisible()
     await expect(page.getByRole('link', { name: '审计日志', exact: true }).first()).toBeVisible()
   })
+
+  test('管理员侧栏完整显示 RBAC 分组', async ({ page }) => {
+    await loginAsAdmin(page)
+    await page.goto('/zh/admin/roles')
+    await waitForHydration(page)
+    await expect(page.getByRole('heading', { name: '角色与权限' })).toBeVisible({ timeout: 15000 })
+
+    // 分组标题本身是折叠按钮；三个入口是链接。
+    const sidebar = page.locator('[data-slot="sidebar"]')
+    await expect(sidebar.getByRole('button', { name: '用户与权限' })).toBeVisible()
+    for (const name of ['用户管理', '角色与权限', '审计日志']) {
+      await expect(sidebar.getByRole('link', { name, exact: true })).toBeVisible()
+    }
+  })
+
+  test('editor 进入管理台只看到有权限的菜单', async ({ page }) => {
+    // `user_roles → role_editor` 需要内置角色行存在，`e2e/global-setup.ts` 用
+    // `buildRbacSeedSql` 保证（与 `pnpm db:seed` 同一份定义）。
+    const email = `rbac-editor-${Date.now()}-${crypto.randomUUID().slice(0, 8)}@example.com`
+    await seedVerifiedUser({
+      email,
+      name: '内容编辑',
+      password: PASSWORD,
+      role: 'editor',
+    })
+    await page.goto('/zh/auth/login')
+    await waitForHydration(page)
+    await waitForForm(page)
+    await page.getByLabel('邮箱').fill(email)
+    await page.getByLabel('密码', { exact: true }).fill(PASSWORD)
+    await page.getByRole('button', { name: '登录', exact: true }).click()
+    await page.waitForURL((url) => url.pathname === '/zh' || url.pathname === '/')
+
+    // 概览要求 `admin.orders.read`；editor 没有，应重定向到第一个可见入口（内容）。
+    await page.goto('/zh/admin')
+    await page.waitForURL(/\/zh\/admin\/content$/, { timeout: 15000 })
+    await waitForHydration(page)
+
+    const sidebar = page.locator('[data-slot="sidebar"]')
+    await expect(sidebar.getByRole('link', { name: '内容与分类', exact: true })).toBeVisible()
+    await expect(sidebar.getByRole('link', { name: '工单与邀请码', exact: true })).toBeVisible()
+    for (const hidden of ['用户管理', '角色与权限', '审计日志', '付款', '系统设置']) {
+      await expect(sidebar.getByRole('link', { name: hidden, exact: true })).toHaveCount(0)
+    }
+    // 无权限的分组整组不渲染。
+    await expect(sidebar.getByRole('button', { name: '用户与权限' })).toHaveCount(0)
+    await expect(sidebar.getByRole('button', { name: '账单与财务' })).toHaveCount(0)
+  })
 })
