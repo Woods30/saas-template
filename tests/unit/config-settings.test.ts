@@ -106,7 +106,7 @@ describe('applySettingsToConfig', () => {
     'modules.mail': true,
     'features.enableAdmin': false,
     'payment.provider': 'creem',
-    'payment.checkoutMode': 'collection',
+    'payment.checkoutMode': 'manual_payments',
     'mail.provider': 'cloudflare',
     'mail.supportEmail': 'hi@acme.dev',
     'analytics.providers': ['umami'],
@@ -132,7 +132,7 @@ describe('applySettingsToConfig', () => {
   it('渠道选择与结账链路进入配置', () => {
     const config = applySettingsToConfig(baseConfig, values)
     expect(config.payment.provider).toBe('creem')
-    expect(config.payment.checkoutMode).toBe('collection')
+    expect(config.payment.checkoutMode).toBe('manual_payments')
     expect(config.mail.provider).toBe('cloudflare')
     expect(config.mail.supportEmail).toBe('hi@acme.dev')
   })

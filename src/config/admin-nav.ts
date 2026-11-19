@@ -84,13 +84,13 @@ const RBAC_ITEMS: AdminNavItem[] = [
   },
 ]
 
-const COLLECTION_ORDERS: AdminNavItem = {
-  id: 'collection-orders',
-  to: adminRoutes.collectionOrders,
+const MANUAL_PAYMENT_ORDERS: AdminNavItem = {
+  id: 'manual-payments',
+  to: adminRoutes.manualPayments,
   icon: IconScan,
-  title: () => m['collection_admin.title_orders'](),
-  label: () => m['collection_admin.nav_orders'](),
-  description: () => m['collection_admin.description_orders'](),
+  title: () => m['manual_payments_admin.title_orders'](),
+  label: () => m['manual_payments_admin.nav_orders'](),
+  description: () => m['manual_payments_admin.description_orders'](),
 }
 
 const BILLING_ITEMS: AdminNavItem[] = [
@@ -157,7 +157,7 @@ const PERSONAL_SWITCH: AdminNavItem = {
   description: () => '',
 }
 
-/** 组装管理台菜单；核销订单只在 collection 模块开启时出现。 */
+/** 组装管理台菜单；核销订单只在 manualPayments 模块开启时出现。 */
 export function getAdminNav(config: WebsiteConfig): AdminNav {
   return {
     overview: OVERVIEW,
@@ -172,8 +172,8 @@ export function getAdminNav(config: WebsiteConfig): AdminNav {
         id: 'billing',
         label: () => m.admin_nav_group_billing(),
         icon: IconCreditCard,
-        items: config.collection.enabled
-          ? [...BILLING_ITEMS.slice(0, 2), COLLECTION_ORDERS, ...BILLING_ITEMS.slice(2)]
+        items: config.manualPayments.enabled
+          ? [...BILLING_ITEMS.slice(0, 2), MANUAL_PAYMENT_ORDERS, ...BILLING_ITEMS.slice(2)]
           : BILLING_ITEMS,
       },
       {

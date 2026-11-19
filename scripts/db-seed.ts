@@ -16,7 +16,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { parseCollectionAccounts } from '../src/config/website'
+import { parseManualPaymentAccounts } from '../src/config/website'
 import {
   type BuiltinRoleSeed,
   DEFAULT_PERMISSIONS,
@@ -95,7 +95,7 @@ export function seedValues(
         .map((item) => item.trim())
         .filter((item) => item !== '')
     } else if (field.kind === 'json') {
-      values[field.key] = parseCollectionAccounts(raw) ?? values[field.key]
+      values[field.key] = parseManualPaymentAccounts(raw) ?? values[field.key]
     } else if (field.kind === 'number') {
       const parsed = Number(raw)
       if (Number.isFinite(parsed)) values[field.key] = parsed

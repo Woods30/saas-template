@@ -4,22 +4,22 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import {
   ADMIN_ORDER_STATUSES,
-  COLLECTION_RATE_LIMITS,
-  type CollectionGuardDeps,
-  collectionAccountSchema,
   createOrderSchema,
   DEFAULT_ADMIN_ORDER_STATUS,
   enforceRateLimit,
   errorResponse,
   errorStatus,
   failureResponse,
-  guardCollectionRequest,
+  guardManualPaymentRequest,
   isValidAccountQrImageKey,
+  MANUAL_PAYMENT_RATE_LIMITS,
+  type ManualPaymentGuardDeps,
+  manualPaymentAccountSchema,
   rateLimitAction,
   resolveAdminOrderQuery,
   reviewOrderSchema,
 } from '@/modules/manual-payments/server-logic'
-import { CollectionError } from '@/modules/manual-payments/types'
+import { ManualPaymentError } from '@/modules/manual-payments/types'
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 
@@ -38,12 +38,12 @@ function escapeRegExp(value: string): string {
  */
 
 /** 造一份门禁依赖，并记录调用顺序。 */
-function makeDeps(overrides: Partial<CollectionGuardDeps> = {}): {
-  deps: CollectionGuardDeps
+function makeDeps(overrides: Partial<ManualPaymentGuardDeps> = {}): {
+  deps: ManualPaymentGuardDeps
   calls: string[]
 } {
   const calls: string[] = []
-  const deps: CollectionGuardDeps = {
+  const deps: ManualPaymentGuardDeps = {
     ip: overrides.ip ?? '1.2.3.4',
     module: () => {
       calls.push('module')
@@ -86,7 +86,7 @@ describe('错误码 → HTTP 状态', () => {
     expect(errorStatus('AMOUNT_MISMATCH')).toBe(400)
     expect(errorStatus('INVALID_PAYER_NOTE')).toBe(400)
     expect(errorStatus('INVALID_REVIEW_NOTE')).toBe(400)
-    expect(errorStatus('NO_COLLECTION_ACCOUNT')).toBe(400)
+    expect(errorStatus('NO_MANUAL_PAYMENT_ACCOUNT')).toBe(400)
     expect(errorStatus('INVALID_INPUT')).toBe(400)
   })
 
@@ -110,7 +110,7 @@ describe('错误码 → HTTP 状态', () => {
 
 describe('异常 → 错误响应', () => {
   it('领域错误按自带的状态码翻译', async () => {
-    const response = failureResponse(new CollectionError('ORDER_EXPIRED', '订单已过期'))
+    const response = failureResponse(new ManualPaymentError('ORDER_EXPIRED', '订单已过期'))
     expect(response.status).toBe(410)
     await expect(response.json()).resolves.toEqual({ error: 'ORDER_EXPIRED' })
   })
@@ -139,7 +139,7 @@ describe('门禁顺序', () => {
     const { deps, calls } = makeDeps({
       module: () => errorResponse('MODULE_DISABLED'),
     })
-    const result = await guardCollectionRequest(deps, { limit: 'create-order' })
+    const result = await guardManualPaymentRequest(deps, { limit: 'create-order' })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.response.status).toBe(404)
     // 模块都没开，就不该再查会话、也不该再查限流。
@@ -148,14 +148,14 @@ describe('门禁顺序', () => {
 
   it('配置不全时 503', async () => {
     const { deps } = makeDeps({ module: () => errorResponse('SERVICE_UNAVAILABLE') })
-    const result = await guardCollectionRequest(deps)
+    const result = await guardManualPaymentRequest(deps)
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.response.status).toBe(503)
   })
 
   it('未登录时 401', async () => {
     const { deps, calls } = makeDeps({ session: async () => null })
-    const result = await guardCollectionRequest(deps)
+    const result = await guardManualPaymentRequest(deps)
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.response.status).toBe(401)
     expect(calls).toEqual(['module', 'session'])
@@ -163,20 +163,20 @@ describe('门禁顺序', () => {
 
   it('普通用户调用管理员接口返回 403', async () => {
     const { deps } = makeDeps({ session: async () => ({ userId: 'u1', role: 'user' }) })
-    const result = await guardCollectionRequest(deps, { requireAdmin: true })
+    const result = await guardManualPaymentRequest(deps, { requireAdmin: true })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.response.status).toBe(403)
   })
 
   it('管理员放行', async () => {
     const { deps } = makeDeps({ session: async () => ({ userId: 'a1', role: 'admin' }) })
-    const result = await guardCollectionRequest(deps, { requireAdmin: true })
+    const result = await guardManualPaymentRequest(deps, { requireAdmin: true })
     expect(result.ok).toBe(true)
   })
 
   it('被限流时 429', async () => {
     const { deps } = makeDeps({ rateLimit: async () => false })
-    const result = await guardCollectionRequest(deps, { limit: 'create-order' })
+    const result = await guardManualPaymentRequest(deps, { limit: 'create-order' })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.response.status).toBe(429)
   })
@@ -185,7 +185,10 @@ describe('门禁顺序', () => {
     const { deps, calls } = makeDeps({
       session: async () => ({ userId: 'a1', role: 'admin' }),
     })
-    const result = await guardCollectionRequest(deps, { requireAdmin: true, limit: 'review-order' })
+    const result = await guardManualPaymentRequest(deps, {
+      requireAdmin: true,
+      limit: 'review-order',
+    })
     expect(result.ok).toBe(true)
     expect(calls).toEqual(['module', 'session', 'rateLimit'])
   })
@@ -193,29 +196,29 @@ describe('门禁顺序', () => {
   it('角色只认服务端会话：客户端伪造的角色不作数', async () => {
     // 门禁的入参里根本没有 role —— 角色只能来自 session。
     const { deps } = makeDeps({ session: async () => ({ userId: 'u1', role: 'user' }) })
-    const result = await guardCollectionRequest(deps, { requireAdmin: true })
+    const result = await guardManualPaymentRequest(deps, { requireAdmin: true })
     expect(result.ok).toBe(false)
   })
 })
 
 describe('限流', () => {
   it('各动作的限额与窗口彼此独立', () => {
-    const actions = Object.entries(COLLECTION_RATE_LIMITS)
-    expect(COLLECTION_RATE_LIMITS['create-order']).toEqual({ limit: 5, windowSeconds: 900 })
-    expect(COLLECTION_RATE_LIMITS['submit-order']).toEqual({ limit: 10, windowSeconds: 60 })
-    expect(COLLECTION_RATE_LIMITS['poll-order']).toEqual({ limit: 60, windowSeconds: 60 })
-    expect(COLLECTION_RATE_LIMITS['upload-receipt']).toEqual({ limit: 5, windowSeconds: 900 })
-    expect(COLLECTION_RATE_LIMITS['review-order']).toEqual({ limit: 30, windowSeconds: 60 })
+    const actions = Object.entries(MANUAL_PAYMENT_RATE_LIMITS)
+    expect(MANUAL_PAYMENT_RATE_LIMITS['create-order']).toEqual({ limit: 5, windowSeconds: 900 })
+    expect(MANUAL_PAYMENT_RATE_LIMITS['submit-order']).toEqual({ limit: 10, windowSeconds: 60 })
+    expect(MANUAL_PAYMENT_RATE_LIMITS['poll-order']).toEqual({ limit: 60, windowSeconds: 60 })
+    expect(MANUAL_PAYMENT_RATE_LIMITS['upload-receipt']).toEqual({ limit: 5, windowSeconds: 900 })
+    expect(MANUAL_PAYMENT_RATE_LIMITS['review-order']).toEqual({ limit: 30, windowSeconds: 60 })
     // 不同动作的键必须不同，否则共享同一桶。
     expect(new Set(actions.map(([action]) => action)).size).toBe(actions.length)
   })
 
   it('限流键带上账号 ID：限流工具只有 ip+action 维度', () => {
-    expect(rateLimitAction('create-order', 'user-1')).toBe('collection:create-order:user-1')
+    expect(rateLimitAction('create-order', 'user-1')).toBe('manual_payments:create-order:user-1')
     expect(rateLimitAction('create-order', 'user-2')).not.toBe(
       rateLimitAction('create-order', 'user-1'),
     )
-    expect(rateLimitAction('poll-order')).toBe('collection:poll-order')
+    expect(rateLimitAction('poll-order')).toBe('manual_payments:poll-order')
   })
 
   it('放行时返回 undefined，被限流时返回 429', async () => {
@@ -225,7 +228,7 @@ describe('限流', () => {
     ).toBeUndefined()
     expect(allowed).toHaveBeenCalledWith({
       ip: '1.2.3.4',
-      action: 'collection:create-order:u1',
+      action: 'manual_payments:create-order:u1',
       limit: 5,
       windowSeconds: 900,
     })
@@ -267,13 +270,16 @@ describe('参数校验', () => {
 describe('收款账户的入参校验', () => {
   it('账户 ID 不能带路径片段', () => {
     expect(
-      collectionAccountSchema.safeParse({ accountId: 'acct-main', displayName: '支付宝' }).success,
+      manualPaymentAccountSchema.safeParse({ accountId: 'acct-main', displayName: '支付宝' })
+        .success,
     ).toBe(true)
     expect(
-      collectionAccountSchema.safeParse({ accountId: '../secrets', displayName: '支付宝' }).success,
+      manualPaymentAccountSchema.safeParse({ accountId: '../secrets', displayName: '支付宝' })
+        .success,
     ).toBe(false)
     expect(
-      collectionAccountSchema.safeParse({ accountId: 'acct/main', displayName: '支付宝' }).success,
+      manualPaymentAccountSchema.safeParse({ accountId: 'acct/main', displayName: '支付宝' })
+        .success,
     ).toBe(false)
   })
 
@@ -282,10 +288,12 @@ describe('收款账户的入参校验', () => {
     expect(isValidAccountQrImageKey('acct-main', null)).toBe(true)
     expect(isValidAccountQrImageKey('acct-main', undefined)).toBe(true)
     // 本账户自己的 key 合法。
-    expect(isValidAccountQrImageKey('acct-main', 'collection-qrcodes/acct-main.png')).toBe(true)
+    expect(isValidAccountQrImageKey('acct-main', 'manual-payment-qrcodes/acct-main.png')).toBe(true)
     // 别人的收款码、凭证目录、任意路径都不放行。
-    expect(isValidAccountQrImageKey('acct-main', 'collection-qrcodes/acct-other.png')).toBe(false)
-    expect(isValidAccountQrImageKey('acct-main', 'collection-receipts/o1.png')).toBe(false)
+    expect(isValidAccountQrImageKey('acct-main', 'manual-payment-qrcodes/acct-other.png')).toBe(
+      false,
+    )
+    expect(isValidAccountQrImageKey('acct-main', 'manual-payment-receipts/o1.png')).toBe(false)
     expect(isValidAccountQrImageKey('acct-main', 'secrets.png')).toBe(false)
   })
 })

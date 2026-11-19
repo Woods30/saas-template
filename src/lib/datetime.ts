@@ -5,7 +5,7 @@
  *
  * 1. **存储与计算一律 UTC**。Drizzle 的 `timestamp` 列存 Unix 秒（`unixepoch()`），
  *    结算周期用 `Date.UTC` / `getUTC*` 推算，见 `src/db/schema.ts` 与
- *    `src/collection/settlement.ts`。后端代码不得使用本地时区读取器
+ *    `src/modules/manual-payments/settlement.ts`。后端代码不得使用本地时区读取器
  *    （`getFullYear` / `getMonth` / …）。
  * 2. **格式化只在这里做**。全仓的 `toLocale*` 调用集中在本模块，其余业务代码一律
  *    调用这里的函数；`tests/unit/datetime-guard.test.ts` 守着这条线。

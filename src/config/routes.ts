@@ -18,7 +18,7 @@ export const adminRoutes = {
   audit: '/{-$locale}/admin/audit',
   orders: '/{-$locale}/admin/orders',
   subscriptions: '/{-$locale}/admin/subscriptions',
-  collectionOrders: '/{-$locale}/admin/collection-orders',
+  manualPayments: '/{-$locale}/admin/manual-payments',
   credits: '/{-$locale}/admin/credits',
   content: '/{-$locale}/admin/content',
   tickets: '/{-$locale}/admin/tickets',
@@ -33,8 +33,8 @@ export const settingsRoutes = {
   sessions: '/{-$locale}/settings/sessions',
   notifications: '/{-$locale}/settings/notifications',
   billing: '/{-$locale}/settings/billing',
-  orders: '/{-$locale}/settings/orders',
-  orderDetail: '/{-$locale}/settings/orders/$orderId',
+  manualPayments: '/{-$locale}/settings/manual-payments',
+  manualPaymentDetail: '/{-$locale}/settings/manual-payments/$orderId',
   apiKeys: '/{-$locale}/settings/api-keys',
 } as const
 

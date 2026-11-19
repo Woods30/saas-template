@@ -6,8 +6,8 @@ const ALLOWED_FOLDER_PREFIXES = [
   'uploads',
   'avatars',
   'documents',
-  'collection-qrcodes',
-  'collection-receipts',
+  'manual-payment-qrcodes',
+  'manual-payment-receipts',
 ] as const
 type AllowedFolder = (typeof ALLOWED_FOLDER_PREFIXES)[number]
 

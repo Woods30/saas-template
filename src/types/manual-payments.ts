@@ -1,5 +1,5 @@
 /**
- * 核销型支付（collection）的共享类型。
+ * 核销型支付（manual payments）的共享类型。
  *
  * 这条链路不接支付渠道：用户按订单金额向收款码付款，管理员核验后结算。
  * 金额一律以「分」为单位的整数保存，币种首期固定人民币。
@@ -10,10 +10,10 @@
  */
 
 /** 首期只支持支付宝个人收款码。 */
-export type CollectionChannel = 'alipay'
+export type ManualPaymentChannel = 'alipay'
 
 /** 一个付费方式在核销链路下的标价。 */
-export interface CollectionPrice {
+export interface ManualPaymentPrice {
   /** 金额，单位为分，必须是正整数。 */
   amount: number
   currency: 'cny'
@@ -25,10 +25,10 @@ export interface CollectionPrice {
 }
 
 /** 收款账户的兜底配置（数据库可按 ID 覆盖）。 */
-export interface CollectionAccountConfig {
+export interface ManualPaymentAccountConfig {
   /** 账户 ID：配置内唯一，数据库覆盖按它对应。 */
   id: string
-  channel: CollectionChannel
+  channel: ManualPaymentChannel
   displayName: string
   currency: 'cny'
   /** 二维码地址：站内根路径或无凭据的 HTTPS URL。 */

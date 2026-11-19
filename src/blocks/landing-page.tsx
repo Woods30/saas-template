@@ -13,25 +13,25 @@ import { LandingStack } from './landing-stack'
 import { LandingTechnologyStrip } from './landing-technology-strip'
 import { LandingValueProps } from './landing-value-props'
 import { LandingWorkflow } from './landing-workflow'
-import { type CollectionPriceView, TemplatePricing } from './template-pricing'
+import { type ManualPaymentPriceView, TemplatePricing } from './template-pricing'
 
 /** 营销首页：按顺序组合各区块。 */
 export function LandingPage({
   priceCents,
-  collectionPrice = null,
+  manualPaymentPrice = null,
 }: {
   priceCents: number | null
   /** 核销链路的本地标价；只在结账链路为核销收款时用。 */
-  collectionPrice?: CollectionPriceView | null
+  manualPaymentPrice?: ManualPaymentPriceView | null
 }) {
   const [motionRunning, setMotionRunning] = useState(true)
   const locale = getLocale()
   // 价格事实源随结账链路走：渠道支付读 Stripe 的价格目录，核销收款读本地标价。
   // 取不到时降级为「价格暂不可用」，不编造金额。
-  const collectionMode = websiteConfig.payment.checkoutMode === 'collection'
-  const price = collectionMode
-    ? collectionPrice
-      ? formatMoney(collectionPrice.amount, collectionPrice.currency, locale)
+  const manualPaymentMode = websiteConfig.payment.checkoutMode === 'manual_payments'
+  const price = manualPaymentMode
+    ? manualPaymentPrice
+      ? formatMoney(manualPaymentPrice.amount, manualPaymentPrice.currency, locale)
       : null
     : priceCents === null
       ? null

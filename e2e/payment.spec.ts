@@ -98,7 +98,7 @@ test.describe('Payment', () => {
     await page.goto('/zh/pricing')
     await expect(page).toHaveURL(/\/zh#pricing$/)
     // 价格形态随结账模式而变：provider 模式（Stripe 目录）显示 $ 金额或没有
-    // 凭据时的「价格暂不可用」；collection 模式（E2E 全局注入）显示 ¥ 金额。
+    // 凭据时的「价格暂不可用」；manual payments 模式（E2E 全局注入）显示 ¥ 金额。
     // 两种都算通过，硬编码金额会在改价或换模式后红。
     await expect(page.locator('#pricing')).toContainText(/\$\d|¥\d|价格暂不可用/)
     await expect(page.getByText('专业版', { exact: true })).toHaveCount(0)

@@ -5,8 +5,8 @@ import { AdminConsoleLayout } from '@/components/admin/AdminConsoleLayout'
 import { websiteConfig } from '@/config/website'
 import type { SessionInfo } from '@/core/auth/session'
 import { setLocale } from '@/locale/paraglide/runtime.js'
-import type { CollectionOrder } from '@/modules/manual-payments/service'
-import { Route as AdminCollectionOrdersRoute } from '@/routes/{-$locale}/_layout/admin/collection-orders'
+import type { ManualPaymentOrder } from '@/modules/manual-payments/service'
+import { Route as AdminManualPaymentOrdersRoute } from '@/routes/{-$locale}/_layout/admin/manual-payments'
 
 /**
  * 管理员核验队列与收款账户运营：入口门禁、默认筛选、金额不符禁提交、
@@ -15,7 +15,7 @@ import { Route as AdminCollectionOrdersRoute } from '@/routes/{-$locale}/_layout
  */
 
 const routerMocks = vi.hoisted(() => ({
-  pathname: '/zh/admin/collection-orders',
+  pathname: '/zh/admin/manual-payments',
   navigate: vi.fn(),
 }))
 
@@ -64,28 +64,28 @@ vi.mock('@/modules/manual-payments/server', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/modules/manual-payments/server')>()
   return {
     ...actual,
-    fetchAdminCollectionOrdersFn: mocks.fetchAdminOrders,
-    reviewCollectionOrderFn: mocks.reviewOrder,
-    fetchCollectionAccountsFn: mocks.fetchAccounts,
-    saveCollectionAccountFn: mocks.saveAccount,
+    fetchAdminManualPaymentOrdersFn: mocks.fetchAdminOrders,
+    reviewManualPaymentOrderFn: mocks.reviewOrder,
+    fetchManualPaymentAccountsFn: mocks.fetchAccounts,
+    saveManualPaymentAccountFn: mocks.saveAccount,
   }
 })
 
 // `websiteConfig` 是 Proxy（`structuredClone` 克隆不了），这里只留快照用到的字段。
-const originalCollectionEnabled = websiteConfig.collection.enabled
-const originalCollectionAccounts = websiteConfig.collection.accounts
+const originalManualPaymentEnabled = websiteConfig.manualPayments.enabled
+const originalManualPaymentAccounts = websiteConfig.manualPayments.accounts
 const originalEnableAdmin = websiteConfig.features.enableAdmin
 
-const AdminCollectionOrdersPage = AdminCollectionOrdersRoute.options
+const AdminManualPaymentOrdersPage = AdminManualPaymentOrdersRoute.options
   .component as unknown as () => React.JSX.Element
 
 beforeEach(() => {
   setLocale('zh', { reload: false })
-  routerMocks.pathname = '/zh/admin/collection-orders'
+  routerMocks.pathname = '/zh/admin/manual-payments'
   // 打开管理台与核销模块：本套件关心的是页面行为，不是门禁开关。
   websiteConfig.features.enableAdmin = true
-  websiteConfig.collection.enabled = true
-  websiteConfig.collection.accounts = [
+  websiteConfig.manualPayments.enabled = true
+  websiteConfig.manualPayments.accounts = [
     {
       id: 'alipay_main',
       channel: 'alipay',
@@ -101,12 +101,12 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  websiteConfig.collection.enabled = originalCollectionEnabled
-  websiteConfig.collection.accounts = originalCollectionAccounts
+  websiteConfig.manualPayments.enabled = originalManualPaymentEnabled
+  websiteConfig.manualPayments.accounts = originalManualPaymentAccounts
   websiteConfig.features.enableAdmin = originalEnableAdmin
 })
 
-function makeOrder(overrides: Partial<CollectionOrder> = {}): CollectionOrder {
+function makeOrder(overrides: Partial<ManualPaymentOrder> = {}): ManualPaymentOrder {
   const createdAt = new Date('2026-01-01T00:00:00.000Z')
   return {
     id: 'ord_1',
@@ -142,13 +142,15 @@ function makeOrder(overrides: Partial<CollectionOrder> = {}): CollectionOrder {
 }
 
 function stubLoaderData(payload: Record<string, unknown>, accounts: unknown[] = []) {
-  vi.spyOn(AdminCollectionOrdersRoute, 'useLoaderData').mockReturnValue({
+  vi.spyOn(AdminManualPaymentOrdersRoute, 'useLoaderData').mockReturnValue({
     accounts,
     ...payload,
   } as never)
   // 页面用 URL 状态驱动筛选与分页；组件直接渲染时没有 Router 上下文，stub 掉。
-  vi.spyOn(AdminCollectionOrdersRoute, 'useSearch').mockReturnValue({} as never)
-  vi.spyOn(AdminCollectionOrdersRoute, 'useNavigate').mockReturnValue(routerMocks.navigate as never)
+  vi.spyOn(AdminManualPaymentOrdersRoute, 'useSearch').mockReturnValue({} as never)
+  vi.spyOn(AdminManualPaymentOrdersRoute, 'useNavigate').mockReturnValue(
+    routerMocks.navigate as never,
+  )
 }
 
 function sessionWith(role: SessionInfo['user']['role'] = 'admin'): SessionInfo {
@@ -167,7 +169,7 @@ function sessionWith(role: SessionInfo['user']['role'] = 'admin'): SessionInfo {
 
 /** 页面组件渲染外壳；入口门禁单独在 settings-layout 侧验证。 */
 function renderPage() {
-  return render(<AdminCollectionOrdersPage />)
+  return render(<AdminManualPaymentOrdersPage />)
 }
 
 describe('核验队列页', () => {
@@ -205,7 +207,10 @@ describe('核验队列页', () => {
       page: {
         rows: [
           makeOrder({ id: 'ord_no_receipt', receiptKey: null }),
-          makeOrder({ id: 'ord_with_receipt', receiptKey: 'collection-receipts/ord_with_receipt' }),
+          makeOrder({
+            id: 'ord_with_receipt',
+            receiptKey: 'manual-payment-receipts/ord_with_receipt',
+          }),
         ],
         total: 2,
       },
@@ -215,8 +220,8 @@ describe('核验队列页', () => {
     expect(screen.getByText('ord_with_receipt')).toBeInTheDocument()
     const img = screen.getByAltText('付款凭证') as HTMLImageElement
     // key 不暴露给客户端：src 只有端点路径，不含任何 R2 key。
-    expect(img.src).toContain('/api/collection/orders/ord_with_receipt/receipt')
-    expect(img.src).not.toContain('collection-receipts')
+    expect(img.src).toContain('/api/manual-payments/orders/ord_with_receipt/receipt')
+    expect(img.src).not.toContain('manual-payment-receipts')
   })
 
   it('金额与应付金额相等才能普通通过；不等时按钮不可提交', async () => {
@@ -310,7 +315,7 @@ describe('收款账户区块', () => {
         channel: 'alipay',
         displayName: '运营改名后的账户',
         currency: 'cny',
-        qrImageKey: 'collection-qrcodes/alipay_main',
+        qrImageKey: 'manual-payment-qrcodes/alipay_main',
         enabled: true,
         updatedBy: 'a_1',
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -378,7 +383,7 @@ describe('个人中心入口', () => {
   })
 
   it('模块关闭时不显示入口', () => {
-    websiteConfig.collection.enabled = false
+    websiteConfig.manualPayments.enabled = false
     renderLayout('admin')
     expect(screen.queryByText('核验队列')).toBeNull()
   })
@@ -390,7 +395,7 @@ describe('个人中心入口', () => {
   })
 
   it('面包屑识别核验队列页', () => {
-    routerMocks.pathname = '/zh/admin/collection-orders'
+    routerMocks.pathname = '/zh/admin/manual-payments'
     renderLayout('admin')
     const nav = screen.getByRole('navigation', { name: 'breadcrumb' })
     expect(within(nav).getByText('核销订单核验')).toBeInTheDocument()

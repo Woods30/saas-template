@@ -7,15 +7,15 @@ import { getModuleUnavailableResponse } from '@/lib/module-access.server'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getServerContext } from '@/lib/server-context'
 import {
-  COLLECTION_IMAGE_MAX_BYTES,
-  COLLECTION_QRCODE_FOLDER,
-  collectionQrImageKey,
   errorResponse,
   findAccountFileRef,
   hasOrderForAccount,
   imageExtension,
+  MANUAL_PAYMENT_IMAGE_MAX_BYTES,
+  MANUAL_PAYMENT_QRCODE_FOLDER,
+  manualPaymentQrImageKey,
   setAccountQrImageKey,
-  validateCollectionImage,
+  validateManualPaymentImage,
 } from '@/modules/manual-payments/service'
 
 /**
@@ -35,11 +35,11 @@ import {
 const UPLOAD_QRCODE_LIMIT = 5
 const UPLOAD_QRCODE_WINDOW_SECONDS = 15 * 60
 
-export const Route = createFileRoute('/api/collection/accounts/$accountId/qrcode')({
+export const Route = createFileRoute('/api/manual-payments/accounts/$accountId/qrcode')({
   server: {
     handlers: {
       POST: async ({ request, params }) => {
-        const unavailable = getModuleUnavailableResponse('collection')
+        const unavailable = getModuleUnavailableResponse('manualPayments')
         if (unavailable) return unavailable
 
         const { env } = getServerContext()
@@ -52,7 +52,7 @@ export const Route = createFileRoute('/api/collection/accounts/$accountId/qrcode
 
         const allowed = await checkRateLimit({
           ip: request.headers.get('cf-connecting-ip') ?? 'unknown',
-          action: `collection:upload-qrcode:${session.user.id}`,
+          action: `manual_payments:upload-qrcode:${session.user.id}`,
           limit: UPLOAD_QRCODE_LIMIT,
           windowSeconds: UPLOAD_QRCODE_WINDOW_SECONDS,
         })
@@ -64,12 +64,12 @@ export const Route = createFileRoute('/api/collection/accounts/$accountId/qrcode
         }
 
         const db = await createDbFromEnv(env)
-        const configured = websiteConfig.collection.accounts.find(
+        const configured = websiteConfig.manualPayments.accounts.find(
           (account) => account.id === params.accountId,
         )
         const existing = await findAccountFileRef(db, params.accountId)
         if (!configured && !existing) {
-          return errorResponse('NO_COLLECTION_ACCOUNT')
+          return errorResponse('NO_MANUAL_PAYMENT_ACCOUNT')
         }
 
         const formData = await request.formData().catch(() => null)
@@ -80,19 +80,19 @@ export const Route = createFileRoute('/api/collection/accounts/$accountId/qrcode
         }
 
         // 先按声明大小挡一道：不把超大文件整个读进内存。
-        if (file.size > COLLECTION_IMAGE_MAX_BYTES.qrcode) {
+        if (file.size > MANUAL_PAYMENT_IMAGE_MAX_BYTES.qrcode) {
           return errorResponse('INVALID_QRCODE')
         }
 
         const bytes = new Uint8Array(await file.arrayBuffer())
-        const validation = validateCollectionImage(bytes, file.type, 'qrcode')
+        const validation = validateManualPaymentImage(bytes, file.type, 'qrcode')
         if (!validation.ok) {
           return errorResponse('INVALID_QRCODE')
         }
 
         const extension = imageExtension(validation.contentType)
         // key 由服务端派生：账户 ID + 扩展名，客户端无从构造。
-        const key = collectionQrImageKey(params.accountId, extension)
+        const key = manualPaymentQrImageKey(params.accountId, extension)
 
         // 先上传：上传失败就不会改账户记录。
         const uploaded = await uploadFile(
@@ -100,7 +100,7 @@ export const Route = createFileRoute('/api/collection/accounts/$accountId/qrcode
           `${params.accountId}.${extension}`,
           validation.contentType,
           {
-            folder: COLLECTION_QRCODE_FOLDER,
+            folder: MANUAL_PAYMENT_QRCODE_FOLDER,
             key,
             userId: session.user.id,
             visibility: 'private',
@@ -119,7 +119,7 @@ export const Route = createFileRoute('/api/collection/accounts/$accountId/qrcode
         // 旧收款码删除失败只告警，不回滚新配置。
         if (existing?.qrImageKey && existing.qrImageKey !== uploaded.key) {
           await deleteFile(existing.qrImageKey, true).catch((error) => {
-            console.warn('[collection] 删除旧收款码失败：', error)
+            console.warn('[manual-payments] 删除旧收款码失败：', error)
           })
         }
 
@@ -127,7 +127,7 @@ export const Route = createFileRoute('/api/collection/accounts/$accountId/qrcode
       },
 
       GET: async ({ request, params }) => {
-        const unavailable = getModuleUnavailableResponse('collection')
+        const unavailable = getModuleUnavailableResponse('manualPayments')
         if (unavailable) return unavailable
 
         const { env } = getServerContext()
@@ -140,7 +140,7 @@ export const Route = createFileRoute('/api/collection/accounts/$accountId/qrcode
 
         const db = await createDbFromEnv(env)
         const account = await findAccountFileRef(db, params.accountId)
-        if (!account) return errorResponse('NO_COLLECTION_ACCOUNT')
+        if (!account) return errorResponse('NO_MANUAL_PAYMENT_ACCOUNT')
 
         // 管理员与该账户的订单所有者可读；其他人一律 404。
         const isAdmin = session.user.role === 'admin'

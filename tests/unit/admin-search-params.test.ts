@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { Route as AdminAuditRoute } from '@/routes/{-$locale}/_layout/admin/audit'
-import { Route as AdminCollectionOrdersRoute } from '@/routes/{-$locale}/_layout/admin/collection-orders'
 import { Route as AdminCreditsRoute } from '@/routes/{-$locale}/_layout/admin/credits'
 import { Route as AdminOverviewRoute } from '@/routes/{-$locale}/_layout/admin/index'
+import { Route as AdminManualPaymentOrdersRoute } from '@/routes/{-$locale}/_layout/admin/manual-payments'
 import { Route as AdminOrdersRoute } from '@/routes/{-$locale}/_layout/admin/orders'
 import { Route as AdminSubscriptionsRoute } from '@/routes/{-$locale}/_layout/admin/subscriptions'
 import { Route as AdminTasksRoute } from '@/routes/{-$locale}/_layout/admin/tasks'
@@ -39,7 +39,7 @@ describe('列表页 search 参数规范化', () => {
     ['admin 用户', AdminUsersRoute],
     ['admin 积分', AdminCreditsRoute],
     ['admin AI 任务', AdminTasksRoute],
-    ['admin 核销订单', AdminCollectionOrdersRoute],
+    ['admin 核销订单', AdminManualPaymentOrdersRoute],
     ['个人中心 API 密钥', ApiKeysRoute],
   ])('%s：空 search 解析后仍为空', (_name, route) => {
     expect(validate(route, {})).toEqual({})
@@ -53,7 +53,7 @@ describe('列表页 search 参数规范化', () => {
     ['admin 用户', AdminUsersRoute],
     ['admin 积分', AdminCreditsRoute],
     ['admin AI 任务', AdminTasksRoute],
-    ['admin 核销订单', AdminCollectionOrdersRoute],
+    ['admin 核销订单', AdminManualPaymentOrdersRoute],
   ])('%s：第 1 页不写进 URL', (_name, route) => {
     expect(validate(route, { page: '1' }).page).toBeUndefined()
   })
@@ -66,7 +66,7 @@ describe('列表页 search 参数规范化', () => {
     ['admin 用户', AdminUsersRoute],
     ['admin 积分', AdminCreditsRoute],
     ['admin AI 任务', AdminTasksRoute],
-    ['admin 核销订单', AdminCollectionOrdersRoute],
+    ['admin 核销订单', AdminManualPaymentOrdersRoute],
   ])('%s：第 3 页保留在 URL 里', (_name, route) => {
     expect(validate(route, { page: '3' }).page).toBe(3)
   })
@@ -79,7 +79,7 @@ describe('列表页 search 参数规范化', () => {
     ['admin 用户', AdminUsersRoute],
     ['admin 积分', AdminCreditsRoute],
     ['admin AI 任务', AdminTasksRoute],
-    ['admin 核销订单', AdminCollectionOrdersRoute],
+    ['admin 核销订单', AdminManualPaymentOrdersRoute],
   ])('%s：非法页码回落默认值', (_name, route) => {
     expect(validate(route, { page: '0' }).page).toBeUndefined()
     expect(validate(route, { page: 'abc' }).page).toBeUndefined()
@@ -122,10 +122,10 @@ describe('列表页 search 参数规范化', () => {
 
   it('核销订单：默认的「等待人工核验」不进 URL，但「全部」要保留', () => {
     // 「全部」与默认筛选结果不同，丢掉它页面就退回默认筛选，用户会以为筛选没生效。
-    expect(validate(AdminCollectionOrdersRoute, { status: 'pending_verification' }).status).toBe(
+    expect(validate(AdminManualPaymentOrdersRoute, { status: 'pending_verification' }).status).toBe(
       undefined,
     )
-    expect(validate(AdminCollectionOrdersRoute, { status: 'all' }).status).toBe('all')
+    expect(validate(AdminManualPaymentOrdersRoute, { status: 'all' }).status).toBe('all')
   })
 
   it('空搜索词与空筛选不进 URL', () => {

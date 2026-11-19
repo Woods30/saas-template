@@ -3,12 +3,12 @@ import { defaultSettingsValues } from '@/core/config/registry'
 import { applySettingsToConfig } from '@/core/config/settings'
 import type { PublicEnv } from '@/core/env/public'
 import { publicEnv } from '@/core/env/public'
-import type { CollectionAccountConfig, CollectionChannel } from '@/types/collection'
+import type { ManualPaymentAccountConfig, ManualPaymentChannel } from '@/types/manual-payments'
 
-/** `VITE_COLLECTION_ACCOUNTS` 里单个账户的形状（与源码配置同构）。 */
-const collectionAccountJson = z.object({
+/** `VITE_MANUAL_PAYMENT_ACCOUNTS` 里单个账户的形状（与源码配置同构）。 */
+const manualPaymentAccountJson = z.object({
   id: z.string().min(1),
-  channel: z.enum(['alipay'] satisfies CollectionChannel[]),
+  channel: z.enum(['alipay'] satisfies ManualPaymentChannel[]),
   displayName: z.string().min(1),
   currency: z.literal('cny'),
   qrImageUrl: z.string().min(1),
@@ -33,7 +33,7 @@ export type ServiceModule =
   | 'contact'
   | 'newsletter'
   | 'payment'
-  | 'collection'
+  | 'manualPayments'
   | 'notification'
   | 'analytics'
   | 'auth'
@@ -130,24 +130,24 @@ export interface WebsiteConfig {
     /**
      * 结账链路：渠道支付与核销收款互斥。
      *
-     * `provider` 走托管结账页（Stripe / Creem），`collection` 走核销型支付
+     * `provider` 走托管结账页（Stripe / Creem），`manual_payments` 走核销型支付
      * （用户按订单金额向收款码付款，管理员核验后结算）。首页的购买入口按它
-     * 分流：选了 `collection` 就不再调渠道结账。
+     * 分流：选了 `manual_payments` 就不再调渠道结账。
      */
-    checkoutMode: 'provider' | 'collection'
+    checkoutMode: 'provider' | 'manual_payments'
   }
   /**
-   * 核销型支付（collection）模块。
+   * 核销型支付（manual payments）模块。
    *
    * 与 `payment` 平级的独立模块：它不实现 `PaymentProvider`，没有托管结账页、
    * 没有 webhook、没有 Customer Portal。`accounts` 是收款账户的源码兜底配置，
    * 数据库里的运营记录按 `id` 覆盖同名项。
    */
-  collection: {
+  manualPayments: {
     enabled: boolean
     /** 核验时效承诺（小时），用于页面正文告知用户。 */
     verificationSlaHours: number
-    accounts: CollectionAccountConfig[]
+    accounts: ManualPaymentAccountConfig[]
   }
   notification: { enabled: boolean; provider: 'discord' | 'feishu' }
   /**
@@ -206,22 +206,22 @@ export interface WebsiteConfig {
 /**
  * 收款账户清单字符串（JSON 数组）→ 收款账户清单。
  *
- * `db:seed` 用它把旧的 `VITE_COLLECTION_ACCOUNTS` 抄进配置表；运行期只读配置表。
+ * `db:seed` 用它把部署环境里的 `VITE_MANUAL_PAYMENT_ACCOUNTS` 抄进配置表；运行期只读配置表。
  *
  * 返回 `undefined` 表示「没给或无效」：非法 JSON、形状不对或空数组都回退源码
  * 兜底配置，**不静默生效半个配置**。「账户没配齐」由服务状态检查如实报出来。
  * 空白串视同未设置。
  */
-export function parseCollectionAccounts(
+export function parseManualPaymentAccounts(
   value: string | undefined,
-): CollectionAccountConfig[] | undefined {
+): ManualPaymentAccountConfig[] | undefined {
   if (value === undefined || value.trim() === '') return undefined
   try {
     const parsed: unknown = JSON.parse(value)
     if (!Array.isArray(parsed) || parsed.length === 0) return undefined
-    const accounts: CollectionAccountConfig[] = []
+    const accounts: ManualPaymentAccountConfig[] = []
     for (const item of parsed) {
-      const account = collectionAccountJson.safeParse(item)
+      const account = manualPaymentAccountJson.safeParse(item)
       if (!account.success) return undefined
       accounts.push(account.data)
     }
@@ -270,7 +270,7 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       contact: { enabled: false },
       newsletter: { enabled: false, provider: 'resend' },
       payment: { enabled: false, provider: 'stripe', checkoutMode: 'provider' },
-      collection: { enabled: false, verificationSlaHours: 24, accounts: [] },
+      manualPayments: { enabled: false, verificationSlaHours: 24, accounts: [] },
       notification: { enabled: false, provider: 'discord' },
       analytics: { enabled: false, providers: [], config: {} },
       captcha: {},

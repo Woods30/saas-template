@@ -6,14 +6,14 @@ import { getModuleUnavailableResponse } from '@/lib/module-access.server'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getServerContext } from '@/lib/server-context'
 import {
-  COLLECTION_IMAGE_MAX_BYTES,
-  COLLECTION_RECEIPT_FOLDER,
-  collectionReceiptKey,
   errorResponse,
   findOrderFileRef,
   imageExtension,
+  MANUAL_PAYMENT_IMAGE_MAX_BYTES,
+  MANUAL_PAYMENT_RECEIPT_FOLDER,
+  manualPaymentReceiptKey,
   setOrderReceiptKey,
-  validateCollectionImage,
+  validateManualPaymentImage,
 } from '@/modules/manual-payments/service'
 
 /**
@@ -31,12 +31,12 @@ import {
 const UPLOAD_RECEIPT_LIMIT = 5
 const UPLOAD_RECEIPT_WINDOW_SECONDS = 15 * 60
 
-export const Route = createFileRoute('/api/collection/orders/$orderId/receipt')({
+export const Route = createFileRoute('/api/manual-payments/orders/$orderId/receipt')({
   server: {
     handlers: {
       POST: async ({ request, params }) => {
         // 模块门禁必须最先跑：模块关闭时不解析 body、不鉴权、不碰对象存储。
-        const unavailable = getModuleUnavailableResponse('collection')
+        const unavailable = getModuleUnavailableResponse('manualPayments')
         if (unavailable) return unavailable
 
         const { env } = getServerContext()
@@ -46,7 +46,7 @@ export const Route = createFileRoute('/api/collection/orders/$orderId/receipt')(
         const allowed = await checkRateLimit({
           ip: request.headers.get('cf-connecting-ip') ?? 'unknown',
           // 限流只有 IP + action 两个维度，账号维度靠 action 后缀带上。
-          action: `collection:upload-receipt:${session.user.id}`,
+          action: `manual_payments:upload-receipt:${session.user.id}`,
           limit: UPLOAD_RECEIPT_LIMIT,
           windowSeconds: UPLOAD_RECEIPT_WINDOW_SECONDS,
         })
@@ -75,26 +75,26 @@ export const Route = createFileRoute('/api/collection/orders/$orderId/receipt')(
         }
 
         // 先按声明大小挡一道：不把超大文件整个读进内存。
-        if (file.size > COLLECTION_IMAGE_MAX_BYTES.receipt) {
+        if (file.size > MANUAL_PAYMENT_IMAGE_MAX_BYTES.receipt) {
           return errorResponse('INVALID_RECEIPT')
         }
 
         const bytes = new Uint8Array(await file.arrayBuffer())
-        const validation = validateCollectionImage(bytes, file.type, 'receipt')
+        const validation = validateManualPaymentImage(bytes, file.type, 'receipt')
         if (!validation.ok) {
           return errorResponse('INVALID_RECEIPT')
         }
 
         const extension = imageExtension(validation.contentType)
         // key 由服务端派生：订单号 + 扩展名，客户端无从构造。
-        const key = collectionReceiptKey(params.orderId, extension)
+        const key = manualPaymentReceiptKey(params.orderId, extension)
 
         const uploaded = await uploadFile(
           bytes,
           `${params.orderId}.${extension}`,
           validation.contentType,
           {
-            folder: COLLECTION_RECEIPT_FOLDER,
+            folder: MANUAL_PAYMENT_RECEIPT_FOLDER,
             key,
             userId: session.user.id,
             visibility: 'private',
@@ -115,7 +115,7 @@ export const Route = createFileRoute('/api/collection/orders/$orderId/receipt')(
         // 旧凭证删除失败只告警，不回滚新凭证。
         if (order.receiptKey && order.receiptKey !== uploaded.key) {
           await deleteFile(order.receiptKey, true).catch((error) => {
-            console.warn('[collection] 删除旧付款凭证失败：', error)
+            console.warn('[manual-payments] 删除旧付款凭证失败：', error)
           })
         }
 
@@ -123,7 +123,7 @@ export const Route = createFileRoute('/api/collection/orders/$orderId/receipt')(
       },
 
       GET: async ({ request, params }) => {
-        const unavailable = getModuleUnavailableResponse('collection')
+        const unavailable = getModuleUnavailableResponse('manualPayments')
         if (unavailable) return unavailable
 
         const { env } = getServerContext()

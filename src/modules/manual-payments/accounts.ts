@@ -7,12 +7,12 @@
  */
 
 import { type DB, schema } from '@/core/db'
-import type { CollectionAccountConfig } from '@/types/collection'
-import type { CollectionChannel, ResolvedCollectionAccount } from './types'
+import type { ManualPaymentAccountConfig } from '@/types/manual-payments'
+import type { ManualPaymentChannel, ResolvedManualPaymentAccount } from './types'
 
 /** 解析收款账户所需的配置片段。 */
-export interface CollectionAccountSettings {
-  accounts: CollectionAccountConfig[]
+export interface ManualPaymentAccountSettings {
+  accounts: ManualPaymentAccountConfig[]
 }
 
 /**
@@ -25,11 +25,11 @@ export interface CollectionAccountSettings {
  *
  * 数据库里存在但配置里没有的 ID 不参与解析：数据库只是覆盖，不是账户清单。
  */
-export async function resolveCollectionAccount(
+export async function resolveManualPaymentAccount(
   db: DB,
-  config: CollectionAccountSettings,
-): Promise<ResolvedCollectionAccount | null> {
-  const overrides = await db.select().from(schema.collectionAccounts)
+  config: ManualPaymentAccountSettings,
+): Promise<ResolvedManualPaymentAccount | null> {
+  const overrides = await db.select().from(schema.manualPaymentAccounts)
   const overridesById = new Map(overrides.map((row) => [row.id, row]))
 
   for (const account of config.accounts) {
@@ -47,7 +47,7 @@ export async function resolveCollectionAccount(
     }
     return {
       id: account.id,
-      channel: override.channel as CollectionChannel,
+      channel: override.channel as ManualPaymentChannel,
       displayName: override.displayName,
       currency: override.currency as 'cny',
       qrImageUrl: account.qrImageUrl,

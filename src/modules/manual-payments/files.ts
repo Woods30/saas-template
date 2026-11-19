@@ -12,18 +12,18 @@
 
 import { and, eq, inArray } from 'drizzle-orm'
 import { type DB, schema } from '@/core/db'
-import type { CollectionOrderStatus } from './types'
+import type { ManualPaymentOrderStatus } from './types'
 
 /** 收款码在 R2 中的目录前缀。 */
-export const COLLECTION_QRCODE_FOLDER = 'collection-qrcodes'
+export const MANUAL_PAYMENT_QRCODE_FOLDER = 'manual-payment-qrcodes'
 /** 付款凭证在 R2 中的目录前缀。 */
-export const COLLECTION_RECEIPT_FOLDER = 'collection-receipts'
+export const MANUAL_PAYMENT_RECEIPT_FOLDER = 'manual-payment-receipts'
 
 /** 收款码 key 的命名空间前缀（含斜杠）。 */
-export const COLLECTION_QRCODE_PREFIX = `${COLLECTION_QRCODE_FOLDER}/`
+export const MANUAL_PAYMENT_QRCODE_PREFIX = `${MANUAL_PAYMENT_QRCODE_FOLDER}/`
 
 /** 付款凭证 key 的命名空间前缀（含斜杠）。 */
-export const COLLECTION_RECEIPT_PREFIX = `${COLLECTION_RECEIPT_FOLDER}/`
+export const MANUAL_PAYMENT_RECEIPT_PREFIX = `${MANUAL_PAYMENT_RECEIPT_FOLDER}/`
 
 /** 收款码 key 的扩展名白名单：与 `imageExtension` 的输出一致。 */
 const QR_IMAGE_EXTENSIONS = ['jpg', 'png', 'webp'] as const
@@ -32,7 +32,7 @@ const QR_IMAGE_EXTENSIONS = ['jpg', 'png', 'webp'] as const
 const ACCOUNT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 
 /** 账户 ID 是否合法。 */
-export function isCollectionAccountId(accountId: string): boolean {
+export function isManualPaymentAccountId(accountId: string): boolean {
   return ACCOUNT_ID_PATTERN.test(accountId)
 }
 
@@ -42,19 +42,19 @@ export function isCollectionAccountId(accountId: string): boolean {
  * key 只由「账户 ID + 扩展名」决定：客户端不能指定 key，否则就能把任意对象
  * （包括别的用户的付款凭证）挂到这个账户上，等于开了个任意文件读的口子。
  */
-export function collectionQrImageKey(accountId: string, extension: string): string {
-  return `${COLLECTION_QRCODE_PREFIX}${accountId}.${extension}`
+export function manualPaymentQrImageKey(accountId: string, extension: string): string {
+  return `${MANUAL_PAYMENT_QRCODE_PREFIX}${accountId}.${extension}`
 }
 
 /**
  * 这个 key 是不是该账户自己的收款码。
  *
- * 只认服务端派生出来的形式：`collection-qrcodes/<accountId>.<jpg|png|webp>`。
+ * 只认服务端派生出来的形式：`manual-payment-qrcodes/<accountId>.<jpg|png|webp>`。
  * 账户 ID 本身也要先过字符检查，否则 key 里会出现路径片段。
  */
-export function isCollectionQrImageKey(accountId: string, key: string): boolean {
-  if (!isCollectionAccountId(accountId)) return false
-  return QR_IMAGE_EXTENSIONS.some((ext) => collectionQrImageKey(accountId, ext) === key)
+export function isManualPaymentQrImageKey(accountId: string, key: string): boolean {
+  if (!isManualPaymentAccountId(accountId)) return false
+  return QR_IMAGE_EXTENSIONS.some((ext) => manualPaymentQrImageKey(accountId, ext) === key)
 }
 
 /**
@@ -62,30 +62,30 @@ export function isCollectionQrImageKey(accountId: string, key: string): boolean 
  *
  * 与收款码同理：key 只由订单号与扩展名决定，客户端无从构造。
  */
-export function collectionReceiptKey(orderId: string, extension: string): string {
-  return `${COLLECTION_RECEIPT_PREFIX}${orderId}.${extension}`
+export function manualPaymentReceiptKey(orderId: string, extension: string): string {
+  return `${MANUAL_PAYMENT_RECEIPT_PREFIX}${orderId}.${extension}`
 }
 
 /** 允许的图片类型：JPG / PNG / WebP。 */
-export const COLLECTION_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
+export const MANUAL_PAYMENT_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
 
-export type CollectionImageType = (typeof COLLECTION_IMAGE_TYPES)[number]
+export type ManualPaymentImageType = (typeof MANUAL_PAYMENT_IMAGE_TYPES)[number]
 
 /** 图片用途：收款码由管理员上传，付款凭证由订单所有者上传。 */
-export type CollectionImageKind = 'qrcode' | 'receipt'
+export type ManualPaymentImageKind = 'qrcode' | 'receipt'
 
 /** 各类图片的大小上限（字节）。 */
-export const COLLECTION_IMAGE_MAX_BYTES: Record<CollectionImageKind, number> = {
+export const MANUAL_PAYMENT_IMAGE_MAX_BYTES: Record<ManualPaymentImageKind, number> = {
   qrcode: 2 * 1024 * 1024,
   receipt: 5 * 1024 * 1024,
 }
 
 /** 拒绝原因：类型不在白名单、超过大小上限、文件头与声明类型不符。 */
-export type CollectionImageRejection = 'unsupported_type' | 'too_large' | 'content_mismatch'
+export type ManualPaymentImageRejection = 'unsupported_type' | 'too_large' | 'content_mismatch'
 
-export type CollectionImageValidation =
-  | { ok: true; contentType: CollectionImageType }
-  | { ok: false; reason: CollectionImageRejection }
+export type ManualPaymentImageValidation =
+  | { ok: true; contentType: ManualPaymentImageType }
+  | { ok: false; reason: ManualPaymentImageRejection }
 
 /**
  * 校验上传的图片：声明类型、大小与文件头三者都要过。
@@ -94,15 +94,15 @@ export type CollectionImageValidation =
  * @param mime 客户端声明的类型（`File.type`）
  * @param kind 图片用途，决定大小上限
  */
-export function validateCollectionImage(
+export function validateManualPaymentImage(
   bytes: Uint8Array,
   mime: string,
-  kind: CollectionImageKind,
-): CollectionImageValidation {
+  kind: ManualPaymentImageKind,
+): ManualPaymentImageValidation {
   const declared = normalizeMime(mime)
   if (!declared) return { ok: false, reason: 'unsupported_type' }
 
-  const maxBytes = COLLECTION_IMAGE_MAX_BYTES[kind]
+  const maxBytes = MANUAL_PAYMENT_IMAGE_MAX_BYTES[kind]
   if (bytes.byteLength > maxBytes) return { ok: false, reason: 'too_large' }
 
   const detected = detectImageType(bytes)
@@ -112,16 +112,16 @@ export function validateCollectionImage(
 }
 
 /** 归一化 MIME：去参数、转小写，并把 `image/jpg` 视作 `image/jpeg`。 */
-function normalizeMime(mime: string): CollectionImageType | null {
+function normalizeMime(mime: string): ManualPaymentImageType | null {
   const base = mime.split(';')[0]?.trim().toLowerCase() ?? ''
   if (base === 'image/jpg') return 'image/jpeg'
-  return (COLLECTION_IMAGE_TYPES as readonly string[]).includes(base)
-    ? (base as CollectionImageType)
+  return (MANUAL_PAYMENT_IMAGE_TYPES as readonly string[]).includes(base)
+    ? (base as ManualPaymentImageType)
     : null
 }
 
 /** 按文件头判断真实图片类型；认不出就是 null。 */
-function detectImageType(bytes: Uint8Array): CollectionImageType | null {
+function detectImageType(bytes: Uint8Array): ManualPaymentImageType | null {
   // PNG: 89 50 4E 47 0D 0A 1A 0A
   if (
     bytes.length >= 8 &&
@@ -158,17 +158,17 @@ function detectImageType(bytes: Uint8Array): CollectionImageType | null {
 }
 
 /** 图片类型到文件扩展名的映射：用于生成服务端可控的 R2 文件名。 */
-export function imageExtension(contentType: CollectionImageType): 'jpg' | 'png' | 'webp' {
+export function imageExtension(contentType: ManualPaymentImageType): 'jpg' | 'png' | 'webp' {
   if (contentType === 'image/jpeg') return 'jpg'
   if (contentType === 'image/webp') return 'webp'
   return 'png'
 }
 
 /** 订单的文件引用：只保留归属校验与状态判断需要的字段。 */
-export interface CollectionOrderFileRef {
+export interface ManualPaymentOrderFileRef {
   id: string
   userId: string
-  status: CollectionOrderStatus
+  status: ManualPaymentOrderStatus
   /** 付款凭证的 R2 key。 */
   receiptKey: string | null
 }
@@ -177,20 +177,20 @@ export interface CollectionOrderFileRef {
 export async function findOrderFileRef(
   db: DB,
   orderId: string,
-): Promise<CollectionOrderFileRef | null> {
+): Promise<ManualPaymentOrderFileRef | null> {
   const rows = await db
     .select({
-      id: schema.collectionOrders.id,
-      userId: schema.collectionOrders.userId,
-      status: schema.collectionOrders.status,
-      receiptKey: schema.collectionOrders.receiptKey,
+      id: schema.manualPaymentOrders.id,
+      userId: schema.manualPaymentOrders.userId,
+      status: schema.manualPaymentOrders.status,
+      receiptKey: schema.manualPaymentOrders.receiptKey,
     })
-    .from(schema.collectionOrders)
-    .where(eq(schema.collectionOrders.id, orderId))
+    .from(schema.manualPaymentOrders)
+    .where(eq(schema.manualPaymentOrders.id, orderId))
     .limit(1)
   const row = rows[0]
   if (!row) return null
-  return { ...row, status: row.status as CollectionOrderStatus }
+  return { ...row, status: row.status as ManualPaymentOrderStatus }
 }
 
 /**
@@ -206,21 +206,21 @@ export async function setOrderReceiptKey(
   params: { orderId: string; userId: string; key: string; now?: Date },
 ): Promise<boolean> {
   const updated = await db
-    .update(schema.collectionOrders)
+    .update(schema.manualPaymentOrders)
     .set({ receiptKey: params.key, updatedAt: params.now ?? new Date() })
     .where(
       and(
-        eq(schema.collectionOrders.id, params.orderId),
-        eq(schema.collectionOrders.userId, params.userId),
-        inArray(schema.collectionOrders.status, ['pending_payment', 'pending_verification']),
+        eq(schema.manualPaymentOrders.id, params.orderId),
+        eq(schema.manualPaymentOrders.userId, params.userId),
+        inArray(schema.manualPaymentOrders.status, ['pending_payment', 'pending_verification']),
       ),
     )
-    .returning({ id: schema.collectionOrders.id })
+    .returning({ id: schema.manualPaymentOrders.id })
   return updated.length > 0
 }
 
 /** 收款账户的文件引用：只保留归属校验与 R2 key。 */
-export interface CollectionAccountFileRef {
+export interface ManualPaymentAccountFileRef {
   id: string
   channel: string
   displayName: string
@@ -235,18 +235,18 @@ export interface CollectionAccountFileRef {
 export async function findAccountFileRef(
   db: DB,
   accountId: string,
-): Promise<CollectionAccountFileRef | null> {
+): Promise<ManualPaymentAccountFileRef | null> {
   const rows = await db
     .select({
-      id: schema.collectionAccounts.id,
-      channel: schema.collectionAccounts.channel,
-      displayName: schema.collectionAccounts.displayName,
-      currency: schema.collectionAccounts.currency,
-      qrImageKey: schema.collectionAccounts.qrImageKey,
-      enabled: schema.collectionAccounts.enabled,
+      id: schema.manualPaymentAccounts.id,
+      channel: schema.manualPaymentAccounts.channel,
+      displayName: schema.manualPaymentAccounts.displayName,
+      currency: schema.manualPaymentAccounts.currency,
+      qrImageKey: schema.manualPaymentAccounts.qrImageKey,
+      enabled: schema.manualPaymentAccounts.enabled,
     })
-    .from(schema.collectionAccounts)
-    .where(eq(schema.collectionAccounts.id, accountId))
+    .from(schema.manualPaymentAccounts)
+    .where(eq(schema.manualPaymentAccounts.id, accountId))
     .limit(1)
   const row = rows[0]
   if (!row) return null
@@ -274,13 +274,13 @@ export async function setAccountQrImageKey(
 ): Promise<void> {
   const now = params.now ?? new Date()
   const updated = await db
-    .update(schema.collectionAccounts)
+    .update(schema.manualPaymentAccounts)
     .set({ qrImageKey: params.key, updatedBy: params.updatedBy ?? null, updatedAt: now })
-    .where(eq(schema.collectionAccounts.id, params.accountId))
-    .returning({ id: schema.collectionAccounts.id })
+    .where(eq(schema.manualPaymentAccounts.id, params.accountId))
+    .returning({ id: schema.manualPaymentAccounts.id })
   if (updated.length > 0) return
 
-  await db.insert(schema.collectionAccounts).values({
+  await db.insert(schema.manualPaymentAccounts).values({
     id: params.accountId,
     channel: params.channel,
     displayName: params.displayName,
@@ -300,12 +300,12 @@ export async function hasOrderForAccount(
   accountId: string,
 ): Promise<boolean> {
   const rows = await db
-    .select({ id: schema.collectionOrders.id })
-    .from(schema.collectionOrders)
+    .select({ id: schema.manualPaymentOrders.id })
+    .from(schema.manualPaymentOrders)
     .where(
       and(
-        eq(schema.collectionOrders.userId, userId),
-        eq(schema.collectionOrders.accountId, accountId),
+        eq(schema.manualPaymentOrders.userId, userId),
+        eq(schema.manualPaymentOrders.accountId, accountId),
       ),
     )
     .limit(1)

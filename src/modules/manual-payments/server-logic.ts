@@ -1,6 +1,10 @@
 import { z } from 'zod'
-import { isCollectionQrImageKey } from './files'
-import { CollectionError, type CollectionErrorCode, type CollectionOrderStatus } from './types'
+import { isManualPaymentQrImageKey } from './files'
+import {
+  ManualPaymentError,
+  type ManualPaymentErrorCode,
+  type ManualPaymentOrderStatus,
+} from './types'
 
 /**
  * 核销型支付的 server 层纯逻辑：门禁顺序、错误映射、限流键与分页。
@@ -20,8 +24,8 @@ import { CollectionError, type CollectionErrorCode, type CollectionOrderStatus }
  * 在领域错误码之外补四个「接口级」错误：未登录、无权限、被限流、参数不合法。
  * 它们不属于任何一次具体订单，却同样只对外暴露稳定码。
  */
-export type CollectionApiErrorCode =
-  | CollectionErrorCode
+export type ManualPaymentApiErrorCode =
+  | ManualPaymentErrorCode
   | 'UNAUTHENTICATED'
   | 'FORBIDDEN'
   | 'RATE_LIMITED'
@@ -29,12 +33,12 @@ export type CollectionApiErrorCode =
   | 'INVALID_QRCODE'
 
 /** 错误码 → HTTP 状态码。 */
-const ERROR_STATUS: Record<CollectionApiErrorCode, number> = {
+const ERROR_STATUS: Record<ManualPaymentApiErrorCode, number> = {
   // 模块关闭时与「不存在」同形，避免泄漏模块是否存在。
   MODULE_DISABLED: 404,
   SERVICE_UNAVAILABLE: 503,
   INVALID_OFFER: 400,
-  NO_COLLECTION_ACCOUNT: 400,
+  NO_MANUAL_PAYMENT_ACCOUNT: 400,
   AMOUNT_POOL_EXHAUSTED: 409,
   ORDER_NOT_FOUND: 404,
   // 订单过期是终态，不是冲突。
@@ -55,12 +59,12 @@ const ERROR_STATUS: Record<CollectionApiErrorCode, number> = {
 }
 
 /** 错误码对应的 HTTP 状态码。未知码按 400 处理，不落到 500。 */
-export function errorStatus(code: CollectionApiErrorCode): number {
+export function errorStatus(code: ManualPaymentApiErrorCode): number {
   return ERROR_STATUS[code] ?? 400
 }
 
 /** 错误响应体：只回稳定错误码，不回显内部细节。 */
-export function errorResponse(code: CollectionApiErrorCode): Response {
+export function errorResponse(code: ManualPaymentApiErrorCode): Response {
   return Response.json({ error: code }, { status: errorStatus(code) })
 }
 
@@ -70,7 +74,7 @@ export function errorResponse(code: CollectionApiErrorCode): Response {
  * 领域错误按自带的状态码翻译；参数错误统一 400；其余按 500 处理，不回显细节。
  */
 export function failureResponse(error: unknown): Response {
-  if (error instanceof CollectionError) return errorResponse(error.code)
+  if (error instanceof ManualPaymentError) return errorResponse(error.code)
   if (error instanceof z.ZodError) return errorResponse('INVALID_INPUT')
   return Response.json({ error: 'INTERNAL_ERROR' }, { status: 500 })
 }
@@ -82,7 +86,7 @@ export function failureResponse(error: unknown): Response {
  * 只能把账号 ID 编进 action 字符串。`createCacheKey` 会把 `:` 换成 `_`，
  * 不同账号因此落在不同的 key 上。
  */
-export type CollectionRateLimitAction =
+export type ManualPaymentRateLimitAction =
   | 'create-order'
   | 'submit-order'
   | 'poll-order'
@@ -90,8 +94,8 @@ export type CollectionRateLimitAction =
   | 'review-order'
 
 /** 各动作的限额与窗口（秒）。 */
-export const COLLECTION_RATE_LIMITS: Record<
-  CollectionRateLimitAction,
+export const MANUAL_PAYMENT_RATE_LIMITS: Record<
+  ManualPaymentRateLimitAction,
   { limit: number; windowSeconds: number }
 > = {
   'create-order': { limit: 5, windowSeconds: 15 * 60 },
@@ -106,8 +110,11 @@ export const COLLECTION_RATE_LIMITS: Record<
  *
  * 带 `userId` 时按账号计数（不传则按 IP 计数）。
  */
-export function rateLimitAction(action: CollectionRateLimitAction, userId?: string | null): string {
-  return userId ? `collection:${action}:${userId}` : `collection:${action}`
+export function rateLimitAction(
+  action: ManualPaymentRateLimitAction,
+  userId?: string | null,
+): string {
+  return userId ? `manual_payments:${action}:${userId}` : `manual_payments:${action}`
 }
 
 /** 限流检查器：由 server 层注入真实实现，测试注入假实现。 */
@@ -127,11 +134,11 @@ export async function enforceRateLimit(
   check: RateLimitChecker,
   opts: {
     ip: string
-    action: CollectionRateLimitAction
+    action: ManualPaymentRateLimitAction
     userId?: string | null
   },
 ): Promise<Response | undefined> {
-  const { limit, windowSeconds } = COLLECTION_RATE_LIMITS[opts.action]
+  const { limit, windowSeconds } = MANUAL_PAYMENT_RATE_LIMITS[opts.action]
   const allowed = await check({
     ip: opts.ip,
     action: rateLimitAction(opts.action, opts.userId),
@@ -142,17 +149,17 @@ export async function enforceRateLimit(
 }
 
 /** 服务端会话里本模块需要的部分。 */
-export interface CollectionSession {
+export interface ManualPaymentSession {
   userId: string
   role: string
 }
 
 /** 门禁所需的依赖；由 server 层注入，测试注入假实现。 */
-export interface CollectionGuardDeps {
+export interface ManualPaymentGuardDeps {
   /** 模块门禁：返回响应表示模块不可用（404 / 503）。 */
   module: () => Response | undefined
   /** 服务端会话：没有登录用户时返回 null。 */
-  session: () => Promise<CollectionSession | null>
+  session: () => Promise<ManualPaymentSession | null>
   /** 限流检查器。 */
   rateLimit: RateLimitChecker
   /** 客户端 IP。 */
@@ -160,15 +167,15 @@ export interface CollectionGuardDeps {
 }
 
 /** 门禁的可选项。 */
-export interface CollectionGuardOptions {
+export interface ManualPaymentGuardOptions {
   /** 是否要求管理员角色。 */
   requireAdmin?: boolean
   /** 要限流的动作；不给就不限流。 */
-  limit?: CollectionRateLimitAction
+  limit?: ManualPaymentRateLimitAction
 }
 
-export type CollectionGuardResult =
-  | { ok: true; session: CollectionSession }
+export type ManualPaymentGuardResult =
+  | { ok: true; session: ManualPaymentSession }
   | { ok: false; response: Response }
 
 /**
@@ -183,10 +190,10 @@ export type CollectionGuardResult =
  *
  * 任何一步失败都返回对应的响应，成功则交回服务端会话。
  */
-export async function guardCollectionRequest(
-  deps: CollectionGuardDeps,
-  options: CollectionGuardOptions = {},
-): Promise<CollectionGuardResult> {
+export async function guardManualPaymentRequest(
+  deps: ManualPaymentGuardDeps,
+  options: ManualPaymentGuardOptions = {},
+): Promise<ManualPaymentGuardResult> {
   const unavailable = deps.module()
   if (unavailable) return { ok: false, response: unavailable }
 
@@ -232,7 +239,7 @@ export const orderIdSchema = z.object({
 })
 
 /** 管理员订单列表的默认筛选状态。 */
-export const DEFAULT_ADMIN_ORDER_STATUS: CollectionOrderStatus = 'pending_verification'
+export const DEFAULT_ADMIN_ORDER_STATUS: ManualPaymentOrderStatus = 'pending_verification'
 
 /** 订单的全部状态。 */
 export const ADMIN_ORDER_STATUSES = [
@@ -267,7 +274,7 @@ export const reviewOrderSchema = z.object({
 })
 
 /** 收款账户保存的入参校验。 */
-export const collectionAccountSchema = z.object({
+export const manualPaymentAccountSchema = z.object({
   // 账户 ID 会进 R2 key，只允许安全字符。
   accountId: z
     .string()
@@ -282,7 +289,7 @@ export const collectionAccountSchema = z.object({
 /**
  * 收款码 key 能不能写进这个账户。
  *
- * key 必须由服务端派生（见 `files.ts`）：`collection-qrcodes/<accountId>.<ext>`。
+ * key 必须由服务端派生（见 `files.ts`）：`manual-payment-qrcodes/<accountId>.<ext>`。
  * 客户端传任意 key 就能把别的对象挂上来——读二维码时等于泄漏别人的文件，
  * 所以这里只放行「本账户自己的 key」，不给 key（清空收款码）也合法。
  */
@@ -291,7 +298,7 @@ export function isValidAccountQrImageKey(
   key: string | null | undefined,
 ): boolean {
   if (key === null || key === undefined) return true
-  return isCollectionQrImageKey(accountId, key)
+  return isManualPaymentQrImageKey(accountId, key)
 }
 
 /**
@@ -304,10 +311,10 @@ export function isValidAccountQrImageKey(
  * 调用方的 bug。server 层把 ZodError 映射成 400。
  */
 export function resolveAdminOrderQuery(input: {
-  status?: CollectionOrderStatus | 'all' | null
+  status?: ManualPaymentOrderStatus | 'all' | null
   limit?: number | null
   offset?: number | null
-}): { status: CollectionOrderStatus | 'all'; limit: number; offset: number } {
+}): { status: ManualPaymentOrderStatus | 'all'; limit: number; offset: number } {
   const parsed = adminOrderListSchema.parse({
     status: input.status ?? undefined,
     limit: input.limit ?? undefined,

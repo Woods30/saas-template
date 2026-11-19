@@ -34,10 +34,10 @@ vi.mock('@/core/auth/client', () => ({
 }))
 
 // 核销链路只 mock 下单这一个函数，其余（错误码文案等）走真实实现。
-const collection = vi.hoisted(() => ({ createOrder: vi.fn() }))
+const manualPayment = vi.hoisted(() => ({ createOrder: vi.fn() }))
 vi.mock('@/modules/manual-payments/service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/modules/manual-payments/service')>()
-  return { ...actual, createCollectionOrder: collection.createOrder }
+  return { ...actual, createManualPaymentOrder: manualPayment.createOrder }
 })
 
 const originalConfig = structuredClone(baseConfig)
@@ -45,7 +45,7 @@ let motion: MediaQueryList
 beforeEach(() => {
   auth.session = null
   router.navigate.mockReset()
-  collection.createOrder.mockReset().mockResolvedValue({ kind: 'redirect', orderId: 'ord_1' })
+  manualPayment.createOrder.mockReset().mockResolvedValue({ kind: 'redirect', orderId: 'ord_1' })
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Unavailable', { status: 400 })))
   setLocale('zh', { reload: false })
   motion = Object.assign(new EventTarget(), {
@@ -283,15 +283,15 @@ describe('LandingPage', () => {
   describe('核销收款链路', () => {
     beforeEach(() => {
       auth.session = { user: { id: 'user_1' } }
-      websiteConfig.payment.checkoutMode = 'collection'
+      websiteConfig.payment.checkoutMode = 'manual_payments'
       // 两条链路互斥：核销链路下支付模块关着也不影响购买入口。
       websiteConfig.payment.enabled = false
-      websiteConfig.collection.enabled = true
+      websiteConfig.manualPayments.enabled = true
     })
 
     it('价格显示核销链路的本地标价', () => {
       const { container } = render(
-        <LandingPage priceCents={9900} collectionPrice={{ amount: 18_000, currency: 'cny' }} />,
+        <LandingPage priceCents={9900} manualPaymentPrice={{ amount: 18_000, currency: 'cny' }} />,
       )
       expect(container.querySelector('#pricing')).toHaveTextContent('¥180')
       expect(container.querySelector('#pricing')).not.toHaveTextContent('$99')
@@ -301,7 +301,7 @@ describe('LandingPage', () => {
       const request = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
       vi.stubGlobal('fetch', request)
       render(
-        <LandingPage priceCents={9900} collectionPrice={{ amount: 18_000, currency: 'cny' }} />,
+        <LandingPage priceCents={9900} manualPaymentPrice={{ amount: 18_000, currency: 'cny' }} />,
       )
       fireEvent.click(
         within(screen.getByRole('region', { name: '一次购买，持续创造。' })).getByRole('button', {
@@ -310,16 +310,16 @@ describe('LandingPage', () => {
       )
       await waitFor(() => expect(router.navigate).toHaveBeenCalled())
       expect(router.navigate).toHaveBeenCalledWith({
-        to: '/{-$locale}/settings/orders/$orderId',
+        to: '/{-$locale}/settings/manual-payments/$orderId',
         params: { locale: 'zh', orderId: 'ord_1' },
       })
       expect(request).not.toHaveBeenCalled()
     })
 
     it('核销模块关闭时购买入口不可用', () => {
-      websiteConfig.collection.enabled = false
+      websiteConfig.manualPayments.enabled = false
       render(
-        <LandingPage priceCents={9900} collectionPrice={{ amount: 18_000, currency: 'cny' }} />,
+        <LandingPage priceCents={9900} manualPaymentPrice={{ amount: 18_000, currency: 'cny' }} />,
       )
       expect(
         within(screen.getByRole('region', { name: '一次购买，持续创造。' })).getByRole('button', {
@@ -329,9 +329,12 @@ describe('LandingPage', () => {
     })
 
     it('下单失败时按稳定错误码提示，不编造文案', async () => {
-      collection.createOrder.mockResolvedValue({ kind: 'error', code: 'NO_COLLECTION_ACCOUNT' })
+      manualPayment.createOrder.mockResolvedValue({
+        kind: 'error',
+        code: 'NO_MANUAL_PAYMENT_ACCOUNT',
+      })
       render(
-        <LandingPage priceCents={9900} collectionPrice={{ amount: 18_000, currency: 'cny' }} />,
+        <LandingPage priceCents={9900} manualPaymentPrice={{ amount: 18_000, currency: 'cny' }} />,
       )
       fireEvent.click(
         within(screen.getByRole('region', { name: '一次购买，持续创造。' })).getByRole('button', {

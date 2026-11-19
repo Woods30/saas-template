@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { settingsRoutes } from '@/config/routes'
 import { assertPageEnabled } from '@/lib/module-access'
 import { settingsHead } from '@/lib/page-head'
-import type { CollectionOrderStatus } from '@/modules/manual-payments/service'
+import type { ManualPaymentOrderStatus } from '@/modules/manual-payments/service'
 
 /**
  * 核销订单路由的父级：门禁、SEO 与列表页数据都在这里取。
@@ -13,9 +13,9 @@ import type { CollectionOrderStatus } from '@/modules/manual-payments/service'
  * 输出 Outlet，子路由永远挂不上：URL 变成详情页、页面仍是列表，症状是
  * 「导航成功但页面不切换」。
  */
-export const Route = createFileRoute('/{-$locale}/_layout/settings/orders')({
-  beforeLoad: () => assertPageEnabled('collection'),
-  head: () => settingsHead(settingsRoutes.orders),
+export const Route = createFileRoute('/{-$locale}/_layout/settings/manual-payments')({
+  beforeLoad: () => assertPageEnabled('manualPayments'),
+  head: () => settingsHead(settingsRoutes.manualPayments),
 })
 
 /**
@@ -24,23 +24,23 @@ export const Route = createFileRoute('/{-$locale}/_layout/settings/orders')({
  * 不写 `: string` 返回注解：TS 要从字面量推断消息键联合才能索引 `m`，
  * 收宽成 `string` 会丢失索引权限（与 `billing-query.ts` 同一套约定）。
  */
-export function collectionOrderStatusMessageKey(status: CollectionOrderStatus) {
+export function manualPaymentOrderStatusMessageKey(status: ManualPaymentOrderStatus) {
   switch (status) {
     case 'pending_payment':
-      return 'collection.order_status_pending_payment'
+      return 'manual_payments.order_status_pending_payment'
     case 'pending_verification':
-      return 'collection.order_status_pending_verification'
+      return 'manual_payments.order_status_pending_verification'
     case 'settling':
-      return 'collection.order_status_settling'
+      return 'manual_payments.order_status_settling'
     case 'settled':
-      return 'collection.order_status_settled'
+      return 'manual_payments.order_status_settled'
     case 'expired':
-      return 'collection.order_status_expired'
+      return 'manual_payments.order_status_expired'
     case 'canceled':
-      return 'collection.order_status_canceled'
+      return 'manual_payments.order_status_canceled'
     case 'rejected':
-      return 'collection.order_status_rejected'
+      return 'manual_payments.order_status_rejected'
     case 'requires_refund':
-      return 'collection.order_status_requires_refund'
+      return 'manual_payments.order_status_requires_refund'
   }
 }

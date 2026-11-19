@@ -1,5 +1,5 @@
 import { m } from '@/locale/paraglide/messages.js'
-import type { CollectionPrice } from '@/types/collection'
+import type { ManualPaymentPrice } from '@/types/manual-payments'
 import type { OfferCreditGrant, PricingInterval, ProductDefinition } from '@/types/pricing'
 
 /**
@@ -50,7 +50,7 @@ export function getProducts(): ProductDefinition[] {
       prices: { once: 'one_time' },
       // 核销型链路的本地标价（单位：分）。这条链路不接支付渠道，没有价格目录
       // 可用，金额只存在这一处——展示与结算读同一份，不另存第二份。
-      collectionPrices: {
+      manualPaymentPrices: {
         once: { amount: 18_000, currency: 'cny', kind: 'one_time' },
       },
       credits: { once: { amount: 10_000 } },
@@ -143,7 +143,7 @@ export function productConfigErrors(products = getProducts()): string[] {
  * 规则：金额是正整数分、币种固定人民币、一次性价格不声明周期、
  * 订阅价格声明周期与正的周期数。
  */
-function isValidCollectionPrice(price: CollectionPrice): boolean {
+function isValidManualPaymentPrice(price: ManualPaymentPrice): boolean {
   if (!Number.isInteger(price.amount) || price.amount <= 0) return false
   if (price.currency !== 'cny') return false
   if (price.kind === 'one_time')
@@ -161,44 +161,45 @@ function isValidCollectionPrice(price: CollectionPrice): boolean {
 /**
  * 取某个商品某个付费方式在核销型链路下的本地价格。
  *
- * 金额只存在 `collectionPrices` 这一处，单位是分；非法配置返回 `undefined`，
+ * 金额只存在 `manualPaymentPrices` 这一处，单位是分；非法配置返回 `undefined`，
  * 不让坏金额流进下单链路。
  */
-export function resolveCollectionPrice(
+export function resolveManualPaymentPrice(
   productId: string,
   offerId: string,
-): CollectionPrice | undefined {
-  const prices = getProducts().find((product) => product.id === productId)?.collectionPrices
+): ManualPaymentPrice | undefined {
+  const prices = getProducts().find((product) => product.id === productId)?.manualPaymentPrices
   if (!prices || !Object.hasOwn(prices, offerId)) return undefined
   const price = prices[offerId]
   if (!price) return undefined
-  return isValidCollectionPrice(price) ? price : undefined
+  return isValidManualPaymentPrice(price) ? price : undefined
 }
 
 /**
  * 校验核销型价格配置。
  *
  * 错误键格式与 `productConfigErrors` 一致：`前缀.商品.付费方式`，
- * 例如 `invalidCollectionAmount.template.once`。
+ * 例如 `invalidManualPaymentAmount.template.once`。
  */
-export function collectionConfigErrors(products = getProducts()): string[] {
+export function manualPaymentConfigErrors(products = getProducts()): string[] {
   const errors: string[] = []
   for (const product of products) {
-    for (const [offer, price] of Object.entries(product.collectionPrices ?? {})) {
+    for (const [offer, price] of Object.entries(product.manualPaymentPrices ?? {})) {
       const key = `${product.id}.${offer}`
       if (!Number.isInteger(price.amount) || price.amount <= 0)
-        errors.push(`invalidCollectionAmount.${key}`)
-      if (price.currency !== 'cny') errors.push(`invalidCollectionCurrency.${key}`)
+        errors.push(`invalidManualPaymentAmount.${key}`)
+      if (price.currency !== 'cny') errors.push(`invalidManualPaymentCurrency.${key}`)
       if (price.kind === 'one_time') {
-        if (price.interval !== undefined) errors.push(`invalidCollectionInterval.${key}`)
-        if (price.intervalCount !== undefined) errors.push(`invalidCollectionIntervalCount.${key}`)
+        if (price.interval !== undefined) errors.push(`invalidManualPaymentInterval.${key}`)
+        if (price.intervalCount !== undefined)
+          errors.push(`invalidManualPaymentIntervalCount.${key}`)
       } else if (price.kind === 'subscription') {
         if (price.interval !== 'month' && price.interval !== 'year')
-          errors.push(`invalidCollectionInterval.${key}`)
+          errors.push(`invalidManualPaymentInterval.${key}`)
         if (!Number.isInteger(price.intervalCount) || (price.intervalCount ?? 0) <= 0)
-          errors.push(`invalidCollectionIntervalCount.${key}`)
+          errors.push(`invalidManualPaymentIntervalCount.${key}`)
       } else {
-        errors.push(`invalidCollectionKind.${key}`)
+        errors.push(`invalidManualPaymentKind.${key}`)
       }
     }
   }

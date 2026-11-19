@@ -9,7 +9,7 @@
  */
 
 import type { AnalyticsName, PaymentProviderName, WebsiteConfig } from '@/config/website'
-import type { CollectionAccountConfig } from '@/types/collection'
+import type { ManualPaymentAccountConfig } from '@/types/manual-payments'
 import {
   defaultSettingsValues,
   SETTING_FIELDS,
@@ -216,8 +216,8 @@ export function applySettingsToConfig(
   const analyticsProviders = strList(values, 'analytics.providers').filter(
     (name): name is AnalyticsName => ANALYTICS_NAMES.includes(name as AnalyticsName),
   )
-  const collectionAccounts = Array.isArray(values['collection.accounts'])
-    ? (values['collection.accounts'] as CollectionAccountConfig[])
+  const manualPaymentAccounts = Array.isArray(values['manualPayments.accounts'])
+    ? (values['manualPayments.accounts'] as ManualPaymentAccountConfig[])
     : []
 
   return {
@@ -257,12 +257,12 @@ export function applySettingsToConfig(
     payment: {
       enabled: bool(values, 'modules.payment'),
       provider: (provider === 'creem' ? 'creem' : 'stripe') satisfies PaymentProviderName,
-      checkoutMode: checkoutMode === 'collection' ? 'collection' : 'provider',
+      checkoutMode: checkoutMode === 'manual_payments' ? 'manual_payments' : 'provider',
     },
-    collection: {
-      enabled: bool(values, 'modules.collection'),
-      verificationSlaHours: num(values, 'collection.verificationSlaHours', 24),
-      accounts: collectionAccounts,
+    manualPayments: {
+      enabled: bool(values, 'modules.manualPayments'),
+      verificationSlaHours: num(values, 'manualPayments.verificationSlaHours', 24),
+      accounts: manualPaymentAccounts,
     },
     notification: {
       enabled: bool(values, 'modules.notification'),

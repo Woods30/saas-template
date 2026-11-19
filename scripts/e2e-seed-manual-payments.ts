@@ -17,7 +17,7 @@ function executeLocalD1Json(
 }
 
 /**
- * 为 E2E 写入核销型支付（collection）的测试数据，只写本地 D1，不访问 Stripe /
+ * 为 E2E 写入核销型支付（manual payments）的测试数据，只写本地 D1，不访问 Stripe /
  * 支付宝。与 `e2e-seed-subscription.ts` 同一约定：`--local` 硬编码，绝不触碰生产库。
  *
  * 子命令：
@@ -30,14 +30,14 @@ function readEnv(key: string): string {
   return parsed[key]?.trim() ?? ''
 }
 
-/** 数据库覆盖收款账户行（`collection_accounts`）。 */
+/** 数据库覆盖收款账户行（`manual_payment_accounts`）。 */
 export function buildAccountSeedSql(input: {
   id: string
   displayName: string
   enabled: boolean
 }): string {
   const quote = (value: string) => `'${escapeSql(value)}'`
-  return `INSERT INTO collection_accounts (id, channel, display_name, currency, enabled) VALUES (${quote(input.id)}, 'alipay', ${quote(input.displayName)}, 'cny', ${input.enabled ? 1 : 0}) ON CONFLICT (id) DO UPDATE SET display_name = excluded.display_name, enabled = excluded.enabled`
+  return `INSERT INTO manual_payment_accounts (id, channel, display_name, currency, enabled) VALUES (${quote(input.id)}, 'alipay', ${quote(input.displayName)}, 'cny', ${input.enabled ? 1 : 0}) ON CONFLICT (id) DO UPDATE SET display_name = excluded.display_name, enabled = excluded.enabled`
 }
 
 /**
@@ -64,7 +64,7 @@ export function buildFingerprintHolderSql(input: {
       `('${crypto.randomUUID()}', '${escapeSql(input.userId)}', '${escapeSql(input.accountId)}', 'alipay', NULL, NULL, 'e2e-holder', 'e2e-one-time', 'one_time', NULL, NULL, ${input.base}, ${fp}, ${input.base + fp}, '${escapeSql(input.currency)}', 'pending_payment', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ${input.expiresAt}, NULL, ${input.expiresAt}, ${input.expiresAt})`,
     )
   }
-  return `INSERT INTO collection_orders (id, user_id, account_id, channel, qr_image_url, qr_image_key, product_id, offer_id, kind, interval, interval_count, base_amount, fingerprint, payable_amount, currency, status, payer_note, receipt_key, submitted_at, observed_amount, external_reference, review_note, reviewed_by, reviewed_at, expires_at, settled_at, created_at, updated_at) VALUES ${holders.join(', ')}`
+  return `INSERT INTO manual_payment_orders (id, user_id, account_id, channel, qr_image_url, qr_image_key, product_id, offer_id, kind, interval, interval_count, base_amount, fingerprint, payable_amount, currency, status, payer_note, receipt_key, submitted_at, observed_amount, external_reference, review_note, reviewed_by, reviewed_at, expires_at, settled_at, created_at, updated_at) VALUES ${holders.join(', ')}`
 }
 
 async function main(): Promise<void> {
@@ -79,7 +79,7 @@ async function main(): Promise<void> {
     const orderId = process.argv[idx + 1]
     if (!orderId) throw new Error('--query-order 需要 <orderId>')
     const rows = executeLocalD1Json(
-      `SELECT base_amount, fingerprint FROM collection_orders WHERE id = '${escapeSql(orderId)}'`,
+      `SELECT base_amount, fingerprint FROM manual_payment_orders WHERE id = '${escapeSql(orderId)}'`,
       persistTo,
     )
     const row = rows[0]?.results?.[0]
@@ -105,7 +105,7 @@ async function main(): Promise<void> {
     // 先清掉该账户除被测单外的全部活跃订单：之前用例留下的 pending_payment /
     // pending_verification 也占尾数，不清会让占位撞唯一索引、池子也不完整。
     executeLocalD1(
-      `DELETE FROM collection_orders WHERE account_id = 'alipay-e2e' AND status IN ('pending_payment','pending_verification','settling') AND payable_amount != ${base + except}`,
+      `DELETE FROM manual_payment_orders WHERE account_id = 'alipay-e2e' AND status IN ('pending_payment','pending_verification','settling') AND payable_amount != ${base + except}`,
       persistTo,
     )
     executeLocalD1(
@@ -126,7 +126,7 @@ async function main(): Promise<void> {
   const email = process.argv[2]
   if (!email || email.startsWith('--')) {
     console.error(
-      '用法：pnpm exec tsx scripts/e2e-seed-collection.ts <email> [--admin]\n' +
+      '用法：pnpm exec tsx scripts/e2e-seed-manual-payments.ts <email> [--admin]\n' +
         '       … --query-order <orderId> | --fill-fingerprints <base> <except>',
     )
     process.exit(1)
@@ -135,7 +135,7 @@ async function main(): Promise<void> {
   const { seedVerifiedUser } = await import('./e2e-seed-subscription')
   // 优先 process.env（Playwright spec 显式传入），再回退 .env 与脚本默认值。
   const password =
-    process.env.E2E_TEST_PASSWORD || readEnv('E2E_TEST_PASSWORD') || 'e2e-collection-password'
+    process.env.E2E_TEST_PASSWORD || readEnv('E2E_TEST_PASSWORD') || 'e2e-manual-payments-password'
   await seedVerifiedUser({
     email,
     name: '核销测试用户',
@@ -143,7 +143,7 @@ async function main(): Promise<void> {
     role: process.argv.includes('--admin') ? 'admin' : undefined,
   })
 
-  // 数据库覆盖账户：与 E2E 环境里 `VITE_COLLECTION_ACCOUNTS` 的兜底同 ID，
+  // 数据库覆盖账户：与 E2E 环境里 `VITE_MANUAL_PAYMENT_ACCOUNTS` 的兜底同 ID，
   // 覆盖只改显示名与启用状态；二维码仍来自源码兜底（E2E 不传 R2 key）。
   executeLocalD1(
     buildAccountSeedSql({ id: 'alipay-e2e', displayName: 'E2E 收款账户', enabled: true }),
@@ -156,7 +156,7 @@ async function main(): Promise<void> {
 }
 
 // 与 e2e-seed-subscription.ts 同一约定：被 import 时不执行 main。
-if (process.argv[1]?.includes('e2e-seed-collection')) {
+if (process.argv[1]?.includes('e2e-seed-manual-payments')) {
   main().catch((err) => {
     console.error(`❌ ${err instanceof Error ? err.message : 'unknown'}`)
     process.exit(1)

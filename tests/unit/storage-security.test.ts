@@ -230,16 +230,16 @@ describe('R2StorageProvider — 安全加固', () => {
       const file = new ArrayBuffer(8)
 
       await provider.uploadFile(file, 'acct.png', 'image/png', {
-        key: 'collection-qrcodes/acct-main.png',
+        key: 'manual-payment-qrcodes/acct-main.png',
       })
-      expect(bucket.put.mock.calls[0][0]).toBe('collection-qrcodes/acct-main.png')
+      expect(bucket.put.mock.calls[0][0]).toBe('manual-payment-qrcodes/acct-main.png')
 
       await expect(
         provider.uploadFile(file, 'x.png', 'image/png', { key: 'secrets/x.png' }),
       ).rejects.toThrow('不在白名单命名空间内')
 
       await expect(
-        provider.uploadFile(file, 'x.png', 'image/png', { key: 'collection-qrcodes/../x.png' }),
+        provider.uploadFile(file, 'x.png', 'image/png', { key: 'manual-payment-qrcodes/../x.png' }),
       ).rejects.toThrow('包含非法字符')
     })
 

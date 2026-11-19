@@ -3,24 +3,24 @@ import { expect, type Page, test } from '@playwright/test'
 import { seedVerifiedUser } from '../scripts/e2e-seed-subscription'
 
 /**
- * 核销型支付（collection）的端到端验收：本地 D1 + 源码兜底账户（env 注入），
+ * 核销型支付（manual payments）的端到端验收：本地 D1 + 源码兜底账户（env 注入），
  * 不接真实支付宝，也不依赖 R2（无 BUCKET 时凭证上传入口隐藏，说明仍可填）。
  *
- * 环境由 `e2e/global-setup.ts` 接线：把 `payment.checkoutMode=collection`、
- * `modules.collection=true` 与收款账户写进本地 D1 的 `settings` 表。
+ * 环境由 `e2e/global-setup.ts` 接线：把 `payment.checkoutMode=manual_payments`、
+ * `modules.manualPayments=true` 与收款账户写进本地 D1 的 `settings` 表。
  */
 
 const PASSWORD = '{{SECRET_1ntmkuxv}}'
 
 /** 注册并登录；核销链路的所有用例都从已登录用户出发。 */
 async function login(page: Page, role: 'user' | 'admin' = 'user'): Promise<string> {
-  const email = `collection-${role}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}@example.com`
+  const email = `manual-payments--${Date.now()}-${crypto.randomUUID().slice(0, 8)}@example.com`
   if (role === 'admin') {
-    // seed-collection 一次完成建号 + 提权 + 账户覆盖，避免两次 INSERT 撞主键。
+    // seed-manual-payments 一次完成建号 + 提权 + 账户覆盖，避免两次 INSERT 撞主键。
     const args = [
       'exec',
       'tsx',
-      'scripts/e2e-seed-collection.ts',
+      'scripts/e2e-seed-manual-payments.ts',
       email,
       '--admin',
       ...(process.env.E2E_D1_PERSIST_TO ? ['--persist-to', process.env.E2E_D1_PERSIST_TO] : []),
@@ -90,7 +90,7 @@ async function createOrder(page: Page): Promise<void> {
   if (!/\/zh\/settings\/orders\/.+/.test(new URL(page.url()).pathname)) {
     // 导航没完成但订单可能已建好（dev server 冷编译会让响应悬挂）：去列表页
     // 等订单行出现，而不是立刻点一个还不存在的链接。
-    await page.goto('/zh/settings/orders')
+    await page.goto('/zh/settings/manual-payments')
     await page.getByRole('link', { name: '查看详情' }).first().click({ timeout: 20000 })
   }
   await expect(page.getByTestId('payable-amount')).toBeVisible({ timeout: 15000 })
@@ -103,7 +103,7 @@ function queryOrderRow(orderId: string): { baseAmount: number; fingerprint: numb
   const args = [
     'exec',
     'tsx',
-    'scripts/e2e-seed-collection.ts',
+    'scripts/e2e-seed-manual-payments.ts',
     '--query-order',
     orderId,
     ...(persistTo ? ['--persist-to', persistTo] : []),
@@ -119,7 +119,7 @@ function fillOtherFingerprints(base: number, exceptFingerprint: number): void {
   const args = [
     'exec',
     'tsx',
-    'scripts/e2e-seed-collection.ts',
+    'scripts/e2e-seed-manual-payments.ts',
     '--fill-fingerprints',
     String(base),
     String(exceptFingerprint),
@@ -132,7 +132,7 @@ function fillOtherFingerprints(base: number, exceptFingerprint: number): void {
 // 该账户其他活跃订单——并行互相踩踏，必须在文件内串行（不同 spec 文件不受影响）。
 test.describe.configure({ mode: 'serial' })
 
-test.describe('Collection', () => {
+test.describe('ManualPayment', () => {
   // 登录 + 下单 + 双角色核验的多段流程，且要容忍 dev server 冷编译与水合竞态
   // 的重试；默认 30 秒不够（重试等待就会把它吃光，浏览器被强关报假错误）。
   test.setTimeout(120_000)
@@ -159,7 +159,7 @@ test.describe('Collection', () => {
     const adminContext = await browser.newContext()
     const adminPage = await adminContext.newPage()
     await login(adminPage, 'admin')
-    await adminPage.goto('/zh/admin/collection-orders')
+    await adminPage.goto('/zh/admin/manual-payments')
     // goto 也可能撞上水合竞态渲染成用户页（快照证据：URL 在 admin 路由但内容
     // 是「订单详情」）。以管理台标题为准，没渲染出来就重新 goto。
     for (let attempt = 0; ; attempt++) {
@@ -170,7 +170,7 @@ test.describe('Collection', () => {
         .catch(() => false)
       if (rendered) break
       if (attempt === 2) throw new Error('管理台核验页始终未渲染')
-      await adminPage.goto('/zh/admin/collection-orders')
+      await adminPage.goto('/zh/admin/manual-payments')
     }
     const payableText = await adminPage
       .getByText(/¥[\d,]+\.\d{2}/)
@@ -203,7 +203,7 @@ test.describe('Collection', () => {
     await userPage.goto('/zh/settings/billing')
     await expect(userPage.getByText('付款记录', { exact: true })).toBeVisible()
     await expect(userPage.getByText('还没有付款记录。')).toHaveCount(0)
-    await userPage.goto('/zh/settings/orders')
+    await userPage.goto('/zh/settings/manual-payments')
     await expect(userPage.getByText('已到账').first()).toBeVisible()
 
     await userContext.close()
@@ -219,14 +219,14 @@ test.describe('Collection', () => {
     const otherContext = await browser.newContext()
     const otherPage = await otherContext.newPage()
     await login(otherPage)
-    await otherPage.goto(`/zh/settings/orders/${orderId}`)
+    await otherPage.goto(`/zh/settings/manual-payments/${orderId}`)
     await expect(otherPage.getByText('订单不存在或不在你的账号下。')).toBeVisible()
     await otherContext.close()
 
     // 普通用户访问管理台被角色门禁拦下（404 与「页面不存在」同形，不泄漏门禁差异）。
     // 用 page.request 而非 request fixture：后者不共享浏览器 cookie，会以未登录
     // 身份被重定向到登录页，测不到角色门禁本身。
-    const response = await page.request.get('/zh/admin/collection-orders')
+    const response = await page.request.get('/zh/admin/manual-payments')
     expect(response.status()).toBe(404)
   })
 

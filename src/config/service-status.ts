@@ -1,9 +1,9 @@
 import { z } from 'zod'
 import type { RuntimeEnv } from '@/core/env/server'
 import {
-  collectionConfigErrors,
+  manualPaymentConfigErrors,
   productConfigErrors,
-  resolveCollectionPrice,
+  resolveManualPaymentPrice,
   resolvePriceReference,
 } from './products'
 import type { ServiceModule, WebsiteConfig } from './website'
@@ -184,56 +184,56 @@ export function getServiceStatuses(input: {
     validateProductConfig(),
   )
 
-  // 核销型支付（collection）：没有托管渠道，价格与收款账户都得在本地配齐。
-  const collectionAccounts = config.collection.accounts
-  const collectionAccountIds = new Set<string>()
-  const collectionAccountDuplicates: ConfigIssue[] = []
-  for (const account of collectionAccounts) {
-    if (collectionAccountIds.has(account.id)) {
-      collectionAccountDuplicates.push({
-        key: 'collection.accounts',
+  // 核销型支付（manual payments）：没有托管渠道，价格与收款账户都得在本地配齐。
+  const manualPaymentAccounts = config.manualPayments.accounts
+  const manualPaymentAccountIds = new Set<string>()
+  const manualPaymentAccountDuplicates: ConfigIssue[] = []
+  for (const account of manualPaymentAccounts) {
+    if (manualPaymentAccountIds.has(account.id)) {
+      manualPaymentAccountDuplicates.push({
+        key: 'manualPayments.accounts',
         location: 'src/config/website.ts',
         conflict: true,
         reason: `收款账户 ID ${account.id} 重复，账户解析会取到不确定的那一个`,
       })
     }
-    collectionAccountIds.add(account.id)
+    manualPaymentAccountIds.add(account.id)
   }
-  const collectionQrIssues: ConfigIssue[] = collectionAccounts
+  const manualPaymentQrIssues: ConfigIssue[] = manualPaymentAccounts
     .filter(
       (account) =>
         !isRootOrProtocolRelativePath(account.qrImageUrl) && !isSafeHttpsUrl(account.qrImageUrl),
     )
     .map((account) => ({
-      key: 'collection.accounts',
+      key: 'manualPayments.accounts',
       location: 'src/config/website.ts',
       conflict: true,
       reason: `收款账户 ${account.id} 的收款码地址必须是站内根路径或无凭据的 HTTPS 地址`,
     }))
 
   check(
-    'collection',
+    'manualPayments',
     [
       [
-        'collection.products',
-        resolveCollectionPrice(config.landingOffer.productId, config.landingOffer.offerId) !==
+        'manualPayments.products',
+        resolveManualPaymentPrice(config.landingOffer.productId, config.landingOffer.offerId) !==
           undefined,
         'src/config/products.ts',
         '首页要卖的商品没有核销型本地标价（收款码链路收不了单）',
       ],
       [
-        'collection.accounts',
-        collectionAccounts.length > 0,
+        'manualPayments.accounts',
+        manualPaymentAccounts.length > 0,
         'src/config/website.ts',
         '没有可用的收款账户，用户付款后无处可付',
       ],
     ],
     [],
     [
-      ...collectionAccountDuplicates,
-      ...collectionQrIssues,
-      ...collectionConfigErrors().map((error) => ({
-        key: `collection.products.${error}`,
+      ...manualPaymentAccountDuplicates,
+      ...manualPaymentQrIssues,
+      ...manualPaymentConfigErrors().map((error) => ({
+        key: `manualPayments.products.${error}`,
         location: 'src/config/products.ts' as const,
         conflict: true,
         reason: '核销型标价的金额、币种或周期不合法，请检查商品配置',

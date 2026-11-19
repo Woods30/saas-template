@@ -88,7 +88,7 @@ client cannot name another customer.
 
 The "Cancel subscription" button calls a site endpoint and **takes effect at period end**: the
 user keeps access for the paid period, then renews no more. Stripe uses
-`cancel_at_period_end`, Creem uses `mode: scheduled`. Collection-based payments have no provider
+`cancel_at_period_end`, Creem uses `mode: scheduled`. Manual-payment flows have no provider
 subscription and do not show the button.
 
 ## Refunds and clawback

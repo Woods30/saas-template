@@ -1,23 +1,23 @@
 /**
  * 核销型支付的领域类型与错误码。
  *
- * 配置层的形状（标价、收款账户）在 `@/types/collection`：那一层要被
+ * 配置层的形状（标价、收款账户）在 `@/types/manual-payments`：那一层要被
  * `src/config/*` 消费，放在模块内部会让配置反向依赖业务模块。这里只放**领域**
  * 概念——订单、状态机、核验动作与稳定错误码。
  */
 
-import type { CollectionChannel, CollectionPrice } from '@/types/collection'
+import type { ManualPaymentChannel, ManualPaymentPrice } from '@/types/manual-payments'
 
 export type {
-  CollectionAccountConfig,
-  CollectionChannel,
-  CollectionPrice,
-} from '@/types/collection'
+  ManualPaymentAccountConfig,
+  ManualPaymentChannel,
+  ManualPaymentPrice,
+} from '@/types/manual-payments'
 
 /** 解析后的收款账户：源码配置兜底 + 数据库同 ID 覆盖的结果。 */
-export interface ResolvedCollectionAccount {
+export interface ResolvedManualPaymentAccount {
   id: string
-  channel: CollectionChannel
+  channel: ManualPaymentChannel
   displayName: string
   currency: 'cny'
   /** 配置里的二维码地址；数据库只存 R2 key，所以这里来自配置。 */
@@ -27,7 +27,7 @@ export interface ResolvedCollectionAccount {
 }
 
 /** 核销订单的状态机。 */
-export type CollectionOrderStatus =
+export type ManualPaymentOrderStatus =
   | 'pending_payment'
   | 'pending_verification'
   | 'settling'
@@ -38,16 +38,16 @@ export type CollectionOrderStatus =
   | 'requires_refund'
 
 /** 一笔核销订单的领域视图。 */
-export interface CollectionOrder {
+export interface ManualPaymentOrder {
   id: string
   userId: string
   accountId: string
-  channel: CollectionChannel
+  channel: ManualPaymentChannel
   qrImageUrl: string | null
   qrImageKey: string | null
   productId: string
   offerId: string
-  kind: CollectionPrice['kind']
+  kind: ManualPaymentPrice['kind']
   interval: 'month' | 'year' | null
   intervalCount: number | null
   /** 标价（分）。 */
@@ -57,7 +57,7 @@ export interface CollectionOrder {
   /** 应付金额 = 标价 + 尾数（分）。 */
   payableAmount: number
   currency: 'cny'
-  status: CollectionOrderStatus
+  status: ManualPaymentOrderStatus
   payerNote: string | null
   receiptKey: string | null
   submittedAt: Date | null
@@ -78,11 +78,11 @@ export interface CollectionOrder {
  *
  * server 层按它映射 HTTP 状态与对外文案，领域层只负责把原因说清楚。
  */
-export type CollectionErrorCode =
+export type ManualPaymentErrorCode =
   | 'MODULE_DISABLED'
   | 'SERVICE_UNAVAILABLE'
   | 'INVALID_OFFER'
-  | 'NO_COLLECTION_ACCOUNT'
+  | 'NO_MANUAL_PAYMENT_ACCOUNT'
   | 'AMOUNT_POOL_EXHAUSTED'
   | 'ORDER_NOT_FOUND'
   | 'ORDER_EXPIRED'
@@ -96,18 +96,18 @@ export type CollectionErrorCode =
   | 'INVALID_RECEIPT'
 
 /** 带稳定错误码的领域异常。 */
-export class CollectionError extends Error {
-  readonly code: CollectionErrorCode
+export class ManualPaymentError extends Error {
+  readonly code: ManualPaymentErrorCode
 
-  constructor(code: CollectionErrorCode, message?: string) {
+  constructor(code: ManualPaymentErrorCode, message?: string) {
     super(message ?? code)
-    this.name = 'CollectionError'
+    this.name = 'ManualPaymentError'
     this.code = code
   }
 }
 
 /** 用户辅助说明的最大字符数。 */
-export const COLLECTION_PAYER_NOTE_MAX_LENGTH = 500
+export const MANUAL_PAYMENT_PAYER_NOTE_MAX_LENGTH = 500
 
 /** 申报付款的输入。 */
 export interface SubmitOrderInput {
@@ -135,7 +135,7 @@ export interface ListUserOrdersInput {
 
 /** 用户订单列表的一页。 */
 export interface UserOrderPage {
-  rows: CollectionOrder[]
+  rows: ManualPaymentOrder[]
   /** 该用户的订单总数（不受分页影响）。 */
   total: number
 }
@@ -147,8 +147,8 @@ export interface UserOrderPage {
  * 页面不能自己读服务端上下文 —— 客户端静态导入服务端模块会把
  * `node:async_hooks` 打进浏览器 bundle，整站水合失败。
  */
-export interface CollectionOrderDetail {
-  order: CollectionOrder
+export interface ManualPaymentOrderDetail {
+  order: ManualPaymentOrder
   /** 是否可以上传付款凭证（没有 R2 绑定时为 false，但说明仍可填写）。 */
   canUpload: boolean
 }
@@ -160,7 +160,7 @@ export interface CollectionOrderDetail {
  * - `approve_exception`：异常通过，用于过期到账或金额不符，必须写理由；
  * - `reject`：驳回，不产生任何资金事实。
  */
-export type CollectionReviewAction = 'approve' | 'approve_exception' | 'reject'
+export type ManualPaymentReviewAction = 'approve' | 'approve_exception' | 'reject'
 
 /** 核验输入。 */
 export interface ReviewOrderInput {
@@ -169,7 +169,7 @@ export interface ReviewOrderInput {
   /** 核验管理员的用户 ID。 */
   reviewerId: string
   /** 核验动作。 */
-  action: CollectionReviewAction
+  action: ManualPaymentReviewAction
   /** 管理员在真实流水里看到的到账金额（分）。普通核验必须等于应付金额。 */
   observedAmount?: number | null
   /** 核验备注；异常核验必须填写。 */
@@ -179,8 +179,8 @@ export interface ReviewOrderInput {
 }
 
 /** 规范化后的核验结果。 */
-export interface CollectionReview {
-  action: CollectionReviewAction
+export interface ManualPaymentReview {
+  action: ManualPaymentReviewAction
   /** 实际到账金额（分）。 */
   observedAmount: number | null
   reviewNote: string | null

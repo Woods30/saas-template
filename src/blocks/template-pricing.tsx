@@ -9,12 +9,12 @@ import { startCheckout } from '@/core/payment/checkout-client'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale } from '@/locale/paraglide/runtime.js'
 import {
-  collectionOrderErrorMessage,
-  createCollectionOrder,
+  createManualPaymentOrder,
+  manualPaymentOrderErrorMessage,
 } from '@/modules/manual-payments/service'
 
 /** 核销链路的标价视图：金额（分）与币种。 */
-export interface CollectionPriceView {
+export interface ManualPaymentPriceView {
   amount: number
   currency: string
 }
@@ -25,7 +25,7 @@ export interface CollectionPriceView {
  * `price` 为展示用金额字符串；`null` 表示价格目录取不到，降级为「价格暂不可用」。
  *
  * 金额由 Stripe 的价格目录给出（见 `fetchPriceCatalog`），代码里不存第二份。
- * 核销收款链路下价格来自本地标价（`collectionPrices`，单位分）——那条链路
+ * 核销收款链路下价格来自本地标价（`manualPaymentPrices`，单位分）——那条链路
  * 不接支付渠道，没有价格目录可用。
  */
 export function TemplatePricing({ price }: { price: string | null }) {
@@ -36,25 +36,25 @@ export function TemplatePricing({ price }: { price: string | null }) {
   const locale = getLocale()
   const navigate = useNavigate()
   const loginUrl = `/${locale}/auth/login?redirect=${encodeURIComponent(`/${locale}/#pricing`)}`
-  const collectionMode = websiteConfig.payment.checkoutMode === 'collection'
+  const manualPaymentMode = websiteConfig.payment.checkoutMode === 'manual_payments'
   // 两条链路互斥：核销收款走核销模块，渠道支付走支付模块。
   const enabled =
     websiteConfig.auth.enabled &&
-    (collectionMode ? websiteConfig.collection.enabled : websiteConfig.payment.enabled)
+    (manualPaymentMode ? websiteConfig.manualPayments.enabled : websiteConfig.payment.enabled)
 
   async function buy() {
     if (pending) return
     setPending(true)
     setNotice('')
     // 核销链路：创建核销订单并站内导航到订单详情，不调渠道结账。
-    if (collectionMode) {
-      const result = await createCollectionOrder({
+    if (manualPaymentMode) {
+      const result = await createManualPaymentOrder({
         productId: websiteConfig.landingOffer.productId,
         offerId: websiteConfig.landingOffer.offerId,
       })
       if (result.kind === 'redirect') {
         await navigate({
-          to: settingsRoutes.orderDetail,
+          to: settingsRoutes.manualPaymentDetail,
           params: { locale, orderId: result.orderId },
         })
         return
@@ -67,7 +67,7 @@ export function TemplatePricing({ price }: { price: string | null }) {
       setNotice(
         result.kind === 'not-configured'
           ? m.payment_checkout_not_configured()
-          : collectionOrderErrorMessage(result.code),
+          : manualPaymentOrderErrorMessage(result.code),
       )
       return
     }

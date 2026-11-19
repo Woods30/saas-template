@@ -6,9 +6,9 @@ import { findProduct } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import type { SessionInfo } from '@/core/auth/session'
 import { setLocale } from '@/locale/paraglide/runtime.js'
-import type { CollectionOrder } from '@/modules/manual-payments/service'
-import { Route as OrderDetailRoute } from '@/routes/{-$locale}/_layout/settings/orders/$orderId'
-import { Route as OrdersIndexRoute } from '@/routes/{-$locale}/_layout/settings/orders/index'
+import type { ManualPaymentOrder } from '@/modules/manual-payments/service'
+import { Route as OrderDetailRoute } from '@/routes/{-$locale}/_layout/settings/manual-payments/$orderId'
+import { Route as OrdersIndexRoute } from '@/routes/{-$locale}/_layout/settings/manual-payments/index'
 
 /**
  * 核销型支付的用户流程：订单列表 / 详情、申报与轮询、无对象存储降级、
@@ -20,7 +20,7 @@ import { Route as OrdersIndexRoute } from '@/routes/{-$locale}/_layout/settings/
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
-  pathname: '/zh/settings/orders',
+  pathname: '/zh/settings/manual-payments',
   session: null as { user: { id: string } } | null,
   createOrder: vi.fn(),
   submitOrder: vi.fn(),
@@ -78,25 +78,25 @@ vi.mock('@/modules/manual-payments/server', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/modules/manual-payments/server')>()
   return {
     ...actual,
-    createCollectionOrderFn: mocks.createOrder,
-    submitCollectionOrderFn: mocks.submitOrder,
-    cancelCollectionOrderFn: mocks.cancelOrder,
-    fetchCollectionOrderFn: mocks.fetchOrder,
-    fetchMyCollectionOrdersFn: mocks.fetchOrders,
-    fetchAdminCollectionOrdersFn: mocks.fetchAdminOrders,
-    reviewCollectionOrderFn: mocks.reviewOrder,
-    fetchCollectionAccountsFn: mocks.fetchAccounts,
-    saveCollectionAccountFn: mocks.saveAccount,
+    createManualPaymentOrderFn: mocks.createOrder,
+    submitManualPaymentOrderFn: mocks.submitOrder,
+    cancelManualPaymentOrderFn: mocks.cancelOrder,
+    fetchManualPaymentOrderFn: mocks.fetchOrder,
+    fetchMyManualPaymentOrdersFn: mocks.fetchOrders,
+    fetchAdminManualPaymentOrdersFn: mocks.fetchAdminOrders,
+    reviewManualPaymentOrderFn: mocks.reviewOrder,
+    fetchManualPaymentAccountsFn: mocks.fetchAccounts,
+    saveManualPaymentAccountFn: mocks.saveAccount,
   }
 })
 
 // `websiteConfig` 是 Proxy（`structuredClone` 克隆不了），这里只留快照用到的字段。
-const originalCollectionEnabled = websiteConfig.collection.enabled
+const originalManualPaymentEnabled = websiteConfig.manualPayments.enabled
 // 列表页在 index 子路由（父路由 `orders.tsx` 只承担门禁与 SEO，无 component）。
 const OrdersPage = OrdersIndexRoute.options.component as unknown as () => React.JSX.Element
 const OrderDetailPage = OrderDetailRoute.options.component as unknown as () => React.JSX.Element
 
-function makeOrder(overrides: Partial<CollectionOrder> = {}): CollectionOrder {
+function makeOrder(overrides: Partial<ManualPaymentOrder> = {}): ManualPaymentOrder {
   const createdAt = new Date(Date.now())
   return {
     id: 'ord_1',
@@ -131,7 +131,7 @@ function makeOrder(overrides: Partial<CollectionOrder> = {}): CollectionOrder {
   }
 }
 
-function stubDetail(order: CollectionOrder | null, canUpload: boolean) {
+function stubDetail(order: ManualPaymentOrder | null, canUpload: boolean) {
   vi.spyOn(OrderDetailRoute, 'useLoaderData').mockReturnValue({
     ok: order !== null,
     orderId: order?.id ?? 'ord_1',
@@ -141,7 +141,7 @@ function stubDetail(order: CollectionOrder | null, canUpload: boolean) {
   } as never)
 }
 
-function stubList(page: { rows: CollectionOrder[]; total: number } | null) {
+function stubList(page: { rows: ManualPaymentOrder[]; total: number } | null) {
   vi.spyOn(OrdersIndexRoute, 'useLoaderData').mockReturnValue({ ok: page !== null, page } as never)
 }
 
@@ -163,7 +163,7 @@ let motion: MediaQueryList
 beforeEach(() => {
   setLocale('zh', { reload: false })
   mocks.navigate.mockReset()
-  mocks.pathname = '/zh/settings/orders'
+  mocks.pathname = '/zh/settings/manual-payments'
   mocks.session = { user: { id: 'u_1' } }
   mocks.createOrder.mockReset().mockResolvedValue({ id: 'ord_1' })
   mocks.submitOrder.mockReset().mockResolvedValue({ status: 'pending_verification' })
@@ -189,7 +189,7 @@ afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
-  Object.assign(websiteConfig.collection, { enabled: originalCollectionEnabled })
+  Object.assign(websiteConfig.manualPayments, { enabled: originalManualPaymentEnabled })
   setLocale('zh', { reload: false })
 })
 
@@ -208,18 +208,18 @@ describe('订单详情页', () => {
   })
 
   it('qrImageKey 优先走服务端图片端点，不接受客户端指定 key', () => {
-    stubDetail(makeOrder({ qrImageKey: 'collection-qrcodes/secret.png' }), true)
+    stubDetail(makeOrder({ qrImageKey: 'manual-payment-qrcodes/secret.png' }), true)
     render(<OrderDetailPage />)
     expect(screen.getByRole('img', { name: '收款二维码' })).toHaveAttribute(
       'src',
-      '/api/collection/accounts/alipay_main/qrcode',
+      '/api/manual-payments/accounts/alipay_main/qrcode',
     )
   })
 
   it('风险正文写明人工核验、核验时限、精确金额、15 分钟有效、截图不代表到账、订阅不自动扣款', () => {
     stubDetail(makeOrder(), true)
     const { container } = render(<OrderDetailPage />)
-    const risk = container.querySelector('[data-testid="collection-risk"]')
+    const risk = container.querySelector('[data-testid="manual-payments-risk"]')
     expect(risk).not.toBeNull()
     expect(risk).toHaveTextContent('人工核验')
     expect(risk).toHaveTextContent('24 小时')
@@ -279,7 +279,7 @@ describe('订单详情页', () => {
     })
     await waitFor(() => expect(request).toHaveBeenCalled())
     const [url, init] = request.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe('/api/collection/orders/ord_1/receipt')
+    expect(url).toBe('/api/manual-payments/orders/ord_1/receipt')
     expect(init.method).toBe('POST')
     expect(init.body).toBeInstanceOf(FormData)
     expect((init.body as FormData).get('file')).toBeInstanceOf(File)
@@ -307,7 +307,7 @@ describe('订单列表页', () => {
     // Base UI 的 Button 渲染成 <a> 时带 `role="button"`，按这个角色找。
     expect(screen.getByRole('button', { name: '查看详情' })).toHaveAttribute(
       'href',
-      '/zh/settings/orders/ord_1',
+      '/zh/settings/manual-payments/ord_1',
     )
   })
 
@@ -327,25 +327,28 @@ describe('个人中心入口与面包屑', () => {
     )
   }
 
-  it('collection 模块开启时显示「订单」入口，关闭时隐藏', () => {
-    websiteConfig.collection.enabled = true
+  it('manualPayments 模块开启时显示「订单」入口，关闭时隐藏', () => {
+    websiteConfig.manualPayments.enabled = true
     const { unmount } = renderLayout()
     const sidebar = document.querySelector('[data-slot="sidebar"]') as HTMLElement
     expect(within(sidebar).getByRole('link', { name: '订单' })).toHaveAttribute(
       'href',
-      '/zh/settings/orders',
+      '/zh/settings/manual-payments',
     )
     unmount()
-    websiteConfig.collection.enabled = false
+    websiteConfig.manualPayments.enabled = false
     renderLayout()
     const closed = document.querySelector('[data-slot="sidebar"]') as HTMLElement
     expect(within(closed).queryByRole('link', { name: '订单' })).toBeNull()
   })
 
-  it.each(['/zh/settings/orders', '/zh/settings/orders/ord_1'])('面包屑识别 %s', (pathname) => {
-    mocks.pathname = pathname
-    renderLayout()
-    const breadcrumb = screen.getByRole('navigation', { name: 'breadcrumb' })
-    expect(within(breadcrumb).getByText('我的订单')).toHaveAttribute('aria-current', 'page')
-  })
+  it.each(['/zh/settings/manual-payments', '/zh/settings/manual-payments/ord_1'])(
+    '面包屑识别 %s',
+    (pathname) => {
+      mocks.pathname = pathname
+      renderLayout()
+      const breadcrumb = screen.getByRole('navigation', { name: 'breadcrumb' })
+      expect(within(breadcrumb).getByText('我的订单')).toHaveAttribute('aria-current', 'page')
+    },
+  )
 })

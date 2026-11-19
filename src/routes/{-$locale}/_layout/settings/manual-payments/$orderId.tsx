@@ -16,19 +16,19 @@ import { assertPageEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
 import { m } from '@/locale/paraglide/messages.js'
 import {
-  COLLECTION_PAYER_NOTE_MAX_LENGTH,
-  type CollectionOrder,
-  type CollectionOrderErrorCode,
-  cancelCollectionOrder,
-  collectionOrderErrorMessage,
-  collectionOrderNeedsCountdown,
-  collectionOrderNeedsPolling,
-  collectionQrSrc,
-  fetchCollectionOrder,
-  submitCollectionOrder,
+  cancelManualPaymentOrder,
+  fetchManualPaymentOrder,
+  MANUAL_PAYMENT_PAYER_NOTE_MAX_LENGTH,
+  type ManualPaymentOrder,
+  type ManualPaymentOrderErrorCode,
+  manualPaymentOrderErrorMessage,
+  manualPaymentOrderNeedsCountdown,
+  manualPaymentOrderNeedsPolling,
+  manualPaymentQrSrc,
+  submitManualPaymentOrder,
 } from '@/modules/manual-payments/service'
 import { productNameForProductId } from '@/modules/subscriptions/service'
-import { collectionOrderStatusMessageKey } from '../orders'
+import { manualPaymentOrderStatusMessageKey } from '../manual-payments'
 
 /**
  * 核销订单详情：精确金额、15 分钟倒计时、收款二维码、申报与轮询。
@@ -42,11 +42,11 @@ import { collectionOrderStatusMessageKey } from '../orders'
  * - **「我已支付」只是申报**：申报成功进入待核验，页面绝不自行显示「已到账」——
  *   到账是管理员核验后由轮询拿回的服务端状态。
  */
-export const Route = createFileRoute('/{-$locale}/_layout/settings/orders/$orderId')({
-  beforeLoad: () => assertPageEnabled('collection'),
+export const Route = createFileRoute('/{-$locale}/_layout/settings/manual-payments/$orderId')({
+  beforeLoad: () => assertPageEnabled('manualPayments'),
   loader: async ({ params }) => {
     try {
-      const result = await fetchCollectionOrder({ orderId: params.orderId })
+      const result = await fetchManualPaymentOrder({ orderId: params.orderId })
       if (result.kind === 'ok') {
         return {
           ok: true as const,
@@ -75,9 +75,9 @@ export const Route = createFileRoute('/{-$locale}/_layout/settings/orders/$order
     }
   },
   head: () =>
-    seo('/settings/orders', {
-      title: m['collection.order_detail_title'](),
-      description: m['collection.order_detail_description'](),
+    seo('/settings/manual-payments', {
+      title: m['manual_payments.order_detail_title'](),
+      description: m['manual_payments.order_detail_description'](),
       locale: getRequestLocale(),
       noindex: true,
     }),
@@ -105,9 +105,9 @@ function formatCountdown(ms: number): string {
 function OrderDetailPage() {
   const loaded = Route.useLoaderData()
   const locale = getRequestLocale()
-  const [order, setOrder] = useState<CollectionOrder | null>(loaded.order)
+  const [order, setOrder] = useState<ManualPaymentOrder | null>(loaded.order)
   const [error, setError] = useState<string | null>(
-    loaded.ok || !loaded.errorCode ? null : collectionOrderErrorMessage(loaded.errorCode),
+    loaded.ok || !loaded.errorCode ? null : manualPaymentOrderErrorMessage(loaded.errorCode),
   )
   const [submitting, setSubmitting] = useState(false)
   const [payerNote, setPayerNote] = useState(order?.payerNote ?? '')
@@ -118,7 +118,7 @@ function OrderDetailPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refresh = useCallback(async () => {
-    const result = await fetchCollectionOrder({ orderId: loaded.orderId })
+    const result = await fetchManualPaymentOrder({ orderId: loaded.orderId })
     if (result.kind === 'ok') setOrder(result.order)
   }, [loaded.orderId])
 
@@ -126,7 +126,7 @@ function OrderDetailPage() {
   // 惰性过期由服务端完成，客户端不自行把状态改成「已过期」。
   // 订单到达终态（不再显示倒计时）或卸载时停表。
   useEffect(() => {
-    if (!order || !collectionOrderNeedsCountdown(order.status)) return
+    if (!order || !manualPaymentOrderNeedsCountdown(order.status)) return
     if (remainingMs(order.expiresAt, Date.now()) <= 0) {
       void refresh()
       return
@@ -142,27 +142,27 @@ function OrderDetailPage() {
 
   // 轮询只在「申报后」与「结算中」进行；进入终态或卸载时清理定时器。
   useEffect(() => {
-    if (!order || !collectionOrderNeedsPolling(order.status)) return
+    if (!order || !manualPaymentOrderNeedsPolling(order.status)) return
     const id = setInterval(() => void refresh(), POLL_INTERVAL_MS)
     return () => clearInterval(id)
   }, [order, refresh])
 
-  const qrSrc = order ? collectionQrSrc(order) : null
+  const qrSrc = order ? manualPaymentQrSrc(order) : null
   const productName = order ? (productNameForProductId(order.productId) ?? order.productId) : ''
   const hasReceipt = Boolean(order?.receiptKey)
-  const receiptSrc = hasReceipt ? `/api/collection/orders/${loaded.orderId}/receipt` : null
+  const receiptSrc = hasReceipt ? `/api/manual-payments/orders/${loaded.orderId}/receipt` : null
 
   async function declare() {
     if (!order || submitting) return
     setSubmitting(true)
     setError(null)
-    const result = await submitCollectionOrder({
+    const result = await submitManualPaymentOrder({
       orderId: order.id,
       payerNote: payerNote.trim() || null,
     })
     setSubmitting(false)
     if (result.kind === 'error') {
-      setError(collectionOrderErrorMessage(result.code as CollectionOrderErrorCode))
+      setError(manualPaymentOrderErrorMessage(result.code as ManualPaymentOrderErrorCode))
       return
     }
     // 申报成功后立即要一次最新状态（含服务端时间戳），并启动轮询。
@@ -173,10 +173,10 @@ function OrderDetailPage() {
     if (!order || submitting) return
     setSubmitting(true)
     setError(null)
-    const result = await cancelCollectionOrder({ orderId: order.id })
+    const result = await cancelManualPaymentOrder({ orderId: order.id })
     setSubmitting(false)
     if (result.kind === 'error') {
-      setError(collectionOrderErrorMessage(result.code as CollectionOrderErrorCode))
+      setError(manualPaymentOrderErrorMessage(result.code as ManualPaymentOrderErrorCode))
       return
     }
     await refresh()
@@ -190,7 +190,7 @@ function OrderDetailPage() {
       const body = new FormData()
       // 字段名由服务端读取（`file`）；key 由服务端派生，客户端不传。
       body.append('file', file)
-      const response = await fetch(`/api/collection/orders/${order.id}/receipt`, {
+      const response = await fetch(`/api/manual-payments/orders/${order.id}/receipt`, {
         method: 'POST',
         body,
       })
@@ -198,15 +198,15 @@ function OrderDetailPage() {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null
         setUploadNotice(
           payload?.error
-            ? collectionOrderErrorMessage(payload.error as CollectionOrderErrorCode)
-            : m['collection.error_generic'](),
+            ? manualPaymentOrderErrorMessage(payload.error as ManualPaymentOrderErrorCode)
+            : m['manual_payments.error_generic'](),
         )
         return
       }
-      setUploadNotice(m['collection.order_receipt_uploaded']())
+      setUploadNotice(m['manual_payments.order_receipt_uploaded']())
       await refresh()
     } catch {
-      setUploadNotice(m['collection.error_generic']())
+      setUploadNotice(m['manual_payments.error_generic']())
     } finally {
       setUploading(false)
     }
@@ -216,19 +216,19 @@ function OrderDetailPage() {
     return (
       <div className="space-y-6">
         <header>
-          <h1 className="text-2xl font-semibold">{m['collection.order_detail_title']()}</h1>
+          <h1 className="text-2xl font-semibold">{m['manual_payments.order_detail_title']()}</h1>
         </header>
         <p role="alert" className="text-destructive">
-          {error ?? m['collection.order_not_found']()}
+          {error ?? m['manual_payments.order_not_found']()}
         </p>
         <Button
           variant="outline"
           // `nativeButton={false}`：Base UI 的 Button 默认渲染 <button>，换成 <a>
           // 后必须关掉，否则开发环境会警告「丢了原生按钮语义」。
           nativeButton={false}
-          render={<Link to={settingsRoutes.orders} params={{ locale }} />}
+          render={<Link to={settingsRoutes.manualPayments} params={{ locale }} />}
         >
-          {m['collection.order_back_to_list']()}
+          {m['manual_payments.order_back_to_list']()}
         </Button>
       </div>
     )
@@ -241,13 +241,13 @@ function OrderDetailPage() {
   return (
     <div className="space-y-8">
       <header className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{m['collection.order_detail_title']()}</h1>
-        <Badge>{m[collectionOrderStatusMessageKey(order.status)]()}</Badge>
+        <h1 className="text-2xl font-semibold">{m['manual_payments.order_detail_title']()}</h1>
+        <Badge>{m[manualPaymentOrderStatusMessageKey(order.status)]()}</Badge>
       </header>
 
       {error && (
         <Alert variant="destructive" role="alert">
-          <AlertTitle>{m['collection.error_heading']()}</AlertTitle>
+          <AlertTitle>{m['manual_payments.error_heading']()}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
@@ -255,16 +255,18 @@ function OrderDetailPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>{m['collection.order_summary_title']()}</CardTitle>
+            <CardTitle>{m['manual_payments.order_summary_title']()}</CardTitle>
             <CardDescription className="font-mono text-xs">{order.id}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <p className="text-sm text-muted-foreground">{m['collection.order_product']()}</p>
+              <p className="text-sm text-muted-foreground">
+                {m['manual_payments.order_product']()}
+              </p>
               <p className="text-lg font-semibold">{productName}</p>
               {order.kind === 'subscription' && order.interval && (
                 <p className="text-sm text-muted-foreground">
-                  {m['collection.order_subscription_note']({
+                  {m['manual_payments.order_subscription_note']({
                     intervalCount: order.intervalCount ?? 1,
                     interval: order.interval,
                   })}
@@ -272,16 +274,20 @@ function OrderDetailPage() {
               )}
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">{m['collection.order_payable']()}</p>
+              <p className="text-sm text-muted-foreground">
+                {m['manual_payments.order_payable']()}
+              </p>
               <p className="text-3xl font-semibold tabular-nums" data-testid="payable-amount">
                 {formatMoney(order.payableAmount, order.currency, locale)}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {m['collection.order_exact_amount_note']()}
+                {m['manual_payments.order_exact_amount_note']()}
               </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">{m['collection.order_time_left']()}</p>
+              <p className="text-sm text-muted-foreground">
+                {m['manual_payments.order_time_left']()}
+              </p>
               <p
                 className="text-2xl font-semibold tabular-nums"
                 role="timer"
@@ -294,11 +300,11 @@ function OrderDetailPage() {
             {canDeclare && (
               <div className="flex flex-wrap gap-3">
                 <Button disabled={submitting} onClick={() => void declare()} aria-busy={submitting}>
-                  {m['collection.order_declare_paid']()}
+                  {m['manual_payments.order_declare_paid']()}
                 </Button>
                 {canCancel && (
                   <Button variant="outline" disabled={submitting} onClick={() => void cancel()}>
-                    {m['collection.order_cancel']()}
+                    {m['manual_payments.order_cancel']()}
                   </Button>
                 )}
               </div>
@@ -308,24 +314,24 @@ function OrderDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{m['collection.order_qr_title']()}</CardTitle>
-            <CardDescription>{m['collection.order_qr_description']()}</CardDescription>
+            <CardTitle>{m['manual_payments.order_qr_title']()}</CardTitle>
+            <CardDescription>{m['manual_payments.order_qr_description']()}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
             {qrSrc ? (
               <img
                 src={qrSrc}
-                alt={m['collection.order_qr_alt']()}
+                alt={m['manual_payments.order_qr_alt']()}
                 className="size-64 rounded-lg border border-border object-contain"
               />
             ) : (
               <p className="text-sm text-muted-foreground">
-                {m['collection.order_qr_unavailable']()}
+                {m['manual_payments.order_qr_unavailable']()}
               </p>
             )}
             {order.payerNote && (
               <p className="text-sm text-muted-foreground">
-                {m['collection.order_note_displayed']({ note: order.payerNote })}
+                {m['manual_payments.order_note_displayed']({ note: order.payerNote })}
               </p>
             )}
           </CardContent>
@@ -334,25 +340,29 @@ function OrderDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{m['collection.order_note_title']()}</CardTitle>
-          <CardDescription>{m['collection.order_note_description']()}</CardDescription>
+          <CardTitle>{m['manual_payments.order_note_title']()}</CardTitle>
+          <CardDescription>{m['manual_payments.order_note_description']()}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="collection-payer-note">{m['collection.order_note_label']()}</Label>
+            <Label htmlFor="manual-payments-payer-note">
+              {m['manual_payments.order_note_label']()}
+            </Label>
             <Textarea
-              id="collection-payer-note"
+              id="manual-payments-payer-note"
               value={payerNote}
-              maxLength={COLLECTION_PAYER_NOTE_MAX_LENGTH}
+              maxLength={MANUAL_PAYMENT_PAYER_NOTE_MAX_LENGTH}
               onChange={(event) => setPayerNote(event.target.value)}
-              placeholder={m['collection.order_note_placeholder']()}
+              placeholder={m['manual_payments.order_note_placeholder']()}
             />
           </div>
           {loaded.canUpload && (
             <div className="space-y-2">
-              <Label htmlFor="collection-receipt">{m['collection.order_receipt_label']()}</Label>
+              <Label htmlFor="manual-payments-receipt">
+                {m['manual_payments.order_receipt_label']()}
+              </Label>
               <Input
-                id="collection-receipt"
+                id="manual-payments-receipt"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 disabled={uploading}
@@ -362,13 +372,13 @@ function OrderDetailPage() {
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                {m['collection.order_receipt_hint']()}
+                {m['manual_payments.order_receipt_hint']()}
               </p>
             </div>
           )}
           {uploading && (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner /> {m['collection.order_receipt_uploading']()}
+              <Spinner /> {m['manual_payments.order_receipt_uploading']()}
             </p>
           )}
           {uploadNotice && (
@@ -378,10 +388,10 @@ function OrderDetailPage() {
           )}
           {receiptSrc && (
             <div className="space-y-2">
-              <p className="text-sm font-medium">{m['collection.order_receipt_current']()}</p>
+              <p className="text-sm font-medium">{m['manual_payments.order_receipt_current']()}</p>
               <img
                 src={receiptSrc}
-                alt={m['collection.order_receipt_alt']()}
+                alt={m['manual_payments.order_receipt_alt']()}
                 className="max-h-48 rounded-lg border border-border"
               />
             </div>
@@ -389,19 +399,19 @@ function OrderDetailPage() {
         </CardContent>
       </Card>
 
-      <Alert data-testid="collection-risk">
-        <AlertTitle>{m['collection.order_risk_title']()}</AlertTitle>
+      <Alert data-testid="manual-payments-risk">
+        <AlertTitle>{m['manual_payments.order_risk_title']()}</AlertTitle>
         <AlertDescription>
           <ul className="list-disc space-y-2 pl-4">
             <li>
-              {m['collection.order_risk_manual_review']({
-                hours: websiteConfig.collection.verificationSlaHours,
+              {m['manual_payments.order_risk_manual_review']({
+                hours: websiteConfig.manualPayments.verificationSlaHours,
               })}
             </li>
-            <li>{m['collection.order_risk_exact_amount']()}</li>
-            <li>{m['collection.order_risk_validity']()}</li>
-            <li>{m['collection.order_risk_declare_not_proof']()}</li>
-            <li>{m['collection.order_risk_no_auto_charge']()}</li>
+            <li>{m['manual_payments.order_risk_exact_amount']()}</li>
+            <li>{m['manual_payments.order_risk_validity']()}</li>
+            <li>{m['manual_payments.order_risk_declare_not_proof']()}</li>
+            <li>{m['manual_payments.order_risk_no_auto_charge']()}</li>
           </ul>
         </AlertDescription>
       </Alert>

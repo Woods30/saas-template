@@ -17,7 +17,7 @@ async function startTestServer() {
   if (existsSync('.dev.vars')) {
     throw new Error('E2E server 不读取 .dev.vars；请移除该本地覆盖后使用 synthetic 邮件配置')
   }
-  resetLocalCollectionFixtures()
+  resetLocalManualPaymentFixtures()
   let captured = 0
   const messages = new Map<string, string>()
   const mail = createServer(async (req, res) => {
@@ -149,13 +149,13 @@ const WARMUP_PATHS = [
 /**
  * 清理本地 D1 里会影响 E2E 结账环境的残留行。
  *
- * `collection_orders` 占尾数池（每账户活跃金额唯一），残留行会让本轮撞
+ * `manual_payment_orders` 占尾数池（每账户活跃金额唯一），残留行会让本轮撞
  * `AMOUNT_POOL_EXHAUSTED`。配置行由 {@link seedE2eSettings} 逐字段覆盖，
  * 不在这里删。
  */
-function resetLocalCollectionFixtures(): void {
+function resetLocalManualPaymentFixtures(): void {
   try {
-    wranglerD1(['DELETE FROM collection_orders'])
+    wranglerD1(['DELETE FROM manual_payment_orders'])
   } catch {
     // 表不存在（未跑迁移）等情形不算致命，后续用例会给出真正的原因。
   }
@@ -180,10 +180,10 @@ function wranglerD1(statements: string[]): void {
  */
 const E2E_SETTINGS: ReadonlyArray<readonly [key: string, value: unknown]> = [
   ['modules.docs', true],
-  ['modules.collection', true],
-  ['payment.checkoutMode', 'collection'],
+  ['modules.manualPayments', true],
+  ['payment.checkoutMode', 'manual_payments'],
   [
-    'collection.accounts',
+    'manualPayments.accounts',
     [
       {
         id: 'alipay-e2e',
@@ -225,7 +225,7 @@ export default async function globalSetup() {
     throw new Error('E2E fixture 仅允许本地 server')
   }
 
-  resetLocalCollectionFixtures()
+  resetLocalManualPaymentFixtures()
   const ctx = await request.newContext({ baseURL: base })
   let ready = false
   for (let i = 0; i < 90; i++) {

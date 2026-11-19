@@ -87,8 +87,8 @@ describe('env 只作 seed 初值', () => {
   })
 
   it('非法收款账户 JSON 回落空列表，不静默生效半个配置', () => {
-    const values = seedValues({ VITE_COLLECTION_ACCOUNTS: 'not-json' }, {})
-    expect(values['collection.accounts']).toEqual([])
+    const values = seedValues({ VITE_MANUAL_PAYMENT_ACCOUNTS: 'not-json' }, {})
+    expect(values['manualPayments.accounts']).toEqual([])
   })
 })
 

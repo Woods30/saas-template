@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { LandingPage } from '@/blocks/landing-page'
 import { MarketingLayout } from '@/blocks/marketing-layout'
-import { resolveCollectionPrice } from '@/config/products'
+import { resolveManualPaymentPrice } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import { findCatalogAmount } from '@/core/payment/price-catalog'
 import { fetchPriceCatalog } from '@/core/payment/pricing'
@@ -30,31 +30,31 @@ export const Route = createFileRoute('/{-$locale}/')({
       offerId: websiteConfig.landingOffer.offerId,
     }
     // 结账链路决定价格事实源：核销收款读本地标价，渠道支付读价格目录。
-    if (websiteConfig.payment.checkoutMode === 'collection') {
-      const price = resolveCollectionPrice(offer.productId, offer.offerId)
+    if (websiteConfig.payment.checkoutMode === 'manual_payments') {
+      const price = resolveManualPaymentPrice(offer.productId, offer.offerId)
       return {
         priceCents: null,
-        collectionPrice: price ? { amount: price.amount, currency: price.currency } : null,
+        manualPaymentPrice: price ? { amount: price.amount, currency: price.currency } : null,
       }
     }
     try {
       const catalog = await fetchPriceCatalog()
       return {
         priceCents: findCatalogAmount(catalog, offer.productId, offer.offerId),
-        collectionPrice: null,
+        manualPaymentPrice: null,
       }
     } catch {
-      return { priceCents: null, collectionPrice: null }
+      return { priceCents: null, manualPaymentPrice: null }
     }
   },
   component: HomePage,
 })
 
 function HomePage() {
-  const { priceCents, collectionPrice } = Route.useLoaderData()
+  const { priceCents, manualPaymentPrice } = Route.useLoaderData()
   return (
     <MarketingLayout>
-      <LandingPage priceCents={priceCents} collectionPrice={collectionPrice} />
+      <LandingPage priceCents={priceCents} manualPaymentPrice={manualPaymentPrice} />
     </MarketingLayout>
   )
 }

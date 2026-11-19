@@ -20,7 +20,7 @@ function createConfig(
     apiKeys?: boolean
     admin?: boolean
     payment?: boolean
-    collection?: boolean
+    manualPayments?: boolean
   } = {},
 ) {
   const config = createWebsiteConfig(parsePublicEnv({}))
@@ -28,7 +28,7 @@ function createConfig(
     ...config,
     newsletter: { ...config.newsletter, enabled: overrides.newsletter ?? false },
     payment: { ...config.payment, enabled: overrides.payment ?? false },
-    collection: { ...config.collection, enabled: overrides.collection ?? false },
+    manualPayments: { ...config.manualPayments, enabled: overrides.manualPayments ?? false },
     features: {
       ...config.features,
       enableApiKeys: overrides.apiKeys ?? false,
@@ -57,14 +57,14 @@ describe('个人中心导航', () => {
     ])
   })
 
-  it('payment / collection / enableApiKeys 各自控制对应入口', () => {
-    const config = createConfig({ payment: true, collection: true, apiKeys: true })
+  it('payment / manualPayments / enableApiKeys 各自控制对应入口', () => {
+    const config = createConfig({ payment: true, manualPayments: true, apiKeys: true })
     expect(getSettingsNav(config).map((item) => item.id)).toEqual([
       'profile',
       'security',
       'sessions',
       'billing',
-      'orders',
+      'manual-payments',
       'api-keys',
     ])
     const partial = createConfig({ apiKeys: true })
@@ -105,15 +105,15 @@ describe('管理台导航', () => {
     expect(pathOf(nav.footer[1]?.to ?? '/{-$locale}/admin')).toBe('/settings/profile')
   })
 
-  it('核销订单入口只在 collection 模块开启时插到订阅与积分之间', () => {
-    const withoutCollection = getAdminNav(createConfig())
+  it('核销订单入口只在 manualPayments 模块开启时插到订阅与积分之间', () => {
+    const withoutManualPayment = getAdminNav(createConfig())
     const billing = (nav: ReturnType<typeof getAdminNav>) =>
       nav.groups.find((group) => group.id === 'billing')?.items.map((item) => item.id)
-    expect(billing(withoutCollection)).toEqual(['orders', 'subscriptions', 'credits'])
-    expect(billing(getAdminNav(createConfig({ collection: true })))).toEqual([
+    expect(billing(withoutManualPayment)).toEqual(['orders', 'subscriptions', 'credits'])
+    expect(billing(getAdminNav(createConfig({ manualPayments: true })))).toEqual([
       'orders',
       'subscriptions',
-      'collection-orders',
+      'manual-payments',
       'credits',
     ])
   })
@@ -135,14 +135,16 @@ describe('管理台导航', () => {
   })
 
   it('侧栏文案默认取页面标题，措辞不同的项单独给 label', () => {
-    const nav = getAdminNav(createConfig({ collection: true }))
+    const nav = getAdminNav(createConfig({ manualPayments: true }))
     const users = nav.groups.find((group) => group.id === 'rbac')?.items[0]
     expect(users && navLabel(users)).toBe(users?.title())
 
-    const collectionOrders = nav.groups
+    const manualPaymentOrders = nav.groups
       .find((group) => group.id === 'billing')
-      ?.items.find((item) => item.id === 'collection-orders')
-    expect(collectionOrders && navLabel(collectionOrders)).not.toBe(collectionOrders?.title())
+      ?.items.find((item) => item.id === 'manual-payments')
+    expect(manualPaymentOrders && navLabel(manualPaymentOrders)).not.toBe(
+      manualPaymentOrders?.title(),
+    )
   })
 
   it('高亮按目标路径判定，概览与子页互不抢占', () => {
@@ -164,7 +166,9 @@ describe('路由常量', () => {
   })
 
   it('pathOf 去掉可选 locale 段', () => {
-    expect(pathOf('/{-$locale}/settings/orders/$orderId')).toBe('/settings/orders/$orderId')
+    expect(pathOf('/{-$locale}/settings/manual-payments/$orderId')).toBe(
+      '/settings/manual-payments/$orderId',
+    )
   })
 })
 
@@ -178,7 +182,7 @@ describe('板块标题元数据', () => {
   })
 
   it('详情页沿用所属列表页的元数据', () => {
-    expect(findSettingsNavItem('orders/ord_123')?.id).toBe('orders')
+    expect(findSettingsNavItem('manual-payments/ord_123')?.id).toBe('manual-payments')
     expect(findSettingsNavItem('unknown')).toBeUndefined()
   })
 

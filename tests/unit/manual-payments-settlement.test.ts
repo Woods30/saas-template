@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { DB } from '@/core/db'
 import { addBillingInterval, reviewOrder } from '@/modules/manual-payments/settlement'
-import type { CollectionOrderStatus } from '@/modules/manual-payments/types'
+import type { ManualPaymentOrderStatus } from '@/modules/manual-payments/types'
 import { createTestDatabase } from '../helpers/database'
 
 /**
@@ -39,7 +39,7 @@ interface OrderFixture {
   kind?: 'subscription' | 'one_time'
   interval?: string | null
   intervalCount?: number | null
-  status?: CollectionOrderStatus
+  status?: ManualPaymentOrderStatus
   /** 到期时间（秒）；默认一年后。 */
   expiresAt?: number
 }
@@ -58,7 +58,7 @@ function insertOrder(
   const expiresAt = options.expiresAt ?? Math.floor(Date.now() / 1000) + 365 * 24 * 3600
   sqlite
     .prepare(
-      `INSERT INTO collection_orders(id,user_id,account_id,channel,product_id,offer_id,kind,interval,interval_count,base_amount,fingerprint,payable_amount,currency,status,expires_at,created_at,updated_at)
+      `INSERT INTO manual_payment_orders(id,user_id,account_id,channel,product_id,offer_id,kind,interval,interval_count,base_amount,fingerprint,payable_amount,currency,status,expires_at,created_at,updated_at)
        VALUES (?, ?, 'acct-main', 'alipay', ?, ?, ?, ?, ?, ?, ?, ?, 'cny', ?, ?, ?, ?)`,
     )
     .run(
@@ -113,7 +113,7 @@ function insertSubscription(
 }
 
 function orderStatus(sqlite: ReturnType<typeof createTestDatabase>['sqlite'], id: string): string {
-  const row = sqlite.prepare('SELECT status FROM collection_orders WHERE id = ?').get(id) as
+  const row = sqlite.prepare('SELECT status FROM manual_payment_orders WHERE id = ?').get(id) as
     | { status: string }
     | undefined
   return row?.status ?? ''
@@ -124,7 +124,7 @@ function orderRow(
   id: string,
 ): Record<string, unknown> {
   return (
-    (sqlite.prepare('SELECT * FROM collection_orders WHERE id = ?').get(id) as
+    (sqlite.prepare('SELECT * FROM manual_payment_orders WHERE id = ?').get(id) as
       | Record<string, unknown>
       | undefined) ?? {}
   )
@@ -204,7 +204,7 @@ describe('核销订单结算', () => {
     const payments = paymentRows(sqlite)
     expect(payments).toHaveLength(1)
     expect(payments[0]).toMatchObject({
-      provider: 'collection',
+      provider: 'manual_payments',
       external_id: order.id,
       user_id: 'u1',
       type: 'one_time',
@@ -336,7 +336,7 @@ describe('核销订阅的手动续费', () => {
     const row = subscriptionRow(sqlite)
     const expectedEnd = Math.floor(addBillingInterval(T0, 'month', 1).getTime() / 1000)
     expect(row).toMatchObject({
-      provider: 'collection',
+      provider: 'manual_payments',
       subscription_id: 'user:u1',
       status: 'active',
       product_id: PRODUCT_ID,
@@ -452,7 +452,7 @@ describe('核销订阅的手动续费', () => {
   it('不同 offer 的核销订阅占位时转需退款', async () => {
     const { db, sqlite } = settlementDatabase()
     insertSubscription(sqlite, {
-      provider: 'collection',
+      provider: 'manual_payments',
       subscriptionId: 'user:u1',
       productId: PRODUCT_ID,
       offerId: 'yearly',

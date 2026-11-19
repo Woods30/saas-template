@@ -7,28 +7,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * 「标价 + 尾数」这条规则，不该被出厂配置的具体金额牵着走。
  */
 const productMocks = vi.hoisted(() => ({
-  resolveCollectionPrice: vi.fn(),
+  resolveManualPaymentPrice: vi.fn(),
 }))
 
 vi.mock('@/config/products', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/config/products')>()
-  return { ...actual, resolveCollectionPrice: productMocks.resolveCollectionPrice }
+  return { ...actual, resolveManualPaymentPrice: productMocks.resolveManualPaymentPrice }
 })
 
 import { websiteConfig } from '@/config/website'
 import { type DB, schema } from '@/core/db'
-import { resolveCollectionAccount } from '@/modules/manual-payments/accounts'
+import { resolveManualPaymentAccount } from '@/modules/manual-payments/accounts'
 import {
-  COLLECTION_ORDER_TTL_SECONDS,
   cancelOrder,
   createOrder,
   expirePendingOrders,
   getUserOrder,
   listAllOrders,
   listUserOrders,
+  MANUAL_PAYMENT_ORDER_TTL_SECONDS,
   submitOrder,
 } from '@/modules/manual-payments/orders'
-import type { CollectionAccountConfig } from '@/modules/manual-payments/types'
+import type { ManualPaymentAccountConfig } from '@/modules/manual-payments/types'
 import { createTestDatabase } from '../helpers/database'
 
 /**
@@ -56,7 +56,7 @@ function indexColumnNames(columns: readonly unknown[]): string[] {
 
 describe('核销型支付的数据表', () => {
   it('两张表都在 schema 里，列与规格一致', () => {
-    expect(Object.keys(getTableColumns(schema.collectionAccounts))).toEqual([
+    expect(Object.keys(getTableColumns(schema.manualPaymentAccounts))).toEqual([
       'id',
       'channel',
       'displayName',
@@ -67,7 +67,7 @@ describe('核销型支付的数据表', () => {
       'createdAt',
       'updatedAt',
     ])
-    expect(Object.keys(getTableColumns(schema.collectionOrders))).toEqual([
+    expect(Object.keys(getTableColumns(schema.manualPaymentOrders))).toEqual([
       'id',
       'userId',
       'accountId',
@@ -100,9 +100,9 @@ describe('核销型支付的数据表', () => {
   })
 
   it('活跃金额唯一索引覆盖收款账户与应付金额两列', () => {
-    const config = getTableConfig(schema.collectionOrders)
+    const config = getTableConfig(schema.manualPaymentOrders)
     const index = config.indexes.find(
-      (item) => item.config?.name === 'collection_orders_active_amount_unique',
+      (item) => item.config?.name === 'manual_payment_orders_active_amount_unique',
     )
     expect(index ? indexColumnNames(index.config?.columns ?? []) : []).toEqual([
       'account_id',
@@ -112,21 +112,21 @@ describe('核销型支付的数据表', () => {
   })
 
   it('结算临界区唯一索引限制同一用户只能有一个 settling 订单', () => {
-    const config = getTableConfig(schema.collectionOrders)
+    const config = getTableConfig(schema.manualPaymentOrders)
     const index = config.indexes.find(
-      (item) => item.config?.name === 'collection_orders_settling_user_unique',
+      (item) => item.config?.name === 'manual_payment_orders_settling_user_unique',
     )
     expect(index ? indexColumnNames(index.config?.columns ?? []) : []).toEqual(['user_id'])
     expect(index?.config?.where).toBeDefined()
   })
 
   it('订单列表与惰性过期索引存在', () => {
-    const config = getTableConfig(schema.collectionOrders)
+    const config = getTableConfig(schema.manualPaymentOrders)
     const byUser = config.indexes.find(
-      (item) => item.config?.name === 'collection_orders_user_status_idx',
+      (item) => item.config?.name === 'manual_payment_orders_user_status_idx',
     )
     const byExpiry = config.indexes.find(
-      (item) => item.config?.name === 'collection_orders_status_expires_idx',
+      (item) => item.config?.name === 'manual_payment_orders_status_expires_idx',
     )
     expect(byUser ? indexColumnNames(byUser.config?.columns ?? []) : []).toEqual([
       'user_id',
@@ -146,7 +146,7 @@ describe('核销型支付的数据表', () => {
     const insert = (id: string, status: string, amount: number) =>
       sqlite
         .prepare(
-          `INSERT INTO collection_orders(id,user_id,account_id,channel,product_id,offer_id,kind,base_amount,fingerprint,payable_amount,currency,status,expires_at)
+          `INSERT INTO manual_payment_orders(id,user_id,account_id,channel,product_id,offer_id,kind,base_amount,fingerprint,payable_amount,currency,status,expires_at)
            VALUES (?, 'u1', 'acct', 'alipay', 'pro', 'monthly', 'subscription', ?, 1, ?, 'cny', ?, 1)`,
         )
         .run(id, amount - 1, amount, status)
@@ -168,7 +168,7 @@ describe('核销型支付的数据表', () => {
     const insert = (id: string, userId: string, amount: number) =>
       sqlite
         .prepare(
-          `INSERT INTO collection_orders(id,user_id,account_id,channel,product_id,offer_id,kind,base_amount,fingerprint,payable_amount,currency,status,expires_at)
+          `INSERT INTO manual_payment_orders(id,user_id,account_id,channel,product_id,offer_id,kind,base_amount,fingerprint,payable_amount,currency,status,expires_at)
            VALUES (?, ?, 'acct', 'alipay', 'pro', 'monthly', 'subscription', ?, 1, ?, 'cny', 'settling', 1)`,
         )
         .run(id, userId, amount - 1, amount)
@@ -187,24 +187,24 @@ const BASE_AMOUNT = 18_000
 const PRODUCT_ID = 'pro'
 const OFFER_ID = 'monthly'
 
-const ACCOUNT_CONFIG: CollectionAccountConfig = {
+const ACCOUNT_CONFIG: ManualPaymentAccountConfig = {
   id: 'acct-main',
   channel: 'alipay',
   displayName: '配置账户',
   currency: 'cny',
-  qrImageUrl: '/collection/main.png',
+  qrImageUrl: '/manual-payments/main.png',
 }
 
-const OTHER_ACCOUNT_CONFIG: CollectionAccountConfig = {
+const OTHER_ACCOUNT_CONFIG: ManualPaymentAccountConfig = {
   id: 'acct-other',
   channel: 'alipay',
   displayName: '备用账户',
   currency: 'cny',
-  qrImageUrl: '/collection/other.png',
+  qrImageUrl: '/manual-payments/other.png',
 }
 
 /** 内存 SQLite + 全迁移回放 + 可用的 Drizzle db。 */
-function collectionDatabase() {
+function manualPaymentDatabase() {
   const { sqlite, db } = createTestDatabase()
   sqlite.exec(
     "INSERT INTO users(id,name,email,created_at,updated_at) VALUES ('u1','User','u1@example.com',1,1),('u2','Other','u2@example.com',1,1)",
@@ -228,7 +228,7 @@ function occupy(
   const expiresAt = options.expiresAt ?? Math.floor(Date.now() / 1000) + 365 * 24 * 3600
   sqlite
     .prepare(
-      `INSERT INTO collection_orders(id,user_id,account_id,channel,product_id,offer_id,kind,base_amount,fingerprint,payable_amount,currency,status,expires_at,created_at,updated_at)
+      `INSERT INTO manual_payment_orders(id,user_id,account_id,channel,product_id,offer_id,kind,base_amount,fingerprint,payable_amount,currency,status,expires_at,created_at,updated_at)
        VALUES (?, ?, ?, 'alipay', ?, ?, 'one_time', ?, ?, ?, 'cny', ?, ?, ?, ?)`,
     )
     .run(
@@ -248,7 +248,7 @@ function occupy(
 }
 
 function orderStatus(sqlite: ReturnType<typeof createTestDatabase>['sqlite'], id: string): string {
-  const row = sqlite.prepare('SELECT status FROM collection_orders WHERE id = ?').get(id) as
+  const row = sqlite.prepare('SELECT status FROM manual_payment_orders WHERE id = ?').get(id) as
     | { status: string }
     | undefined
   return row?.status ?? ''
@@ -262,80 +262,80 @@ function forceFingerprintStart(value: number): void {
   })
 }
 
-const originalAccounts = websiteConfig.collection.accounts
+const originalAccounts = websiteConfig.manualPayments.accounts
 
 beforeEach(() => {
-  productMocks.resolveCollectionPrice.mockReturnValue({
+  productMocks.resolveManualPaymentPrice.mockReturnValue({
     amount: BASE_AMOUNT,
     currency: 'cny',
     kind: 'one_time',
   })
-  websiteConfig.collection.accounts = [ACCOUNT_CONFIG]
+  websiteConfig.manualPayments.accounts = [ACCOUNT_CONFIG]
 })
 
 afterEach(() => {
-  websiteConfig.collection.accounts = originalAccounts
+  websiteConfig.manualPayments.accounts = originalAccounts
   vi.restoreAllMocks()
 })
 
 describe('收款账户解析', () => {
   it('没有数据库记录时用源码配置兜底', async () => {
-    const { db, sqlite } = collectionDatabase()
-    const account = await resolveCollectionAccount(db, { accounts: [ACCOUNT_CONFIG] })
+    const { db, sqlite } = manualPaymentDatabase()
+    const account = await resolveManualPaymentAccount(db, { accounts: [ACCOUNT_CONFIG] })
     expect(account).toEqual({
       id: 'acct-main',
       channel: 'alipay',
       displayName: '配置账户',
       currency: 'cny',
-      qrImageUrl: '/collection/main.png',
+      qrImageUrl: '/manual-payments/main.png',
       qrImageKey: null,
     })
     sqlite.close()
   })
 
   it('数据库里的运营记录按 ID 覆盖配置', async () => {
-    const { db, sqlite } = collectionDatabase()
-    await db.insert(schema.collectionAccounts).values({
+    const { db, sqlite } = manualPaymentDatabase()
+    await db.insert(schema.manualPaymentAccounts).values({
       id: 'acct-main',
       channel: 'alipay',
       displayName: '运营改过的名字',
       currency: 'cny',
-      qrImageKey: 'collection-qrcodes/main.png',
+      qrImageKey: 'manual-payment-qrcodes/main.png',
       enabled: true,
     })
-    const account = await resolveCollectionAccount(db, { accounts: [ACCOUNT_CONFIG] })
+    const account = await resolveManualPaymentAccount(db, { accounts: [ACCOUNT_CONFIG] })
     expect(account).toMatchObject({
       id: 'acct-main',
       displayName: '运营改过的名字',
-      qrImageKey: 'collection-qrcodes/main.png',
+      qrImageKey: 'manual-payment-qrcodes/main.png',
     })
     sqlite.close()
   })
 
   it('数据库里没有对应配置的账户 ID 不参与解析', async () => {
-    const { db, sqlite } = collectionDatabase()
-    await db.insert(schema.collectionAccounts).values({
+    const { db, sqlite } = manualPaymentDatabase()
+    await db.insert(schema.manualPaymentAccounts).values({
       id: 'acct-stranger',
       channel: 'alipay',
       displayName: '陌生账户',
       currency: 'cny',
       enabled: true,
     })
-    const account = await resolveCollectionAccount(db, { accounts: [ACCOUNT_CONFIG] })
+    const account = await resolveManualPaymentAccount(db, { accounts: [ACCOUNT_CONFIG] })
     expect(account?.id).toBe('acct-main')
     sqlite.close()
   })
 
   it('被禁用的账户被跳过并继续找下一个', async () => {
-    const { db, sqlite } = collectionDatabase()
-    await db.insert(schema.collectionAccounts).values({
+    const { db, sqlite } = manualPaymentDatabase()
+    await db.insert(schema.manualPaymentAccounts).values({
       id: 'acct-main',
       channel: 'alipay',
       displayName: '主账户',
       currency: 'cny',
       enabled: false,
     })
-    const account = await resolveCollectionAccount(db, {
+    const account = await resolveManualPaymentAccount(db, {
       accounts: [ACCOUNT_CONFIG, OTHER_ACCOUNT_CONFIG],
     })
     expect(account?.id).toBe('acct-other')
@@ -343,33 +343,33 @@ describe('收款账户解析', () => {
   })
 
   it('全部账户被禁用时没有可用账户', async () => {
-    const { db, sqlite } = collectionDatabase()
-    await db.insert(schema.collectionAccounts).values({
+    const { db, sqlite } = manualPaymentDatabase()
+    await db.insert(schema.manualPaymentAccounts).values({
       id: 'acct-main',
       channel: 'alipay',
       displayName: '主账户',
       currency: 'cny',
       enabled: false,
     })
-    const account = await resolveCollectionAccount(db, { accounts: [ACCOUNT_CONFIG] })
+    const account = await resolveManualPaymentAccount(db, { accounts: [ACCOUNT_CONFIG] })
     expect(account).toBeNull()
     sqlite.close()
   })
 })
 
 describe('核销订单金额分配', () => {
-  it('没有可用账户时抛 NO_COLLECTION_ACCOUNT', async () => {
-    const { db, sqlite } = collectionDatabase()
-    websiteConfig.collection.accounts = []
+  it('没有可用账户时抛 NO_MANUAL_PAYMENT_ACCOUNT', async () => {
+    const { db, sqlite } = manualPaymentDatabase()
+    websiteConfig.manualPayments.accounts = []
     await expect(
       createOrder(db, { userId: 'u1', productId: PRODUCT_ID, offerId: OFFER_ID }),
-    ).rejects.toMatchObject({ code: 'NO_COLLECTION_ACCOUNT' })
+    ).rejects.toMatchObject({ code: 'NO_MANUAL_PAYMENT_ACCOUNT' })
     sqlite.close()
   })
 
   it('商品没有核销价格时抛 INVALID_OFFER', async () => {
-    const { db, sqlite } = collectionDatabase()
-    productMocks.resolveCollectionPrice.mockReturnValue(undefined)
+    const { db, sqlite } = manualPaymentDatabase()
+    productMocks.resolveManualPaymentPrice.mockReturnValue(undefined)
     await expect(
       createOrder(db, { userId: 'u1', productId: PRODUCT_ID, offerId: OFFER_ID }),
     ).rejects.toMatchObject({ code: 'INVALID_OFFER' })
@@ -377,7 +377,7 @@ describe('核销订单金额分配', () => {
   })
 
   it('应付金额等于标价加尾数且尾数落在 1 到 99', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const order = await createOrder(db, {
       userId: 'u1',
       productId: PRODUCT_ID,
@@ -391,7 +391,7 @@ describe('核销订单金额分配', () => {
   })
 
   it('订单快照收款账户与价格字段，有效期是创建时间加 15 分钟', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const now = new Date('2026-01-01T00:00:00.000Z')
     const order = await createOrder(
       db,
@@ -402,18 +402,18 @@ describe('核销订单金额分配', () => {
       userId: 'u1',
       accountId: 'acct-main',
       channel: 'alipay',
-      qrImageUrl: '/collection/main.png',
+      qrImageUrl: '/manual-payments/main.png',
       productId: PRODUCT_ID,
       offerId: OFFER_ID,
       kind: 'one_time',
       currency: 'cny',
       status: 'pending_payment',
     })
-    expect(order.expiresAt.getTime()).toBe(now.getTime() + COLLECTION_ORDER_TTL_SECONDS * 1000)
-    expect(COLLECTION_ORDER_TTL_SECONDS).toBe(15 * 60)
+    expect(order.expiresAt.getTime()).toBe(now.getTime() + MANUAL_PAYMENT_ORDER_TTL_SECONDS * 1000)
+    expect(MANUAL_PAYMENT_ORDER_TTL_SECONDS).toBe(15 * 60)
     // D1 的 timestamp 列是整数秒：存的是裸秒整数，不是毫秒。
     const stored = sqlite
-      .prepare('SELECT created_at, expires_at FROM collection_orders WHERE id = ?')
+      .prepare('SELECT created_at, expires_at FROM manual_payment_orders WHERE id = ?')
       .get(order.id) as { created_at: number; expires_at: number }
     expect(stored.created_at).toBe(Math.floor(now.getTime() / 1000))
     expect(stored.expires_at).toBe(Math.floor(now.getTime() / 1000) + 15 * 60)
@@ -421,7 +421,7 @@ describe('核销订单金额分配', () => {
   })
 
   it('同一账户已占用的尾数不会被再次分配', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     occupy(sqlite, { id: 'taken', fingerprint: 5 })
     forceFingerprintStart(4)
     const order = await createOrder(db, {
@@ -435,7 +435,7 @@ describe('核销订单金额分配', () => {
   })
 
   it('金额唯一性按收款账户约束：别的账户占用同额不阻塞', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     // 另一个收款账户已经用了同一个应付金额。
     occupy(sqlite, { id: 'other-account-order', fingerprint: 7, accountId: 'acct-other' })
     // 主账户只剩尾数 7 空着。
@@ -453,7 +453,7 @@ describe('核销订单金额分配', () => {
   })
 
   it('同一账户并发创建不会拿到相同应付金额', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     forceFingerprintStart(0)
     const [first, second] = await Promise.all([
       createOrder(db, { userId: 'u1', productId: PRODUCT_ID, offerId: OFFER_ID }),
@@ -464,7 +464,7 @@ describe('核销订单金额分配', () => {
   })
 
   it('99 个活跃金额占满后抛 AMOUNT_POOL_EXHAUSTED', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     for (let fingerprint = 1; fingerprint <= 99; fingerprint++) {
       occupy(sqlite, { id: `full-${fingerprint}`, fingerprint })
     }
@@ -475,7 +475,7 @@ describe('核销订单金额分配', () => {
   })
 
   it('随机起点之后按环形顺序扫描下一个空尾数', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     occupy(sqlite, { id: 'busy-1', fingerprint: 1 })
     occupy(sqlite, { id: 'busy-2', fingerprint: 2 })
     forceFingerprintStart(0)
@@ -491,7 +491,7 @@ describe('核销订单金额分配', () => {
 
 describe('核销订单惰性过期', () => {
   it('创建订单前把已到期的待支付订单标记为过期并释放金额', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const now = new Date('2026-01-01T00:00:00.000Z')
     const past = Math.floor(now.getTime() / 1000) - 60
     for (let fingerprint = 1; fingerprint <= 99; fingerprint++) {
@@ -510,7 +510,7 @@ describe('核销订单惰性过期', () => {
   })
 
   it('已申报待核验的订单不会被惰性过期', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const now = new Date('2026-01-01T00:00:00.000Z')
     const past = Math.floor(now.getTime() / 1000) - 60
     for (let fingerprint = 1; fingerprint <= 99; fingerprint++) {
@@ -531,7 +531,7 @@ describe('核销订单惰性过期', () => {
   })
 
   it('expirePendingOrders 返回被标记为过期的订单数', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const now = new Date('2026-01-01T00:00:00.000Z')
     const past = Math.floor(now.getTime() / 1000) - 60
     occupy(sqlite, { id: 'stale-1', fingerprint: 1, expiresAt: past })
@@ -565,13 +565,13 @@ describe('用户订单状态机与查询隔离', () => {
   }
 
   it('到期时刻等于当前时间即视为过期，不能申报且订单变为已过期', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const order = await createAt(db, 'u1')
     await expect(
       submitOrder(
         db,
         { userId: 'u1', orderId: order.id },
-        plusSeconds(T0, COLLECTION_ORDER_TTL_SECONDS),
+        plusSeconds(T0, MANUAL_PAYMENT_ORDER_TTL_SECONDS),
       ),
     ).rejects.toMatchObject({ code: 'ORDER_EXPIRED' })
     expect(orderStatus(sqlite, order.id)).toBe('expired')
@@ -579,7 +579,7 @@ describe('用户订单状态机与查询隔离', () => {
   })
 
   it('未到期的订单申报后进入待核验并记录申报时间', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const order = await createAt(db, 'u1')
     const submitted = await submitOrder(
       db,
@@ -593,7 +593,7 @@ describe('用户订单状态机与查询隔离', () => {
   })
 
   it('申报后继续占用尾数，新订单拿不到同一个应付金额', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const order = await createAt(db, 'u1')
     await submitOrder(db, { userId: 'u1', orderId: order.id }, plusSeconds(T0, 10))
     forceFingerprintStart(order.fingerprint)
@@ -603,7 +603,7 @@ describe('用户订单状态机与查询隔离', () => {
   })
 
   it('重复申报返回状态非法', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const order = await createAt(db, 'u1')
     await submitOrder(db, { userId: 'u1', orderId: order.id }, plusSeconds(T0, 10))
     await expect(
@@ -613,7 +613,7 @@ describe('用户订单状态机与查询隔离', () => {
   })
 
   it('他人读取与提交统一表现为订单不存在', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const order = await createAt(db, 'u1')
     expect(await getUserOrder(db, 'u2', order.id, plusSeconds(T0, 10))).toBeNull()
     await expect(
@@ -627,7 +627,7 @@ describe('用户订单状态机与查询隔离', () => {
   })
 
   it('不存在的订单读取返回空、提交返回订单不存在', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     expect(await getUserOrder(db, 'u1', 'missing-order', T0)).toBeNull()
     await expect(
       submitOrder(db, { userId: 'u1', orderId: 'missing-order' }, T0),
@@ -636,7 +636,7 @@ describe('用户订单状态机与查询隔离', () => {
   })
 
   it('只有待支付订单可以取消', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const order = await createAt(db, 'u1')
     const canceled = await cancelOrder(db, { userId: 'u1', orderId: order.id }, plusSeconds(T0, 10))
     expect(canceled.status).toBe('canceled')
@@ -645,7 +645,7 @@ describe('用户订单状态机与查询隔离', () => {
   })
 
   it('待核验订单不能取消', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const order = await createAt(db, 'u1')
     await submitOrder(db, { userId: 'u1', orderId: order.id }, plusSeconds(T0, 10))
     await expect(
@@ -656,7 +656,7 @@ describe('用户订单状态机与查询隔离', () => {
   })
 
   it('已取消的订单不能再次取消', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const order = await createAt(db, 'u1')
     await cancelOrder(db, { userId: 'u1', orderId: order.id }, plusSeconds(T0, 10))
     await expect(
@@ -666,7 +666,7 @@ describe('用户订单状态机与查询隔离', () => {
   })
 
   it('辅助说明最多 500 字符，超出被拒绝', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const order = await createAt(db, 'u1')
     const accepted = await submitOrder(
       db,
@@ -688,11 +688,11 @@ describe('用户订单状态机与查询隔离', () => {
   })
 
   it('读取自己的订单时惰性过期待支付订单，不动待核验订单', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const pending = await createAt(db, 'u1')
     const submitted = await createAt(db, 'u1', plusSeconds(T0, 1))
     await submitOrder(db, { userId: 'u1', orderId: submitted.id }, plusSeconds(T0, 2))
-    const later = plusSeconds(T0, COLLECTION_ORDER_TTL_SECONDS)
+    const later = plusSeconds(T0, MANUAL_PAYMENT_ORDER_TTL_SECONDS)
     const read = await getUserOrder(db, 'u1', pending.id, later)
     expect(read?.status).toBe('expired')
     expect(orderStatus(sqlite, pending.id)).toBe('expired')
@@ -701,9 +701,9 @@ describe('用户订单状态机与查询隔离', () => {
   })
 
   it('过期订单释放尾数，新订单可以复用同一个应付金额', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     const order = await createAt(db, 'u1')
-    const later = plusSeconds(T0, COLLECTION_ORDER_TTL_SECONDS)
+    const later = plusSeconds(T0, MANUAL_PAYMENT_ORDER_TTL_SECONDS)
     await getUserOrder(db, 'u1', order.id, later)
     expect(orderStatus(sqlite, order.id)).toBe('expired')
     forceFingerprintStart(order.fingerprint - 1)
@@ -714,7 +714,7 @@ describe('用户订单状态机与查询隔离', () => {
   })
 
   it('列表只返回自己的订单，并在返回前惰性过期自己的待支付订单', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     await createAt(db, 'u1')
     await createAt(db, 'u1', plusSeconds(T0, 1))
     await createAt(db, 'u2', plusSeconds(T0, 2))
@@ -732,7 +732,7 @@ describe('用户订单状态机与查询隔离', () => {
   })
 
   it('列表支持分页', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     await createAt(db, 'u1')
     await createAt(db, 'u1', plusSeconds(T0, 1))
     await createAt(db, 'u1', plusSeconds(T0, 2))
@@ -753,7 +753,7 @@ describe('管理员订单列表', () => {
   }
 
   it('默认只看待核验，且带上下单账号的邮箱', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     await createOrder(db, { userId: 'u1', productId: PRODUCT_ID, offerId: OFFER_ID }, T0)
     await createOrder(
       db,
@@ -762,7 +762,9 @@ describe('管理员订单列表', () => {
     )
     // 把其中一单推进到待核验。
     sqlite
-      .prepare("UPDATE collection_orders SET status = 'pending_verification' WHERE user_id = 'u2'")
+      .prepare(
+        "UPDATE manual_payment_orders SET status = 'pending_verification' WHERE user_id = 'u2'",
+      )
       .run()
 
     const page = await listAllOrders(db, { status: 'pending_verification', limit: 20, offset: 0 })
@@ -774,7 +776,7 @@ describe('管理员订单列表', () => {
   })
 
   it("'all' 不按状态过滤", async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     await createOrder(db, { userId: 'u1', productId: PRODUCT_ID, offerId: OFFER_ID }, T0)
     await createOrder(
       db,
@@ -782,7 +784,9 @@ describe('管理员订单列表', () => {
       plusSeconds(T0, 1),
     )
     sqlite
-      .prepare("UPDATE collection_orders SET status = 'pending_verification' WHERE user_id = 'u2'")
+      .prepare(
+        "UPDATE manual_payment_orders SET status = 'pending_verification' WHERE user_id = 'u2'",
+      )
       .run()
 
     const page = await listAllOrders(db, { status: 'all', limit: 20, offset: 0 })
@@ -791,7 +795,7 @@ describe('管理员订单列表', () => {
   })
 
   it('支持分页', async () => {
-    const { db, sqlite } = collectionDatabase()
+    const { db, sqlite } = manualPaymentDatabase()
     await createOrder(db, { userId: 'u1', productId: PRODUCT_ID, offerId: OFFER_ID }, T0)
     await createOrder(
       db,

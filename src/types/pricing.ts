@@ -1,4 +1,4 @@
-import type { CollectionPrice } from './collection'
+import type { ManualPaymentPrice } from './manual-payments'
 
 export type PricingInterval = 'month' | 'year' | 'week' | 'day' | 'one_time'
 
@@ -35,7 +35,7 @@ export interface ProductDefinition {
    * 目录给出；核销型链路不接渠道，没有价格目录可用，金额只能在这里声明，
    * 且**只此一处**——展示与结算读同一份。
    */
-  collectionPrices?: Record<string, CollectionPrice>
+  manualPaymentPrices?: Record<string, ManualPaymentPrice>
 }
 
 export interface ProductPrice {

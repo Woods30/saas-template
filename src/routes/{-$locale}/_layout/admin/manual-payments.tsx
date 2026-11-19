@@ -41,14 +41,14 @@ import { assertPageEnabled } from '@/lib/module-access'
 import { adminHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
 import {
-  type AdminCollectionOrder,
+  type AdminManualPaymentOrder,
   type AdminOrderPage,
   type CallWith,
-  type CollectionOrderStatus,
-  fetchAdminCollectionOrdersFn,
-  fetchCollectionAccountsFn,
-  reviewCollectionOrderFn,
-  saveCollectionAccountFn,
+  fetchAdminManualPaymentOrdersFn,
+  fetchManualPaymentAccountsFn,
+  type ManualPaymentOrderStatus,
+  reviewManualPaymentOrderFn,
+  saveManualPaymentAccountFn,
 } from '@/modules/manual-payments/service'
 import { productNameForProductId } from '@/modules/subscriptions/service'
 
@@ -86,9 +86,9 @@ interface AdminAccountPayload {
   enabled: boolean
 }
 
-export const Route = createFileRoute('/{-$locale}/_layout/admin/collection-orders')({
+export const Route = createFileRoute('/{-$locale}/_layout/admin/manual-payments')({
   // 模块关闭时整页 404（父级 `_layout/admin` 已做管理员门禁）。
-  beforeLoad: () => assertPageEnabled('collection'),
+  beforeLoad: () => assertPageEnabled('manualPayments'),
   // 页码与筛选放 URL：刷新与分享链接能停在原处，也符合「URL 即状态」的路由数据流。
   validateSearch: (search: Record<string, unknown>): { page?: number; status?: string } => {
     const parsed = Number(search.page)
@@ -111,56 +111,56 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/collection-order
       limit: DEFAULT_PAGE_SIZE,
       offset: (deps.page - 1) * DEFAULT_PAGE_SIZE,
     })
-    const accounts = await fetchCollectionAccountsFn()
+    const accounts = await fetchManualPaymentAccountsFn()
     return {
       ok: !(result instanceof Response) && !(accounts instanceof Response),
       page: result instanceof Response ? null : result,
       accounts: accounts instanceof Response ? [] : accounts,
     }
   },
-  head: () => adminHead(adminRoutes.collectionOrders),
-  component: AdminCollectionOrdersComponent,
+  head: () => adminHead(adminRoutes.manualPayments),
+  component: AdminManualPaymentOrdersComponent,
 })
 
 /** 调用管理员订单列表的 server function。 */
 async function listAdminOrders(query: AdminOrderQuery): Promise<AdminOrderPage | Response> {
-  const fn = fetchAdminCollectionOrdersFn as unknown as CallWith<AdminOrderQuery>
+  const fn = fetchAdminManualPaymentOrdersFn as unknown as CallWith<AdminOrderQuery>
   return (await fn({ data: query })) as AdminOrderPage | Response
 }
 
 /** 调用管理员核验订单的 server function。 */
 async function reviewOrder(payload: AdminReviewPayload): Promise<{ status: string } | Response> {
-  const fn = reviewCollectionOrderFn as unknown as CallWith<AdminReviewPayload>
+  const fn = reviewManualPaymentOrderFn as unknown as CallWith<AdminReviewPayload>
   return (await fn({ data: payload })) as { status: string } | Response
 }
 
 /** 调用管理员保存收款账户的 server function。 */
 async function saveAccount(payload: AdminAccountPayload): Promise<{ ok: true } | Response> {
-  const fn = saveCollectionAccountFn as unknown as CallWith<AdminAccountPayload>
+  const fn = saveManualPaymentAccountFn as unknown as CallWith<AdminAccountPayload>
   return (await fn({ data: payload })) as { ok: true } | Response
 }
 
 /** 订单状态 → 文案键。文案在渲染期经 `m[key]()` 求值以跟随请求语言。 */
-export function collectionAdminOrderStatusMessageKey(status: CollectionOrderStatus) {
+export function manualPaymentAdminOrderStatusMessageKey(status: ManualPaymentOrderStatus) {
   switch (status) {
     case 'pending_payment':
-      return 'collection_admin.status_pending_payment'
+      return 'manual_payments_admin.status_pending_payment'
     case 'pending_verification':
-      return 'collection_admin.status_pending_verification'
+      return 'manual_payments_admin.status_pending_verification'
     case 'settling':
-      return 'collection_admin.status_settling'
+      return 'manual_payments_admin.status_settling'
     case 'settled':
-      return 'collection_admin.status_settled'
+      return 'manual_payments_admin.status_settled'
     case 'expired':
-      return 'collection_admin.status_expired'
+      return 'manual_payments_admin.status_expired'
     case 'canceled':
-      return 'collection_admin.status_canceled'
+      return 'manual_payments_admin.status_canceled'
     case 'rejected':
-      return 'collection_admin.status_rejected'
+      return 'manual_payments_admin.status_rejected'
     case 'requires_refund':
-      return 'collection_admin.status_requires_refund'
+      return 'manual_payments_admin.status_requires_refund'
     default:
-      return 'collection_admin.status_pending_payment'
+      return 'manual_payments_admin.status_pending_payment'
   }
 }
 
@@ -186,7 +186,7 @@ interface AccountView {
 
 const EMPTY_FORM: ReviewForm = { observedAmount: '', externalReference: '', reviewNote: '' }
 
-function AdminCollectionOrdersComponent() {
+function AdminManualPaymentOrdersComponent() {
   const router = useRouter()
   const loaded = Route.useLoaderData()
   const { page = 1, status = 'pending_verification' } = Route.useSearch()
@@ -196,7 +196,7 @@ function AdminCollectionOrdersComponent() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const [reviewTarget, setReviewTarget] = useState<AdminCollectionOrder | null>(null)
+  const [reviewTarget, setReviewTarget] = useState<AdminManualPaymentOrder | null>(null)
   const [form, setForm] = useState<ReviewForm>(EMPTY_FORM)
   const [exceptionConfirm, setExceptionConfirm] = useState(false)
 
@@ -232,12 +232,12 @@ function AdminCollectionOrdersComponent() {
     })
     setBusy(false)
     if (result instanceof Response) {
-      setError(m['collection_admin.error_generic']())
+      setError(m['manual_payments_admin.error_generic']())
       return
     }
     setReviewTarget(null)
     setForm(EMPTY_FORM)
-    toast.add({ type: 'success', title: m['collection_admin.review_done']() })
+    toast.add({ type: 'success', title: m['manual_payments_admin.review_done']() })
     await router.invalidate()
   }
 
@@ -248,14 +248,14 @@ function AdminCollectionOrdersComponent() {
       const result = await saveAccount({ accountId, displayName, enabled })
       setBusy(false)
       if (result instanceof Response) {
-        setError(m['collection_admin.error_generic']())
+        setError(m['manual_payments_admin.error_generic']())
         return
       }
       toast.add({
         type: 'success',
         title: enabled
-          ? m['collection_admin.account_enabled']()
-          : m['collection_admin.account_disabled'](),
+          ? m['manual_payments_admin.account_enabled']()
+          : m['manual_payments_admin.account_disabled'](),
       })
       await router.invalidate()
     },
@@ -273,7 +273,7 @@ function AdminCollectionOrdersComponent() {
    */
   const accountViews = useMemo<AccountView[]>(() => {
     const byId = new Map(loaded.accounts.map((row) => [row.id, row]))
-    const configured = websiteConfig.collection.accounts
+    const configured = websiteConfig.manualPayments.accounts
     const views: AccountView[] = configured.map((item) => {
       const override = byId.get(item.id)
       return {
@@ -300,70 +300,70 @@ function AdminCollectionOrdersComponent() {
     return views
   }, [loaded.accounts])
 
-  const orderColumns = useMemo<DataTableColumn<AdminCollectionOrder>[]>(
+  const orderColumns = useMemo<DataTableColumn<AdminManualPaymentOrder>[]>(
     () => [
       {
         id: 'orderId',
-        header: m['collection_admin.col_order_id'](),
+        header: m['manual_payments_admin.col_order_id'](),
         className: 'font-mono text-xs',
         cell: (order) => order.id,
       },
       {
         id: 'buyer',
-        header: m['collection_admin.col_buyer'](),
+        header: m['manual_payments_admin.col_buyer'](),
         className: 'max-w-[220px] truncate',
         cell: (order) => order.userEmail,
       },
       {
         id: 'product',
-        header: m['collection_admin.col_product'](),
+        header: m['manual_payments_admin.col_product'](),
         cell: (order) => productNameForProductId(order.productId) ?? order.productId,
       },
       {
         id: 'amount',
-        header: m['collection_admin.col_amount'](),
+        header: m['manual_payments_admin.col_amount'](),
         cell: (order) => formatMoney(order.payableAmount, order.currency, locale),
       },
       {
         id: 'submittedAt',
-        header: m['collection_admin.col_submitted_at'](),
+        header: m['manual_payments_admin.col_submitted_at'](),
         cell: (order) => <LocalDate value={order.submittedAt} locale={locale} />,
       },
       {
         id: 'note',
-        header: m['collection_admin.col_note'](),
+        header: m['manual_payments_admin.col_note'](),
         className: 'max-w-[200px] truncate',
         cell: (order) => order.payerNote ?? '—',
       },
       {
         id: 'receipt',
-        header: m['collection_admin.col_receipt'](),
+        header: m['manual_payments_admin.col_receipt'](),
         cell: (order) =>
           order.receiptKey ? (
             // key 不出现在 URL：凭证只能走服务端端点读取。
             <img
-              src={`/api/collection/orders/${order.id}/receipt`}
-              alt={m['collection_admin.receipt_alt']()}
+              src={`/api/manual-payments/orders/${order.id}/receipt`}
+              alt={m['manual_payments_admin.receipt_alt']()}
               className="h-12 w-12 rounded object-cover"
             />
           ) : (
             <span className="text-xs text-muted-foreground">
-              {m['collection_admin.receipt_missing']()}
+              {m['manual_payments_admin.receipt_missing']()}
             </span>
           ),
       },
       {
         id: 'status',
-        header: m['collection_admin.col_status'](),
+        header: m['manual_payments_admin.col_status'](),
         cell: (order) => (
           <Badge variant={order.status === 'settled' ? 'default' : 'secondary'}>
-            {m[collectionAdminOrderStatusMessageKey(order.status)]()}
+            {m[manualPaymentAdminOrderStatusMessageKey(order.status)]()}
           </Badge>
         ),
       },
       {
         id: 'actions',
-        header: m['collection_admin.col_actions'](),
+        header: m['manual_payments_admin.col_actions'](),
         cell: (order) => (
           <Button
             variant="outline"
@@ -373,7 +373,7 @@ function AdminCollectionOrdersComponent() {
               setForm(EMPTY_FORM)
             }}
           >
-            {m['collection_admin.review_open']()}
+            {m['manual_payments_admin.review_open']()}
           </Button>
         ),
       },
@@ -385,31 +385,31 @@ function AdminCollectionOrdersComponent() {
     () => [
       {
         id: 'accountId',
-        header: m['collection_admin.col_account_id'](),
+        header: m['manual_payments_admin.col_account_id'](),
         className: 'font-mono text-xs',
         cell: (view) => view.id,
       },
       {
         id: 'accountName',
-        header: m['collection_admin.col_account_name'](),
+        header: m['manual_payments_admin.col_account_name'](),
         cell: (view) => view.displayName,
       },
       {
         id: 'qr',
-        header: m['collection_admin.col_qr'](),
+        header: m['manual_payments_admin.col_qr'](),
         cell: (view) =>
           view.qrImageKey ? (
             // 数据库覆盖的二维码走服务端端点读取。
             <img
-              src={`/api/collection/accounts/${view.id}/qrcode`}
-              alt={m['collection_admin.qr_alt']()}
+              src={`/api/manual-payments/accounts/${view.id}/qrcode`}
+              alt={m['manual_payments_admin.qr_alt']()}
               className="h-12 w-12 rounded object-cover"
             />
           ) : view.configuredQrImageUrl ? (
             // 源码配置的地址直接引用：它本来就是站内路径或无凭据 HTTPS。
             <img
               src={view.configuredQrImageUrl}
-              alt={m['collection_admin.qr_alt']()}
+              alt={m['manual_payments_admin.qr_alt']()}
               className="h-12 w-12 rounded object-cover"
             />
           ) : (
@@ -418,17 +418,17 @@ function AdminCollectionOrdersComponent() {
       },
       {
         id: 'source',
-        header: m['collection_admin.col_source'](),
+        header: m['manual_payments_admin.col_source'](),
         cell: (view) =>
           view.fromDb ? (
-            <Badge variant="secondary">{m['collection_admin.db_override']()}</Badge>
+            <Badge variant="secondary">{m['manual_payments_admin.db_override']()}</Badge>
           ) : (
-            <Badge variant="outline">{m['collection_admin.source_config']()}</Badge>
+            <Badge variant="outline">{m['manual_payments_admin.source_config']()}</Badge>
           ),
       },
       {
         id: 'accountActions',
-        header: m['collection_admin.col_actions'](),
+        header: m['manual_payments_admin.col_actions'](),
         cell: (view) => (
           <Button
             variant="outline"
@@ -436,7 +436,9 @@ function AdminCollectionOrdersComponent() {
             disabled={busy}
             onClick={() => void toggleAccount(view.id, !view.enabled, view.displayName)}
           >
-            {view.enabled ? m['collection_admin.disable']() : m['collection_admin.enable']()}
+            {view.enabled
+              ? m['manual_payments_admin.disable']()
+              : m['manual_payments_admin.enable']()}
           </Button>
         ),
       },
@@ -452,8 +454,8 @@ function AdminCollectionOrdersComponent() {
           columns={orderColumns}
           data={loaded.page?.rows ?? []}
           rowKey={(order) => order.id}
-          error={error ?? (loaded.ok ? null : m['collection_admin.error_generic']())}
-          emptyTitle={m['collection_admin.empty']()}
+          error={error ?? (loaded.ok ? null : m['manual_payments_admin.error_generic']())}
+          emptyTitle={m['manual_payments_admin.empty']()}
           pagination={{
             page,
             pageSize: DEFAULT_PAGE_SIZE,
@@ -479,7 +481,7 @@ function AdminCollectionOrdersComponent() {
               }}
               items={statusFilterItems()}
             >
-              <SelectTrigger size="sm" aria-label={m['collection_admin.filter_status']()}>
+              <SelectTrigger size="sm" aria-label={m['manual_payments_admin.filter_status']()}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -496,14 +498,16 @@ function AdminCollectionOrdersComponent() {
 
       {/* 收款账户：源码配置账户与数据库覆盖合并展示。 */}
       <section className="space-y-4">
-        <h3 className="text-lg font-semibold">{m['collection_admin.accounts_title']()}</h3>
+        <h3 className="text-lg font-semibold">{m['manual_payments_admin.accounts_title']()}</h3>
         <DataTable
           columns={accountColumns}
           data={accountViews}
           rowKey={(view) => view.id}
-          emptyTitle={m['collection_admin.accounts_empty']()}
+          emptyTitle={m['manual_payments_admin.accounts_empty']()}
         />
-        <p className="text-xs text-muted-foreground">{m['collection_admin.accounts_note']()}</p>
+        <p className="text-xs text-muted-foreground">
+          {m['manual_payments_admin.accounts_note']()}
+        </p>
       </section>
 
       {/* 核验表单 */}
@@ -519,10 +523,10 @@ function AdminCollectionOrdersComponent() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {m['collection_admin.review_title']({ id: reviewTarget?.id ?? '' })}
+              {m['manual_payments_admin.review_title']({ id: reviewTarget?.id ?? '' })}
             </DialogTitle>
             <DialogDescription>
-              {m['collection_admin.review_description']({
+              {m['manual_payments_admin.review_description']({
                 amount: reviewTarget
                   ? formatMoney(reviewTarget.payableAmount, reviewTarget.currency, locale)
                   : '',
@@ -532,11 +536,11 @@ function AdminCollectionOrdersComponent() {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="collection-admin-observed-amount">
-                {m['collection_admin.observed_amount']()}
+              <Label htmlFor="manual-payments-admin-observed-amount">
+                {m['manual_payments_admin.observed_amount']()}
               </Label>
               <Input
-                id="collection-admin-observed-amount"
+                id="manual-payments-admin-observed-amount"
                 type="number"
                 step="0.01"
                 min="0"
@@ -547,11 +551,11 @@ function AdminCollectionOrdersComponent() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="collection-admin-external-reference">
-                {m['collection_admin.external_reference']()}
+              <Label htmlFor="manual-payments-admin-external-reference">
+                {m['manual_payments_admin.external_reference']()}
               </Label>
               <Input
-                id="collection-admin-external-reference"
+                id="manual-payments-admin-external-reference"
                 value={form.externalReference}
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, externalReference: event.target.value }))
@@ -559,11 +563,11 @@ function AdminCollectionOrdersComponent() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="collection-admin-review-note">
-                {m['collection_admin.review_note']()}
+              <Label htmlFor="manual-payments-admin-review-note">
+                {m['manual_payments_admin.review_note']()}
               </Label>
               <Input
-                id="collection-admin-review-note"
+                id="manual-payments-admin-review-note"
                 value={form.reviewNote}
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, reviewNote: event.target.value }))
@@ -579,7 +583,7 @@ function AdminCollectionOrdersComponent() {
               disabled={busy}
               onClick={() => setReviewTarget(null)}
             >
-              {m['collection_admin.cancel']()}
+              {m['manual_payments_admin.cancel']()}
             </Button>
             <Button
               variant="destructive"
@@ -587,7 +591,7 @@ function AdminCollectionOrdersComponent() {
               disabled={busy || !noteFilled()}
               onClick={() => void submitReview('reject')}
             >
-              {m['collection_admin.reject']()}
+              {m['manual_payments_admin.reject']()}
             </Button>
             {/* 金额不符时普通通过不可提交：差一分都不能走普通通道。 */}
             <Button
@@ -595,7 +599,7 @@ function AdminCollectionOrdersComponent() {
               disabled={busy || !approveEnabled()}
               onClick={() => void submitReview('approve')}
             >
-              {m['collection_admin.approve']()}
+              {m['manual_payments_admin.approve']()}
             </Button>
             <Button
               variant="secondary"
@@ -603,7 +607,7 @@ function AdminCollectionOrdersComponent() {
               disabled={busy || !noteFilled()}
               onClick={() => setExceptionConfirm(true)}
             >
-              {m['collection_admin.approve_exception']()}
+              {m['manual_payments_admin.approve_exception']()}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -613,9 +617,9 @@ function AdminCollectionOrdersComponent() {
       <AlertDialog open={exceptionConfirm} onOpenChange={setExceptionConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{m['collection_admin.exception_title']()}</AlertDialogTitle>
+            <AlertDialogTitle>{m['manual_payments_admin.exception_title']()}</AlertDialogTitle>
             <AlertDialogDescription>
-              {m['collection_admin.exception_description']({
+              {m['manual_payments_admin.exception_description']({
                 observed:
                   reviewTarget && observedAmountCents() !== null
                     ? formatMoney(observedAmountCents() ?? 0, reviewTarget.currency, locale)
@@ -627,14 +631,14 @@ function AdminCollectionOrdersComponent() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{m['collection_admin.cancel']()}</AlertDialogCancel>
+            <AlertDialogCancel>{m['manual_payments_admin.cancel']()}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 setExceptionConfirm(false)
                 void submitReview('approve_exception')
               }}
             >
-              {m['collection_admin.confirm']()}
+              {m['manual_payments_admin.confirm']()}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -646,17 +650,17 @@ function AdminCollectionOrdersComponent() {
 /** 状态筛选的选项；渲染期构造以跟随语言。 */
 function statusFilterItems(): { value: string; label: string }[] {
   return [
-    { value: 'pending_payment', label: m['collection_admin.status_pending_payment']() },
+    { value: 'pending_payment', label: m['manual_payments_admin.status_pending_payment']() },
     {
       value: 'pending_verification',
-      label: m['collection_admin.status_pending_verification'](),
+      label: m['manual_payments_admin.status_pending_verification'](),
     },
-    { value: 'settling', label: m['collection_admin.status_settling']() },
-    { value: 'settled', label: m['collection_admin.status_settled']() },
-    { value: 'expired', label: m['collection_admin.status_expired']() },
-    { value: 'canceled', label: m['collection_admin.status_canceled']() },
-    { value: 'rejected', label: m['collection_admin.status_rejected']() },
-    { value: 'requires_refund', label: m['collection_admin.status_requires_refund']() },
-    { value: 'all', label: m['collection_admin.filter_all']() },
+    { value: 'settling', label: m['manual_payments_admin.status_settling']() },
+    { value: 'settled', label: m['manual_payments_admin.status_settled']() },
+    { value: 'expired', label: m['manual_payments_admin.status_expired']() },
+    { value: 'canceled', label: m['manual_payments_admin.status_canceled']() },
+    { value: 'rejected', label: m['manual_payments_admin.status_rejected']() },
+    { value: 'requires_refund', label: m['manual_payments_admin.status_requires_refund']() },
+    { value: 'all', label: m['manual_payments_admin.filter_all']() },
   ]
 }

@@ -51,12 +51,12 @@ Settings are organised as tabs containing group cards; each card saves on its ow
 | General | SEO | Default title / description / keywords, plus per-locale overrides |
 | General | Social | 11 platform URLs; invalid or credential-bearing URLs are dropped |
 | General | Docs | External docs site URL and the "docs at the root path" switch |
-| Modules | Modules | 11 module switches (docs / blog / changelog / mail / contact / newsletter / payment / collection / notification / analytics / auth) |
+| Modules | Modules | 11 module switches (docs / blog / changelog / mail / contact / newsletter / payment / manualPayments / notification / analytics / auth) |
 | Modules | Features | `enableI18n`, `enableFileUpload`, `enableApiKeys`, `enableAdmin`, `enableAIGateway` |
 | Auth | Auth | Email-verification requirement, Google credentials, Turnstile site and secret keys |
-| Payment | Payment | Provider and checkout mode (`provider` / `collection`) |
+| Payment | Payment | Provider and checkout mode (`provider` / `manual_payments`) |
 | Payment | Stripe / Creem | Provider keys and webhook secrets; Creem also has a product map and sandbox flag |
-| Payment | Collection | Verification SLA and payee accounts (QR images live in the repo) |
+| Payment | Manual payments | Verification SLA and payee accounts (QR images live in the repo) |
 | Mail | Mail | Provider, support address, sender address |
 | Mail | Resend / Cloudflare Email | Provider credentials |
 | Mail | Newsletter | Newsletter provider (resend / beehiiv) and credentials |

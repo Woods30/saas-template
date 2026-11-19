@@ -3,23 +3,23 @@ import type { DB } from '@/core/db'
 import type { AdminOrderPage } from './orders'
 import {
   adminOrderListSchema,
-  type CollectionGuardDeps,
   cancelOrderSchema,
-  collectionAccountSchema,
   createOrderSchema,
   errorResponse,
   failureResponse,
-  guardCollectionRequest,
+  guardManualPaymentRequest,
   isValidAccountQrImageKey,
+  type ManualPaymentGuardDeps,
+  manualPaymentAccountSchema,
   orderIdSchema,
   resolveAdminOrderQuery,
   reviewOrderSchema,
   submitOrderSchema,
 } from './server-logic'
-import type { CollectionOrderDetail, UserOrderPage } from './types'
+import type { ManualPaymentOrderDetail, UserOrderPage } from './types'
 
 /** 收款账户的数据库行。 */
-type CollectionAccountRow = {
+type ManualPaymentAccountRow = {
   id: string
   channel: string
   displayName: string
@@ -68,7 +68,7 @@ export type CallWith<D> = (opts: {
 }) => Promise<unknown>
 
 /** 取门禁所需的依赖。 */
-async function guardDeps(): Promise<CollectionGuardDeps> {
+async function guardDeps(): Promise<ManualPaymentGuardDeps> {
   const [
     { getModuleUnavailableResponse },
     { getServerContext },
@@ -85,7 +85,7 @@ async function guardDeps(): Promise<CollectionGuardDeps> {
 
   const headers = await getRequestHeaders()
   return {
-    module: () => getModuleUnavailableResponse('collection'),
+    module: () => getModuleUnavailableResponse('manualPayments'),
     session: async () => {
       const env = getServerContext().env
       const session = await (await getAuth(env)).api.getSession({ headers })
@@ -99,7 +99,7 @@ async function guardDeps(): Promise<CollectionGuardDeps> {
 }
 
 /** 取数据库连接。 */
-async function collectionDb(): Promise<DB> {
+async function manualPaymentDb(): Promise<DB> {
   const [{ createDbFromEnv }, { getServerContext }] = await Promise.all([
     import('@/core/db'),
     import('@/lib/server-context'),
@@ -129,7 +129,7 @@ async function hasStorageBinding(): Promise<boolean> {
 /** 管理员动作共享的运行时依赖。 */
 export interface AdminActionDeps {
   /** 门禁依赖：模块开关、服务端会话、角色、限流。 */
-  guard: CollectionGuardDeps
+  guard: ManualPaymentGuardDeps
   /** 惰性取库：门禁不通过时不该碰数据库。 */
   db: () => Promise<DB>
 }
@@ -139,7 +139,7 @@ export async function adminListOrders(
   { guard, db }: AdminActionDeps,
   data: unknown,
 ): Promise<AdminOrderPage | Response> {
-  const gate = await guardCollectionRequest(guard, { requireAdmin: true })
+  const gate = await guardManualPaymentRequest(guard, { requireAdmin: true })
   if (!gate.ok) return gate.response
 
   const raw = data && typeof data === 'object' ? (data as Record<string, unknown>) : {}
@@ -168,7 +168,7 @@ export async function adminReviewOrder(
   { guard, db }: AdminActionDeps,
   data: unknown,
 ): Promise<{ status: string } | Response> {
-  const gate = await guardCollectionRequest(guard, {
+  const gate = await guardManualPaymentRequest(guard, {
     requireAdmin: true,
     limit: 'review-order',
   })
@@ -199,10 +199,10 @@ export async function adminSaveAccount(
   { guard, db }: AdminActionDeps,
   data: unknown,
 ): Promise<{ ok: true } | Response> {
-  const gate = await guardCollectionRequest(guard, { requireAdmin: true })
+  const gate = await guardManualPaymentRequest(guard, { requireAdmin: true })
   if (!gate.ok) return gate.response
 
-  const parsed = collectionAccountSchema.safeParse(data)
+  const parsed = manualPaymentAccountSchema.safeParse(data)
   if (!parsed.success) return errorResponse('INVALID_INPUT')
   // 收款码 key 必须是服务端派生出来的那个：客户端不能指定任意 R2 对象。
   if (!isValidAccountQrImageKey(parsed.data.accountId, parsed.data.qrImageKey)) {
@@ -213,7 +213,7 @@ export async function adminSaveAccount(
     const { schema } = await import('@/core/db')
     const now = new Date()
     await (await db())
-      .insert(schema.collectionAccounts)
+      .insert(schema.manualPaymentAccounts)
       .values({
         id: parsed.data.accountId,
         channel: 'alipay',
@@ -226,7 +226,7 @@ export async function adminSaveAccount(
         updatedAt: now,
       })
       .onConflictDoUpdate({
-        target: schema.collectionAccounts.id,
+        target: schema.manualPaymentAccounts.id,
         set: {
           displayName: parsed.data.displayName,
           qrImageKey: parsed.data.qrImageKey ?? null,
@@ -242,9 +242,9 @@ export async function adminSaveAccount(
 }
 
 /** 用户创建订单：分配一个唯一的应付金额。 */
-export const createCollectionOrderFn = createServerFn({ method: 'POST' }).handler(
+export const createManualPaymentOrderFn = createServerFn({ method: 'POST' }).handler(
   async ({ data }): Promise<{ id: string } | Response> => {
-    const guard = await guardCollectionRequest(await guardDeps(), { limit: 'create-order' })
+    const guard = await guardManualPaymentRequest(await guardDeps(), { limit: 'create-order' })
     if (!guard.ok) return guard.response
 
     const parsed = createOrderSchema.safeParse(data)
@@ -252,7 +252,7 @@ export const createCollectionOrderFn = createServerFn({ method: 'POST' }).handle
 
     try {
       const { createOrder } = await import('./orders')
-      const order = await createOrder(await collectionDb(), {
+      const order = await createOrder(await manualPaymentDb(), {
         userId: guard.session.userId,
         ...parsed.data,
       })
@@ -264,9 +264,9 @@ export const createCollectionOrderFn = createServerFn({ method: 'POST' }).handle
 )
 
 /** 用户申报「我已支付」。 */
-export const submitCollectionOrderFn = createServerFn({ method: 'POST' }).handler(
+export const submitManualPaymentOrderFn = createServerFn({ method: 'POST' }).handler(
   async ({ data }): Promise<{ status: string } | Response> => {
-    const guard = await guardCollectionRequest(await guardDeps(), { limit: 'submit-order' })
+    const guard = await guardManualPaymentRequest(await guardDeps(), { limit: 'submit-order' })
     if (!guard.ok) return guard.response
 
     const parsed = submitOrderSchema.safeParse(data)
@@ -274,7 +274,7 @@ export const submitCollectionOrderFn = createServerFn({ method: 'POST' }).handle
 
     try {
       const { submitOrder } = await import('./orders')
-      const order = await submitOrder(await collectionDb(), {
+      const order = await submitOrder(await manualPaymentDb(), {
         userId: guard.session.userId,
         ...parsed.data,
       })
@@ -286,9 +286,9 @@ export const submitCollectionOrderFn = createServerFn({ method: 'POST' }).handle
 )
 
 /** 用户取消未支付的订单。 */
-export const cancelCollectionOrderFn = createServerFn({ method: 'POST' }).handler(
+export const cancelManualPaymentOrderFn = createServerFn({ method: 'POST' }).handler(
   async ({ data }): Promise<{ status: string } | Response> => {
-    const guard = await guardCollectionRequest(await guardDeps())
+    const guard = await guardManualPaymentRequest(await guardDeps())
     if (!guard.ok) return guard.response
 
     const parsed = cancelOrderSchema.safeParse(data)
@@ -296,7 +296,7 @@ export const cancelCollectionOrderFn = createServerFn({ method: 'POST' }).handle
 
     try {
       const { cancelOrder } = await import('./orders')
-      const order = await cancelOrder(await collectionDb(), {
+      const order = await cancelOrder(await manualPaymentDb(), {
         userId: guard.session.userId,
         ...parsed.data,
       })
@@ -308,9 +308,9 @@ export const cancelCollectionOrderFn = createServerFn({ method: 'POST' }).handle
 )
 
 /** 读取自己的订单详情。 */
-export const fetchCollectionOrderFn = createServerFn({ method: 'GET' }).handler(
-  async ({ data }): Promise<CollectionOrderDetail | Response> => {
-    const guard = await guardCollectionRequest(await guardDeps(), { limit: 'poll-order' })
+export const fetchManualPaymentOrderFn = createServerFn({ method: 'GET' }).handler(
+  async ({ data }): Promise<ManualPaymentOrderDetail | Response> => {
+    const guard = await guardManualPaymentRequest(await guardDeps(), { limit: 'poll-order' })
     if (!guard.ok) return guard.response
 
     const parsed = orderIdSchema.safeParse(data)
@@ -319,7 +319,7 @@ export const fetchCollectionOrderFn = createServerFn({ method: 'GET' }).handler(
     try {
       const { getUserOrder } = await import('./orders')
       const order = await getUserOrder(
-        await collectionDb(),
+        await manualPaymentDb(),
         guard.session.userId,
         parsed.data.orderId,
       )
@@ -333,14 +333,14 @@ export const fetchCollectionOrderFn = createServerFn({ method: 'GET' }).handler(
 )
 
 /** 用户自己的订单列表。 */
-export const fetchMyCollectionOrdersFn = createServerFn({ method: 'GET' }).handler(
+export const fetchMyManualPaymentOrdersFn = createServerFn({ method: 'GET' }).handler(
   async (): Promise<UserOrderPage | Response> => {
-    const guard = await guardCollectionRequest(await guardDeps())
+    const guard = await guardManualPaymentRequest(await guardDeps())
     if (!guard.ok) return guard.response
 
     try {
       const { listUserOrders } = await import('./orders')
-      return await listUserOrders(await collectionDb(), { userId: guard.session.userId })
+      return await listUserOrders(await manualPaymentDb(), { userId: guard.session.userId })
     } catch (error) {
       return failureResponse(error)
     }
@@ -348,26 +348,26 @@ export const fetchMyCollectionOrdersFn = createServerFn({ method: 'GET' }).handl
 )
 
 /** 管理员读取订单队列，默认只看待核验。 */
-export const fetchAdminCollectionOrdersFn = createServerFn({ method: 'GET' }).handler(
+export const fetchAdminManualPaymentOrdersFn = createServerFn({ method: 'GET' }).handler(
   async ({ data }): Promise<AdminOrderPage | Response> =>
-    adminListOrders({ guard: await guardDeps(), db: collectionDb }, data),
+    adminListOrders({ guard: await guardDeps(), db: manualPaymentDb }, data),
 )
 
 /** 管理员核验订单。 */
-export const reviewCollectionOrderFn = createServerFn({ method: 'POST' }).handler(
+export const reviewManualPaymentOrderFn = createServerFn({ method: 'POST' }).handler(
   async ({ data }): Promise<{ status: string } | Response> =>
-    adminReviewOrder({ guard: await guardDeps(), db: collectionDb }, data),
+    adminReviewOrder({ guard: await guardDeps(), db: manualPaymentDb }, data),
 )
 
 /** 管理员读取收款账户。 */
-export const fetchCollectionAccountsFn = createServerFn({ method: 'GET' }).handler(
-  async (): Promise<CollectionAccountRow[] | Response> => {
-    const guard = await guardCollectionRequest(await guardDeps(), { requireAdmin: true })
+export const fetchManualPaymentAccountsFn = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<ManualPaymentAccountRow[] | Response> => {
+    const guard = await guardManualPaymentRequest(await guardDeps(), { requireAdmin: true })
     if (!guard.ok) return guard.response
 
     try {
-      const [{ schema }, db] = await Promise.all([import('@/core/db'), collectionDb()])
-      return await db.select().from(schema.collectionAccounts)
+      const [{ schema }, db] = await Promise.all([import('@/core/db'), manualPaymentDb()])
+      return await db.select().from(schema.manualPaymentAccounts)
     } catch (error) {
       return failureResponse(error)
     }
@@ -380,7 +380,7 @@ export const fetchCollectionAccountsFn = createServerFn({ method: 'GET' }).handl
  * 数据库只是「覆盖」：账户清单仍在源码配置里，这里改的是显示名、二维码与启用
  * 状态。数据库里没有的账户会补一行。
  */
-export const saveCollectionAccountFn = createServerFn({ method: 'POST' }).handler(
+export const saveManualPaymentAccountFn = createServerFn({ method: 'POST' }).handler(
   async ({ data }): Promise<{ ok: true } | Response> =>
-    adminSaveAccount({ guard: await guardDeps(), db: collectionDb }, data),
+    adminSaveAccount({ guard: await guardDeps(), db: manualPaymentDb }, data),
 )

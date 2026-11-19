@@ -19,25 +19,25 @@
  */
 
 import { and, count, desc, eq, gt, lte } from 'drizzle-orm'
-import { resolveCollectionPrice } from '@/config/products'
+import { resolveManualPaymentPrice } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import { type DB, schema } from '@/core/db'
-import { resolveCollectionAccount } from './accounts'
+import { resolveManualPaymentAccount } from './accounts'
 import {
   type CancelOrderInput,
-  COLLECTION_PAYER_NOTE_MAX_LENGTH,
-  CollectionError,
-  type CollectionOrder,
-  type CollectionOrderStatus,
-  type CollectionPrice,
   type ListUserOrdersInput,
-  type ResolvedCollectionAccount,
+  MANUAL_PAYMENT_PAYER_NOTE_MAX_LENGTH,
+  ManualPaymentError,
+  type ManualPaymentOrder,
+  type ManualPaymentOrderStatus,
+  type ManualPaymentPrice,
+  type ResolvedManualPaymentAccount,
   type SubmitOrderInput,
   type UserOrderPage,
 } from './types'
 
 /** 订单有效期：精确 15 分钟。 */
-export const COLLECTION_ORDER_TTL_SECONDS = 15 * 60
+export const MANUAL_PAYMENT_ORDER_TTL_SECONDS = 15 * 60
 /** 尾数下界。 */
 export const FINGERPRINT_MIN = 1
 /** 尾数上界。 */
@@ -45,7 +45,7 @@ export const FINGERPRINT_MAX = 99
 
 const FINGERPRINT_SPAN = FINGERPRINT_MAX - FINGERPRINT_MIN + 1
 
-type CollectionOrderRow = typeof schema.collectionOrders.$inferSelect
+type ManualPaymentOrderRow = typeof schema.manualPaymentOrders.$inferSelect
 
 /** 创建订单的输入。 */
 export interface CreateOrderInput {
@@ -64,16 +64,16 @@ export interface CreateOrderInput {
  */
 export async function expirePendingOrders(db: DB, accountId: string, now: Date): Promise<number> {
   const expired = await db
-    .update(schema.collectionOrders)
+    .update(schema.manualPaymentOrders)
     .set({ status: 'expired', updatedAt: now })
     .where(
       and(
-        eq(schema.collectionOrders.accountId, accountId),
-        eq(schema.collectionOrders.status, 'pending_payment'),
-        lte(schema.collectionOrders.expiresAt, now),
+        eq(schema.manualPaymentOrders.accountId, accountId),
+        eq(schema.manualPaymentOrders.status, 'pending_payment'),
+        lte(schema.manualPaymentOrders.expiresAt, now),
       ),
     )
-    .returning({ id: schema.collectionOrders.id })
+    .returning({ id: schema.manualPaymentOrders.id })
   return expired.length
 }
 
@@ -87,38 +87,38 @@ export async function createOrder(
   db: DB,
   input: CreateOrderInput,
   now: Date = new Date(),
-): Promise<CollectionOrder> {
-  const price = resolveCollectionPrice(input.productId, input.offerId)
+): Promise<ManualPaymentOrder> {
+  const price = resolveManualPaymentPrice(input.productId, input.offerId)
   if (!price) {
-    throw new CollectionError(
+    throw new ManualPaymentError(
       'INVALID_OFFER',
       `商品 ${input.productId} 的付费方式 ${input.offerId} 没有可用的核销价格`,
     )
   }
 
-  const account = await resolveCollectionAccount(db, websiteConfig.collection)
+  const account = await resolveManualPaymentAccount(db, websiteConfig.manualPayments)
   if (!account) {
-    throw new CollectionError('NO_COLLECTION_ACCOUNT', '没有可用的收款账户')
+    throw new ManualPaymentError('NO_MANUAL_PAYMENT_ACCOUNT', '没有可用的收款账户')
   }
 
   await expirePendingOrders(db, account.id, now)
 
-  const expiresAt = new Date(now.getTime() + COLLECTION_ORDER_TTL_SECONDS * 1000)
+  const expiresAt = new Date(now.getTime() + MANUAL_PAYMENT_ORDER_TTL_SECONDS * 1000)
   const start = randomFingerprintStart()
 
   for (let offset = 0; offset < FINGERPRINT_SPAN; offset++) {
     const fingerprint = ((start - FINGERPRINT_MIN + offset) % FINGERPRINT_SPAN) + FINGERPRINT_MIN
     const row = buildOrder({ input, price, account, fingerprint, now, expiresAt })
     try {
-      await db.insert(schema.collectionOrders).values(row)
-      return toCollectionOrder(row)
+      await db.insert(schema.manualPaymentOrders).values(row)
+      return toManualPaymentOrder(row)
     } catch (error) {
       // 唯一索引说这个尾数被占了：换下一个候选。
       if (!isUniqueConstraintError(error)) throw error
     }
   }
 
-  throw new CollectionError('AMOUNT_POOL_EXHAUSTED', '该收款账户的应付金额池已被活跃订单占满')
+  throw new ManualPaymentError('AMOUNT_POOL_EXHAUSTED', '该收款账户的应付金额池已被活跃订单占满')
 }
 
 /**
@@ -134,22 +134,22 @@ export async function submitOrder(
   db: DB,
   input: SubmitOrderInput,
   now: Date = new Date(),
-): Promise<CollectionOrder> {
+): Promise<ManualPaymentOrder> {
   const order = await readOwnedOrder(db, input.userId, input.orderId)
   if (!order) {
-    throw new CollectionError('ORDER_NOT_FOUND', '订单不存在')
+    throw new ManualPaymentError('ORDER_NOT_FOUND', '订单不存在')
   }
   if (order.status !== 'pending_payment') {
     throw stateError(order)
   }
   if (isExpired(order, now)) {
     await markExpired(db, input.userId, order.id, now)
-    throw new CollectionError('ORDER_EXPIRED', '订单已过期')
+    throw new ManualPaymentError('ORDER_EXPIRED', '订单已过期')
   }
   const payerNote = normalizePayerNote(input.payerNote)
 
   const updated = await db
-    .update(schema.collectionOrders)
+    .update(schema.manualPaymentOrders)
     .set({
       status: 'pending_verification',
       payerNote,
@@ -158,10 +158,10 @@ export async function submitOrder(
     })
     .where(
       and(
-        eq(schema.collectionOrders.id, order.id),
-        eq(schema.collectionOrders.userId, input.userId),
-        eq(schema.collectionOrders.status, 'pending_payment'),
-        gt(schema.collectionOrders.expiresAt, now),
+        eq(schema.manualPaymentOrders.id, order.id),
+        eq(schema.manualPaymentOrders.userId, input.userId),
+        eq(schema.manualPaymentOrders.status, 'pending_payment'),
+        gt(schema.manualPaymentOrders.expiresAt, now),
       ),
     )
     .returning()
@@ -170,7 +170,7 @@ export async function submitOrder(
     // 条件不满足（刚过期，或被并发改动）：重新读取再映射稳定错误码。
     throw await resolveConflict(db, input.userId, order.id, now)
   }
-  return toCollectionOrder(row)
+  return toManualPaymentOrder(row)
 }
 
 /**
@@ -183,28 +183,28 @@ export async function cancelOrder(
   db: DB,
   input: CancelOrderInput,
   now: Date = new Date(),
-): Promise<CollectionOrder> {
+): Promise<ManualPaymentOrder> {
   const order = await readOwnedOrder(db, input.userId, input.orderId)
   if (!order) {
-    throw new CollectionError('ORDER_NOT_FOUND', '订单不存在')
+    throw new ManualPaymentError('ORDER_NOT_FOUND', '订单不存在')
   }
   if (order.status !== 'pending_payment') {
     throw stateError(order)
   }
   if (isExpired(order, now)) {
     await markExpired(db, input.userId, order.id, now)
-    throw new CollectionError('ORDER_EXPIRED', '订单已过期')
+    throw new ManualPaymentError('ORDER_EXPIRED', '订单已过期')
   }
 
   const updated = await db
-    .update(schema.collectionOrders)
+    .update(schema.manualPaymentOrders)
     .set({ status: 'canceled', updatedAt: now })
     .where(
       and(
-        eq(schema.collectionOrders.id, order.id),
-        eq(schema.collectionOrders.userId, input.userId),
-        eq(schema.collectionOrders.status, 'pending_payment'),
-        gt(schema.collectionOrders.expiresAt, now),
+        eq(schema.manualPaymentOrders.id, order.id),
+        eq(schema.manualPaymentOrders.userId, input.userId),
+        eq(schema.manualPaymentOrders.status, 'pending_payment'),
+        gt(schema.manualPaymentOrders.expiresAt, now),
       ),
     )
     .returning()
@@ -212,7 +212,7 @@ export async function cancelOrder(
   if (!row) {
     throw await resolveConflict(db, input.userId, order.id, now)
   }
-  return toCollectionOrder(row)
+  return toManualPaymentOrder(row)
 }
 
 /**
@@ -227,15 +227,15 @@ export async function getUserOrder(
   userId: string,
   orderId: string,
   now: Date = new Date(),
-): Promise<CollectionOrder | null> {
+): Promise<ManualPaymentOrder | null> {
   const order = await readOwnedOrder(db, userId, orderId)
   if (!order) return null
   if (order.status === 'pending_payment' && isExpired(order, now)) {
     await markExpired(db, userId, order.id, now)
     const fresh = await readOwnedOrder(db, userId, orderId)
-    return fresh ? toCollectionOrder(fresh) : null
+    return fresh ? toManualPaymentOrder(fresh) : null
   }
-  return toCollectionOrder(order)
+  return toManualPaymentOrder(order)
 }
 
 /**
@@ -249,13 +249,13 @@ export async function listUserOrders(
   now: Date = new Date(),
 ): Promise<UserOrderPage> {
   await db
-    .update(schema.collectionOrders)
+    .update(schema.manualPaymentOrders)
     .set({ status: 'expired', updatedAt: now })
     .where(
       and(
-        eq(schema.collectionOrders.userId, input.userId),
-        eq(schema.collectionOrders.status, 'pending_payment'),
-        lte(schema.collectionOrders.expiresAt, now),
+        eq(schema.manualPaymentOrders.userId, input.userId),
+        eq(schema.manualPaymentOrders.status, 'pending_payment'),
+        lte(schema.manualPaymentOrders.expiresAt, now),
       ),
     )
 
@@ -263,28 +263,28 @@ export async function listUserOrders(
   const offset = Math.max(0, Math.trunc(input.offset ?? 0))
   const rows = await db
     .select()
-    .from(schema.collectionOrders)
-    .where(eq(schema.collectionOrders.userId, input.userId))
-    .orderBy(desc(schema.collectionOrders.createdAt), desc(schema.collectionOrders.id))
+    .from(schema.manualPaymentOrders)
+    .where(eq(schema.manualPaymentOrders.userId, input.userId))
+    .orderBy(desc(schema.manualPaymentOrders.createdAt), desc(schema.manualPaymentOrders.id))
     .limit(limit)
     .offset(offset)
   const counted = await db
     .select({ total: count() })
-    .from(schema.collectionOrders)
-    .where(eq(schema.collectionOrders.userId, input.userId))
+    .from(schema.manualPaymentOrders)
+    .where(eq(schema.manualPaymentOrders.userId, input.userId))
 
-  return { rows: rows.map(toCollectionOrder), total: Number(counted[0]?.total ?? 0) }
+  return { rows: rows.map(toManualPaymentOrder), total: Number(counted[0]?.total ?? 0) }
 }
 
 /** 管理员看到的订单：额外带上下单账号的邮箱。 */
-export interface AdminCollectionOrder extends CollectionOrder {
+export interface AdminManualPaymentOrder extends ManualPaymentOrder {
   /** 下单账号的邮箱：人工对账时要能认出是谁付的款。 */
   userEmail: string
 }
 
 /** 管理员订单列表的一页。 */
 export interface AdminOrderPage {
-  rows: AdminCollectionOrder[]
+  rows: AdminManualPaymentOrder[]
   total: number
 }
 
@@ -297,26 +297,26 @@ export interface AdminOrderPage {
  */
 export async function listAllOrders(
   db: DB,
-  input: { status?: CollectionOrderStatus | 'all' | null; limit: number; offset: number },
+  input: { status?: ManualPaymentOrderStatus | 'all' | null; limit: number; offset: number },
 ): Promise<AdminOrderPage> {
   const where =
     input.status && input.status !== 'all'
-      ? eq(schema.collectionOrders.status, input.status)
+      ? eq(schema.manualPaymentOrders.status, input.status)
       : undefined
 
   const rows = await db
-    .select({ order: schema.collectionOrders, userEmail: schema.users.email })
-    .from(schema.collectionOrders)
-    .leftJoin(schema.users, eq(schema.collectionOrders.userId, schema.users.id))
+    .select({ order: schema.manualPaymentOrders, userEmail: schema.users.email })
+    .from(schema.manualPaymentOrders)
+    .leftJoin(schema.users, eq(schema.manualPaymentOrders.userId, schema.users.id))
     .where(where)
-    .orderBy(desc(schema.collectionOrders.createdAt), desc(schema.collectionOrders.id))
+    .orderBy(desc(schema.manualPaymentOrders.createdAt), desc(schema.manualPaymentOrders.id))
     .limit(input.limit)
     .offset(input.offset)
-  const counted = await db.select({ total: count() }).from(schema.collectionOrders).where(where)
+  const counted = await db.select({ total: count() }).from(schema.manualPaymentOrders).where(where)
 
   return {
     rows: rows.map((row) => ({
-      ...toCollectionOrder(row.order),
+      ...toManualPaymentOrder(row.order),
       userEmail: row.userEmail ?? '',
     })),
     total: Number(counted[0]?.total ?? 0),
@@ -325,12 +325,12 @@ export async function listAllOrders(
 
 function buildOrder(params: {
   input: CreateOrderInput
-  price: CollectionPrice
-  account: ResolvedCollectionAccount
+  price: ManualPaymentPrice
+  account: ResolvedManualPaymentAccount
   fingerprint: number
   now: Date
   expiresAt: Date
-}): CollectionOrderRow {
+}): ManualPaymentOrderRow {
   const { input, price, account, fingerprint, now, expiresAt } = params
   return {
     id: crypto.randomUUID(),
@@ -364,14 +364,14 @@ function buildOrder(params: {
   }
 }
 
-export function toCollectionOrder(row: CollectionOrderRow): CollectionOrder {
+export function toManualPaymentOrder(row: ManualPaymentOrderRow): ManualPaymentOrder {
   return {
     ...row,
-    channel: row.channel as CollectionOrder['channel'],
-    kind: row.kind as CollectionOrder['kind'],
-    interval: row.interval as CollectionOrder['interval'],
-    currency: row.currency as CollectionOrder['currency'],
-    status: row.status as CollectionOrderStatus,
+    channel: row.channel as ManualPaymentOrder['channel'],
+    kind: row.kind as ManualPaymentOrder['kind'],
+    interval: row.interval as ManualPaymentOrder['interval'],
+    currency: row.currency as ManualPaymentOrder['currency'],
+    status: row.status as ManualPaymentOrderStatus,
   }
 }
 
@@ -380,11 +380,16 @@ async function readOwnedOrder(
   db: DB,
   userId: string,
   orderId: string,
-): Promise<CollectionOrderRow | undefined> {
+): Promise<ManualPaymentOrderRow | undefined> {
   const rows = await db
     .select()
-    .from(schema.collectionOrders)
-    .where(and(eq(schema.collectionOrders.id, orderId), eq(schema.collectionOrders.userId, userId)))
+    .from(schema.manualPaymentOrders)
+    .where(
+      and(
+        eq(schema.manualPaymentOrders.id, orderId),
+        eq(schema.manualPaymentOrders.userId, userId),
+      ),
+    )
     .limit(1)
   return rows[0]
 }
@@ -395,21 +400,21 @@ async function readOwnedOrder(
  * 到期时刻等于当前时间即视为已过期：`expires_at` 存的是整数秒，比较时把
  * 当前时间也取整到秒，与数据库的 `lte` 判定保持一致。
  */
-function isExpired(order: CollectionOrderRow, now: Date): boolean {
+function isExpired(order: ManualPaymentOrderRow, now: Date): boolean {
   return order.expiresAt.getTime() <= now.getTime()
 }
 
 /** 把已到期的待支付订单标记为过期（条件里带状态与所有者）。 */
 async function markExpired(db: DB, userId: string, orderId: string, now: Date): Promise<void> {
   await db
-    .update(schema.collectionOrders)
+    .update(schema.manualPaymentOrders)
     .set({ status: 'expired', updatedAt: now })
     .where(
       and(
-        eq(schema.collectionOrders.id, orderId),
-        eq(schema.collectionOrders.userId, userId),
-        eq(schema.collectionOrders.status, 'pending_payment'),
-        lte(schema.collectionOrders.expiresAt, now),
+        eq(schema.manualPaymentOrders.id, orderId),
+        eq(schema.manualPaymentOrders.userId, userId),
+        eq(schema.manualPaymentOrders.status, 'pending_payment'),
+        lte(schema.manualPaymentOrders.expiresAt, now),
       ),
     )
 }
@@ -425,24 +430,27 @@ async function resolveConflict(
   userId: string,
   orderId: string,
   now: Date,
-): Promise<CollectionError> {
+): Promise<ManualPaymentError> {
   const fresh = await readOwnedOrder(db, userId, orderId)
   if (!fresh) {
-    return new CollectionError('ORDER_NOT_FOUND', '订单不存在')
+    return new ManualPaymentError('ORDER_NOT_FOUND', '订单不存在')
   }
   if (fresh.status === 'pending_payment' && isExpired(fresh, now)) {
     await markExpired(db, userId, fresh.id, now)
-    return new CollectionError('ORDER_EXPIRED', '订单已过期')
+    return new ManualPaymentError('ORDER_EXPIRED', '订单已过期')
   }
   return stateError(fresh)
 }
 
 /** 把订单当前状态映射成稳定错误码。 */
-function stateError(order: CollectionOrderRow): CollectionError {
+function stateError(order: ManualPaymentOrderRow): ManualPaymentError {
   if (order.status === 'expired') {
-    return new CollectionError('ORDER_EXPIRED', '订单已过期')
+    return new ManualPaymentError('ORDER_EXPIRED', '订单已过期')
   }
-  return new CollectionError('INVALID_ORDER_STATE', `订单当前状态为 ${order.status}，不允许该操作`)
+  return new ManualPaymentError(
+    'INVALID_ORDER_STATE',
+    `订单当前状态为 ${order.status}，不允许该操作`,
+  )
 }
 
 /** 规范化用户辅助说明：去掉首尾空白，空值视为未填，超长拒绝。 */
@@ -450,10 +458,10 @@ function normalizePayerNote(note: string | null | undefined): string | null {
   if (note === null || note === undefined) return null
   const trimmed = note.trim()
   if (trimmed.length === 0) return null
-  if (trimmed.length > COLLECTION_PAYER_NOTE_MAX_LENGTH) {
-    throw new CollectionError(
+  if (trimmed.length > MANUAL_PAYMENT_PAYER_NOTE_MAX_LENGTH) {
+    throw new ManualPaymentError(
       'INVALID_PAYER_NOTE',
-      `辅助说明最多 ${COLLECTION_PAYER_NOTE_MAX_LENGTH} 个字符`,
+      `辅助说明最多 ${MANUAL_PAYMENT_PAYER_NOTE_MAX_LENGTH} 个字符`,
     )
   }
   return trimmed

@@ -2,16 +2,16 @@ import { describe, expect, it } from 'vitest'
 
 import { type DB, schema } from '@/core/db'
 import {
-  COLLECTION_IMAGE_MAX_BYTES,
-  collectionQrImageKey,
   findAccountFileRef,
   findOrderFileRef,
   hasOrderForAccount,
-  isCollectionAccountId,
-  isCollectionQrImageKey,
+  isManualPaymentAccountId,
+  isManualPaymentQrImageKey,
+  MANUAL_PAYMENT_IMAGE_MAX_BYTES,
+  manualPaymentQrImageKey,
   setAccountQrImageKey,
   setOrderReceiptKey,
-  validateCollectionImage,
+  validateManualPaymentImage,
 } from '@/modules/manual-payments/files'
 import { createTestDatabase } from '../helpers/database'
 
@@ -54,8 +54,8 @@ function insertOrder(
 ): void {
   sqlite
     .prepare(
-      `INSERT INTO collection_orders(id,user_id,account_id,channel,product_id,offer_id,kind,base_amount,fingerprint,payable_amount,currency,status,qr_image_url,qr_image_key,receipt_key,expires_at,created_at,updated_at)
-       VALUES (?, ?, 'acct-main', 'alipay', 'pro', 'once', 'one_time', 1000, 1, 1001, 'cny', ?, '/collection/main.png', NULL, ?, 4102444800, 1, 1)`,
+      `INSERT INTO manual_payment_orders(id,user_id,account_id,channel,product_id,offer_id,kind,base_amount,fingerprint,payable_amount,currency,status,qr_image_url,qr_image_key,receipt_key,expires_at,created_at,updated_at)
+       VALUES (?, ?, 'acct-main', 'alipay', 'pro', 'once', 'one_time', 1000, 1, 1001, 'cny', ?, '/manual-payments/main.png', NULL, ?, 4102444800, 1, 1)`,
     )
     .run(
       options.id,
@@ -73,62 +73,62 @@ function insertAccount(
 ): void {
   sqlite
     .prepare(
-      `INSERT INTO collection_accounts(id,channel,display_name,currency,qr_image_key,enabled,created_at,updated_at)
+      `INSERT INTO manual_payment_accounts(id,channel,display_name,currency,qr_image_key,enabled,created_at,updated_at)
        VALUES (?, 'alipay', '支付宝', 'cny', ?, 1, 1, 1)`,
     )
     .run(accountId, qrImageKey)
 }
 
-describe('validateCollectionImage', () => {
+describe('validateManualPaymentImage', () => {
   it('接受声明类型与文件头一致的 JPG / PNG / WebP', () => {
-    expect(validateCollectionImage(PNG_BYTES, 'image/png', 'qrcode')).toEqual({
+    expect(validateManualPaymentImage(PNG_BYTES, 'image/png', 'qrcode')).toEqual({
       ok: true,
       contentType: 'image/png',
     })
-    expect(validateCollectionImage(JPEG_BYTES, 'image/jpeg', 'receipt')).toEqual({
+    expect(validateManualPaymentImage(JPEG_BYTES, 'image/jpeg', 'receipt')).toEqual({
       ok: true,
       contentType: 'image/jpeg',
     })
-    expect(validateCollectionImage(WEBP_BYTES, 'image/webp', 'receipt')).toEqual({
+    expect(validateManualPaymentImage(WEBP_BYTES, 'image/webp', 'receipt')).toEqual({
       ok: true,
       contentType: 'image/webp',
     })
   })
 
   it('拒绝 MIME 为 image/png 但 magic bytes 不是 PNG 的文件', () => {
-    expect(validateCollectionImage(JPEG_BYTES, 'image/png', 'receipt')).toEqual({
+    expect(validateManualPaymentImage(JPEG_BYTES, 'image/png', 'receipt')).toEqual({
       ok: false,
       reason: 'content_mismatch',
     })
   })
 
   it('拒绝声明类型不在白名单的文件', () => {
-    expect(validateCollectionImage(PNG_BYTES, 'image/gif', 'receipt')).toEqual({
+    expect(validateManualPaymentImage(PNG_BYTES, 'image/gif', 'receipt')).toEqual({
       ok: false,
       reason: 'unsupported_type',
     })
   })
 
   it('凭证超过 5 MiB、二维码超过 2 MiB 时拒绝', () => {
-    const tooBigForReceipt = new Uint8Array(COLLECTION_IMAGE_MAX_BYTES.receipt + 1)
+    const tooBigForReceipt = new Uint8Array(MANUAL_PAYMENT_IMAGE_MAX_BYTES.receipt + 1)
     tooBigForReceipt.set(PNG_BYTES, 0)
-    expect(validateCollectionImage(tooBigForReceipt, 'image/png', 'receipt')).toEqual({
+    expect(validateManualPaymentImage(tooBigForReceipt, 'image/png', 'receipt')).toEqual({
       ok: false,
       reason: 'too_large',
     })
 
-    const tooBigForQrcode = new Uint8Array(COLLECTION_IMAGE_MAX_BYTES.qrcode + 1)
+    const tooBigForQrcode = new Uint8Array(MANUAL_PAYMENT_IMAGE_MAX_BYTES.qrcode + 1)
     tooBigForQrcode.set(PNG_BYTES, 0)
-    expect(validateCollectionImage(tooBigForQrcode, 'image/png', 'qrcode')).toEqual({
+    expect(validateManualPaymentImage(tooBigForQrcode, 'image/png', 'qrcode')).toEqual({
       ok: false,
       reason: 'too_large',
     })
   })
 
   it('大小上限边界：刚好等于上限的文件放行', () => {
-    const exact = new Uint8Array(COLLECTION_IMAGE_MAX_BYTES.qrcode)
+    const exact = new Uint8Array(MANUAL_PAYMENT_IMAGE_MAX_BYTES.qrcode)
     exact.set(PNG_BYTES, 0)
-    expect(validateCollectionImage(exact, 'image/png', 'qrcode')).toEqual({
+    expect(validateManualPaymentImage(exact, 'image/png', 'qrcode')).toEqual({
       ok: true,
       contentType: 'image/png',
     })
@@ -138,14 +138,18 @@ describe('validateCollectionImage', () => {
 describe('订单文件引用', () => {
   it('按订单 ID 读取引用，读不到时返回 null', async () => {
     const { db, sqlite } = createTestDb()
-    insertOrder(sqlite, { id: 'o1', userId: 'u1', receiptKey: 'collection-receipts/u1/1-o1.png' })
+    insertOrder(sqlite, {
+      id: 'o1',
+      userId: 'u1',
+      receiptKey: 'manual-payment-receipts/u1/1-o1.png',
+    })
 
     const ref = await findOrderFileRef(db, 'o1')
     expect(ref).toMatchObject({
       id: 'o1',
       userId: 'u1',
       status: 'pending_payment',
-      receiptKey: 'collection-receipts/u1/1-o1.png',
+      receiptKey: 'manual-payment-receipts/u1/1-o1.png',
     })
     expect(await findOrderFileRef(db, 'missing')).toBeNull()
     sqlite.close()
@@ -158,13 +162,15 @@ describe('订单文件引用', () => {
     // 别人的订单写不进去。
     expect(await setOrderReceiptKey(db, { orderId: 'o1', userId: 'u2', key: 'k.png' })).toBe(false)
     // 已结算的订单写不进去。
-    sqlite.prepare("UPDATE collection_orders SET status = 'settled' WHERE id = 'o1'").run()
+    sqlite.prepare("UPDATE manual_payment_orders SET status = 'settled' WHERE id = 'o1'").run()
     expect(await setOrderReceiptKey(db, { orderId: 'o1', userId: 'u1', key: 'k.png' })).toBe(false)
 
-    sqlite.prepare("UPDATE collection_orders SET status = 'pending_payment' WHERE id = 'o1'").run()
+    sqlite
+      .prepare("UPDATE manual_payment_orders SET status = 'pending_payment' WHERE id = 'o1'")
+      .run()
     expect(await setOrderReceiptKey(db, { orderId: 'o1', userId: 'u1', key: 'k.png' })).toBe(true)
     const row = sqlite
-      .prepare('SELECT receipt_key FROM collection_orders WHERE id = ?')
+      .prepare('SELECT receipt_key FROM manual_payment_orders WHERE id = ?')
       .get('o1') as {
       receipt_key: string
     }
@@ -193,11 +199,11 @@ describe('收款账户文件引用', () => {
   it('写入收款码 key：已有行只更新 key，不改启用状态', async () => {
     const { db, sqlite } = createTestDb()
     insertAccount(sqlite, 'acct-main', null)
-    sqlite.prepare("UPDATE collection_accounts SET enabled = 0 WHERE id = 'acct-main'").run()
+    sqlite.prepare("UPDATE manual_payment_accounts SET enabled = 0 WHERE id = 'acct-main'").run()
 
     await setAccountQrImageKey(db, {
       accountId: 'acct-main',
-      key: 'collection-qrcodes/main.png',
+      key: 'manual-payment-qrcodes/main.png',
       channel: 'alipay',
       displayName: '支付宝',
       currency: 'cny',
@@ -206,7 +212,7 @@ describe('收款账户文件引用', () => {
     const ref = await findAccountFileRef(db, 'acct-main')
     expect(ref).toMatchObject({
       id: 'acct-main',
-      qrImageKey: 'collection-qrcodes/main.png',
+      qrImageKey: 'manual-payment-qrcodes/main.png',
       // 上传收款码不等于启用账户。
       enabled: false,
     })
@@ -217,13 +223,13 @@ describe('收款账户文件引用', () => {
     const { db, sqlite } = createTestDb()
     await setAccountQrImageKey(db, {
       accountId: 'acct-new',
-      key: 'collection-qrcodes/new.png',
+      key: 'manual-payment-qrcodes/new.png',
       channel: 'alipay',
       displayName: '新账户',
       currency: 'cny',
     })
 
-    const rows = await db.select().from(schema.collectionAccounts)
+    const rows = await db.select().from(schema.manualPaymentAccounts)
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ id: 'acct-new', enabled: true })
     sqlite.close()
@@ -232,35 +238,49 @@ describe('收款账户文件引用', () => {
 
 describe('收款码 key 的派生与校验', () => {
   it('key 由账户 ID 与扩展名派生，落在收款码目录下', () => {
-    expect(collectionQrImageKey('acct-main', 'png')).toBe('collection-qrcodes/acct-main.png')
-    expect(collectionQrImageKey('acct-main', 'jpg')).toBe('collection-qrcodes/acct-main.jpg')
-    expect(collectionQrImageKey('acct-main', 'webp')).toBe('collection-qrcodes/acct-main.webp')
+    expect(manualPaymentQrImageKey('acct-main', 'png')).toBe('manual-payment-qrcodes/acct-main.png')
+    expect(manualPaymentQrImageKey('acct-main', 'jpg')).toBe('manual-payment-qrcodes/acct-main.jpg')
+    expect(manualPaymentQrImageKey('acct-main', 'webp')).toBe(
+      'manual-payment-qrcodes/acct-main.webp',
+    )
   })
 
   it('只认本账户自己的 key：别人的收款码、其他目录、任意路径都不放行', () => {
-    expect(isCollectionQrImageKey('acct-main', 'collection-qrcodes/acct-main.png')).toBe(true)
-    expect(isCollectionQrImageKey('acct-main', 'collection-qrcodes/acct-main.webp')).toBe(true)
+    expect(isManualPaymentQrImageKey('acct-main', 'manual-payment-qrcodes/acct-main.png')).toBe(
+      true,
+    )
+    expect(isManualPaymentQrImageKey('acct-main', 'manual-payment-qrcodes/acct-main.webp')).toBe(
+      true,
+    )
 
     // 别的账户的收款码
-    expect(isCollectionQrImageKey('acct-main', 'collection-qrcodes/acct-other.png')).toBe(false)
+    expect(isManualPaymentQrImageKey('acct-main', 'manual-payment-qrcodes/acct-other.png')).toBe(
+      false,
+    )
     // 付款凭证目录
-    expect(isCollectionQrImageKey('acct-main', 'collection-receipts/acct-main.png')).toBe(false)
+    expect(isManualPaymentQrImageKey('acct-main', 'manual-payment-receipts/acct-main.png')).toBe(
+      false,
+    )
     // 目录外的任意对象
-    expect(isCollectionQrImageKey('acct-main', 'secrets/other.png')).toBe(false)
-    expect(isCollectionQrImageKey('acct-main', 'acct-main.png')).toBe(false)
+    expect(isManualPaymentQrImageKey('acct-main', 'secrets/other.png')).toBe(false)
+    expect(isManualPaymentQrImageKey('acct-main', 'acct-main.png')).toBe(false)
     // 路径穿越
-    expect(isCollectionQrImageKey('acct-main', 'collection-qrcodes/../secrets.png')).toBe(false)
+    expect(isManualPaymentQrImageKey('acct-main', 'manual-payment-qrcodes/../secrets.png')).toBe(
+      false,
+    )
     // 扩展名不在白名单
-    expect(isCollectionQrImageKey('acct-main', 'collection-qrcodes/acct-main.svg')).toBe(false)
+    expect(isManualPaymentQrImageKey('acct-main', 'manual-payment-qrcodes/acct-main.svg')).toBe(
+      false,
+    )
   })
 
   it('账户 ID 只允许安全字符，不能带路径片段', () => {
-    expect(isCollectionAccountId('acct-main')).toBe(true)
-    expect(isCollectionAccountId('alipay_default')).toBe(true)
-    expect(isCollectionAccountId('acct/main')).toBe(false)
-    expect(isCollectionAccountId('../secrets')).toBe(false)
-    expect(isCollectionAccountId('a b')).toBe(false)
-    expect(isCollectionAccountId('')).toBe(false)
+    expect(isManualPaymentAccountId('acct-main')).toBe(true)
+    expect(isManualPaymentAccountId('alipay_default')).toBe(true)
+    expect(isManualPaymentAccountId('acct/main')).toBe(false)
+    expect(isManualPaymentAccountId('../secrets')).toBe(false)
+    expect(isManualPaymentAccountId('a b')).toBe(false)
+    expect(isManualPaymentAccountId('')).toBe(false)
   })
 })
 
