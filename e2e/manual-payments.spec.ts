@@ -225,10 +225,14 @@ test.describe('ManualPayment', () => {
     await expect(userPage.getByText('已到账').first()).toBeVisible({ timeout: 15000 })
     // 订单同步与详情结算可能是两条 UPDATE，轮询到三侧一致为止。
     await expect
-      .poll(() => {
-        const row = queryOrderRow(orderId)
-        return `${row.paymentCount}:${row.orderStatus}:${row.detailStatus}`
-      })
+      .poll(
+        () => {
+          const row = queryOrderRow(orderId)
+          return `${row.paymentCount}:${row.orderStatus}:${row.detailStatus}`
+        },
+        // 每次轮询都要起一个 wrangler 进程读本地 D1，余量给足，避免撞上边界。
+        { timeout: 20_000 },
+      )
       .toBe('1:completed:settled')
     await userPage.goto('/zh/settings/billing')
     await expect(userPage.getByText('付款记录', { exact: true })).toBeVisible()

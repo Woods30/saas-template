@@ -30,7 +30,7 @@ This page is a map. When you cannot find something, look here first, then read t
 | `src/locale/` | Paraglide output and locale middleware |
 | `src/core/cache/` `src/core/storage/` `src/core/email/` `src/modules/newsletter/` `src/core/notify/` `src/core/payment/` | Service modules: provider registry plus an abstract interface |
 | `src/modules/subscriptions/` | Checkout, money facts (`payments`) and billing contracts (`subscriptions`), refunds, plus admin querying, revenue and the conversion funnel |
-| `src/modules/manual-payments/` | Manual verification: the order + `manual_payment_details` pair, collection accounts, and the admin review flow |
+| `src/modules/manual-payments/` | Manual verification: the order + `manual_payment_details` pair, payee accounts, and the admin review flow |
 | `src/styles/` | `globals.css` (design tokens), `mdx.css` |
 | `src/hooks/` | Hooks reused across pages |
 | `src/server.ts` / `src/router.tsx` | Server entry (CSP nonce, env injection) / router instance |

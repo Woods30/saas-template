@@ -21,7 +21,7 @@ async function login(page: Page): Promise<string> {
   return email
 }
 
-/** 造一个管理员：付款页只有 `admin.*` 权限才能进。 */
+/** 造一个管理员：付款页与订阅页当前按 `admin` 角色放行。 */
 async function loginAsAdmin(page: Page): Promise<string> {
   const email = `pay-admin-${Date.now()}-${crypto.randomUUID().slice(0, 8)}@example.com`
   await seedVerifiedUser({ email, name: '支付管理员', password: PASSWORD, role: 'admin' })
@@ -34,17 +34,8 @@ async function waitForHydration(page: Page): Promise<void> {
   await page.waitForLoadState('networkidle')
 }
 
-/** 直接写本地 D1 造一条已支付记录（含订单），避免为了分 tab 跑完整结账链路。 */
-function seedPayment(email: string, provider: 'stripe' | 'manual_payments'): void {
-  const args = [
-    'exec',
-    'tsx',
-    'scripts/e2e-seed-manual-payments.ts',
-    '--seed-payment',
-    email,
-    provider,
-    ...(process.env.E2E_D1_PERSIST_TO ? ['--persist-to', process.env.E2E_D1_PERSIST_TO] : []),
-  ]
+/** 本地 D1 与 dev server 抢同一 sqlite 文件，写种子偶发失败，退避重试几次。 */
+function withD1Retry(args: string[]): void {
   for (let attempt = 0; ; attempt++) {
     try {
       execFileSync('pnpm', args, { stdio: 'pipe', encoding: 'utf8' })
@@ -55,24 +46,28 @@ function seedPayment(email: string, provider: 'stripe' | 'manual_payments'): voi
     }
   }
 }
+
+/** 直接写本地 D1 造一条已支付记录（含订单），避免为了分 tab 跑完整结账链路。 */
+function seedPayment(email: string, provider: 'stripe' | 'manual_payments'): void {
+  withD1Retry([
+    'exec',
+    'tsx',
+    'scripts/e2e-seed-manual-payments.ts',
+    '--seed-payment',
+    email,
+    provider,
+    ...(process.env.E2E_D1_PERSIST_TO ? ['--persist-to', process.env.E2E_D1_PERSIST_TO] : []),
+  ])
+}
 function seed(email: string, history = false) {
-  const args = [
+  withD1Retry([
     'exec',
     'tsx',
     'scripts/e2e-seed-subscription.ts',
     email,
     ...(history ? ['--history'] : []),
     ...(process.env.E2E_D1_PERSIST_TO ? ['--persist-to', process.env.E2E_D1_PERSIST_TO] : []),
-  ]
-  for (let attempt = 0; ; attempt++) {
-    try {
-      execFileSync('pnpm', args, { stdio: 'pipe', encoding: 'utf8' })
-      return
-    } catch (error) {
-      if (attempt === 3) throw error
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, (attempt + 1) * 300)
-    }
-  }
+  ])
 }
 async function configured(request: import('@playwright/test').APIRequestContext) {
   return (await request.post('/api/payment', { data: {} })).status() === 401

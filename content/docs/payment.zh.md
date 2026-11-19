@@ -95,10 +95,10 @@ Stripe 用 `cancel_at_period_end`，Creem 用 `mode: scheduled`。核销型收�
 
 | 页面 | 权限 | 内容 |
 |---|---|---|
-| `/admin/payments` | `admin.orders.read` / `admin.orders.write` | 已确认的付款，按类型分四个 tab：**全部 / 订阅 / 一次性 / 人工核销**（`all` 为默认值，不写进 URL）。tab 是划分而不是叠加——人工核销不会出现在订阅或一次性里。 |
-| `/admin/subscriptions` | `admin.subscriptions.read` | 订阅周期与状态。 |
+| `/admin/payments` | `admin` 角色 | 已确认的付款，按类型分四个 tab：**全部 / 订阅 / 一次性 / 人工核销**（`all` 为默认值，不写进 URL）。tab 是划分而不是叠加——人工核销不会出现在订阅或一次性里。 |
+| `/admin/subscriptions` | `admin` 角色 | 订阅周期与状态。 |
 | `/admin/manual-payments` | `admin.orders.read` / `admin.orders.write` | 人工核销订单的核验队列。 |
-| `/admin` | 任意 `admin.*` | KPI 卡、「注册 → 创建结账 → 付款」转化漏斗（24 小时 / 7 天 / 30 天，按 UTM 维度、referrer 或 country 分组；空值显示为 `direct`）、最近付款与待办。 |
+| `/admin` | `admin.orders.read` | KPI 卡、「注册 → 创建结账 → 付款」转化漏斗（24 小时 / 7 天 / 30 天，按 UTM 维度、referrer 或 country 分组；空值显示为 `direct`）、最近付款与待办。 |
 
 ## 退款与反扣
 
@@ -109,7 +109,7 @@ Stripe 用 `cancel_at_period_end`，Creem 用 `mode: scheduled`。核销型收�
 1. 先用条件状态转移把付款行抢成 `refunding`，并发重复点击只会有一个成功；
 2. 调 provider 退款：Stripe 按 PaymentIntent，Creem 按交易号（Creem 只支持全额）；
 3. 成功后写 `refunded` / `partially_refunded`，并反扣**该付款开出的积分批次**；
-4. 渠道失败时订单恢复原状态，可以重试；每次成功都写审计日志。
+4. 渠道失败时付款行恢复原状态，可以重试；每次成功都写审计日志。
 
 反扣只扣到 0 为止：积分已经被消费时不会把余额打成负数，流水里记录应扣、实际扣减与
 差额。渠道侧的最终到账以 webhook 为准，后台先按「已受理」落库。
