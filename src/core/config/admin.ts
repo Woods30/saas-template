@@ -49,8 +49,14 @@ const saveInputSchema = z.object({
   values: z.record(z.string(), z.unknown()),
 })
 
-/** 按 id 取 tab；未知 id 与旧的未知分组一样返回 400。 */
+/**
+ * 按 id 取 tab；未知 id 与旧的未知分组一样返回 400。
+ *
+ * `custom` 也返回 400：自定义配置是整表替换，必须走 `saveCustomSettings`，
+ * 混进按 tab 保存会把它的空分组当成「什么都不改」而静默成功。
+ */
 export function requireSettingTab(tabId: string): SettingTab {
+  if (tabId === 'custom') throw new Response(null, { status: 400 })
   const tab = settingTab(tabId)
   if (!tab) throw new Response(null, { status: 400 })
   return tab

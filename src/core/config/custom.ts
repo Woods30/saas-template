@@ -8,7 +8,7 @@
  * 整表替换：不在提交清单里的 `custom.*` 行会被删除，注册表行不受影响。
  */
 import { createServerOnlyFn } from '@tanstack/react-start'
-import { and, eq, like, notInArray } from 'drizzle-orm'
+import { eq, inArray, like } from 'drizzle-orm'
 import { type DB, schema } from '@/core/db'
 import {
   decryptSecret,
@@ -139,6 +139,33 @@ export async function listCustomSettings(db: DB, encryptionKey?: string): Promis
   return entries
 }
 
+/** D1 单条语句的绑定参数上限是 100；留一半余量，每批 50 个键。 */
+export const CUSTOM_DELETE_BATCH_SIZE = 50
+
+/**
+ * 算出需要删除的 `custom.*` 存储键，并按批切分。
+ *
+ * 用已加载的现有键与本次保留键做差集，再分块删除。单条 `NOT IN (...)` 在
+ * 自定义条目较多时会超过 D1 的绑定参数上限。
+ */
+export function pendingCustomKeyDeletes(
+  existingKeys: Iterable<string>,
+  keepKeys: Iterable<string>,
+  batchSize = CUSTOM_DELETE_BATCH_SIZE,
+): string[][] {
+  const keep = new Set(keepKeys)
+  const pending: string[] = []
+  for (const key of existingKeys) {
+    if (!keep.has(key)) pending.push(key)
+  }
+
+  const batches: string[][] = []
+  for (let index = 0; index < pending.length; index += batchSize) {
+    batches.push(pending.slice(index, index + batchSize))
+  }
+  return batches
+}
+
 /**
  * 整表替换自定义配置。
  *
@@ -165,6 +192,8 @@ export async function replaceCustomSettings(
     .where(like(schema.settings.key, `${CUSTOM_PREFIX}%`))
 
   const existing = new Map<string, StoredCustomValue>()
+  // 删除用全部现有键（含解析失败的坏行），值查找只用能解析的行。
+  const existingKeys = existingRows.map((row) => row.key)
   for (const row of existingRows) {
     const stored = parseStored(row.value)
     if (stored) existing.set(row.key, stored)
@@ -212,16 +241,12 @@ export async function replaceCustomSettings(
       })
   }
 
-  // 删除不再提交的 custom.* 行；注册表行不匹配 like 条件，不会被碰到。
+  // 删除不再提交的 custom.* 行；按批执行，避免超出 D1 的绑定参数上限。
+  // 只取已加载的 custom.* 键，注册表行不会被碰到。
   const keepKeys = rows.map((row) => row.key)
-  const customRows = like(schema.settings.key, `${CUSTOM_PREFIX}%`)
-  await db
-    .delete(schema.settings)
-    .where(
-      keepKeys.length === 0
-        ? customRows
-        : and(customRows, notInArray(schema.settings.key, keepKeys)),
-    )
+  for (const batch of pendingCustomKeyDeletes(existingKeys, keepKeys)) {
+    await db.delete(schema.settings).where(inArray(schema.settings.key, batch))
+  }
 }
 
 /**

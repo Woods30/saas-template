@@ -23,6 +23,17 @@ describe('saveAdminSettings', () => {
     expect(requireSettingTab('general').id).toBe('general')
   })
 
+  it('custom tab 必须走 saveCustomSettings，返回 400', () => {
+    let thrown: unknown
+    try {
+      requireSettingTab('custom')
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(Response)
+    expect((thrown as Response).status).toBe(400)
+  })
+
   it('分组 id 不是 tab，同样返回 400', () => {
     let thrown: unknown
     try {

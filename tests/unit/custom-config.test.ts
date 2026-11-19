@@ -9,6 +9,7 @@ import {
 import {
   isReservedCustomKey,
   listCustomSettings,
+  pendingCustomKeyDeletes,
   replaceCustomSettings,
 } from '../../src/core/config/custom'
 import { SettingsValidationError } from '../../src/core/config/settings'
@@ -94,6 +95,31 @@ describe('自定义键写入', () => {
 
     const keys = storedRows(sqlite).map((row) => row.key)
     expect(keys).toEqual(['custom.keep'])
+    sqlite.close()
+  })
+
+  it('待删键按 50 个一批切分，且只含未保留的键', () => {
+    const existing = Array.from({ length: 120 }, (_, index) => `custom.k${index}`)
+    const batches = pendingCustomKeyDeletes(existing, ['custom.k0', 'custom.k7'])
+
+    expect(batches.map((batch) => batch.length)).toEqual([50, 50, 18])
+    const flattened = batches.flat()
+    expect(flattened).toHaveLength(118)
+    expect(new Set(flattened).size).toBe(118)
+    expect(flattened).not.toContain('custom.k0')
+    expect(flattened).not.toContain('custom.k7')
+  })
+
+  it('超过单条语句参数上限的旧行也能全部删除', async () => {
+    const { db, sqlite } = createTestDatabase()
+    const insert = sqlite.prepare('INSERT INTO settings(key, value, updated_at) VALUES (?, ?, 1)')
+    for (let index = 0; index < 120; index++) {
+      insert.run(`custom.old${index}`, JSON.stringify({ v: `v${index}`, s: false }))
+    }
+
+    await replaceCustomSettings(db, [{ key: 'keep', value: 'y', secret: false }])
+
+    expect(storedRows(sqlite).map((row) => row.key)).toEqual(['custom.keep'])
     sqlite.close()
   })
 })
