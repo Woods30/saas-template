@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { buildCleanupSettingsSql } from '../../scripts/cleanup-removed-settings'
 import { baseConfig } from '../../src/config/website'
+import { settingsToServerEnv } from '../../src/core/config/derive'
 import { defaultSettingsValues, SETTING_FIELDS } from '../../src/core/config/registry'
 import {
   applySettingsToConfig,
   resolveSettingsValues,
   validateGroupValues,
 } from '../../src/core/config/settings'
+import { parseServerEnv } from '../../src/core/env/server'
 import { createTestDatabase } from '../helpers/database'
 
 /**
@@ -270,10 +272,22 @@ describe('applySettingsToConfig', () => {
 })
 
 describe('清理已移除的配置行', () => {
-  it('只匹配 features.* 与 modules.auth', () => {
-    const sql = buildCleanupSettingsSql()
-    expect(sql).toContain("key LIKE 'features.%'")
-    expect(sql).toContain("key = 'modules.auth'")
+  it('只删除精确的孤儿键，近似键保留', () => {
+    const { sqlite } = createTestDatabase()
+    sqlite.exec(`
+      INSERT INTO settings (key, value, updated_at) VALUES
+        ('featuresX.enableAdmin', 'true', 1),
+        ('modules.manualPayments', 'true', 1),
+        ('features.enableAdmin', 'true', 1),
+        ('modules.auth', 'true', 1)
+    `)
+
+    expect(sqlite.prepare(buildCleanupSettingsSql()).all()).toHaveLength(2)
+    expect(sqlite.prepare('SELECT key FROM settings ORDER BY key').all()).toEqual([
+      { key: 'featuresX.enableAdmin' },
+      { key: 'modules.manualPayments' },
+    ])
+    sqlite.close()
   })
 
   it('删除孤儿行，重复执行不报错也不误删', () => {
@@ -296,5 +310,16 @@ describe('清理已移除的配置行', () => {
       { key: 'brand.name' },
     ])
     sqlite.close()
+  })
+})
+
+describe('settingsToServerEnv', () => {
+  it('GitHub 凭据映射到服务端 env', () => {
+    const env = settingsToServerEnv(
+      { 'github.clientId': 'github-id', 'github.clientSecret': 'github-secret' },
+      parseServerEnv({}),
+    )
+    expect(env.GITHUB_CLIENT_ID).toBe('github-id')
+    expect(env.GITHUB_CLIENT_SECRET).toBe('github-secret')
   })
 })

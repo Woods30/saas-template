@@ -63,6 +63,8 @@ export interface ManagedEnv {
   CREEM_DEBUG?: 'true' | 'false'
   GOOGLE_CLIENT_ID?: string
   GOOGLE_CLIENT_SECRET?: string
+  GITHUB_CLIENT_ID?: string
+  GITHUB_CLIENT_SECRET?: string
   TURNSTILE_SECRET_KEY?: string
   CLOUDFLARE_EMAIL_SENDER?: string
   RESEND_API_KEY?: string

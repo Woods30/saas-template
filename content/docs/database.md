@@ -131,9 +131,10 @@ You should see `users`, `sessions`, `accounts`, `verifications`, `subscriptions`
 - **Existing databases need the new baseline.** After pulling a version that adds or changes the
   schema, run `pnpm db:setup` (and `pnpm db:migrate:local` where needed) on existing local or
   deployed databases; otherwise the first write fails at runtime instead of at startup.
-- **Upgrading past the capability switches?** Run `pnpm db:cleanup:settings` once after migrating.
-  It removes the retired `features.*` and `modules.auth` rows from `settings`; the command is
-  idempotent, so running it again is safe.
+- **Upgrading past the capability switches?** Run `pnpm db:cleanup:settings` once after migrating
+  (use `pnpm db:cleanup:settings:remote` for deployed D1, or `pnpm db:cleanup:settings:pg` for
+  PostgreSQL). It removes the retired `features.*` and `modules.auth` rows from `settings`; the
+  command is idempotent, so running it again is safe.
 - **Both schemas have to change together.** A new table means editing `schema.sqlite.ts` *and*
   `schema.postgres.ts`; `tests/unit/schema-parity.test.ts` compares every table and column, but
   indexes and constraints rely on code review.
