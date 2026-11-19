@@ -303,10 +303,10 @@ function AdminManualPaymentOrdersComponent() {
   const orderColumns = useMemo<DataTableColumn<AdminManualPaymentOrder>[]>(
     () => [
       {
-        id: 'orderId',
+        id: 'orderNo',
         header: m['manual_payments_admin.col_order_id'](),
         className: 'font-mono text-xs',
-        cell: (order) => order.id,
+        cell: (order) => order.orderNo,
       },
       {
         id: 'buyer',

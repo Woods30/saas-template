@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { matchPermission } from '@/core/auth/rbac'
 import { isManualPaymentQrImageKey } from './files'
 import {
   ManualPaymentError,
@@ -160,6 +161,12 @@ export interface ManualPaymentGuardDeps {
   module: () => Response | undefined
   /** 服务端会话：没有登录用户时返回 null。 */
   session: () => Promise<ManualPaymentSession | null>
+  /**
+   * 解析用户持有的 RBAC 权限码。
+   *
+   * 权限点只从服务端读取，客户端传什么都不作数；没有权限时返回空数组。
+   */
+  permissions: (userId: string) => Promise<readonly string[]>
   /** 限流检查器。 */
   rateLimit: RateLimitChecker
   /** 客户端 IP。 */
@@ -170,6 +177,12 @@ export interface ManualPaymentGuardDeps {
 export interface ManualPaymentGuardOptions {
   /** 是否要求管理员角色。 */
   requireAdmin?: boolean
+  /**
+   * 要求的 RBAC 权限点（如 `admin.orders.read`）。
+   *
+   * 与 `requireAdmin` 二选一：管理台接口以权限点为准，角色只决定能不能进管理台。
+   */
+  requiredPermission?: string
   /** 要限流的动作；不给就不限流。 */
   limit?: ManualPaymentRateLimitAction
 }
@@ -179,13 +192,14 @@ export type ManualPaymentGuardResult =
   | { ok: false; response: Response }
 
 /**
- * 统一门禁：模块可用性 → 服务端会话 → 角色 → 限流。
+ * 统一门禁：模块可用性 → 服务端会话 → 角色 / 权限点 → 限流。
  *
  * 顺序是硬要求，不能调换：
  *
  * - 模块门禁最先跑：模块关掉时连「有没有登录」都不该泄露，也不该白白查一次
  *   会话。
- * - 会话在角色之前：角色必须来自服务端会话，客户端传什么都不作数。
+ * - 会话在角色 / 权限之前：角色与权限必须来自服务端，客户端传什么都不作数。
+ * - 权限点在限流之前：未授权的请求不该消耗限流额度。
  * - 限流最后：限流要按账号计数，而账号 ID 得先从会话里拿到。
  *
  * 任何一步失败都返回对应的响应，成功则交回服务端会话。
@@ -202,6 +216,14 @@ export async function guardManualPaymentRequest(
 
   if (options.requireAdmin && session.role !== 'admin') {
     return { ok: false, response: errorResponse('FORBIDDEN') }
+  }
+
+  if (options.requiredPermission) {
+    const held = await deps.permissions(session.userId)
+    if (!matchPermission(options.requiredPermission, held)) {
+      // 没有权限就 403，绝不回空列表 —— 否则前端会把「无权限」显示成「没有订单」。
+      return { ok: false, response: errorResponse('FORBIDDEN') }
+    }
   }
 
   if (options.limit) {

@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
+import { listAllOrders } from '@/modules/manual-payments/orders'
 import {
   ADMIN_ORDER_STATUSES,
   createOrderSchema,
@@ -19,7 +20,9 @@ import {
   resolveAdminOrderQuery,
   reviewOrderSchema,
 } from '@/modules/manual-payments/server-logic'
+import { reviewOrder } from '@/modules/manual-payments/settlement'
 import { ManualPaymentError } from '@/modules/manual-payments/types'
+import { createTestDatabase } from '../helpers/database'
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 
@@ -53,6 +56,11 @@ function makeDeps(overrides: Partial<ManualPaymentGuardDeps> = {}): {
       calls.push('session')
       if (overrides.session) return overrides.session()
       return { userId: 'u1', role: 'user' }
+    },
+    permissions: async (userId) => {
+      calls.push('permissions')
+      if (overrides.permissions) return overrides.permissions(userId)
+      return ['*']
     },
     rateLimit: async (opts) => {
       calls.push('rateLimit')
@@ -198,6 +206,138 @@ describe('门禁顺序', () => {
     const { deps } = makeDeps({ session: async () => ({ userId: 'u1', role: 'user' }) })
     const result = await guardManualPaymentRequest(deps, { requireAdmin: true })
     expect(result.ok).toBe(false)
+  })
+})
+
+describe('权限点门禁', () => {
+  it('没有 admin.orders.read 权限的管理员拿到 403', async () => {
+    // 角色是 admin，但 RBAC 权限点里没有订单读取权限：管理台接口以权限点为准。
+    const { deps } = makeDeps({
+      session: async () => ({ userId: 'a1', role: 'admin' }),
+      permissions: async () => ['admin.content.read', 'admin.content.write'],
+    })
+    const result = await guardManualPaymentRequest(deps, {
+      requiredPermission: 'admin.orders.read',
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.response.status).toBe(403)
+      await expect(result.response.json()).resolves.toEqual({ error: 'FORBIDDEN' })
+    }
+  })
+
+  it('editor 只有内容权限时不能读取核销队列', async () => {
+    const { deps } = makeDeps({
+      session: async () => ({ userId: 'e1', role: 'editor' }),
+      permissions: async () => [
+        'admin.content.read',
+        'admin.content.write',
+        'admin.tickets.read',
+        'admin.tickets.write',
+      ],
+    })
+    const result = await guardManualPaymentRequest(deps, {
+      requiredPermission: 'admin.orders.read',
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.response.status).toBe(403)
+  })
+
+  it('持有对应权限点或通配权限时放行', async () => {
+    const held = await guardManualPaymentRequest(
+      makeDeps({ permissions: async () => ['admin.orders.read'] }).deps,
+      { requiredPermission: 'admin.orders.read' },
+    )
+    expect(held.ok).toBe(true)
+
+    const wildcard = await guardManualPaymentRequest(
+      makeDeps({ permissions: async () => ['*'] }).deps,
+      { requiredPermission: 'admin.orders.write' },
+    )
+    expect(wildcard.ok).toBe(true)
+  })
+
+  it('权限检查在限流之前：未授权请求不消耗限流额度', async () => {
+    const { deps, calls } = makeDeps({
+      session: async () => ({ userId: 'a1', role: 'admin' }),
+      permissions: async () => [],
+    })
+    const result = await guardManualPaymentRequest(deps, {
+      requiredPermission: 'admin.orders.write',
+      limit: 'review-order',
+    })
+    expect(result.ok).toBe(false)
+    expect(calls).toEqual(['module', 'session', 'permissions'])
+  })
+})
+
+describe('管理员核销队列读取', () => {
+  /** 一张待核验订单：两行（购买意图 + 核销详情），外加下单账号。 */
+  function seedPendingOrder() {
+    const { sqlite, db } = createTestDatabase()
+    sqlite.exec(
+      "INSERT INTO users(id,name,email,created_at,updated_at) VALUES ('u1','User','u1@example.com',1,1),('admin','Admin','admin@example.com',1,1)",
+    )
+    sqlite
+      .prepare(
+        `INSERT INTO orders(id,order_no,user_id,provider,mode,product_id,offer_id,status,created_at,updated_at)
+         VALUES ('order-1','ord_20260101000000_abcd1234','u1','manual_payments','payment','pro','monthly','open',100,100)`,
+      )
+      .run()
+    sqlite
+      .prepare(
+        `INSERT INTO manual_payment_details(order_id,user_id,account_id,channel,base_amount,fingerprint,payable_amount,currency,status,submitted_at,expires_at,created_at,updated_at)
+         VALUES ('order-1','u1','acct-main','alipay',18000,42,18042,'cny','pending_verification',100,9999999999,100,100)`,
+      )
+      .run()
+    return { sqlite, db }
+  }
+
+  it('管理员列表返回 orderNo 与买家邮箱', async () => {
+    const { db } = seedPendingOrder()
+    const page = await listAllOrders(db, {
+      status: 'pending_verification',
+      limit: 20,
+      offset: 0,
+    })
+    expect(page.total).toBe(1)
+    expect(page.rows).toHaveLength(1)
+    expect(page.rows[0]?.orderNo).toBe('ord_20260101000000_abcd1234')
+    expect(page.rows[0]?.email).toBe('u1@example.com')
+    expect(page.rows[0]?.payableAmount).toBe(18042)
+    expect(page.rows[0]?.status).toBe('pending_verification')
+  })
+
+  it('核验通过后订单状态为 settled 且 payments.order_id 指向订单', async () => {
+    const { sqlite, db } = seedPendingOrder()
+    const reviewed = await reviewOrder(db, {
+      orderId: 'order-1',
+      reviewerId: 'admin',
+      action: 'approve',
+      observedAmount: 18042,
+    })
+    expect(reviewed.status).toBe('settled')
+
+    // 核销详情是状态机的真源；`orders.status` 只跟随终态。
+    const detail = sqlite
+      .prepare('SELECT status FROM manual_payment_details WHERE order_id = ?')
+      .get('order-1') as { status: string }
+    expect(detail.status).toBe('settled')
+    const order = sqlite.prepare('SELECT status FROM orders WHERE id = ?').get('order-1') as {
+      status: string
+    }
+    expect(order.status).toBe('completed')
+
+    // 资金事实必须指回购买意图。
+    const payments = sqlite.prepare('SELECT order_id, amount, status FROM payments').all() as {
+      order_id: string | null
+      amount: number
+      status: string
+    }[]
+    expect(payments).toHaveLength(1)
+    expect(payments[0]?.order_id).toBe('order-1')
+    expect(payments[0]?.amount).toBe(18042)
+    expect(payments[0]?.status).toBe('paid')
   })
 })
 

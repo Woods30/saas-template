@@ -195,7 +195,9 @@ describe('核验队列页', () => {
       },
     })
     renderPage()
-    await waitFor(() => expect(screen.getByText('ord_1')).toBeInTheDocument())
+    // 订单号列展示对外订单号，而不是内部 UUID。
+    await waitFor(() => expect(screen.getByText('ord_20260101000000_ABCDEF12')).toBeInTheDocument())
+    expect(screen.queryByText('ord_1')).toBeNull()
     expect(screen.getByText('buyer@example.com')).toBeInTheDocument()
     // 金额按币种格式化：18042 分 = ¥180.42。
     expect(screen.getByText(/180\.42/)).toBeInTheDocument()
@@ -207,9 +209,14 @@ describe('核验队列页', () => {
       ok: true as const,
       page: {
         rows: [
-          makeOrder({ id: 'ord_no_receipt', receiptKey: null }),
+          makeOrder({
+            id: 'ord_no_receipt',
+            orderNo: 'ord_no_receipt_no',
+            receiptKey: null,
+          }),
           makeOrder({
             id: 'ord_with_receipt',
+            orderNo: 'ord_with_receipt_no',
             receiptKey: 'manual-payment-receipts/ord_with_receipt',
           }),
         ],
@@ -217,8 +224,8 @@ describe('核验队列页', () => {
       },
     })
     renderPage()
-    await waitFor(() => expect(screen.getByText('ord_no_receipt')).toBeInTheDocument())
-    expect(screen.getByText('ord_with_receipt')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('ord_no_receipt_no')).toBeInTheDocument())
+    expect(screen.getByText('ord_with_receipt_no')).toBeInTheDocument()
     const img = screen.getByAltText('付款凭证') as HTMLImageElement
     // key 不暴露给客户端：src 只有端点路径，不含任何 R2 key。
     expect(img.src).toContain('/api/manual-payments/orders/ord_with_receipt/receipt')
@@ -375,24 +382,24 @@ describe('个人中心入口', () => {
 
   it('角色、功能开关与模块三者都满足才显示入口', () => {
     renderLayout('admin')
-    expect(screen.getByText('核验队列')).toBeInTheDocument()
+    expect(screen.getByText('核销审核')).toBeInTheDocument()
   })
 
   it('非管理员不显示入口', () => {
     renderLayout('user')
-    expect(screen.queryByText('核验队列')).toBeNull()
+    expect(screen.queryByText('核销审核')).toBeNull()
   })
 
   it('模块关闭时不显示入口', () => {
     websiteConfig.manualPayments.enabled = false
     renderLayout('admin')
-    expect(screen.queryByText('核验队列')).toBeNull()
+    expect(screen.queryByText('核销审核')).toBeNull()
   })
 
   it('功能开关关闭时不显示入口', () => {
     websiteConfig.features.enableAdmin = false
     renderLayout('admin')
-    expect(screen.queryByText('核验队列')).toBeNull()
+    expect(screen.queryByText('核销审核')).toBeNull()
   })
 
   it('面包屑识别核验队列页', () => {

@@ -822,7 +822,7 @@
   "manual_payments_admin.external_reference": "外部流水号",
   "manual_payments_admin.filter_all": "全部状态",
   "manual_payments_admin.filter_status": "按状态筛选",
-  "manual_payments_admin.nav_orders": "核验队列",
+  "manual_payments_admin.nav_orders": "核销审核",
   "manual_payments_admin.observed_amount": "实际到账金额（元）",
   "manual_payments_admin.qr_alt": "收款二维码",
   "manual_payments_admin.receipt_alt": "付款凭证",

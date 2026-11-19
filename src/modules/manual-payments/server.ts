@@ -92,6 +92,14 @@ async function guardDeps(): Promise<ManualPaymentGuardDeps> {
       if (!session) return null
       return { userId: session.user.id, role: session.user.role ?? 'user' }
     },
+    // 权限点只从服务端 RBAC 表读取：客户端传来的角色 / 权限都不作数。
+    permissions: async (userId) => {
+      const [{ getUserPermissions }, { createDbFromEnv }] = await Promise.all([
+        import('@/modules/rbac/service'),
+        import('@/core/db'),
+      ])
+      return getUserPermissions(await createDbFromEnv(getServerContext().env), userId)
+    },
     rateLimit: checkRateLimit,
     // `cf-connecting-ip` 可信；`x-forwarded-for` 可伪造，不用。
     ip: headers.get('cf-connecting-ip') ?? 'unknown',
@@ -139,7 +147,9 @@ export async function adminListOrders(
   { guard, db }: AdminActionDeps,
   data: unknown,
 ): Promise<AdminOrderPage | Response> {
-  const gate = await guardManualPaymentRequest(guard, { requireAdmin: true })
+  const gate = await guardManualPaymentRequest(guard, {
+    requiredPermission: 'admin.orders.read',
+  })
   if (!gate.ok) return gate.response
 
   const raw = data && typeof data === 'object' ? (data as Record<string, unknown>) : {}
@@ -169,7 +179,7 @@ export async function adminReviewOrder(
   data: unknown,
 ): Promise<{ status: string } | Response> {
   const gate = await guardManualPaymentRequest(guard, {
-    requireAdmin: true,
+    requiredPermission: 'admin.orders.write',
     limit: 'review-order',
   })
   if (!gate.ok) return gate.response
@@ -199,7 +209,9 @@ export async function adminSaveAccount(
   { guard, db }: AdminActionDeps,
   data: unknown,
 ): Promise<{ ok: true } | Response> {
-  const gate = await guardManualPaymentRequest(guard, { requireAdmin: true })
+  const gate = await guardManualPaymentRequest(guard, {
+    requiredPermission: 'admin.orders.write',
+  })
   if (!gate.ok) return gate.response
 
   const parsed = manualPaymentAccountSchema.safeParse(data)
@@ -362,7 +374,9 @@ export const reviewManualPaymentOrderFn = createServerFn({ method: 'POST' }).han
 /** 管理员读取收款账户。 */
 export const fetchManualPaymentAccountsFn = createServerFn({ method: 'GET' }).handler(
   async (): Promise<ManualPaymentAccountRow[] | Response> => {
-    const guard = await guardManualPaymentRequest(await guardDeps(), { requireAdmin: true })
+    const guard = await guardManualPaymentRequest(await guardDeps(), {
+      requiredPermission: 'admin.orders.read',
+    })
     if (!guard.ok) return guard.response
 
     try {

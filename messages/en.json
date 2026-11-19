@@ -822,7 +822,7 @@
   "manual_payments_admin.external_reference": "External reference",
   "manual_payments_admin.filter_all": "All statuses",
   "manual_payments_admin.filter_status": "Filter by status",
-  "manual_payments_admin.nav_orders": "Verification queue",
+  "manual_payments_admin.nav_orders": "Manual review",
   "manual_payments_admin.observed_amount": "Observed amount (CNY)",
   "manual_payments_admin.qr_alt": "Payment QR code",
   "manual_payments_admin.receipt_alt": "Payment receipt",
