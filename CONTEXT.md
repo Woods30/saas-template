@@ -22,15 +22,31 @@
   流水 `credit_transactions` + 分配明细 `credit_allocations` + 汇总 `credit_balances`）实现
   FIFO 优先扣减最早到期批次、过期作废与按原消费流水逆向退回（`refundCredits`）。
 - **权益模型（credits-only）**：套餐之间只差**积分数量与有效期**，没有套餐级功能开关；
-  功能开关是实例级的 modules / features。见 ADR-0011。
+  功能开关是实例级的模块开关。见 ADR-0011、ADR-0013。
 - **购买发积分**：每种付费方式成功后发放多少积分、有效期多少天，写在
   `src/config/products.ts` 的 offer 上；订阅每期续费再发一次。
 - **退款反扣（clawback）**：退款时只扣该订单开出的批次，扣到 0 为止；应扣、实际扣减与
   差额写进流水，退款不因积分不足而失败。
 - **期末取消（cancel at period end）**：用户自助取消后本计费周期内仍有效，到期不续费；
   不立即终止。
-- **manual-payments（核销型收款）**：`src/modules/manual-payments/service.ts`。原 `collection` 模块，
-  管理收款码账户、唯一尾数金额锁池、付款凭证上传与后台人工核销。
+- **manual-payments（人工核销）**：`src/modules/manual-payments/service.ts`。原 `collection`
+  模块的统一名称，代码、配置键、表名与文案均已改名；负责收款账户、唯一尾数金额锁池、
+  付款凭证上传与后台人工核销。_避免使用_：「核销型支付」「collection」指代该模块。
+- **付款（payment）**：`payments` 表的一行，是**资金事实**——钱已到账的不可重复记录，只由
+  渠道回调或人工核验结算写入。管理台「付款」页与个人中心付款记录读它。
+  _避免使用_：「订单」指代资金事实。
+- **订阅（subscription）**：`subscriptions` 表的一行，是**计费契约**——周期、续费与期末取消。
+  与付款是两个概念、两个入口：付款回答「收过哪些钱」，订阅回答「当前方案与下次续费」。
+- **订单 / 结账尝试（order）**：`orders` 表的一行，是**购买意图**——每次创建结账写一行，
+  订阅与一次性都写，续费不写。状态只描述结账尝试，不代表钱已到账。
+- **核销详情（manual payment details）**：`manual_payment_details` 表，与订单 1:1。承载金额
+  尾数、收款账户、付款凭证与人工核验字段；金额唯一与结算临界区两条索引留在这张表。
+- **归因（attribution）**：注册时写入用户行的首次触达信息（UTM 五件套、referrer、country）。
+  用于管理台转化漏斗分组；空值表示未归因，不表示自然流量。
+- **用户中心功能（user features）**：个人中心里可由管理员开启/关闭的入口（账单 / 人工核销 /
+  API 密钥 / 通知偏好）。与模块开关分开：模块开关决定能力是否存在，功能开关决定入口是否展示。
+- **自定义配置（custom config）**：`settings` 表中不属于任何注册表字段的 key-value，由后台
+  「自定义配置」tab 维护；仅服务端可读，不进入公开配置。
 - **rbac（角色与权限点）**：`src/modules/rbac/service.ts` 与 `src/core/auth/rbac.ts`。基于 `roles`、
   `permissions`、`role_permissions`、`user_roles` 四张表，支持 `*` 与前缀通配及权限天花板保护。
 - **ai-tasks（AI 任务原语）**：`src/modules/ai-tasks/service.ts` 与 `src/core/ai/index.ts`。封装
@@ -48,8 +64,8 @@
   键（点号格式，如 `brand.name`）、类型、默认值与可选的 `envKey`；后台表单、种子、
   校验与 `settings` 表都从它派生。新增配置项只改这里与文案。
 - **配置项 / 配置组 / 配置 tab**：配置项是注册表里的一个字段；一组字段构成后台的一张
-  卡片（可带「测试连接」）；若干组构成一个 tab（general / modules / auth / payment /
-  mail / analytics / notification）。
+  卡片（可带「测试连接」）；若干组构成一个 tab（基础与外观 / 用户 / 内容模块 / 认证与安全 /
+  支付 / 邮件 / 分析 / 通知 / 自定义配置）。每个 tab 一个保存按钮，分组可折叠。
 - **配置密钥加密**：`secret` 类型的字段以 AES-GCM 加密入库（`enc:v1:` 前缀），
   密钥由 `CONFIG_ENCRYPTION_KEY` 派生；后台只回显末四位，留空表示不修改。
   缺口令时拒绝保存含密钥的组，公开参数仍可写。
@@ -69,10 +85,10 @@
   AsyncLocalStorage，业务代码经 `getServerContext()` 取用。
 - **SiteModule / ServiceModule**：`src/config/website.ts` 的联合类型。`SiteModule` 含
   `docs` / `blog` / `changelog` 与全部服务模块；`ServiceModule` 仅服务模块，供 API 门禁使用。
-  `auth` 也在 `ServiceModule` 内，但它**没有 provider 注册表**（接线由 Better Auth 自己持有），
-  因此只适用开关与门禁两步。它的必要配置只有一条**矛盾规则**：`auth.requireEmailVerification`
-  为 `true` 而 `mail` 未配置完整时，状态为 `incomplete`——要求验证却发不出验证邮件，等于
-  让新用户永远无法登录。这是该模块唯一会触发 503 的情形。
+  `auth` **不在模块开关内**：认证是否可用由邮箱 / Google / GitHub 三个方法开关决定，保存时
+  至少保留一个。邮件模块仍有一条**矛盾规则**：`auth.requireEmailVerification` 为 `true` 而
+  `mail` 未配置完整时，服务状态为 `incomplete`——要求验证却发不出验证邮件，等于让新用户
+  永远无法登录。
 - **模块门禁**：`assertPageEnabled`（页面，抛 `notFound()`）与 `getModuleUnavailableResponse`
   （API，404 `MODULE_DISABLED` / 503 `SERVICE_UNAVAILABLE`）。
 - **管理台 / 个人中心 / 后台**：`/admin/*` 称**管理台**，`/settings/*` 称**个人中心**；
@@ -96,10 +112,10 @@
   cookie 是 httpOnly 且 `getAuth` 需要每请求 env。
 - **受保护路由**：`src/routes/{-$locale}/_layout/settings.tsx`（个人中心，`/settings/*`）与
   `_layout/admin.tsx`（管理台，`/admin/*`）两棵独立子树——pathless layout 的 `beforeLoad`
-  先 `assertPageEnabled('auth')`，再用 `fetchSession()` 判会话，未登录 `redirect` 到登录页
-  并带上 locale 参数；管理台在此之上再 `assertFeatureEnabled('enableAdmin')` +
-  `assertAdminRole()`。外壳（侧栏、面包屑、页面标题）由 `components/dashboard/DashboardShell`
-  统一渲染，页面自己不再写标题块。
+  先用 `fetchSession()` 判会话，未登录 `redirect` 到登录页并带上 locale 参数；管理台在此
+  之上再校验「任意 `admin.*` 权限」（`matchPermission('admin.*', permissions)`）。`editor`
+  可进管理台，但菜单与接口按权限点逐项显隐/校验。外壳（侧栏、面包屑、页面标题）由
+  `components/dashboard/DashboardShell` 统一渲染，页面自己不再写标题块。
 - **AuthFormMessages**：`src/core/auth/validation.ts` 的校验文案契约。schema 工厂接收文案而非
   自己调 `m.*()`，使校验逻辑不依赖 Paraglide 运行时、可脱离组件单测；页面用
   `authFormMessages()` 求值。
@@ -134,6 +150,11 @@
 - **单一配置入口**：配置字段只在 `src/core/config/registry.ts` 声明；`websiteConfig` 由
   数据库值经 `applySettingsToConfig` 求出，全站经 Proxy 读取，只放语言无关值。需随请求
   语言变化的文案必须在工厂调用、组件 render 或路由 `head()` 内调用 `m.*()` 求值。
+- **订单与付款分离**：`orders` 只记购买意图与结账尝试；`payments` 只记已确认的资金事实。
+  用户申报、结账跳转、失败支付都**不得**直接生成 `payments` 行或授予权益。人工核销必须
+  经管理员核验后才写 `payments`。
+- **归因只写一次**：UTM 与 referrer 以首次触达为准，注册时写入用户行后不再覆盖；后台
+  只能清空或人工修正，不能靠再次访问改写历史归因。
 - **消息键配对**：新增消息键必须在所有 locale 文件中同时存在，由 `scripts/check-locale.ts`
   双向校验。
 - **生成物禁改**：`src/routeTree.gen.ts`、`src/locale/paraglide/**`、
@@ -147,11 +168,16 @@
   部署（D：E2E / CI / CSP）、品牌化与 Landing 单页、网站源码配置与公共菜单（模块开关、
   菜单契约、服务状态、配置文档）、个人中心（`/{locale}/settings/*`：资料 / 安全 / 登录设备 /
   通知偏好 / API 密钥 / 用户管理，含 `fetchSession` 守卫）、管理台（`/{locale}/admin/*`：
-  概览 / 用户 / 角色 / 审计 / 订单 / 订阅 / 积分 / 内容 / 工单 / AI 任务 / 核销订单）与表单统一
+  概览 / 用户 / 角色 / 审计 / 付款 / 订阅 / 核销审核 / 积分 / 内容 / 工单 / AI 任务）与表单统一
   （TanStack Form + Zod + shadcn `Field`）。管理台与个人中心的列表页统一用
   `components/data-table`。
-- **尚未实现**：文件上传、AI 网关、PWA。`websiteConfig.features` 中对应的开关是能力边界
-  标记，不注册路由。
+- **2026-11-19 起**：新增 `orders`（结账尝试）与 `manual_payment_details`（核销详情）两层，
+  `payments` 保持资金事实并增加可空 `order_id`；管理台付款页按「全部 / 订阅 / 一次性 /
+  人工核销」分 tab。注册时写入首次归因，管理台概览提供「注册 → 创建结账 → 付款」转化漏斗。
+  系统设置改为 9 个 tab、单保存 + 可折叠；移除 `features.*` 与 `modules.auth` 总开关，
+  管理台门禁改为权限点。见 ADR-0012、ADR-0013。
+- **尚未实现**：文件上传、AI 网关、PWA。这些能力不再用 `features.*` 开关标记边界，
+  是否可用由依赖配置是否齐备决定。
 - **两仓关系（2026-11-02 定）**：本仓是**模板工程**（`Woods30/saas-template`，模板源码与
   技术文档），**官网工程**是另一个仓（`Woods30/jerbix`，官网 + 支付 + 商业条款
   文档），保留完整代码副本并靠 `git merge template/main` 跟进本仓。拆分取舍见
@@ -171,6 +197,8 @@
 - `docs/adr/0009-multi-dialect-database-and-config.md` —— 多方言数据库与配置入库。
 - `docs/adr/0010-settings-in-database.md` —— 配置注册表、密钥入库加密与 env 边界（取代 ADR-0009 的密钥与 `VITE_MODULES` 两条）。
 - `docs/adr/0011-credits-only-entitlements.md` —— 权益模型收敛为 credits-only，补齐退款、自助取消与购买发放。
+- `docs/adr/0012-orders-payments-subscriptions.md` —— 订单、付款与订阅三层模型，结账尝试与核销详情的拆分。
+- `docs/adr/0013-capability-switches-and-settings-taxonomy.md` —— 移除实例级能力开关、管理台权限门禁与系统设置分类。
 
 ## 面向 AI 代理的指导
 
@@ -186,3 +214,6 @@
 - 站点按部署选择一个 provider（内置 Stripe 与 Creem）；金额和真实周期来自外部价格目录。
 - 账号全局最多一份未终止订阅，一次性商品独立购买，不存在等级互斥或买断接管。
 - 订阅管理交给托管 Portal；Webhook 由适配器转换，通用 events.ts 落库。
+- 三层记录：`orders`（结账尝试）→ `payments`（资金事实，可空 `order_id`）→ `subscriptions`
+  （计费契约）。人工核销的订单与详情写入同一套 `orders` / `manual_payment_details`，核验
+  通过后仍由结算流程写 `payments`。续费只写 `payments` 与 `subscriptions`，不写 `orders`。

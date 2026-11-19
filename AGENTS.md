@@ -87,7 +87,7 @@ src/
 │   ├── credits/       积分余额账本（FIFO、过期、退款回滚与反扣）
 │   ├── docs/          文件型文档站（默认关闭）
 │   ├── invite-codes/  邀请码创建与积分兑换
-│   ├── manual-payments/ 核销型收款（原 collection）
+│   ├── manual-payments/ 人工核销（原 collection）
 │   ├── newsletter/    订阅邮件
 │   ├── posts/         文章数据库 CMS
 │   ├── rbac/          角色与权限点矩阵
