@@ -267,6 +267,7 @@
   "admin_settings_save": "Save",
   "admin_settings_save_failed": "Save failed. Check the input and try again.",
   "admin_settings_saved": "Settings saved",
+  "admin_settings_saved_refresh_failed": "Saved, but refreshing failed — reload the page manually.",
   "admin_settings_saving": "Saving…",
   "admin_settings_secret_configured": "Configured — leave blank to keep",
   "admin_settings_secret_hint": "Saved secrets only show the last four characters; leave empty to keep the current value.",

@@ -267,6 +267,7 @@
   "admin_settings_save": "保存",
   "admin_settings_save_failed": "保存失败，请检查输入后重试。",
   "admin_settings_saved": "设置已保存",
+  "admin_settings_saved_refresh_failed": "已保存，但刷新失败，请手动刷新页面",
   "admin_settings_saving": "保存中…",
   "admin_settings_secret_configured": "已配置，留空不修改",
   "admin_settings_secret_hint": "已保存的密钥只显示末四位；留空表示不修改。",

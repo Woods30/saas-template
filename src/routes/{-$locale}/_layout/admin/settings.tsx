@@ -381,10 +381,19 @@ function AdminSettingsPage() {
     setSaving(true)
     try {
       await saveAdminSettings({ data: { tabId: tab.id, values: payload } })
+    } catch {
+      toast.add({ type: 'error', title: m.admin_settings_save_failed() })
+      setSaving(false)
+      return
+    }
+
+    // 保存与刷新分开：保存已经成功，刷新失败不能再报「保存失败」，否则管理员会
+    // 以为没存上而重复提交。此时草稿保持用户输入，提示手动刷新即可。
+    try {
       applyValues(await fetchAdminSettings(), tab)
       toast.add({ type: 'success', title: m.admin_settings_saved() })
     } catch {
-      toast.add({ type: 'error', title: m.admin_settings_save_failed() })
+      toast.add({ type: 'error', title: m.admin_settings_saved_refresh_failed() })
     } finally {
       setSaving(false)
     }
