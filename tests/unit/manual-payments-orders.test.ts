@@ -276,17 +276,17 @@ function orderStatus(sqlite: ReturnType<typeof createTestDatabase>['sqlite'], id
   return row?.status ?? ''
 }
 
-/** 让订单状态回写（`orders.status = 'canceled'`）抛错一次。 */
-function breakCancelStatusSync(db: DB): void {
+/** 让指定终态（默认 `canceled`）的订单状态回写抛错一次。 */
+function breakOrderStatusSync(db: DB, target: string = 'canceled'): void {
   const original = db.update.bind(db)
   let broken = false
   db.update = ((table: unknown) => {
     const builder = original(table as never)
-    // 只拦 `orders` 表的回写；详情表取消时也写 `status = 'canceled'`。
+    // 只拦 `orders` 表的回写；详情表也会写相同的终态值。
     if (table !== schema.orders) return builder
     const set = builder.set.bind(builder)
     builder.set = ((values: Record<string, unknown>) => {
-      if (!broken && values.status === 'canceled') {
+      if (!broken && values.status === target) {
         broken = true
         throw new Error('订单状态同步失败')
       }
@@ -780,7 +780,7 @@ describe('用户订单状态机与查询隔离', () => {
     const { db, sqlite } = manualPaymentDatabase()
     const order = await createAt(db, 'u1')
 
-    breakCancelStatusSync(db)
+    breakOrderStatusSync(db, 'canceled')
     await expect(
       cancelOrder(db, { userId: 'u1', orderId: order.id }, plusSeconds(T0, 10)),
     ).rejects.toThrow('订单状态同步失败')
@@ -794,6 +794,31 @@ describe('用户订单状态机与查询隔离', () => {
       cancelOrder(db, { userId: 'u1', orderId: order.id }, plusSeconds(T0, 20)),
     ).rejects.toMatchObject({ code: 'INVALID_ORDER_STATE' })
     expect(orderStatus(sqlite, order.id)).toBe('canceled')
+    sqlite.close()
+  })
+
+  it('详情已过期但订单状态同步失败时，重试把订单补成 expired', async () => {
+    const { db, sqlite } = manualPaymentDatabase()
+    occupy(sqlite, {
+      id: 'ord-expired',
+      fingerprint: 11,
+      expiresAt: Math.floor(T0.getTime() / 1000),
+    })
+
+    breakOrderStatusSync(db, 'expired')
+    await expect(
+      cancelOrder(db, { userId: 'u1', orderId: 'ord-expired' }, plusSeconds(T0, 30)),
+    ).rejects.toThrow('订单状态同步失败')
+
+    // 详情已过期，订单行还停在 open。
+    expect(detailStatus(sqlite, 'ord-expired')).toBe('expired')
+    expect(orderStatus(sqlite, 'ord-expired')).toBe('open')
+
+    // 重试仍抛 ORDER_EXPIRED，但顺手补上订单状态。
+    await expect(
+      cancelOrder(db, { userId: 'u1', orderId: 'ord-expired' }, plusSeconds(T0, 40)),
+    ).rejects.toMatchObject({ code: 'ORDER_EXPIRED' })
+    expect(orderStatus(sqlite, 'ord-expired')).toBe('expired')
     sqlite.close()
   })
 

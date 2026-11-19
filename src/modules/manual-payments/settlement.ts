@@ -32,6 +32,7 @@ import {
   MANUAL_PAYMENT_PROVIDER,
   ManualPaymentError,
   type ManualPaymentOrder,
+  type ManualPaymentOrderStatus,
   type ManualPaymentReview,
   type ReviewOrderInput,
 } from './types'
@@ -121,6 +122,8 @@ export async function reviewOrder(
     record.detail.status !== 'pending_verification' &&
     !(input.action === 'approve_exception' && record.detail.status === 'expired')
   ) {
+    // 详情可能已是终态而订单行没跟上（崩溃后重试）：补一次幂等同步再抛错。
+    await syncOrderStatus(db, record.order.id, record.detail.status as ManualPaymentOrderStatus, at)
     throw new ManualPaymentError(
       'INVALID_ORDER_STATE',
       `订单当前状态为 ${record.detail.status}，不允许核验`,
@@ -188,6 +191,8 @@ async function rejectOrder(
     return toView(record)
   }
   if (record.detail.status !== 'pending_verification') {
+    // 详情可能已是终态而订单行没跟上（崩溃后重试）：补一次幂等同步再抛错。
+    await syncOrderStatus(db, record.order.id, record.detail.status as ManualPaymentOrderStatus, at)
     throw new ManualPaymentError(
       'INVALID_ORDER_STATE',
       `订单当前状态为 ${record.detail.status}，不允许驳回`,
@@ -218,6 +223,8 @@ async function rejectOrder(
       await syncOrderStatus(db, fresh.order.id, 'rejected', at)
       return toView(fresh)
     }
+    if (fresh)
+      await syncOrderStatus(db, fresh.order.id, fresh.detail.status as ManualPaymentOrderStatus, at)
     throw new ManualPaymentError('INVALID_ORDER_STATE', '订单状态已变化，驳回失败')
   }
   await syncOrderStatus(db, record.order.id, 'rejected', at)
@@ -489,6 +496,8 @@ async function markSettled(
     await syncOrderStatus(db, fresh.order.id, 'settled', at)
     return toView(fresh)
   }
+  if (fresh)
+    await syncOrderStatus(db, fresh.order.id, fresh.detail.status as ManualPaymentOrderStatus, at)
   throw new ManualPaymentError(
     'INVALID_ORDER_STATE',
     `订单当前状态为 ${fresh?.detail.status ?? '未知'}，无法标记为已结算`,
@@ -543,6 +552,8 @@ async function markRequiresRefund(
     await syncOrderStatus(db, fresh.order.id, 'requires_refund', at)
     return toView(fresh)
   }
+  if (fresh)
+    await syncOrderStatus(db, fresh.order.id, fresh.detail.status as ManualPaymentOrderStatus, at)
   throw new ManualPaymentError('INVALID_ORDER_STATE', '订单状态已变化，无法标记为需退款')
 }
 

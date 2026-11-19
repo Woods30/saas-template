@@ -227,6 +227,9 @@ export async function submitOrder(
     throw new ManualPaymentError('ORDER_NOT_FOUND', '订单不存在')
   }
   if (found.detail.status !== 'pending_payment') {
+    // 重试到达这里时，上一次可能已把详情写成终态、但订单回写失败；先补一次幂等
+    // 同步再抛错，避免订单永远停在 open（详见 §Fix round 4）。
+    await syncOrderStatus(db, found.order.id, found.detail.status as ManualPaymentOrderStatus, now)
     throw stateError(found.detail)
   }
   if (isExpired(found.detail, now)) {
@@ -276,11 +279,10 @@ export async function cancelOrder(
     throw new ManualPaymentError('ORDER_NOT_FOUND', '订单不存在')
   }
   if (found.detail.status !== 'pending_payment') {
-    // 已取消的订单重复提交：上次可能在详情落库后、订单回写前失败，这里补一次
-    // 幂等同步，避免订单永远停在 open（行为仍保持抛错，见 §Fix round 3）。
-    if (found.detail.status === 'canceled') {
-      await syncOrderStatus(db, found.order.id, 'canceled', now)
-    }
+    // 重试到达这里时，上一次可能已把详情写成终态（取消 / 过期 / 驳回等）、
+    // 但订单回写失败；先补一次幂等同步再抛错，避免订单永远停在 open
+    // （行为仍保持抛错，见 §Fix round 3/4）。
+    await syncOrderStatus(db, found.order.id, found.detail.status as ManualPaymentOrderStatus, now)
     throw stateError(found.detail)
   }
   if (isExpired(found.detail, now)) {
@@ -645,6 +647,8 @@ async function resolveConflict(
     await markExpired(db, userId, fresh.order.id, now)
     return new ManualPaymentError('ORDER_EXPIRED', '订单已过期')
   }
+  // 详情已是终态但订单回写可能没跟上（崩溃重试）：先补一次幂等同步再映射错误。
+  await syncOrderStatus(db, fresh.order.id, fresh.detail.status as ManualPaymentOrderStatus, now)
   return stateError(fresh.detail)
 }
 
