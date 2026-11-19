@@ -151,7 +151,11 @@ export function buildSeedSql(values: SettingsValues, force: boolean, dialect: Di
     ? `ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = ${now}`
     : 'ON CONFLICT (key) DO NOTHING'
   const knownKeys = SETTING_FIELDS.map((field) => sqlString(field.key)).join(', ')
-  const cleanup = `DELETE FROM settings WHERE key NOT IN (${knownKeys});`
+  // `custom.*` 是后台「自定义配置」tab 写入的键，不在注册表里；用 NOT LIKE 排除，
+  // 否则一次 `db:seed` 会把用户自定义配置全删。`_` 在 LIKE 里是单字符通配符，但
+  // 这里的模式只有 `custom.%`（点号是字面量），无需 ESCAPE：`custom_foo` 不会匹配
+  // `custom.%`，只有 `custom.` 前缀的行被保留。
+  const cleanup = `DELETE FROM settings WHERE key NOT IN (${knownKeys}) AND key NOT LIKE 'custom.%';`
   const lines = Object.entries(values).map(
     ([key, value]) =>
       `INSERT INTO settings (key, value, updated_at) VALUES (${sqlString(key)}, ${sqlString(

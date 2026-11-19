@@ -49,9 +49,14 @@ test.describe('Admin 角色权限与审计日志', () => {
 
     await page.goto('/zh/admin/roles')
     await expect(page.getByRole('heading', { name: '角色与权限' })).toHaveCount(0)
+    // 门禁结果是 404，不是 403 或错误页：标题不存在不足以区分这三者。
+    // 用 `page.request` 共享浏览器 cookie；`request` fixture 不共享，会以未登录
+    // 身份被重定向到登录页，测不到门禁本身。
+    expect((await page.request.get('/zh/admin/roles')).status()).toBe(404)
 
     await page.goto('/zh/admin/audit')
     await expect(page.getByRole('heading', { name: '审计日志' })).toHaveCount(0)
+    expect((await page.request.get('/zh/admin/audit')).status()).toBe(404)
   })
 
   test('管理员创建自定义角色并在审计日志中查到轨迹', async ({ page }) => {
@@ -134,7 +139,7 @@ test.describe('Admin 角色权限与审计日志', () => {
     const sidebar = page.locator('[data-slot="sidebar"]')
     await expect(sidebar.getByRole('link', { name: '内容与分类', exact: true })).toBeVisible()
     await expect(sidebar.getByRole('link', { name: '工单与邀请码', exact: true })).toBeVisible()
-    for (const hidden of ['用户管理', '角色与权限', '审计日志', '付款', '系统设置']) {
+    for (const hidden of ['用户管理', '角色与权限', '审计日志', '付款', '系统设置', 'AI 任务']) {
       await expect(sidebar.getByRole('link', { name: hidden, exact: true })).toHaveCount(0)
     }
     // 无权限的分组整组不渲染。

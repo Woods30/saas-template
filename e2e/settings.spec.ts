@@ -175,13 +175,22 @@ test.describe('Admin 系统设置', () => {
     await page.goto('/zh/admin/settings')
     await waitForHydration(page)
     await page.getByRole('tab', { name: '自定义配置', exact: true }).click()
-    // 面板挂载后自己拉一次列表；拉取未完成就点「新增条目」，随后的响应会把新行覆盖掉。
     await waitForHydration(page)
 
     const key = `e2e_${crypto.randomUUID().slice(0, 8)}`
     await page.getByRole('button', { name: '新增条目', exact: true }).click()
-    // 新行追加在末尾；按位置取，避免受历史残留的 custom.* 行影响。
-    const newRow = page.getByRole('row').last()
+    // 按输入值定位新行（键为空的那行），不依赖 DOM 顺序，也不受历史残留行影响。
+    const addedInputs = page.getByRole('textbox', { name: /^键 \d+$/ })
+    let addedIndex = -1
+    for (let i = 0; i < (await addedInputs.count()); i++) {
+      if ((await addedInputs.nth(i).inputValue()) === '') {
+        addedIndex = i
+        break
+      }
+    }
+    expect(addedIndex, '新增后应有一行空键').toBeGreaterThanOrEqual(0)
+    // `row` 含表头，数据行从第 2 个开始。
+    const newRow = page.getByRole('row').nth(addedIndex + 1)
     await newRow.getByRole('textbox').nth(0).fill(key)
     await newRow.getByRole('textbox').nth(1).fill('e2e-value')
     await page.getByRole('button', { name: '保存', exact: true }).click()
@@ -194,18 +203,18 @@ test.describe('Admin 系统设置', () => {
     await page.getByRole('tab', { name: '自定义配置', exact: true }).click()
     await waitForHydration(page)
     // 列表按存储键排序，行序不固定；按输入框的当前值找到目标行。
-    const keyInputs = page.getByRole('textbox', { name: /^键 \d+$/ })
-    await expect(keyInputs.first()).toBeVisible({ timeout: 15000 })
-    let rowIndex = -1
-    for (let i = 0; i < (await keyInputs.count()); i++) {
-      if ((await keyInputs.nth(i).inputValue()) === key) {
-        rowIndex = i
+    const readbackInputs = page.getByRole('textbox', { name: /^键 \d+$/ })
+    await expect(readbackInputs.first()).toBeVisible({ timeout: 15000 })
+    let readbackIndex = -1
+    for (let i = 0; i < (await readbackInputs.count()); i++) {
+      if ((await readbackInputs.nth(i).inputValue()) === key) {
+        readbackIndex = i
         break
       }
     }
-    expect(rowIndex, '刷新后应能回读到刚保存的自定义键').toBeGreaterThanOrEqual(0)
+    expect(readbackIndex, '刷新后应能回读到刚保存的自定义键').toBeGreaterThanOrEqual(0)
     // `row` 含表头，数据行从第 2 个开始。
-    const savedRow = page.getByRole('row').nth(rowIndex + 1)
+    const savedRow = page.getByRole('row').nth(readbackIndex + 1)
     await expect(savedRow.getByRole('textbox').nth(1)).toHaveValue('e2e-value')
 
     await savedRow.getByRole('button', { name: '删除', exact: true }).click()

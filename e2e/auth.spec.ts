@@ -154,6 +154,13 @@ test.describe('Admin 认证方式开关', () => {
   // 关闭邮箱登录是全局配置，必须串行；用例本身也会改全局状态。
   test.describe.configure({ mode: 'serial' })
 
+  /** 进入本组前的原值；`undefined` 表示库里没有该行（等价于注册表默认 `true`）。 */
+  let originalEmailLogin: string | undefined
+
+  test.beforeAll(() => {
+    originalEmailLogin = readEmailLoginSetting()
+  })
+
   test('GitHub 登录按钮按配置出现在登录页', async ({ page }) => {
     // `auth.githubEnabled` 与假凭据由 `e2e/global-setup.ts` 写入。
     await page.goto('/zh/auth/login')
@@ -179,13 +186,15 @@ test.describe('Admin 认证方式开关', () => {
   })
 
   /**
-   * 再兜一层：若上面的 finally 本身失败（浏览器崩溃 / 超时），直接把 D1 改回 true。
+   * 再兜一层：若上面的 finally 本身失败（浏览器崩溃 / 超时），把 D1 恢复到本组开始
+   * 前的值（`beforeAll` 读出；行不存在时按默认 `true` 写回）。
    *
    * 这条只保证**持久状态**正确；dev server 的进程内快照最多滞后 30 秒（TTL），
    * 因此它不是主要恢复路径——主要恢复在用例的 finally 里走后台保存。
    */
   test.afterAll(() => {
-    if (readEmailLoginSetting() !== 'false') return
+    const target = originalEmailLogin ?? 'true'
+    if (readEmailLoginSetting() === target) return
     try {
       execFileSync(
         'wrangler',
@@ -195,7 +204,7 @@ test.describe('Admin 认证方式开关', () => {
           'DB',
           '--local',
           '--command',
-          "INSERT INTO settings (key, value, updated_at) VALUES ('auth.emailEnabled', 'true', strftime('%s','now')) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+          `INSERT INTO settings (key, value, updated_at) VALUES ('auth.emailEnabled', '${target}', strftime('%s','now')) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
         ],
         { stdio: 'ignore' },
       )

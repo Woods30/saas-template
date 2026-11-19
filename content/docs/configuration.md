@@ -45,7 +45,9 @@ consumers.
 
 Settings are organised as nine tabs. Each tab has **one Save button** at the top and submits
 every group in that tab, including collapsed ones. Group cards can be collapsed individually;
-collapsing is a view state and does not affect saving. Switching tabs keeps unsaved drafts,
+collapsing is a view state and does not affect saving. The **Custom** tab is the exception: it
+renders its own panel with its own Save button (whole-table replacement, not per tab); see
+"Custom settings are server-only" below. Switching tabs keeps unsaved drafts,
 and saving one tab leaves drafts in the other tabs untouched.
 
 | Tab | Group | Content |

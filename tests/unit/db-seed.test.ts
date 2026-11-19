@@ -110,10 +110,15 @@ describe('种子 SQL', () => {
     expect(valuesPart).not.toContain('EXCLUDED')
   })
 
-  it('先清掉注册表之外的旧键（早期整组 JSON）', () => {
+  it('先清掉注册表之外的旧键（早期整组 JSON），但保留 custom.*', () => {
     const sql = buildSeedSql(defaultSettingsValues(), false, 'sqlite')
     expect(sql.startsWith('DELETE FROM settings WHERE key NOT IN (')).toBe(true)
     expect(sql).toContain("'brand.name'")
+    // `custom.*` 由自定义配置 tab 写入，不在注册表里，seed 不能删。
+    expect(sql).toContain("AND key NOT LIKE 'custom.%'")
+    // 旧键仍会被清：它们不在白名单里，也不匹配 `custom.%`。
+    expect(sql).not.toContain("'features.")
+    expect(sql).not.toContain("'modules.auth'")
   })
 
   it('每个字段一条 INSERT', () => {

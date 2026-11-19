@@ -166,7 +166,11 @@ export function executeLocalD1(sql: string, persistTo = process.env.E2E_D1_PERSI
     } catch (error) {
       // wrangler 把 D1 的错误 JSON 写到 **stdout**，stderr 往往是空的。
       const output = `${String((error as { stderr?: unknown }).stderr ?? '')}\n${String((error as { stdout?: unknown }).stdout ?? '')}`
-      if (attempt === 3 || !isRetryableD1Error(output)) throw error
+      if (attempt === 3 || !isRetryableD1Error(output)) {
+        // `execFileSync` 的 message 只有命令行，D1 的真实报错在 stdout/stderr 里；
+        // 不带出来时 Playwright 只能显示「Command failed」，无法判断该不该重试。
+        throw new Error(`${(error as Error).message}\n${output}`, { cause: error })
+      }
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, (attempt + 1) * 300)
     }
   }

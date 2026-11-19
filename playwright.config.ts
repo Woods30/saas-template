@@ -13,7 +13,24 @@ export default defineConfig({
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3000',
     trace: 'on-first-retry',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      // 常规用例。`auth.spec.ts` 里有会临时翻转全局认证配置的用例，单独放进下游
+      // project 串行跑，避免与这里的登录并发（见 auth-config）。
+      name: 'chromium',
+      testIgnore: /auth\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      // 依赖 project：`chromium` 全部结束后才开始。此时没有其它 spec 在登录，
+      // 关闭邮箱登录的窗口不会让别的用例拿到「没有邮箱表单」的登录页。
+      name: 'auth-config',
+      testMatch: /auth\.spec\.ts/,
+      fullyParallel: false,
+      dependencies: ['chromium'],
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
   webServer: process.env.E2E_NO_SERVER
     ? undefined
     : {
