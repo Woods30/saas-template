@@ -62,7 +62,7 @@ Repository root:
 | Docs content | `content/docs/*.md` |
 | Database table | Edit both `src/core/db/schema.sqlite.ts` and `schema.postgres.ts`, then `pnpm db:setup` |
 | Payment records, refunds, admin payments page | `src/modules/subscriptions/` (`orders` / `payments` / `subscriptions`) |
-| Manual verification flow and collecting accounts | `src/modules/manual-payments/` |
+| Manual verification flow and payee accounts | `src/modules/manual-payments/` |
 | Add a page | Create a file under `src/routes/`; the router picks it up |
 | Add an API route | `src/routes/api/<name>/$.ts` |
 | Add a UI control | `pnpm dlx shadcn@latest add <component> -y`, which lands in `src/components/ui/` |
