@@ -9,9 +9,8 @@ import { assertAdminAccess, assertUserFeatureEnabled } from '@/lib/module-access
 /**
  * 管理台门禁：任意 `admin.*` 权限即可进入。
  *
- * 判定用 404 而非 403，不向非管理员泄漏「页面存在但你没权限」。角色只认 RBAC
- * 权限点：`editor` 持有内容 / 工单权限，同样能进管理台；`super_admin` 的 `*`
- * 覆盖一切。
+ * 判定用 404 而非 403，不向非管理员泄漏「页面存在但你没权限」。只认 RBAC 权限点：
+ * `editor` 持有内容 / 工单权限，同样能进管理台；`super_admin` 的 `*` 覆盖一切。
  */
 
 const editorPermissions = DEFAULT_ROLES.find((role) => role.name === ROLES.EDITOR)?.permissions
@@ -74,8 +73,8 @@ describe('管理台权限门禁', () => {
   })
 })
 
-describe('fetchSession 的权限点', () => {
-  it('fetchSession 返回权限点列表', () => {
+describe('会话的权限点', () => {
+  it('toSessionInfo 带上权限点并保留原始 role', () => {
     const info = toSessionInfo(rawSession(), ['admin.users.read', 'admin.orders.read'])
     expect(info.permissions).toEqual(['admin.users.read', 'admin.orders.read'])
     expect(info.user.role).toBe('user')
@@ -94,6 +93,60 @@ describe('fetchSession 的权限点', () => {
   it('读取成功时原样返回权限点，不走空数组兜底', async () => {
     const permissions = await resolveSessionPermissions('u_1', async () => ['admin.users.read'])
     expect(permissions).toEqual(['admin.users.read'])
+  })
+})
+
+describe('管理台接口的权限点门禁', () => {
+  /**
+   * 直接驱动 `requirePermissionDb`：它正是 `fetchAdminSettings` / `saveAdminSettings`
+   * 等服务端接口的第一行。没有 `admin.settings.read` 时必须 403，且不能返回任何配置值
+   * ——否则任一登录用户都能读到掩码后的密钥与全站配置。
+   */
+  async function importGuard(held: string[]) {
+    vi.resetModules()
+    vi.doMock('@/lib/server-context', () => ({
+      getServerContext: () => ({ env: {} }),
+    }))
+    vi.doMock('@tanstack/react-start/server', () => ({
+      getRequestHeaders: () => new Headers(),
+    }))
+    vi.doMock('@/core/auth/auth', () => ({
+      getAuth: async () => ({
+        api: { getSession: async () => ({ user: { id: 'u_1' }, session: {} }) },
+      }),
+    }))
+    vi.doMock('@/core/db', async () => {
+      const actual = await vi.importActual<typeof import('@/core/db')>('@/core/db')
+      return { ...actual, createDbFromEnv: async () => ({}) }
+    })
+    vi.doMock('@/core/auth/rbac', async () => {
+      const actual = await vi.importActual<typeof import('@/core/auth/rbac')>('@/core/auth/rbac')
+      return { ...actual, loadUserPermissions: async () => held }
+    })
+    return import('@/core/auth/session')
+  }
+
+  it('没有 admin.settings.read 时 403', async () => {
+    const { requirePermissionDb } = await importGuard(['admin.content.read'])
+    await expect(requirePermissionDb('admin.settings.read')).rejects.toMatchObject({ status: 403 })
+  })
+
+  it('未登录时 403', async () => {
+    vi.resetModules()
+    vi.doMock('@/lib/server-context', () => ({ getServerContext: () => ({ env: {} }) }))
+    vi.doMock('@tanstack/react-start/server', () => ({ getRequestHeaders: () => new Headers() }))
+    vi.doMock('@/core/auth/auth', () => ({
+      getAuth: async () => ({ api: { getSession: async () => null } }),
+    }))
+    const { requirePermissionDb } = await import('@/core/auth/session')
+    await expect(requirePermissionDb('admin.settings.read')).rejects.toMatchObject({ status: 403 })
+  })
+
+  it('持有 admin.settings.read 时放行并交回权限点', async () => {
+    const { requirePermissionDb } = await importGuard(['admin.settings.read', 'admin.users.read'])
+    const result = await requirePermissionDb('admin.settings.read')
+    expect(result.adminId).toBe('u_1')
+    expect(result.permissions).toContain('admin.settings.read')
   })
 })
 

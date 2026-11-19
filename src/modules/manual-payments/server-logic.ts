@@ -180,8 +180,8 @@ export interface ManualPaymentGuardOptions {
   /**
    * 要求的 RBAC 权限点（如 `admin.orders.read`）。
    *
-   * 管理台接口只给权限点，角色只决定能不能进管理台。若同时给出 `requireAdmin`，
-   * 两者是 AND 关系：先校验角色，再校验权限点。
+   * 管理台接口以权限点为准；`requireAdmin` 只是遗留的角色门（当前没有生产调用点）。
+   * 若同时给出两者，是 AND 关系：先校验角色，再校验权限点。
    */
   requiredPermission?: string
   /** 要限流的动作；不给就不限流。 */

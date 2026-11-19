@@ -30,9 +30,12 @@ export function canEnterAdmin(permissions: readonly string[] | undefined): boole
  * `users.role` 由 RBAC 分配（`assignRolesToUser`）按「是否持有任意 `admin.*`
  * 权限」同步，正常路径下与 `canEnterAdmin` 同真同假。它只是入口提示：真正的
  * 门禁在路由与服务端，标记陈旧最多是多显示 / 少显示一个菜单项。
+ *
+ * `super_admin` 也算：手工改库的存量账号在 `loadUserPermissions` 里回退为 `['*']`，
+ * 若这里只认 `'admin'`，顶栏会藏起入口而侧栏仍显示，两处不一致。
  */
 export function hasAdminRole(role: string | null | undefined): boolean {
-  return role === 'admin'
+  return role === 'admin' || role === 'super_admin'
 }
 
 /** 个人中心与管理台入口；`isAdmin` 决定是否渲染管理后台入口。 */

@@ -561,3 +561,105 @@ describe('页面路由的服务端导入边界', () => {
     expect(offenders).toEqual([])
   })
 })
+
+/**
+ * 收款码 / 付款凭证端点的授权边界。
+ *
+ * 这两个路由原先按 `session.user.role === 'admin'` 授权，现改为权限点：
+ * 上传要 `admin.orders.write`（只读的 editor / viewer 不能改收款码，否则可以把
+ * 客户的钱导去别处），读取给 `admin.orders.read` 或订单所有者。
+ */
+describe('收款码端点按权限点授权', () => {
+  async function importQrcodeRoute(options: {
+    permissions: string[]
+    ownsOrder?: boolean
+    account?: { accountId: string; channel: string; displayName: string; currency: string } | null
+  }) {
+    vi.resetModules()
+    vi.doMock('@/lib/module-access.server', () => ({
+      getModuleUnavailableResponse: () => undefined,
+    }))
+    vi.doMock('@/lib/server-context', () => ({ getServerContext: () => ({ env: { BUCKET: {} } }) }))
+    vi.doMock('@/lib/rate-limit', () => ({ checkRateLimit: async () => true }))
+    vi.doMock('@/core/auth/auth', () => ({
+      getAuth: async () => ({
+        api: { getSession: async () => ({ user: { id: 'u_1', role: 'admin' } }) },
+      }),
+    }))
+    vi.doMock('@/core/db', () => ({ createDbFromEnv: async () => ({}) }))
+    vi.doMock('@/modules/rbac/service', () => ({
+      hasPermission: async (_db: unknown, _userId: string, code: string) =>
+        options.permissions.includes(code),
+    }))
+    vi.doMock('@/modules/manual-payments/service', () => ({
+      errorResponse: (code: string) =>
+        Response.json({ error: code }, { status: code === 'FORBIDDEN' ? 403 : 404 }),
+      findAccountFileRef: async () => options.account ?? null,
+      hasOrderForAccount: async () => options.ownsOrder ?? false,
+    }))
+    return import('@/routes/api/manual-payments/accounts/$accountId/qrcode')
+  }
+
+  function handlerOf(route: unknown, method: 'GET' | 'POST') {
+    const handlers = (route as { options?: { server?: { handlers?: Record<string, unknown> } } })
+      .options?.server?.handlers
+    const handler = handlers?.[method]
+    if (typeof handler !== 'function') throw new Error(`${method} handler 缺失`)
+    return handler as (ctx: {
+      request: Request
+      params: { accountId: string }
+    }) => Promise<Response>
+  }
+
+  it('只有 admin.orders.read 的人不能上传收款码（403）', async () => {
+    const { Route } = await importQrcodeRoute({ permissions: ['admin.orders.read'] })
+    const res = await handlerOf(
+      Route,
+      'POST',
+    )({
+      request: new Request('https://jerbix.dev/api/manual-payments/accounts/alipay_main/qrcode', {
+        method: 'POST',
+      }),
+      params: { accountId: 'alipay_main' },
+    })
+    expect(res.status).toBe(403)
+    await expect(res.json()).resolves.toEqual({ error: 'FORBIDDEN' })
+  })
+
+  it('持 admin.orders.write 时越过授权检查（进入后续流程）', async () => {
+    const { Route } = await importQrcodeRoute({ permissions: ['admin.orders.write'] })
+    const res = await handlerOf(
+      Route,
+      'POST',
+    )({
+      request: new Request('https://jerbix.dev/api/manual-payments/accounts/alipay_main/qrcode', {
+        method: 'POST',
+      }),
+      params: { accountId: 'alipay_main' },
+    })
+    // 授权已通过：后续因账户不存在 / 无表单体而失败，但绝不是 403。
+    expect(res.status).not.toBe(403)
+    await expect(res.json()).resolves.not.toEqual({ error: 'FORBIDDEN' })
+  })
+
+  it('非订单所有者且无 admin.orders.read 时读不到收款码（404）', async () => {
+    const { Route } = await importQrcodeRoute({
+      permissions: [],
+      account: {
+        accountId: 'alipay_main',
+        channel: 'alipay',
+        displayName: '主账户',
+        currency: 'cny',
+      },
+    })
+    const res = await handlerOf(
+      Route,
+      'GET',
+    )({
+      request: new Request('https://jerbix.dev/api/manual-payments/accounts/alipay_main/qrcode'),
+      params: { accountId: 'alipay_main' },
+    })
+    expect(res.status).toBe(404)
+    await expect(res.json()).resolves.toEqual({ error: 'ORDER_NOT_FOUND' })
+  })
+})
