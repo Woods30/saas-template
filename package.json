@@ -47,7 +47,10 @@
     "db:migrate:pg": "node --env-file-if-exists=.env --import tsx scripts/db-migrate-pg.ts",
     "db:seed": "node --env-file-if-exists=.env --import tsx scripts/db-seed.ts --local",
     "db:seed:remote": "node --env-file-if-exists=.env --import tsx scripts/db-seed.ts --remote",
-    "db:seed:pg": "node --env-file-if-exists=.env --import tsx scripts/db-seed.ts --pg"
+    "db:seed:pg": "node --env-file-if-exists=.env --import tsx scripts/db-seed.ts --pg",
+    "db:cleanup:settings": "node --env-file-if-exists=.env --import tsx scripts/cleanup-removed-settings.ts --local",
+    "db:cleanup:settings:remote": "node --env-file-if-exists=.env --import tsx scripts/cleanup-removed-settings.ts --remote",
+    "db:cleanup:settings:pg": "node --env-file-if-exists=.env --import tsx scripts/cleanup-removed-settings.ts --pg"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1149.0",

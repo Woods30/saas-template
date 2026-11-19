@@ -297,6 +297,23 @@ export function applySettingsToConfig(
       githubEnabled: bool(values, 'auth.githubEnabled'),
       requireEmailVerification: bool(values, 'auth.requireEmailVerification'),
     },
+    userFeatures: {
+      billing: bool(values, 'userFeatures.billing'),
+      manualPayments: bool(values, 'userFeatures.manualPayments'),
+      apiKeys: bool(values, 'userFeatures.apiKeys'),
+      notifications: bool(values, 'userFeatures.notifications'),
+    },
+    users: {
+      // TODO(task 7): 注册用户时把这个配置落到账号上。运行时 `users.role` 只有
+      // `user | admin`，而 `viewer` / `editor` 来自 RBAC 目录，映射规则由 Task 7 定。
+      defaultRole: str(values, 'users.defaultRole') === 'editor' ? 'editor' : 'viewer',
+      signupCredits: {
+        enabled: bool(values, 'signupCredits.enabled'),
+        amount: num(values, 'signupCredits.amount', 0),
+        validDays: num(values, 'signupCredits.validDays', 0),
+        description: str(values, 'signupCredits.description'),
+      },
+    },
     captcha: {
       ...(str(values, 'turnstile.siteKey') ? { siteKey: str(values, 'turnstile.siteKey') } : {}),
     },

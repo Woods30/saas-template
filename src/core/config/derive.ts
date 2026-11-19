@@ -19,6 +19,8 @@ const ENV_MAP: ReadonlyArray<readonly [fieldKey: string, envKey: string]> = [
   ['creem.debug', 'CREEM_DEBUG'],
   ['google.clientId', 'GOOGLE_CLIENT_ID'],
   ['google.clientSecret', 'GOOGLE_CLIENT_SECRET'],
+  ['github.clientId', 'GITHUB_CLIENT_ID'],
+  ['github.clientSecret', 'GITHUB_CLIENT_SECRET'],
   ['turnstile.secretKey', 'TURNSTILE_SECRET_KEY'],
   ['cloudflareEmail.sender', 'CLOUDFLARE_EMAIL_SENDER'],
   ['resend.apiKey', 'RESEND_API_KEY'],

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { buildCleanupSettingsSql } from '../../scripts/cleanup-removed-settings'
 import { baseConfig } from '../../src/config/website'
 import { defaultSettingsValues, SETTING_FIELDS } from '../../src/core/config/registry'
 import {
@@ -6,6 +7,7 @@ import {
   resolveSettingsValues,
   validateGroupValues,
 } from '../../src/core/config/settings'
+import { createTestDatabase } from '../helpers/database'
 
 /**
  * 配置解析与落地规则。
@@ -161,5 +163,138 @@ describe('applySettingsToConfig', () => {
       expect(SETTING_FIELDS.some((field) => field.key === key)).toBe(true)
     }
     expect(config.metadata.name.length).toBeGreaterThan(0)
+  })
+
+  it('features.* 不再影响站点配置', () => {
+    const config = applySettingsToConfig(baseConfig, {
+      ...defaultSettingsValues(),
+      'features.enableI18n': false,
+      'features.enableApiKeys': false,
+      'features.enableAdmin': false,
+      'modules.auth': false,
+    })
+    // 能力开关与认证总闸已移出注册表：旧库里残留的取值不能再改变输出。
+    expect(config.features).toEqual({
+      enableI18n: true,
+      enableFileUpload: false,
+      enableApiKeys: true,
+      enableAdmin: true,
+      enableAIGateway: false,
+    })
+    expect(config.auth.enabled).toBe(true)
+  })
+
+  it('三个认证方法开关映射到 auth', () => {
+    const config = applySettingsToConfig(baseConfig, {
+      ...defaultSettingsValues(),
+      'auth.emailEnabled': false,
+      'auth.googleEnabled': false,
+      'auth.githubEnabled': true,
+    })
+    expect(config.auth).toMatchObject({
+      emailEnabled: false,
+      googleEnabled: false,
+      githubEnabled: true,
+    })
+  })
+
+  it('用户中心功能开关映射到 userFeatures', () => {
+    const config = applySettingsToConfig(baseConfig, {
+      ...defaultSettingsValues(),
+      'userFeatures.billing': false,
+      'userFeatures.manualPayments': false,
+      'userFeatures.apiKeys': true,
+      'userFeatures.notifications': false,
+    })
+    expect(config.userFeatures).toEqual({
+      billing: false,
+      manualPayments: false,
+      apiKeys: true,
+      notifications: false,
+    })
+  })
+
+  it('注册赠积分映射到 users.signupCredits', () => {
+    const config = applySettingsToConfig(baseConfig, {
+      ...defaultSettingsValues(),
+      'signupCredits.enabled': true,
+      'signupCredits.amount': 50,
+      'signupCredits.validDays': 30,
+      'signupCredits.description': '注册赠送',
+    })
+    expect(config.users.signupCredits).toEqual({
+      enabled: true,
+      amount: 50,
+      validDays: 30,
+      description: '注册赠送',
+    })
+  })
+
+  it('manualPayments 配置映射到 manualPayments', () => {
+    const accounts = [
+      {
+        id: 'alipay-main',
+        channel: 'alipay' as const,
+        displayName: '支付宝',
+        currency: 'cny' as const,
+        qrImageUrl: '/qr.png',
+      },
+    ]
+    const config = applySettingsToConfig(baseConfig, {
+      ...defaultSettingsValues(),
+      'modules.manualPayments': true,
+      'manualPayments.verificationSlaHours': 12,
+      'manualPayments.accounts': accounts,
+    })
+    expect(config.manualPayments).toEqual({
+      enabled: true,
+      verificationSlaHours: 12,
+      accounts,
+    })
+  })
+
+  it('默认角色只接受 editor，其余取值回落 viewer', () => {
+    expect(
+      applySettingsToConfig(baseConfig, {
+        ...defaultSettingsValues(),
+        'users.defaultRole': 'editor',
+      }).users.defaultRole,
+    ).toBe('editor')
+    expect(
+      applySettingsToConfig(baseConfig, {
+        ...defaultSettingsValues(),
+        'users.defaultRole': 'bogus',
+      }).users.defaultRole,
+    ).toBe('viewer')
+  })
+})
+
+describe('清理已移除的配置行', () => {
+  it('只匹配 features.* 与 modules.auth', () => {
+    const sql = buildCleanupSettingsSql()
+    expect(sql).toContain("key LIKE 'features.%'")
+    expect(sql).toContain("key = 'modules.auth'")
+  })
+
+  it('删除孤儿行，重复执行不报错也不误删', () => {
+    const { sqlite } = createTestDatabase()
+    sqlite.exec(`
+      INSERT INTO settings (key, value, updated_at) VALUES
+        ('features.enableAdmin', 'true', 1),
+        ('features.enableApiKeys', 'false', 1),
+        ('modules.auth', 'true', 1),
+        ('brand.name', '"Acme"', 1)
+    `)
+
+    const firstRun = sqlite.prepare(buildCleanupSettingsSql()).all()
+    expect(firstRun).toHaveLength(3)
+
+    const secondRun = sqlite.prepare(buildCleanupSettingsSql()).all()
+    expect(secondRun).toHaveLength(0)
+
+    expect(sqlite.prepare('SELECT key FROM settings ORDER BY key').all()).toEqual([
+      { key: 'brand.name' },
+    ])
+    sqlite.close()
   })
 })
