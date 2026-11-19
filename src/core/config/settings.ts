@@ -145,18 +145,6 @@ export function validateGroupValues(
   return result
 }
 
-/** 组里是否含密钥字段：含则保存前必须有 `CONFIG_ENCRYPTION_KEY`。 */
-export function groupHasSecrets(groupId: string): boolean {
-  const group = settingGroup(groupId)
-  return group?.fields.some((field) => field.secret === true) === true
-}
-
-/** 组里的密钥字段键。 */
-export function groupSecretKeys(groupId: string): string[] {
-  const group = settingGroup(groupId)
-  return group?.fields.filter((field) => field.secret).map((field) => field.key) ?? []
-}
-
 /**
  * 校验一个 tab 的提交值，返回只含该 tab 各分组字段的归一化结果。
  *
@@ -178,22 +166,6 @@ export function validateTabValues(
     }
   }
   return result
-}
-
-/** tab 里是否含密钥字段：含则保存前必须有 `CONFIG_ENCRYPTION_KEY`。 */
-export function tabHasSecrets(tabId: SettingTabId): boolean {
-  const tab = settingTab(tabId)
-  return tab?.groups.some((group) => group.fields.some((field) => field.secret === true)) === true
-}
-
-/** tab 里的密钥字段键。 */
-export function tabSecretKeys(tabId: SettingTabId): string[] {
-  const tab = settingTab(tabId)
-  return (
-    tab?.groups.flatMap((group) =>
-      group.fields.filter((field) => field.secret).map((field) => field.key),
-    ) ?? []
-  )
 }
 
 function str(values: SettingsValues, key: string): string {
