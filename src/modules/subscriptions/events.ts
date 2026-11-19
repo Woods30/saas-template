@@ -4,6 +4,7 @@ import { websiteConfig } from '@/config/website'
 import { type DB, schema } from '@/core/db'
 import type { PaymentEvent, ProviderSubscription } from '@/core/payment/types'
 import { clawbackCreditsForRefund, grantCreditsForPayment } from './credits'
+import { findOrderBySessionId, markOrderStatus } from './orders'
 
 type Db = DB
 
@@ -20,6 +21,12 @@ export async function applyPaymentEvent(
     .where(eq(schema.webhookEvents.id, eventKey))
   if (existing?.processedAt) return
   const date = new Date(event.created * 1000)
+  // 在线结账回调带 session id：解析出对应订单，既用于付款归属，也用于收尾订单状态。
+  // 找不到（历史会话 / 未落订单的旧数据）时按无归属处理，不回填合成订单。
+  const checkoutOrder = event.checkoutId
+    ? await findOrderBySessionId(db, event.provider, event.checkoutId)
+    : undefined
+  const orderId = event.orderId ?? checkoutOrder?.id ?? null
   let sub = event.subscription
   if (sub) {
     let synchronized = false
@@ -105,6 +112,7 @@ export async function applyPaymentEvent(
         externalId: payment.id,
         provider: event.provider,
         userId,
+        orderId,
         type: payment.type,
         status: payment.status,
         amount: payment.amount,
@@ -162,6 +170,11 @@ export async function applyPaymentEvent(
         meta: { userId, plan, amount, kind: payment.type },
       })
     }
+  }
+  // 资金事实落库后再收尾订单：结账会话已完成，订单状态只描述这次结账尝试。
+  // 退款事件不携带 checkoutId，不会误改订单状态。
+  if (checkoutOrder) {
+    await markOrderStatus(db, checkoutOrder.id, 'completed')
   }
   if (event.refund) {
     const refund = event.refund

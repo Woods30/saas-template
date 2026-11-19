@@ -431,6 +431,8 @@ function buildSettlementEvent(
     provider: MANUAL_PAYMENT_PROVIDER,
     type: MANUAL_PAYMENT_SETTLEMENT_EVENT_TYPE,
     created: Math.floor(review.reviewedAt.getTime() / 1000),
+    // 人工核销的结账订单就是这张订单：资金事实必须指回购买意图。
+    orderId: order.id,
     payment: {
       id: order.id,
       invoiceId: null,

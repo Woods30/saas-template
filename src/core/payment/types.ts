@@ -75,6 +75,8 @@ export interface PaymentEvent {
   provider: string
   type: string
   created: number
+  /** 这笔资金事实对应的结账订单；历史事件或无法归属时为空。 */
+  orderId?: string | null
   subscriptionId?: string
   subscription?: ProviderSubscription
   payment?: {

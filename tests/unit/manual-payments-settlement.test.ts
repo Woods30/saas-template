@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import type { DB } from '@/core/db'
 import { addBillingInterval, reviewOrder } from '@/modules/manual-payments/settlement'
-import type { ManualPaymentOrderStatus } from '@/modules/manual-payments/types'
+import {
+  MANUAL_PAYMENT_PROVIDER,
+  type ManualPaymentOrderStatus,
+} from '@/modules/manual-payments/types'
+import { applyPaymentEvent } from '@/modules/subscriptions/service'
 import { createTestDatabase } from '../helpers/database'
 
 /**
@@ -734,6 +738,116 @@ describe('核销订单审核留痕', () => {
     expect(row.reviewed_by).toBe(ADMIN)
     expect(row.reviewed_at).toBe(Math.floor(T0.getTime() / 1000))
     expect(row.settled_at).toBe(Math.floor(T0.getTime() / 1000))
+    sqlite.close()
+  })
+})
+
+/**
+ * 付款行与订单的关联。
+ *
+ * `orders` 是购买意图，`payments` 是资金事实：资金事实落库时必须带上是哪次结账
+ * 尝试，人工核销与在线回调都走同一条链路。
+ */
+describe('付款关联订单', () => {
+  /** 直接写一行在线渠道的订单（`orders` + `provider_session_id`）。 */
+  function insertOnlineOrder(
+    sqlite: ReturnType<typeof createTestDatabase>['sqlite'],
+    options: { id: string; sessionId: string; status?: string },
+  ): void {
+    sqlite
+      .prepare(
+        `INSERT INTO orders(id,order_no,user_id,provider,mode,product_id,offer_id,status,provider_session_id)
+         VALUES (?, ?, 'u1', 'stripe', 'payment', ?, ?, ?, ?)`,
+      )
+      .run(
+        options.id,
+        `ord_test_${options.id}`,
+        PRODUCT_ID,
+        OFFER_ID,
+        options.status ?? 'open',
+        options.sessionId,
+      )
+  }
+
+  it('人工核销结算写 payments 且 order_id 指向订单', async () => {
+    const { db, sqlite } = settlementDatabase()
+    const order = insertOrder(sqlite)
+    await reviewOrder(
+      db,
+      {
+        orderId: order.id,
+        reviewerId: ADMIN,
+        action: 'approve',
+        observedAmount: order.payable,
+      },
+      T0,
+    )
+    const payments = paymentRows(sqlite)
+    expect(payments).toHaveLength(1)
+    expect(payments[0]).toMatchObject({
+      id: `${MANUAL_PAYMENT_PROVIDER}:${order.id}`,
+      provider: MANUAL_PAYMENT_PROVIDER,
+      external_id: order.id,
+      order_id: order.id,
+    })
+    sqlite.close()
+  })
+
+  it('结算事件重复应用只写一条 payments', async () => {
+    const { db, sqlite } = settlementDatabase()
+    const order = insertOrder(sqlite)
+    const input = {
+      orderId: order.id,
+      reviewerId: ADMIN,
+      action: 'approve' as const,
+      observedAmount: order.payable,
+    }
+
+    // 第一次结算落库付款后、订单回写前失败；重试会再次应用同一条结算事件。
+    breakFinalSettlement(db)
+    await expect(reviewOrder(db, input, T0)).rejects.toThrow('结算中途失败')
+    await reviewOrder(db, input, new Date(T0.getTime() + 3600 * 1000))
+
+    const payments = paymentRows(sqlite)
+    expect(payments).toHaveLength(1)
+    expect(payments[0]).toMatchObject({ external_id: order.id, order_id: order.id })
+    sqlite.close()
+  })
+
+  it('在线支付事件带 checkoutId 时关联订单并标记 completed', async () => {
+    const { db, sqlite } = settlementDatabase()
+    insertOnlineOrder(sqlite, { id: 'order-online', sessionId: 'cs_online' })
+
+    await applyPaymentEvent(db, {
+      id: 'evt_checkout_paid',
+      provider: 'stripe',
+      type: 'checkout.session.completed',
+      created: Math.floor(T0.getTime() / 1000),
+      checkoutId: 'cs_online',
+      payment: {
+        id: 'pi_online',
+        invoiceId: null,
+        chargeId: 'pi_online',
+        customerId: null,
+        userId: 'u1',
+        productId: PRODUCT_ID,
+        offerId: OFFER_ID,
+        subscriptionId: null,
+        type: 'one_time',
+        amount: BASE_AMOUNT,
+        currency: 'usd',
+        status: 'paid',
+      },
+    })
+
+    const payments = paymentRows(sqlite)
+    expect(payments).toHaveLength(1)
+    expect(payments[0]).toMatchObject({
+      id: 'stripe:pi_online',
+      external_id: 'pi_online',
+      order_id: 'order-online',
+    })
+    expect(orderRowStatus(sqlite, 'order-online')).toBe('completed')
     sqlite.close()
   })
 })
