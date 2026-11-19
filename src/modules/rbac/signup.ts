@@ -25,8 +25,8 @@ let registered = false
  *    任何角色，`users.role` 保持 `'user'`、`loadUserPermissions` 返回空数组。
  *    默认值取 `'user'` 而非 `viewer`：viewer 持有全部 `admin.*.read`，默认授予
  *    等于把管理台开给每个注册用户。
- * 2. `signupCredits.enabled && amount > 0` 时发放一次注册积分（`grantCredits`
- *    对非正数抛错，所以先在这里挡住）。
+ * 2. `signupCredits.enabled && Number.isInteger(amount) && amount > 0` 时发放一次
+ *    注册积分（`grantCredits` 对非正整数抛错，所以先在这里挡住小数 / 0 / 负数）。
  */
 export function registerSignupSideEffects(): void {
   if (registered) return

@@ -262,8 +262,11 @@ describe('applySettingsToConfig', () => {
   })
 
   it('默认角色出厂值为 user（绝不能默认 viewer —— 那是提权）', () => {
-    // 三条都钉死：把任一处默认值改回 viewer 都必须变红。viewer 持有全部
-    // `admin.*.read`，默认授予等于把管理台开给每个注册用户。
+    // 真正的事实源是注册表字段的 `defaultValue`；`defaultSettingsValues()` 与
+    // `baseConfig.users.defaultRole` 都由它派生，三者一起断言。注意
+    // `src/config/website.ts` 里的 `defaultRole` 字面量会被 `applySettingsToConfig`
+    // 整体覆盖、不承载默认值，所以不在断言范围内——改它不会影响任何行为。
+    // viewer 持有全部 `admin.*.read`，默认授予等于把管理台开给每个注册用户。
     expect(defaultSettingsValues()['users.defaultRole']).toBe('user')
     expect(baseConfig.users.defaultRole).toBe('user')
     const field = SETTING_FIELDS.find((item) => item.key === 'users.defaultRole')

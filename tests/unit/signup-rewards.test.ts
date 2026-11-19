@@ -99,7 +99,10 @@ describe('注册默认角色', () => {
       role: string
     }
     expect(row.role).toBe('user')
-    expect(warn).not.toHaveBeenCalled()
+    // 只认角色动作的告警：赠积分动作与本用例无关，不能因它变红/变绿。
+    expect(warn.mock.calls.some((call) => String(call[0]).includes('注册默认角色分配失败'))).toBe(
+      false,
+    )
   })
 })
 
@@ -154,7 +157,29 @@ describe('注册赠积分', () => {
 
     expect(balanceOf(sqlite, 'u_zero')).toBe(0)
     expect(transactionCount(sqlite, 'u_zero')).toBe(0)
-    expect(warn).not.toHaveBeenCalled()
+    // 只认赠积分动作的告警：角色动作失败（如删掉 'user' 特判）不该让本用例变红。
+    expect(warn.mock.calls.some((call) => String(call[0]).includes('注册赠积分发放失败'))).toBe(
+      false,
+    )
+  })
+
+  it('角色分配失败不吞掉赠积分（两个动作互相隔离）', async () => {
+    const { sqlite, db } = createTestDatabase()
+    seedUser(sqlite, 'u_isolated')
+    // `ghost` 不在 RBAC 目录里 → `assignRolesToUser` 抛 RBAC_ROLE_NOT_FOUND。
+    baseConfig.users.defaultRole = 'ghost' as never
+    baseConfig.users.signupCredits = { enabled: true, amount: 40, validDays: 0, description: '' }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await runSignup(db, 'u_isolated')
+
+    // 角色分配失败，但赠积分照常发放——两个动作各自 try/catch。
+    expect(roleNamesOf(sqlite, 'u_isolated')).toEqual([])
+    expect(balanceOf(sqlite, 'u_isolated')).toBe(40)
+    expect(transactionCount(sqlite, 'u_isolated')).toBe(1)
+    expect(warn.mock.calls.some((call) => String(call[0]).includes('注册默认角色分配失败'))).toBe(
+      true,
+    )
   })
 })
 
