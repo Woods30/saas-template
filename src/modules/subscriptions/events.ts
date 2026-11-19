@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, isNull, sql } from 'drizzle-orm'
 import { findOfferByReference, findProduct } from '@/config/products'
 import { websiteConfig } from '@/config/website'
 import { type DB, schema } from '@/core/db'
@@ -138,6 +138,20 @@ export async function applyPaymentEvent(
         setWhere: sql`${schema.payments.eventCreated} <= ${event.created} AND ${schema.payments.refundedAmount} = 0 AND ${schema.payments.status} != 'paid'`,
       })
       .returning({ id: schema.payments.id })
+    // 渠道不保证事件顺序：`invoice.paid` 可能先于 `checkout.session.completed` 到达，
+    // 付款先以 `order_id = null` 落库；后到事件的 upsert 又被 `status != 'paid'` 挡住。
+    // 订单关联是纯附加信息，单独补一次、且只填 NULL，绝不覆盖已有关联。
+    if (orderId) {
+      await db
+        .update(schema.payments)
+        .set({ orderId })
+        .where(
+          and(
+            eq(schema.payments.id, `${event.provider}:${payment.id}`),
+            isNull(schema.payments.orderId),
+          ),
+        )
+    }
     const productId = subscription?.productId ?? payment.productId
     const offerId = subscription?.offerId ?? payment.offerId
     // 发放放在 `saved.length` 之外：支付行可能已经落库、但上一次发放失败后 webhook
@@ -171,7 +185,12 @@ export async function applyPaymentEvent(
       })
     }
   }
-  // 资金事实落库后再收尾订单：结账会话已完成，订单状态只描述这次结账尝试。
+  // 资金事实落库后再收尾订单。
+  //
+  // `checkoutId` 只在**会话完成信号**上出现（Stripe 适配器只在
+  // `checkout.session.completed` / `checkout.session.async_payment_succeeded` 上赋值），
+  // 所以它本身已经保证「结账尝试已完成」。订单描述的是结账尝试，不是资金事实：
+  // 异步支付尚未到账时也应该标记完成，钱是否到账由 `payments` 表达。
   // 退款事件不携带 checkoutId，不会误改订单状态。
   if (checkoutOrder) {
     await markOrderStatus(db, checkoutOrder.id, 'completed')

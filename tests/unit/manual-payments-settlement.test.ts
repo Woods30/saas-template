@@ -850,4 +850,68 @@ describe('付款关联订单', () => {
     expect(orderRowStatus(sqlite, 'order-online')).toBe('completed')
     sqlite.close()
   })
+
+  it('后到的结账事件给已落库付款补上订单关联且不覆盖已有值', async () => {
+    const { db, sqlite } = settlementDatabase()
+    insertOnlineOrder(sqlite, { id: 'order-online', sessionId: 'cs_link' })
+
+    const payment = {
+      id: 'pi_shared',
+      invoiceId: 'in_shared',
+      chargeId: 'pi_shared',
+      customerId: null,
+      userId: 'u1',
+      productId: PRODUCT_ID,
+      offerId: OFFER_ID,
+      subscriptionId: null,
+      type: 'one_time' as const,
+      amount: BASE_AMOUNT,
+      currency: 'usd',
+      status: 'paid' as const,
+    }
+
+    // 先到的 invoice.paid 不带 checkoutId：付款落库但没有订单关联。
+    await applyPaymentEvent(db, {
+      id: 'evt_invoice_paid',
+      provider: 'stripe',
+      type: 'invoice.paid',
+      created: Math.floor(T0.getTime() / 1000),
+      payment,
+    })
+    expect(paymentRows(sqlite)).toHaveLength(1)
+    expect(paymentRows(sqlite)[0]).toMatchObject({ order_id: null, status: 'paid' })
+
+    // 后到的 checkout.session.completed 解析出订单：补上 order_id，不改付款事实。
+    const checkoutEvent = {
+      id: 'evt_checkout_late',
+      provider: 'stripe',
+      type: 'checkout.session.completed',
+      created: Math.floor(T0.getTime() / 1000) + 1,
+      checkoutId: 'cs_link',
+      payment,
+    }
+    await applyPaymentEvent(db, checkoutEvent)
+    const linked = paymentRows(sqlite)
+    expect(linked).toHaveLength(1)
+    expect(linked[0]).toMatchObject({
+      order_id: 'order-online',
+      status: 'paid',
+      amount: BASE_AMOUNT,
+    })
+
+    // 再应用一次（新事件 id 绕过事件幂等表）也不覆盖已有关联、不改付款事实。
+    await applyPaymentEvent(db, {
+      ...checkoutEvent,
+      id: 'evt_checkout_late_2',
+      created: checkoutEvent.created + 1,
+    })
+    const repeated = paymentRows(sqlite)
+    expect(repeated).toHaveLength(1)
+    expect(repeated[0]).toMatchObject({
+      order_id: 'order-online',
+      status: 'paid',
+      amount: BASE_AMOUNT,
+    })
+    sqlite.close()
+  })
 })
