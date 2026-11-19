@@ -109,9 +109,9 @@ describe('管理台导航', () => {
     const withoutManualPayment = getAdminNav(createConfig())
     const billing = (nav: ReturnType<typeof getAdminNav>) =>
       nav.groups.find((group) => group.id === 'billing')?.items.map((item) => item.id)
-    expect(billing(withoutManualPayment)).toEqual(['orders', 'subscriptions', 'credits'])
+    expect(billing(withoutManualPayment)).toEqual(['payments', 'subscriptions', 'credits'])
     expect(billing(getAdminNav(createConfig({ manualPayments: true })))).toEqual([
-      'orders',
+      'payments',
       'subscriptions',
       'manual-payments',
       'credits',

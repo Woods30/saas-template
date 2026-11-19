@@ -95,11 +95,11 @@ const MANUAL_PAYMENT_ORDERS: AdminNavItem = {
 
 const BILLING_ITEMS: AdminNavItem[] = [
   {
-    id: 'orders',
-    to: adminRoutes.orders,
+    id: 'payments',
+    to: adminRoutes.payments,
     icon: IconReceipt,
-    title: () => m.admin_orders_title(),
-    description: () => m.admin_orders_description(),
+    title: () => m.admin_payments_title(),
+    description: () => m.admin_payments_description(),
   },
   {
     id: 'subscriptions',

@@ -6,18 +6,23 @@ import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@/core/db/paging'
 import { clawbackCreditsForRefund } from './credits'
 
 /**
- * 管理台订单列表。
+ * 管理台付款列表。
  *
- * 「订单」指支付流水（`payments` 表）：一笔支付就是一笔订单，退款也记在同一行上。
- * 与订阅列表分开，因为两者的状态集合不同——支付有 `partially_refunded`，
- * 订阅没有。
+ * 「付款」指已确认的资金事实（`payments` 表）：一笔支付就是一条记录，退款也记在
+ * 同一行上。与订阅列表分开，因为两者的状态集合不同——支付有
+ * `partially_refunded`，订阅没有。
  */
 
-/** 订单状态筛选。`all` 表示不过滤。 */
+/** 付款状态筛选。`all` 表示不过滤。 */
 export type AdminOrderStatusFilter = 'all' | 'paid' | 'failed' | 'refunded' | 'partially_refunded'
+
+/** 付款类型 tab：资金事实按「订阅 / 一次性 / 人工核销」分档。 */
+export type AdminPaymentTab = 'all' | 'subscription' | 'one_time' | 'manual_payments'
 
 export interface AdminOrder {
   id: string
+  /** 这笔付款对应的结账订单；历史数据或无法归属时为空。 */
+  orderId: string | null
   /** 买家 id；支付行可能没有用户（外键可空，历史数据也可能有孤儿行）。 */
   userId: string | null
   /** 买家邮箱；用户行缺失时为空字符串——行本身仍然展示，不静默丢弃。 */
@@ -35,7 +40,7 @@ export interface AdminOrder {
   createdAt: Date | string
 }
 
-export interface AdminOrdersQuery {
+export interface AdminPaymentsQuery {
   status?: AdminOrderStatusFilter
   limit?: number
   offset?: number
@@ -48,14 +53,14 @@ export interface AdminOrdersResult {
 }
 
 /**
- * 查订单列表。
+ * 查付款列表。
  *
  * 左连接用户表而非内连接：外键未强制时（历史数据、直接写库）支付行可能指向
- * 不存在的用户，内连接会静默丢行，让订单数与营收对不上。
+ * 不存在的用户，内连接会静默丢行，让支付数与营收对不上。
  */
-export async function queryAdminOrders(
+export async function queryAdminPayments(
   db: DB,
-  query: AdminOrdersQuery = {},
+  query: AdminPaymentsQuery = {},
 ): Promise<AdminOrdersResult> {
   const status = query.status ?? 'all'
   const where = status === 'all' ? undefined : eq(schema.payments.status, status)
@@ -66,6 +71,7 @@ export async function queryAdminOrders(
     db
       .select({
         id: schema.payments.id,
+        orderId: schema.payments.orderId,
         userId: schema.payments.userId,
         email: schema.users.email,
         provider: schema.payments.provider,
@@ -95,24 +101,24 @@ export async function queryAdminOrders(
   }
 }
 
-const ordersQuerySchema = z.object({
+const paymentsQuerySchema = z.object({
   status: z.enum(['all', 'paid', 'failed', 'refunded', 'partially_refunded']).default('all'),
   limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
   offset: z.number().int().min(0).default(0),
 })
 
 /**
- * 订单列表的 server function。
+ * 付款列表的 server function。
  *
  * 权限在服务端再校验：server function 是可被直接调用的 HTTP 端点，
  * 只靠菜单隐藏拦不住。
  */
-export const fetchAdminOrders = createServerFn({ method: 'GET' })
-  .validator((input: unknown) => ordersQuerySchema.parse(input))
+export const fetchAdminPayments = createServerFn({ method: 'GET' })
+  .validator((input: unknown) => paymentsQuerySchema.parse(input))
   .handler(async ({ data }): Promise<AdminOrdersResult> => {
     const { requireAdminDb } = await import('@/core/auth/session')
     const { db } = await requireAdminDb()
-    return queryAdminOrders(db, data)
+    return queryAdminPayments(db, data)
   })
 
 export interface AdminRefundResult {

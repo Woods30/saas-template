@@ -40,7 +40,7 @@ import { Route as Char123LocaleChar125LayoutAdminAuditRouteImport } from './rout
 import { Route as Char123LocaleChar125LayoutAdminContentRouteImport } from './routes/{-$locale}/_layout/admin/content'
 import { Route as Char123LocaleChar125LayoutAdminCreditsRouteImport } from './routes/{-$locale}/_layout/admin/credits'
 import { Route as Char123LocaleChar125LayoutAdminManualPaymentsRouteImport } from './routes/{-$locale}/_layout/admin/manual-payments'
-import { Route as Char123LocaleChar125LayoutAdminOrdersRouteImport } from './routes/{-$locale}/_layout/admin/orders'
+import { Route as Char123LocaleChar125LayoutAdminPaymentsRouteImport } from './routes/{-$locale}/_layout/admin/payments'
 import { Route as Char123LocaleChar125LayoutAdminRolesRouteImport } from './routes/{-$locale}/_layout/admin/roles'
 import { Route as Char123LocaleChar125LayoutAdminSettingsRouteImport } from './routes/{-$locale}/_layout/admin/settings'
 import { Route as Char123LocaleChar125LayoutAdminSubscriptionsRouteImport } from './routes/{-$locale}/_layout/admin/subscriptions'
@@ -245,10 +245,10 @@ const Char123LocaleChar125LayoutAdminManualPaymentsRoute =
     path: '/manual-payments',
     getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
   } as any)
-const Char123LocaleChar125LayoutAdminOrdersRoute =
-  Char123LocaleChar125LayoutAdminOrdersRouteImport.update({
-    id: '/orders',
-    path: '/orders',
+const Char123LocaleChar125LayoutAdminPaymentsRoute =
+  Char123LocaleChar125LayoutAdminPaymentsRouteImport.update({
+    id: '/payments',
+    path: '/payments',
     getParentRoute: () => Char123LocaleChar125LayoutAdminRoute,
   } as any)
 const Char123LocaleChar125LayoutAdminRolesRoute =
@@ -463,7 +463,7 @@ export interface FileRoutesByFullPath {
   '/{-$locale}/admin/content': typeof Char123LocaleChar125LayoutAdminContentRoute
   '/{-$locale}/admin/credits': typeof Char123LocaleChar125LayoutAdminCreditsRoute
   '/{-$locale}/admin/manual-payments': typeof Char123LocaleChar125LayoutAdminManualPaymentsRoute
-  '/{-$locale}/admin/orders': typeof Char123LocaleChar125LayoutAdminOrdersRoute
+  '/{-$locale}/admin/payments': typeof Char123LocaleChar125LayoutAdminPaymentsRoute
   '/{-$locale}/admin/roles': typeof Char123LocaleChar125LayoutAdminRolesRoute
   '/{-$locale}/admin/settings': typeof Char123LocaleChar125LayoutAdminSettingsRoute
   '/{-$locale}/admin/subscriptions': typeof Char123LocaleChar125LayoutAdminSubscriptionsRoute
@@ -523,7 +523,7 @@ export interface FileRoutesByTo {
   '/{-$locale}/admin/content': typeof Char123LocaleChar125LayoutAdminContentRoute
   '/{-$locale}/admin/credits': typeof Char123LocaleChar125LayoutAdminCreditsRoute
   '/{-$locale}/admin/manual-payments': typeof Char123LocaleChar125LayoutAdminManualPaymentsRoute
-  '/{-$locale}/admin/orders': typeof Char123LocaleChar125LayoutAdminOrdersRoute
+  '/{-$locale}/admin/payments': typeof Char123LocaleChar125LayoutAdminPaymentsRoute
   '/{-$locale}/admin/roles': typeof Char123LocaleChar125LayoutAdminRolesRoute
   '/{-$locale}/admin/settings': typeof Char123LocaleChar125LayoutAdminSettingsRoute
   '/{-$locale}/admin/subscriptions': typeof Char123LocaleChar125LayoutAdminSubscriptionsRoute
@@ -587,7 +587,7 @@ export interface FileRoutesById {
   '/{-$locale}/_layout/admin/content': typeof Char123LocaleChar125LayoutAdminContentRoute
   '/{-$locale}/_layout/admin/credits': typeof Char123LocaleChar125LayoutAdminCreditsRoute
   '/{-$locale}/_layout/admin/manual-payments': typeof Char123LocaleChar125LayoutAdminManualPaymentsRoute
-  '/{-$locale}/_layout/admin/orders': typeof Char123LocaleChar125LayoutAdminOrdersRoute
+  '/{-$locale}/_layout/admin/payments': typeof Char123LocaleChar125LayoutAdminPaymentsRoute
   '/{-$locale}/_layout/admin/roles': typeof Char123LocaleChar125LayoutAdminRolesRoute
   '/{-$locale}/_layout/admin/settings': typeof Char123LocaleChar125LayoutAdminSettingsRoute
   '/{-$locale}/_layout/admin/subscriptions': typeof Char123LocaleChar125LayoutAdminSubscriptionsRoute
@@ -653,7 +653,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/admin/content'
     | '/{-$locale}/admin/credits'
     | '/{-$locale}/admin/manual-payments'
-    | '/{-$locale}/admin/orders'
+    | '/{-$locale}/admin/payments'
     | '/{-$locale}/admin/roles'
     | '/{-$locale}/admin/settings'
     | '/{-$locale}/admin/subscriptions'
@@ -713,7 +713,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/admin/content'
     | '/{-$locale}/admin/credits'
     | '/{-$locale}/admin/manual-payments'
-    | '/{-$locale}/admin/orders'
+    | '/{-$locale}/admin/payments'
     | '/{-$locale}/admin/roles'
     | '/{-$locale}/admin/settings'
     | '/{-$locale}/admin/subscriptions'
@@ -776,7 +776,7 @@ export interface FileRouteTypes {
     | '/{-$locale}/_layout/admin/content'
     | '/{-$locale}/_layout/admin/credits'
     | '/{-$locale}/_layout/admin/manual-payments'
-    | '/{-$locale}/_layout/admin/orders'
+    | '/{-$locale}/_layout/admin/payments'
     | '/{-$locale}/_layout/admin/roles'
     | '/{-$locale}/_layout/admin/settings'
     | '/{-$locale}/_layout/admin/subscriptions'
@@ -1060,11 +1060,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char123LocaleChar125LayoutAdminManualPaymentsRouteImport
       parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
     }
-    '/{-$locale}/_layout/admin/orders': {
-      id: '/{-$locale}/_layout/admin/orders'
-      path: '/orders'
-      fullPath: '/{-$locale}/admin/orders'
-      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminOrdersRouteImport
+    '/{-$locale}/_layout/admin/payments': {
+      id: '/{-$locale}/_layout/admin/payments'
+      path: '/payments'
+      fullPath: '/{-$locale}/admin/payments'
+      preLoaderRoute: typeof Char123LocaleChar125LayoutAdminPaymentsRouteImport
       parentRoute: typeof Char123LocaleChar125LayoutAdminRoute
     }
     '/{-$locale}/_layout/admin/roles': {
@@ -1285,7 +1285,7 @@ interface Char123LocaleChar125LayoutAdminRouteChildren {
   Char123LocaleChar125LayoutAdminContentRoute: typeof Char123LocaleChar125LayoutAdminContentRoute
   Char123LocaleChar125LayoutAdminCreditsRoute: typeof Char123LocaleChar125LayoutAdminCreditsRoute
   Char123LocaleChar125LayoutAdminManualPaymentsRoute: typeof Char123LocaleChar125LayoutAdminManualPaymentsRoute
-  Char123LocaleChar125LayoutAdminOrdersRoute: typeof Char123LocaleChar125LayoutAdminOrdersRoute
+  Char123LocaleChar125LayoutAdminPaymentsRoute: typeof Char123LocaleChar125LayoutAdminPaymentsRoute
   Char123LocaleChar125LayoutAdminRolesRoute: typeof Char123LocaleChar125LayoutAdminRolesRoute
   Char123LocaleChar125LayoutAdminSettingsRoute: typeof Char123LocaleChar125LayoutAdminSettingsRoute
   Char123LocaleChar125LayoutAdminSubscriptionsRoute: typeof Char123LocaleChar125LayoutAdminSubscriptionsRoute
@@ -1305,8 +1305,8 @@ const Char123LocaleChar125LayoutAdminRouteChildren: Char123LocaleChar125LayoutAd
       Char123LocaleChar125LayoutAdminCreditsRoute,
     Char123LocaleChar125LayoutAdminManualPaymentsRoute:
       Char123LocaleChar125LayoutAdminManualPaymentsRoute,
-    Char123LocaleChar125LayoutAdminOrdersRoute:
-      Char123LocaleChar125LayoutAdminOrdersRoute,
+    Char123LocaleChar125LayoutAdminPaymentsRoute:
+      Char123LocaleChar125LayoutAdminPaymentsRoute,
     Char123LocaleChar125LayoutAdminRolesRoute:
       Char123LocaleChar125LayoutAdminRolesRoute,
     Char123LocaleChar125LayoutAdminSettingsRoute:

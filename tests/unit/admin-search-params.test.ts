@@ -3,7 +3,7 @@ import { Route as AdminAuditRoute } from '@/routes/{-$locale}/_layout/admin/audi
 import { Route as AdminCreditsRoute } from '@/routes/{-$locale}/_layout/admin/credits'
 import { Route as AdminOverviewRoute } from '@/routes/{-$locale}/_layout/admin/index'
 import { Route as AdminManualPaymentOrdersRoute } from '@/routes/{-$locale}/_layout/admin/manual-payments'
-import { Route as AdminOrdersRoute } from '@/routes/{-$locale}/_layout/admin/orders'
+import { Route as AdminPaymentsRoute } from '@/routes/{-$locale}/_layout/admin/payments'
 import { Route as AdminSubscriptionsRoute } from '@/routes/{-$locale}/_layout/admin/subscriptions'
 import { Route as AdminTasksRoute } from '@/routes/{-$locale}/_layout/admin/tasks'
 import { Route as AdminUsersRoute } from '@/routes/{-$locale}/_layout/admin/users'
@@ -33,7 +33,7 @@ function validate(route: unknown, search: Record<string, unknown>) {
 describe('列表页 search 参数规范化', () => {
   it.each([
     ['admin 概览', AdminOverviewRoute],
-    ['admin 订单', AdminOrdersRoute],
+    ['admin 付款', AdminPaymentsRoute],
     ['admin 订阅', AdminSubscriptionsRoute],
     ['admin 审计日志', AdminAuditRoute],
     ['admin 用户', AdminUsersRoute],
@@ -47,7 +47,7 @@ describe('列表页 search 参数规范化', () => {
 
   it.each([
     ['admin 概览', AdminOverviewRoute],
-    ['admin 订单', AdminOrdersRoute],
+    ['admin 付款', AdminPaymentsRoute],
     ['admin 订阅', AdminSubscriptionsRoute],
     ['admin 审计日志', AdminAuditRoute],
     ['admin 用户', AdminUsersRoute],
@@ -60,7 +60,7 @@ describe('列表页 search 参数规范化', () => {
 
   it.each([
     ['admin 概览', AdminOverviewRoute],
-    ['admin 订单', AdminOrdersRoute],
+    ['admin 付款', AdminPaymentsRoute],
     ['admin 订阅', AdminSubscriptionsRoute],
     ['admin 审计日志', AdminAuditRoute],
     ['admin 用户', AdminUsersRoute],
@@ -73,7 +73,7 @@ describe('列表页 search 参数规范化', () => {
 
   it.each([
     ['admin 概览', AdminOverviewRoute],
-    ['admin 订单', AdminOrdersRoute],
+    ['admin 付款', AdminPaymentsRoute],
     ['admin 订阅', AdminSubscriptionsRoute],
     ['admin 审计日志', AdminAuditRoute],
     ['admin 用户', AdminUsersRoute],
@@ -93,9 +93,9 @@ describe('列表页 search 参数规范化', () => {
   })
 
   it('订单状态：「全部」是默认值，不进 URL', () => {
-    expect(validate(AdminOrdersRoute, { status: 'all' }).status).toBeUndefined()
-    expect(validate(AdminOrdersRoute, { status: 'paid' }).status).toBe('paid')
-    expect(validate(AdminOrdersRoute, { status: 'bogus' }).status).toBeUndefined()
+    expect(validate(AdminPaymentsRoute, { status: 'all' }).status).toBeUndefined()
+    expect(validate(AdminPaymentsRoute, { status: 'paid' }).status).toBe('paid')
+    expect(validate(AdminPaymentsRoute, { status: 'bogus' }).status).toBeUndefined()
   })
 
   it('订阅状态：「全部」是默认值，不进 URL', () => {

@@ -16,7 +16,7 @@ export const adminRoutes = {
   users: '/{-$locale}/admin/users',
   roles: '/{-$locale}/admin/roles',
   audit: '/{-$locale}/admin/audit',
-  orders: '/{-$locale}/admin/orders',
+  payments: '/{-$locale}/admin/payments',
   subscriptions: '/{-$locale}/admin/subscriptions',
   manualPayments: '/{-$locale}/admin/manual-payments',
   credits: '/{-$locale}/admin/credits',

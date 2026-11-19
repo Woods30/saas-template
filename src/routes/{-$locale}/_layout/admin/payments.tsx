@@ -31,24 +31,25 @@ import { m } from '@/locale/paraglide/messages.js'
 import {
   type AdminOrder,
   type AdminOrderStatusFilter,
-  fetchAdminOrders,
+  fetchAdminPayments,
   paymentStatusMessageKey,
   productNameForProductId,
   refundAdminOrder,
 } from '@/modules/subscriptions/service'
 
 /**
- * 管理台订单列表。
+ * 管理台付款列表。
  *
  * 与营收页的分工：营收页给聚合口径（每个币种收了多少），这里给明细口径
  * （哪一笔付过款、付了多少、退了多少）。
  *
- * 页码与状态筛选放 URL：刷新与分享链接能停在原页，也符合「URL 即状态」的路由数据流。
+ * 页码、状态与类型筛选放 URL：刷新与分享链接能停在原页，也符合「URL 即状态」的
+ * 路由数据流。
  */
-export const Route = createFileRoute('/{-$locale}/_layout/admin/orders')({
+export const Route = createFileRoute('/{-$locale}/_layout/admin/payments')({
   // 属性声明为可选：`MakeRequiredSearchParams` 会把「必填的 search 参数」算进
   // 链接类型，导致侧栏里的 linkOptions 必须带 search，导航项就没法只写路径。
-  validateSearch: (search: Record<string, unknown>): AdminOrdersSearch => {
+  validateSearch: (search: Record<string, unknown>): AdminPaymentsSearch => {
     const parsed = Number(search.page)
     const page = Number.isInteger(parsed) && parsed > 1 ? parsed : undefined
     const raw = search.status
@@ -62,15 +63,15 @@ export const Route = createFileRoute('/{-$locale}/_layout/admin/orders')({
   },
   loaderDeps: ({ search }) => ({ page: search.page ?? 1, status: search.status ?? 'all' }),
   loader: ({ deps }) =>
-    fetchAdminOrders({
+    fetchAdminPayments({
       data: {
         status: deps.status,
         limit: DEFAULT_PAGE_SIZE,
         offset: (deps.page - 1) * DEFAULT_PAGE_SIZE,
       },
     }),
-  head: () => adminHead(adminRoutes.orders),
-  component: AdminOrdersPage,
+  head: () => adminHead(adminRoutes.payments),
+  component: AdminPaymentsPage,
 })
 
 /** 可选的状态筛选值。 */
@@ -82,7 +83,7 @@ const ORDER_STATUSES: AdminOrderStatusFilter[] = [
   'partially_refunded',
 ]
 
-interface AdminOrdersSearch {
+interface AdminPaymentsSearch {
   page?: number
   status?: AdminOrderStatusFilter
 }
@@ -90,15 +91,15 @@ interface AdminOrdersSearch {
 /** 筛选下拉的选项：必须渲染期构造，否则切换语言后选项仍是旧文案。 */
 function statusItems() {
   return [
-    { value: 'all', label: m.admin_orders_filter_all() },
-    { value: 'paid', label: m.admin_orders_filter_paid() },
-    { value: 'failed', label: m.admin_orders_filter_failed() },
-    { value: 'refunded', label: m.admin_orders_filter_refunded() },
-    { value: 'partially_refunded', label: m.admin_orders_filter_partially_refunded() },
+    { value: 'all', label: m.admin_payments_filter_all() },
+    { value: 'paid', label: m.admin_payments_filter_paid() },
+    { value: 'failed', label: m.admin_payments_filter_failed() },
+    { value: 'refunded', label: m.admin_payments_filter_refunded() },
+    { value: 'partially_refunded', label: m.admin_payments_filter_partially_refunded() },
   ]
 }
 
-function AdminOrdersPage() {
+function AdminPaymentsPage() {
   const data = Route.useLoaderData()
   const { page = 1, status = 'all' } = Route.useSearch()
   const navigate = Route.useNavigate()
@@ -129,23 +130,23 @@ function AdminOrdersPage() {
     () => [
       {
         id: 'user',
-        header: m.admin_orders_col_user(),
+        header: m.admin_payments_col_user(),
         className: 'max-w-[220px] truncate',
         cell: (order) => order.email || order.userId || '—',
       },
       {
         id: 'product',
-        header: m.admin_orders_col_product(),
+        header: m.admin_payments_col_product(),
         cell: (order) => productNameForProductId(order.productId) ?? order.productId ?? '—',
       },
       {
         id: 'amount',
-        header: m.admin_orders_col_amount(),
+        header: m.admin_payments_col_amount(),
         cell: (order) => formatMoney(order.amount, order.currency, locale),
       },
       {
         id: 'refunded',
-        header: m.admin_orders_col_refunded(),
+        header: m.admin_payments_col_refunded(),
         cell: (order) =>
           order.refundedAmount > 0
             ? formatMoney(order.refundedAmount, order.currency, locale)
@@ -153,7 +154,7 @@ function AdminOrdersPage() {
       },
       {
         id: 'status',
-        header: m.admin_orders_col_status(),
+        header: m.admin_payments_col_status(),
         cell: (order) => (
           <Badge variant={order.status === 'paid' ? 'default' : 'secondary'}>
             {m[paymentStatusMessageKey(order.status)]()}
@@ -162,13 +163,13 @@ function AdminOrdersPage() {
       },
       {
         id: 'paidAt',
-        header: m.admin_orders_col_paid_at(),
+        header: m.admin_payments_col_paid_at(),
         className: 'hidden lg:table-cell',
         cell: (order) => <LocalDate value={order.paidAt} locale={locale} />,
       },
       {
         id: 'createdAt',
-        header: m.admin_orders_col_created_at(),
+        header: m.admin_payments_col_created_at(),
         className: 'hidden xl:table-cell',
         cell: (order) => <LocalDate value={order.createdAt} locale={locale} />,
       },
@@ -179,7 +180,7 @@ function AdminOrdersPage() {
           (order.status === 'paid' || order.status === 'partially_refunded') &&
           order.refundedAmount < order.amount ? (
             <Button variant="outline" size="sm" onClick={() => setPendingRefund(order)}>
-              {m.admin_orders_refund()}
+              {m.admin_payments_refund()}
             </Button>
           ) : null,
       },
@@ -194,7 +195,7 @@ function AdminOrdersPage() {
         data={data.orders}
         rowKey={(order) => order.id}
         emptyIcon={<IconReceipt aria-hidden />}
-        emptyTitle={m.admin_orders_empty()}
+        emptyTitle={m.admin_payments_empty()}
         pagination={{
           page,
           pageSize: DEFAULT_PAGE_SIZE,
@@ -218,7 +219,7 @@ function AdminOrdersPage() {
             }
             items={statusItems()}
           >
-            <SelectTrigger size="sm" aria-label={m.admin_orders_col_status()}>
+            <SelectTrigger size="sm" aria-label={m.admin_payments_col_status()}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -239,18 +240,18 @@ function AdminOrdersPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{m.admin_orders_refund_confirm_title()}</AlertDialogTitle>
+            <AlertDialogTitle>{m.admin_payments_refund_confirm_title()}</AlertDialogTitle>
             <AlertDialogDescription>
-              {m.admin_orders_refund_confirm_description()}
+              {m.admin_payments_refund_confirm_description()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {refundError && (
             <p role="alert" className="text-sm text-destructive">
-              {m.admin_orders_refund_error()}
+              {m.admin_payments_refund_error()}
             </p>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={refunding}>{m.admin_orders_cancel()}</AlertDialogCancel>
+            <AlertDialogCancel disabled={refunding}>{m.admin_payments_cancel()}</AlertDialogCancel>
             <AlertDialogAction
               disabled={refunding}
               variant="destructive"
@@ -259,7 +260,9 @@ function AdminOrdersPage() {
                 void refund()
               }}
             >
-              {refunding ? m.admin_orders_refund_pending() : m.admin_orders_refund_confirm_action()}
+              {refunding
+                ? m.admin_payments_refund_pending()
+                : m.admin_payments_refund_confirm_action()}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

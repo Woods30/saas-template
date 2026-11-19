@@ -13,11 +13,12 @@ export {
 export {
   type AdminOrder,
   type AdminOrderStatusFilter,
-  type AdminOrdersQuery,
   type AdminOrdersResult,
+  type AdminPaymentsQuery,
+  type AdminPaymentTab,
   type AdminRefundResult,
-  fetchAdminOrders,
-  queryAdminOrders,
+  fetchAdminPayments,
+  queryAdminPayments,
   refundAdminOrder,
 } from './admin-orders'
 export {
