@@ -899,11 +899,21 @@ describe('付款关联订单', () => {
       amount: BASE_AMOUNT,
     })
 
+    // 同一笔付款又收到另一个会话的完成事件：关联已存在，绝不能改成后一个订单。
+    insertOnlineOrder(sqlite, { id: 'order-online-2', sessionId: 'cs_link2' })
+    await applyPaymentEvent(db, {
+      ...checkoutEvent,
+      id: 'evt_checkout_other',
+      checkoutId: 'cs_link2',
+      created: checkoutEvent.created + 1,
+    })
+    expect(paymentRows(sqlite)[0]).toMatchObject({ order_id: 'order-online' })
+
     // 再应用一次（新事件 id 绕过事件幂等表）也不覆盖已有关联、不改付款事实。
     await applyPaymentEvent(db, {
       ...checkoutEvent,
       id: 'evt_checkout_late_2',
-      created: checkoutEvent.created + 1,
+      created: checkoutEvent.created + 2,
     })
     const repeated = paymentRows(sqlite)
     expect(repeated).toHaveLength(1)
@@ -912,6 +922,58 @@ describe('付款关联订单', () => {
       status: 'paid',
       amount: BASE_AMOUNT,
     })
+    sqlite.close()
+  })
+
+  it('订阅结账完成且无付款时仍收尾订单但不写 payments', async () => {
+    const { db, sqlite } = settlementDatabase()
+    insertOnlineOrder(sqlite, { id: 'order-sub', sessionId: 'cs_sub' })
+
+    await applyPaymentEvent(db, {
+      id: 'evt_sub_checkout',
+      provider: 'stripe',
+      type: 'checkout.session.completed',
+      created: Math.floor(T0.getTime() / 1000),
+      checkoutId: 'cs_sub',
+      subscriptionId: 'sub_checkout',
+      subscription: {
+        id: 'sub_checkout',
+        userId: 'u1',
+        customerId: null,
+        priceId: 'p1',
+        reference: null,
+        productId: PRODUCT_ID,
+        offerId: OFFER_ID,
+        amount: BASE_AMOUNT,
+        currency: 'usd',
+        interval: 'month',
+        intervalCount: 1,
+        currentPeriodStart: 100,
+        currentPeriodEnd: 200,
+        cancelAtPeriodEnd: false,
+        status: 'active',
+      },
+    })
+
+    // 订单是结账尝试：会话完成即完成，钱是否到账由 payments 表达。
+    expect(orderRowStatus(sqlite, 'order-sub')).toBe('completed')
+    expect(paymentRows(sqlite)).toHaveLength(0)
+    sqlite.close()
+  })
+
+  it('终态订单不会被后到的完成事件改回 completed', async () => {
+    const { db, sqlite } = settlementDatabase()
+    insertOnlineOrder(sqlite, { id: 'order-failed', sessionId: 'cs_failed', status: 'failed' })
+
+    await applyPaymentEvent(db, {
+      id: 'evt_late_checkout',
+      provider: 'stripe',
+      type: 'checkout.session.completed',
+      created: Math.floor(T0.getTime() / 1000),
+      checkoutId: 'cs_failed',
+    })
+
+    expect(orderRowStatus(sqlite, 'order-failed')).toBe('failed')
     sqlite.close()
   })
 })

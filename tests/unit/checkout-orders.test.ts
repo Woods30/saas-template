@@ -210,6 +210,48 @@ describe('在线结账写订单', () => {
     sqlite.close()
   })
 
+  it('对账已完成会话时订单标记 completed', async () => {
+    const { db, sqlite } = createTestDatabase()
+    seedUser(sqlite, 'u1')
+    const subscription = {
+      id: 'sub_done',
+      userId: 'u1',
+      customerId: null,
+      priceId: 'p1',
+      reference: null,
+      productId: 'pro',
+      offerId: 'monthly',
+      amount: 18_000,
+      currency: 'usd',
+      interval: 'month',
+      intervalCount: 1,
+      currentPeriodStart: 100,
+      currentPeriodEnd: 200,
+      cancelAtPeriodEnd: false,
+      status: 'active' as const,
+    }
+    const provider = fakeProvider({
+      createCheckoutSession: async () => ({
+        url: 'https://pay.test/done',
+        sessionId: 'cs_done',
+        expiresAt: 1_800_000_000,
+      }),
+      retrieveCheckoutSession: async () => ({
+        status: 'complete',
+        subscriptionId: subscription.id,
+      }),
+      retrieveSubscription: async () => subscription,
+    })
+
+    await beginCheckout(db, provider, checkoutInput('subscription'))
+    expect(readOrders(sqlite)[0]?.status).toBe('open')
+
+    // webhook 丢失：重试对账远端已完成会话，订单必须随之收尾。
+    expect(await beginCheckout(db, provider, checkoutInput('subscription'))).toBeNull()
+    expect(readOrders(sqlite)[0]?.status).toBe('completed')
+    sqlite.close()
+  })
+
   it('渠道创建失败时订单标记 failed', async () => {
     const { db, sqlite } = createTestDatabase()
     seedUser(sqlite, 'u1')

@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, notInArray } from 'drizzle-orm'
 import { type DB, schema } from '@/core/db'
 
 /**
@@ -78,11 +78,20 @@ export async function markOrderOpen(
     .where(eq(schema.orders.id, orderId))
 }
 
+/** 终态：结账尝试已经结束，后续事件不能把它改回 `completed`。 */
+const TERMINAL_ORDER_STATUSES = ['failed', 'expired', 'canceled'] as const
+
 export async function markOrderStatus(db: Db, orderId: string, status: OrderStatus): Promise<void> {
-  await db
-    .update(schema.orders)
-    .set({ status, updatedAt: new Date() })
-    .where(eq(schema.orders.id, orderId))
+  // 完成事件可能晚于终态写入（例如 webhook 乱序）；`completed` 只允许从
+  // 非终态推进，避免把失败 / 过期 / 取消的结账尝试"复活"。
+  const where =
+    status === 'completed'
+      ? and(
+          eq(schema.orders.id, orderId),
+          notInArray(schema.orders.status, [...TERMINAL_ORDER_STATUSES]),
+        )
+      : eq(schema.orders.id, orderId)
+  await db.update(schema.orders).set({ status, updatedAt: new Date() }).where(where)
 }
 
 export async function findOrderBySessionId(

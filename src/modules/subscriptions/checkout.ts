@@ -179,6 +179,9 @@ export async function beginCheckout(
           provider: name,
           type: 'checkout.reconciled',
           created: now,
+          // 远端会话已完成：带上会话 id，让付款事件链路按它找回订单并收尾，
+          // 否则 webhook 丢失时订阅生效而订单会永远停在 open。
+          checkoutId: reservation.sessionId,
           subscription,
         },
         () => provider.retrieveSubscription(session.subscriptionId as string),
