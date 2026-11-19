@@ -85,6 +85,13 @@ describe('attributionCookieHeaders — UTM', () => {
     })
     expect(attributionCookieHeaders(request)).toEqual([`utm_source=spring; ${UTM_MAX_AGE}`])
   })
+
+  it('规范化后为空的 utm cookie 不阻断后续有效参数', () => {
+    const request = new Request('https://example.com/pricing?utm_source=spring', {
+      headers: { cookie: 'utm_source=%20' },
+    })
+    expect(attributionCookieHeaders(request)).toEqual([`utm_source=spring; ${UTM_MAX_AGE}`])
+  })
 })
 
 describe('attributionCookieHeaders — referrer', () => {
@@ -106,6 +113,19 @@ describe('attributionCookieHeaders — referrer', () => {
         accept: 'text/html',
         referer: 'https://www.google.com/search',
         cookie: 'first_referrer=',
+      },
+    })
+    expect(attributionCookieHeaders(request)).toEqual([
+      `${REFERRER_COOKIE}=${encodeURIComponent('https://www.google.com/search')}; ${UTM_MAX_AGE}`,
+    ])
+  })
+
+  it('规范化后为空的 first_referrer cookie 不阻断后续外部来源', () => {
+    const request = new Request('https://example.com/pricing', {
+      headers: {
+        accept: 'text/html',
+        referer: 'https://www.google.com/search',
+        cookie: 'first_referrer=%20',
       },
     })
     expect(attributionCookieHeaders(request)).toEqual([

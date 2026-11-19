@@ -205,14 +205,18 @@ function shouldWriteReferrer(request: Request, cookieHeader: string | null): boo
 }
 
 /**
- * cookie 是否存在有效值。
+ * cookie 是否存在**有效**值。
  *
- * 空值（`utm_source=`）与缺失同等看待：读取侧把空值映射为「未归因」，写入侧若把它
- * 当作「已存在」，一个空 cookie 就会永久挡住后续有效参数（30 天窗口）。
+ * 空值（`utm_source=`）与「解码 + 清洗后为空」（`utm_source=%20`）都与缺失同等看待：
+ * 读取侧把这类值映射为「未归因」，写入侧若把它当作「已存在」，一个伪造/历史空 cookie
+ * 就会永久挡住后续有效参数（30 天窗口）。
  */
 function hasCookieValue(cookieHeader: string | null, name: string): boolean {
-  const value = readCookieValue(cookieHeader, name)
-  return value !== undefined && value !== ''
+  const raw = readCookieValue(cookieHeader, name)
+  if (raw === undefined) return false
+  const decoded = decodeCookieValue(raw)
+  const sanitized = name === REFERRER_COOKIE ? sanitizeReferrer(decoded) : sanitizeUtm(decoded)
+  return sanitized !== ''
 }
 
 function decodeCookieValue(value: string): string {
