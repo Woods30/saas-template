@@ -288,18 +288,26 @@ export function applySettingsToConfig(
       },
     },
     auth: {
-      enabled: bool(values, 'modules.auth'),
+      // `modules.auth` 已从注册表移除。消费方（settings-nav、account-menu、
+      // AdminConsoleLayout、api/auth/$）仍读这个形状，先固定为原默认值 `true`，
+      // Task 6 再连同类型一起删除这层过渡形状。
+      enabled: true,
+      emailEnabled: bool(values, 'auth.emailEnabled'),
+      googleEnabled: bool(values, 'auth.googleEnabled'),
+      githubEnabled: bool(values, 'auth.githubEnabled'),
       requireEmailVerification: bool(values, 'auth.requireEmailVerification'),
     },
     captcha: {
       ...(str(values, 'turnstile.siteKey') ? { siteKey: str(values, 'turnstile.siteKey') } : {}),
     },
     features: {
-      enableI18n: bool(values, 'features.enableI18n'),
-      enableFileUpload: bool(values, 'features.enableFileUpload'),
-      enableApiKeys: bool(values, 'features.enableApiKeys'),
-      enableAdmin: bool(values, 'features.enableAdmin'),
-      enableAIGateway: bool(values, 'features.enableAIGateway'),
+      // `features.*` 已从注册表移除；输出形状保留到 Task 6。取值固定为原默认值，
+      // 避免库里旧的存储覆盖失效时，`enableAdmin` / `enableApiKeys` 等静默翻成 false。
+      enableI18n: true,
+      enableFileUpload: false,
+      enableApiKeys: true,
+      enableAdmin: true,
+      enableAIGateway: false,
     },
   }
 }

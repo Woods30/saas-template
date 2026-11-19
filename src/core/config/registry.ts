@@ -39,12 +39,14 @@ export interface SettingField {
 
 export type SettingTabId =
   | 'general'
-  | 'modules'
+  | 'users'
+  | 'content'
   | 'auth'
   | 'payment'
   | 'mail'
   | 'analytics'
   | 'notification'
+  | 'custom'
 
 export type SettingTestTarget = 'payment' | 'mail'
 
@@ -108,27 +110,35 @@ function secret(
   return { key, kind: 'password', label, secret: true, defaultValue: '', envKey, ...extra }
 }
 
-/** 模块开关字段：11 个模块，逐个声明（顺序即后台展示顺序）。 */
-const moduleFields: readonly SettingField[] = [
+/**
+ * 模块开关字段：按所属业务域拆开声明（顺序即后台展示顺序）。
+ *
+ * 认证不再有总闸：可用性由 `auth.emailEnabled` / `auth.googleEnabled` /
+ * `auth.githubEnabled` 三个方法开关决定。
+ */
+const contentModuleFields: readonly SettingField[] = [
   boolean('modules.docs', m.admin_settings_module_docs, false),
   boolean('modules.blog', m.admin_settings_module_blog, true),
   boolean('modules.changelog', m.admin_settings_module_changelog, true),
-  boolean('modules.mail', m.admin_settings_mail_enabled, true),
   boolean('modules.contact', m.admin_settings_module_contact, false),
-  boolean('modules.newsletter', m.admin_settings_module_newsletter, false),
-  boolean('modules.payment', m.admin_settings_payment_enabled, true),
-  boolean('modules.manualPayments', m.admin_settings_module_manual_payments, false),
-  boolean('modules.notification', m.admin_settings_module_notification, false),
-  boolean('modules.analytics', m.admin_settings_module_analytics, true),
-  boolean('modules.auth', m.admin_settings_module_auth, true),
 ]
 
-const featureFields: readonly SettingField[] = [
-  boolean('features.enableI18n', m.admin_settings_feature_i18n, true),
-  boolean('features.enableFileUpload', m.admin_settings_feature_file_upload, false),
-  boolean('features.enableApiKeys', m.admin_settings_feature_api_keys, true),
-  boolean('features.enableAdmin', m.admin_settings_feature_admin, true),
-  boolean('features.enableAIGateway', m.admin_settings_feature_ai_gateway, false),
+const paymentModuleFields: readonly SettingField[] = [
+  boolean('modules.payment', m.admin_settings_payment_enabled, true),
+  boolean('modules.manualPayments', m.admin_settings_module_manual_payments, false),
+]
+
+const mailModuleFields: readonly SettingField[] = [
+  boolean('modules.mail', m.admin_settings_mail_enabled, true),
+  boolean('modules.newsletter', m.admin_settings_module_newsletter, false),
+]
+
+const analyticsModuleFields: readonly SettingField[] = [
+  boolean('modules.analytics', m.admin_settings_module_analytics, true),
+]
+
+const notificationModuleFields: readonly SettingField[] = [
+  boolean('modules.notification', m.admin_settings_module_notification, false),
 ]
 
 export const SETTING_TABS: readonly SettingTab[] = [
@@ -193,6 +203,73 @@ export const SETTING_TABS: readonly SettingTab[] = [
           }),
         ),
       },
+    ],
+  },
+  {
+    id: 'users',
+    label: m.admin_settings_tab_users,
+    groups: [
+      {
+        id: 'userFeatures',
+        title: m.admin_settings_section_user_features,
+        description: m.admin_settings_user_features_description,
+        fields: [
+          boolean('userFeatures.billing', m.admin_settings_user_feature_billing, true),
+          boolean(
+            'userFeatures.manualPayments',
+            m.admin_settings_user_feature_manual_payments,
+            true,
+          ),
+          boolean('userFeatures.apiKeys', m.admin_settings_user_feature_api_keys, true),
+          boolean('userFeatures.notifications', m.admin_settings_user_feature_notifications, true),
+        ],
+      },
+      {
+        id: 'registration',
+        title: m.admin_settings_section_registration,
+        description: m.admin_settings_registration_description,
+        fields: [
+          {
+            key: 'users.defaultRole',
+            kind: 'select',
+            label: m.admin_settings_users_default_role,
+            hint: m.admin_settings_users_default_role_hint,
+            defaultValue: 'viewer',
+            options: ['viewer', 'editor'],
+          },
+          boolean('signupCredits.enabled', m.admin_settings_signup_credits_enabled, false),
+          {
+            key: 'signupCredits.amount',
+            kind: 'number',
+            label: m.admin_settings_signup_credits_amount,
+            defaultValue: 0,
+          },
+          {
+            key: 'signupCredits.validDays',
+            kind: 'number',
+            label: m.admin_settings_signup_credits_valid_days,
+            hint: m.admin_settings_signup_credits_valid_days_hint,
+            defaultValue: 0,
+          },
+          {
+            key: 'signupCredits.description',
+            kind: 'textarea',
+            label: m.admin_settings_signup_credits_description,
+            defaultValue: '',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'content',
+    label: m.admin_settings_tab_content,
+    groups: [
+      {
+        id: 'contentModules',
+        title: m.admin_settings_section_content_modules,
+        fields: contentModuleFields,
+      },
       {
         id: 'docs',
         title: m.admin_settings_section_docs,
@@ -205,27 +282,28 @@ export const SETTING_TABS: readonly SettingTab[] = [
     ],
   },
   {
-    id: 'modules',
-    label: m.admin_settings_tab_modules,
-    groups: [
-      { id: 'modules', title: m.admin_settings_section_modules, fields: moduleFields },
-      { id: 'features', title: m.admin_settings_section_features, fields: featureFields },
-    ],
-  },
-  {
     id: 'auth',
     label: m.admin_settings_tab_auth,
     groups: [
       {
-        id: 'auth',
-        title: m.admin_settings_section_auth,
+        id: 'authMethods',
+        title: m.admin_settings_section_auth_methods,
         fields: [
+          boolean('auth.emailEnabled', m.admin_settings_auth_email_enabled, true),
+          boolean('auth.googleEnabled', m.admin_settings_auth_google_enabled, true),
+          boolean('auth.githubEnabled', m.admin_settings_auth_github_enabled, false),
           boolean(
             'auth.requireEmailVerification',
             m.admin_settings_auth_require_email_verification,
             true,
             { hint: m.admin_settings_auth_require_email_verification_hint },
           ),
+        ],
+      },
+      {
+        id: 'google',
+        title: m.admin_settings_section_google,
+        fields: [
           text('google.clientId', m.admin_settings_google_client_id, '', {
             envKey: 'GOOGLE_CLIENT_ID',
           }),
@@ -234,6 +312,26 @@ export const SETTING_TABS: readonly SettingTab[] = [
             m.admin_settings_google_client_secret,
             'GOOGLE_CLIENT_SECRET',
           ),
+        ],
+      },
+      {
+        id: 'github',
+        title: m.admin_settings_section_github,
+        fields: [
+          text('github.clientId', m.admin_settings_github_client_id, '', {
+            envKey: 'GITHUB_CLIENT_ID',
+          }),
+          secret(
+            'github.clientSecret',
+            m.admin_settings_github_client_secret,
+            'GITHUB_CLIENT_SECRET',
+          ),
+        ],
+      },
+      {
+        id: 'turnstile',
+        title: m.admin_settings_section_turnstile,
+        fields: [
           text('turnstile.siteKey', m.admin_settings_captcha_site_key, '', {
             envKey: 'VITE_TURNSTILE_SITE_KEY',
           }),
@@ -250,6 +348,11 @@ export const SETTING_TABS: readonly SettingTab[] = [
     id: 'payment',
     label: m.admin_settings_tab_payment,
     groups: [
+      {
+        id: 'paymentModules',
+        title: m.admin_settings_section_payment_modules,
+        fields: paymentModuleFields,
+      },
       {
         id: 'payment',
         title: m.admin_settings_section_payment,
@@ -303,7 +406,7 @@ export const SETTING_TABS: readonly SettingTab[] = [
         ],
       },
       {
-        id: 'manual-payments',
+        id: 'manualPayments',
         title: m.admin_settings_section_manual_payments,
         fields: [
           {
@@ -328,6 +431,11 @@ export const SETTING_TABS: readonly SettingTab[] = [
     id: 'mail',
     label: m.admin_settings_tab_mail,
     groups: [
+      {
+        id: 'mailModules',
+        title: m.admin_settings_section_mail_modules,
+        fields: mailModuleFields,
+      },
       {
         id: 'mail',
         title: m.admin_settings_section_mail,
@@ -382,6 +490,12 @@ export const SETTING_TABS: readonly SettingTab[] = [
             defaultValue: 'resend',
             options: ['resend', 'beehiiv'],
           },
+        ],
+      },
+      {
+        id: 'beehiiv',
+        title: m.admin_settings_section_beehiiv,
+        fields: [
           secret('beehiiv.apiKey', m.admin_settings_beehiiv_api_key, 'BEEHIIV_API_KEY'),
           text('beehiiv.publicationId', m.admin_settings_beehiiv_publication_id, '', {
             envKey: 'BEEHIIV_PUBLICATION_ID',
@@ -397,6 +511,11 @@ export const SETTING_TABS: readonly SettingTab[] = [
     id: 'analytics',
     label: m.admin_settings_tab_analytics,
     groups: [
+      {
+        id: 'analyticsModules',
+        title: m.admin_settings_section_analytics_modules,
+        fields: analyticsModuleFields,
+      },
       {
         id: 'analytics',
         title: m.admin_settings_section_analytics,
@@ -431,6 +550,11 @@ export const SETTING_TABS: readonly SettingTab[] = [
     label: m.admin_settings_tab_notify,
     groups: [
       {
+        id: 'notificationModules',
+        title: m.admin_settings_section_notification_modules,
+        fields: notificationModuleFields,
+      },
+      {
         id: 'notification',
         title: m.admin_settings_section_notification,
         fields: [
@@ -455,6 +579,12 @@ export const SETTING_TABS: readonly SettingTab[] = [
       },
     ],
   },
+  {
+    id: 'custom',
+    label: m.admin_settings_tab_custom,
+    // 自定义配置不来自注册表：页面单独渲染 `CustomConfigPanel`。
+    groups: [],
+  },
 ]
 
 /** 全部字段，按声明顺序摊平。 */
@@ -472,8 +602,16 @@ const TAB_BY_GROUP = new Map(
   SETTING_TABS.flatMap((tab) => tab.groups.map((group) => [group.id, tab] as const)),
 )
 
+const TAB_BY_ID: ReadonlyMap<string, SettingTab> = new Map(
+  SETTING_TABS.map((tab) => [tab.id, tab] as const),
+)
+
 export function settingField(key: string): SettingField | undefined {
   return FIELD_BY_KEY.get(key)
+}
+
+export function settingTab(id: string): SettingTab | undefined {
+  return TAB_BY_ID.get(id)
 }
 
 export function settingGroup(id: string): SettingGroup | undefined {

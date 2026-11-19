@@ -183,7 +183,15 @@ describe('assertPageEnabled', () => {
     expectNotFound(() =>
       assertPageEnabled(
         'auth',
-        makeConfig({ auth: { enabled: false, requireEmailVerification: true } }),
+        makeConfig({
+          auth: {
+            enabled: false,
+            emailEnabled: true,
+            googleEnabled: true,
+            githubEnabled: false,
+            requireEmailVerification: true,
+          },
+        }),
       ),
     )
   })
@@ -706,7 +714,15 @@ describe('API handler 门禁（默认服务全关）', () => {
 
   it('auth 关闭时 /api/auth/* 返回 404，且不调用 getAuth', async () => {
     const mod = (await importRouteWithConfig(
-      { auth: { enabled: false, requireEmailVerification: true } },
+      {
+        auth: {
+          enabled: false,
+          emailEnabled: true,
+          googleEnabled: true,
+          githubEnabled: false,
+          requireEmailVerification: true,
+        },
+      },
       {},
       '@/routes/api/auth/$',
     )) as { Route: unknown }

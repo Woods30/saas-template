@@ -82,9 +82,16 @@ describe('出厂值来自配置注册表', () => {
     const defaults = defaultSettingsValues()
     expect(config.docs.enabled).toBe(defaults['modules.docs'])
     expect(config.blog.enabled).toBe(defaults['modules.blog'])
-    expect(config.features.enableAdmin).toBe(defaults['features.enableAdmin'])
     expect(config.payment.enabled).toBe(defaults['modules.payment'])
-    expect(config.auth.enabled).toBe(defaults['modules.auth'])
+    // `features` 与 `auth.enabled` 已移出注册表，过渡期按固定默认值输出；Task 6 删除。
+    expect(config.features).toEqual({
+      enableI18n: true,
+      enableFileUpload: false,
+      enableApiKeys: true,
+      enableAdmin: true,
+      enableAIGateway: false,
+    })
+    expect(config.auth.enabled).toBe(true)
   })
 
   it('工厂调用之间互不影响', () => {

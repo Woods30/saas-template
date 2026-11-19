@@ -171,7 +171,19 @@ export interface WebsiteConfig {
   /** Turnstile 的**公开**站点 key；secret 只在服务端配置里。 */
   captcha: { siteKey?: string }
   auth: {
+    /**
+     * 认证总闸，仅为过渡形状保留。
+     *
+     * 注册表里的 `modules.auth` 已移除，认证可用性改由三个方法开关决定；
+     * 这个字段固定为 `true`，Task 6 删除。
+     */
     enabled: boolean
+    /** 邮箱 + 密码登录。 */
+    emailEnabled: boolean
+    /** Google 登录：还需配齐 clientId / clientSecret 才会真正启用。 */
+    googleEnabled: boolean
+    /** GitHub 登录：还需配齐 clientId / clientSecret 才会真正启用。 */
+    githubEnabled: boolean
     /**
      * 注册后是否必须先验证邮箱才能登录。
      *
@@ -182,6 +194,28 @@ export interface WebsiteConfig {
      * `getServiceStatuses()` 会报 incomplete，不会自动降级为免验证登录。
      */
     requireEmailVerification: boolean
+  }
+  /**
+   * 个人中心的功能入口开关。
+   *
+   * 与 `modules.*` 分开：模块开关决定能力是否存在，功能开关只决定入口是否展示。
+   */
+  userFeatures: {
+    billing: boolean
+    manualPayments: boolean
+    apiKeys: boolean
+    notifications: boolean
+  }
+  /** 用户注册行为：默认角色与注册赠积分。 */
+  users: {
+    defaultRole: 'viewer' | 'editor'
+    signupCredits: {
+      enabled: boolean
+      amount: number
+      /** 0 表示永不过期。 */
+      validDays: number
+      description: string
+    }
   }
   social: Partial<Record<SocialPlatform, string>>
   /**
@@ -274,7 +308,23 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
       notification: { enabled: false, provider: 'discord' },
       analytics: { enabled: false, providers: [], config: {} },
       captcha: {},
-      auth: { enabled: false, requireEmailVerification: true },
+      auth: {
+        enabled: true,
+        emailEnabled: true,
+        googleEnabled: true,
+        githubEnabled: false,
+        requireEmailVerification: true,
+      },
+      userFeatures: {
+        billing: true,
+        manualPayments: true,
+        apiKeys: true,
+        notifications: true,
+      },
+      users: {
+        defaultRole: 'viewer',
+        signupCredits: { enabled: false, amount: 0, validDays: 0, description: '' },
+      },
       social: {},
       seo: { default: { title: '', description: '', keywords: [] }, locales: {} },
       features: {

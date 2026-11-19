@@ -104,7 +104,6 @@ describe('applySettingsToConfig', () => {
     'modules.blog': false,
     'modules.payment': false,
     'modules.mail': true,
-    'features.enableAdmin': false,
     'payment.provider': 'creem',
     'payment.checkoutMode': 'manual_payments',
     'mail.provider': 'cloudflare',
@@ -124,7 +123,6 @@ describe('applySettingsToConfig', () => {
     const config = applySettingsToConfig(baseConfig, values)
     expect(config.docs.enabled).toBe(false)
     expect(config.blog.enabled).toBe(false)
-    expect(config.features.enableAdmin).toBe(false)
     expect(config.payment.enabled).toBe(false)
     expect(config.mail.enabled).toBe(true)
   })
@@ -159,7 +157,7 @@ describe('applySettingsToConfig', () => {
   it('注册表覆盖了默认值的每个字段都有解析路径', () => {
     // 防止新增字段后忘了在 applySettingsToConfig 里消费，静默不生效。
     const config = applySettingsToConfig(baseConfig, defaultSettingsValues())
-    for (const key of ['brand.name', 'modules.docs', 'features.enableAdmin'] as const) {
+    for (const key of ['brand.name', 'modules.docs', 'auth.emailEnabled'] as const) {
       expect(SETTING_FIELDS.some((field) => field.key === key)).toBe(true)
     }
     expect(config.metadata.name.length).toBeGreaterThan(0)
