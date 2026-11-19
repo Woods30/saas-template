@@ -121,11 +121,23 @@ function SettingInput({
     )
   }
 
-  if (field.kind === 'textarea' || field.kind === 'json') {
+  if (field.kind === 'textarea') {
     return (
       <Field>
         <FieldLabel htmlFor={id}>{field.label()}</FieldLabel>
         <Textarea id={id} value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} />
+        {field.hint && <FieldDescription>{field.hint()}</FieldDescription>}
+      </Field>
+    )
+  }
+
+  if (field.kind === 'json') {
+    // 服务端值是已解析的结构（数组 / 对象），草稿里可能是管理员改过的文本。
+    const text = typeof value === 'string' ? value : JSON.stringify(value ?? [], null, 2)
+    return (
+      <Field>
+        <FieldLabel htmlFor={id}>{field.label()}</FieldLabel>
+        <Textarea id={id} value={text} onChange={(e) => onChange(e.target.value)} />
         {field.hint && <FieldDescription>{field.hint()}</FieldDescription>}
       </Field>
     )
@@ -270,8 +282,9 @@ function buildPayload(
                 .filter((item) => item !== '')
             : (value ?? [])
       } else if (field.kind === 'json') {
+        // 没编辑过时草稿仍是服务端结构；只有字符串才需要解析。
         try {
-          payload[field.key] = JSON.parse(String(value ?? '[]'))
+          payload[field.key] = typeof value === 'string' ? JSON.parse(value) : (value ?? [])
         } catch {
           toast.add({ type: 'error', title: m.admin_settings_json_invalid() })
           return null
@@ -292,9 +305,18 @@ function AdminSettingsPage() {
   const [activeTab, setActiveTab] = useState<string>(SETTING_TABS[0]?.id ?? 'general')
   const [saving, setSaving] = useState(false)
 
-  /** 服务端值到达（或保存后重新拉取）时，所有 tab 的草稿都回到服务端值。 */
-  const applyValues = useCallback((next: AdminSettingsValues) => {
+  /**
+   * 服务端值到达时同步页面状态。
+   *
+   * 首次加载（`savedTab` 缺省）重置所有 tab 的草稿；保存成功后只重置被保存的
+   * tab，其它 tab 的未保存草稿继续保留。
+   */
+  const applyValues = useCallback((next: AdminSettingsValues, savedTab?: SettingTab) => {
     setValues(next)
+    if (savedTab) {
+      setDrafts((prev) => ({ ...prev, [savedTab.id]: seedDraft(savedTab, next) }))
+      return
+    }
     setDrafts(Object.fromEntries(SETTING_TABS.map((tab) => [tab.id, seedDraft(tab, next)])))
   }, [])
 
@@ -340,7 +362,7 @@ function AdminSettingsPage() {
     setSaving(true)
     try {
       await saveAdminSettings({ data: { tabId: tab.id, values: payload } })
-      applyValues(await fetchAdminSettings())
+      applyValues(await fetchAdminSettings(), tab)
       toast.add({ type: 'success', title: m.admin_settings_saved() })
     } catch {
       toast.add({ type: 'error', title: m.admin_settings_save_failed() })

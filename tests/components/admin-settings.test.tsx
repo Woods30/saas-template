@@ -109,6 +109,78 @@ describe('系统设置页', () => {
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
   })
 
+  it('json 字段未修改时按原值提交', async () => {
+    const accounts = [
+      {
+        id: 'alipay_main',
+        channel: 'alipay',
+        displayName: '主收款账户',
+        currency: 'cny',
+        qrImageUrl: '/qr/alipay.png',
+      },
+    ]
+    mocks.fetchAdminSettings.mockImplementation(async () => ({
+      ...structuredClone(defaultSettingsValues()),
+      'manualPayments.accounts': structuredClone(accounts),
+    }))
+
+    await renderPage()
+    fireEvent.click(screen.getByRole('tab', { name: '支付' }))
+
+    // 服务端结构要渲染成可编辑的 JSON 文本，而不是 `[object Object]`。
+    const textarea = await screen.findByLabelText('收款账户')
+    expect(textarea).toHaveValue(JSON.stringify(accounts, null, 2))
+
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(mocks.saveAdminSettings).toHaveBeenCalledTimes(1))
+
+    const call = mocks.saveAdminSettings.mock.calls[0]?.[0] as {
+      data: { tabId: string; values: Record<string, unknown> }
+    }
+    expect(call.data.tabId).toBe('payment')
+    expect(call.data.values['manualPayments.accounts']).toEqual(accounts)
+  })
+
+  it('json 字段编辑后按文本解析', async () => {
+    await renderPage()
+    fireEvent.click(screen.getByRole('tab', { name: '支付' }))
+
+    const edited = [
+      {
+        id: 'bank_main',
+        channel: 'bank',
+        displayName: '银行账户',
+        currency: 'cny',
+        qrImageUrl: '/qr/bank.png',
+      },
+    ]
+    fireEvent.change(await screen.findByLabelText('收款账户'), {
+      target: { value: JSON.stringify(edited) },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(mocks.saveAdminSettings).toHaveBeenCalledTimes(1))
+
+    const call = mocks.saveAdminSettings.mock.calls[0]?.[0] as {
+      data: { tabId: string; values: Record<string, unknown> }
+    }
+    expect(call.data.values['manualPayments.accounts']).toEqual(edited)
+  })
+
+  it('保存一个 tab 不清空其它 tab 的未保存草稿', async () => {
+    await renderPage()
+    fireEvent.change(screen.getByLabelText('品牌名'), { target: { value: '草稿品牌' } })
+
+    fireEvent.click(screen.getByRole('tab', { name: '用户' }))
+    fireEvent.change(await screen.findByLabelText('赠送数量'), { target: { value: '9' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(mocks.saveAdminSettings).toHaveBeenCalledTimes(1))
+
+    // 保存「用户」后回「基础与外观」，之前的品牌名草稿仍在。
+    fireEvent.click(screen.getByRole('tab', { name: '基础与外观' }))
+    expect(await screen.findByLabelText('品牌名')).toHaveValue('草稿品牌')
+  })
+
   it('custom tab 不渲染注册表字段', async () => {
     await renderPage()
     fireEvent.click(screen.getByRole('tab', { name: '自定义配置' }))
