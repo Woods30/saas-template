@@ -93,12 +93,17 @@ async function guardDeps(): Promise<ManualPaymentGuardDeps> {
       return { userId: session.user.id, role: session.user.role ?? 'user' }
     },
     // 权限点只从服务端 RBAC 表读取：客户端传来的角色 / 权限都不作数。
+    // 解析失败时回空数组（门禁随后 403），不让 RBAC 读库异常漏成 500。
     permissions: async (userId) => {
-      const [{ getUserPermissions }, { createDbFromEnv }] = await Promise.all([
-        import('@/modules/rbac/service'),
-        import('@/core/db'),
-      ])
-      return getUserPermissions(await createDbFromEnv(getServerContext().env), userId)
+      try {
+        const [{ getUserPermissions }, { createDbFromEnv }] = await Promise.all([
+          import('@/modules/rbac/service'),
+          import('@/core/db'),
+        ])
+        return await getUserPermissions(await createDbFromEnv(getServerContext().env), userId)
+      } catch {
+        return []
+      }
     },
     rateLimit: checkRateLimit,
     // `cf-connecting-ip` 可信；`x-forwarded-for` 可伪造，不用。

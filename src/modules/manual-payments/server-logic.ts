@@ -180,7 +180,8 @@ export interface ManualPaymentGuardOptions {
   /**
    * 要求的 RBAC 权限点（如 `admin.orders.read`）。
    *
-   * 与 `requireAdmin` 二选一：管理台接口以权限点为准，角色只决定能不能进管理台。
+   * 管理台接口只给权限点，角色只决定能不能进管理台。若同时给出 `requireAdmin`，
+   * 两者是 AND 关系：先校验角色，再校验权限点。
    */
   requiredPermission?: string
   /** 要限流的动作；不给就不限流。 */
@@ -219,7 +220,13 @@ export async function guardManualPaymentRequest(
   }
 
   if (options.requiredPermission) {
-    const held = await deps.permissions(session.userId)
+    // 权限解析失败按「无权限」处理：宁可 403，也不能把异常漏成 500。
+    let held: readonly string[] = []
+    try {
+      held = await deps.permissions(session.userId)
+    } catch {
+      held = []
+    }
     if (!matchPermission(options.requiredPermission, held)) {
       // 没有权限就 403，绝不回空列表 —— 否则前端会把「无权限」显示成「没有订单」。
       return { ok: false, response: errorResponse('FORBIDDEN') }

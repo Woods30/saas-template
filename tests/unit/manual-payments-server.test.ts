@@ -3,6 +3,7 @@ import { join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import { listAllOrders } from '@/modules/manual-payments/orders'
+import { adminListOrders, adminReviewOrder } from '@/modules/manual-payments/server'
 import {
   ADMIN_ORDER_STATUSES,
   createOrderSchema,
@@ -268,6 +269,58 @@ describe('权限点门禁', () => {
     })
     expect(result.ok).toBe(false)
     expect(calls).toEqual(['module', 'session', 'permissions'])
+  })
+})
+
+describe('管理员动作 wrapper 的权限门禁', () => {
+  /** 管理员动作依赖：权限解析可注入，`db` 在被误触时抛错（无权限不该碰库）。 */
+  function adminActionDeps(permissions: (userId: string) => Promise<readonly string[]>) {
+    const { deps } = makeDeps({
+      session: async () => ({ userId: 'a1', role: 'admin' }),
+      permissions,
+    })
+    return {
+      guard: deps,
+      db: async (): Promise<never> => {
+        throw new Error('无权限时不应触碰数据库')
+      },
+    }
+  }
+
+  it('adminListOrders 无权限时返回 403 Response，而不是空列表', async () => {
+    const result = await adminListOrders(
+      adminActionDeps(async () => []),
+      {},
+    )
+    expect(result).toBeInstanceOf(Response)
+    if (result instanceof Response) {
+      expect(result.status).toBe(403)
+      await expect(result.json()).resolves.toEqual({ error: 'FORBIDDEN' })
+    }
+  })
+
+  it('adminReviewOrder 无权限时返回 403 Response，而不是静默 no-op', async () => {
+    const result = await adminReviewOrder(
+      adminActionDeps(async () => []),
+      {
+        orderId: 'o1',
+        action: 'approve',
+        observedAmount: 1,
+      },
+    )
+    expect(result).toBeInstanceOf(Response)
+    if (result instanceof Response) expect(result.status).toBe(403)
+  })
+
+  it('权限解析抛错时按无权限处理：403，而不是 500', async () => {
+    const result = await adminListOrders(
+      adminActionDeps(async () => {
+        throw new Error('rbac 不可用')
+      }),
+      {},
+    )
+    expect(result).toBeInstanceOf(Response)
+    if (result instanceof Response) expect(result.status).toBe(403)
   })
 })
 
