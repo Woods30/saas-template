@@ -1,7 +1,12 @@
 import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 
 import { db } from '@/core/db';
-import { atomic, AtomicGuardError, guard } from '@/core/db/atomic';
+import {
+  atomic,
+  AtomicGuardError,
+  guard,
+  type AtomicStep,
+} from '@/core/db/atomic';
 import {
   AlipayProvider,
   CreemProvider,
@@ -18,7 +23,12 @@ import {
   type PaymentOrder,
   type PaymentRefund,
 } from '@/core/payment/types';
-import { credit, order, subscription } from '@/config/db/schema';
+import {
+  credit,
+  manualPaymentDetail,
+  order,
+  subscription,
+} from '@/config/db/schema';
 import { getAllConfigs } from '@/modules/config/service';
 import {
   calculateCreditExpirationTime,
@@ -28,6 +38,7 @@ import {
   planGuestPostFulfillment,
   planGuestPostRefund,
 } from '@/modules/guest-posts/service';
+import { MANUAL_PAYMENT_PROVIDER } from '@/modules/manual-payments/types';
 import {
   notifyGuestPostSubmitted,
   notifyPaymentSuccess,
@@ -334,7 +345,13 @@ async function handleCheckoutSuccess(session: any, provider: string) {
 export async function settleCheckoutOrder(
   existingOrder: typeof order.$inferSelect,
   session: any,
-  provider: string
+  provider: string,
+  /**
+   * Extra write steps committed in the same atomic block as the settlement.
+   * Manual payments use it to close their detail row in the same commit that
+   * marks the order paid, so the two can never disagree.
+   */
+  extraSteps?: (q: any) => AtomicStep[]
 ) {
   // Fast path only; the conditional update below is the real guard.
   if (
@@ -468,6 +485,8 @@ export async function settleCheckoutOrder(
         newCredit && q.insert(credit).values(newCredit),
         // 4. Guest post: the paid draft enters review.
         ...(guestPost ? guestPost.steps(q) : []),
+        // 5. Caller's own steps (manual-payment detail), same commit.
+        ...(extraSteps ? extraSteps(q) : []),
       ]);
       claimed = true;
     } catch (error) {
@@ -781,12 +800,16 @@ export async function refundOrder(params: {
     );
   }
 
+  // Manual payments have no channel to refund: the money returns outside the
+  // app, so the bookkeeping below is the whole refund.
+  const isManual = existingOrder.paymentProvider === MANUAL_PAYMENT_PROVIDER;
+
   // Resolve the provider BEFORE claiming. getProvider() falls back to the
   // default provider, so check the name — never refund through the wrong one.
   const paidAmount = existingOrder.paymentAmount ?? existingOrder.amount;
   const pm = await getPaymentManager();
   const provider = pm.getProvider(existingOrder.paymentProvider);
-  if (paidAmount > 0) {
+  if (paidAmount > 0 && !isManual) {
     if (
       !provider ||
       provider.name !== existingOrder.paymentProvider ||
@@ -827,7 +850,7 @@ export async function refundOrder(params: {
 
   // 2. Refund at the provider. On failure, release the claim.
   let refund: PaymentRefund | null = null;
-  if (paidAmount > 0 && provider?.refundPayment) {
+  if (paidAmount > 0 && !isManual && provider?.refundPayment) {
     try {
       refund = await provider.refundPayment({
         orderNo: existingOrder.orderNo,
@@ -879,6 +902,15 @@ export async function refundOrder(params: {
       ...deduction.steps(q),
       // A refunded guest post order rejects (or takes down) its submission.
       ...planGuestPostRefund(existingOrder.orderNo)(q),
+      // A refunded manual order closes its detail in the same commit.
+      ...(isManual
+        ? [
+            q
+              .update(manualPaymentDetail)
+              .set({ status: 'canceled', updatedAt: new Date() })
+              .where(eq(manualPaymentDetail.orderId, existingOrder.id)),
+          ]
+        : []),
       q
         .update(order)
         .set({

@@ -194,6 +194,9 @@ export async function createManualOrder(
           productName: product.productName,
           planName: product.planName,
           description: product.description,
+          // What the settlement path grants once the receipt is approved.
+          creditsAmount: product.credits || null,
+          creditsValidDays: product.creditsValidDays || null,
           paymentType: 'one-time',
           paymentProvider: MANUAL_PAYMENT_PROVIDER,
           checkoutInfo: JSON.stringify({
