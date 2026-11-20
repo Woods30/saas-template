@@ -9,6 +9,9 @@ import * as guest_posts from './handlers/guest-posts';
 import * as guest_posts_id from './handlers/guest-posts-id';
 import * as indexnow from './handlers/indexnow';
 import * as invite_codes from './handlers/invite-codes';
+import * as manual_accounts from './handlers/manual-accounts';
+import * as manual_orders from './handlers/manual-orders';
+import * as manual_review from './handlers/manual-review';
 import * as operations from './handlers/operations';
 import * as orders from './handlers/orders';
 import * as orders_refund from './handlers/orders-refund';
@@ -49,6 +52,13 @@ export const handlers: Record<
   orders_list: orders.GET,
   orders_update: orders.PATCH,
   orders_refund: orders_refund.POST,
+  manual_accounts_list: manual_accounts.GET,
+  manual_account_create: manual_accounts.POST,
+  manual_account_update: manual_accounts.PUT,
+  manual_account_delete: manual_accounts.DELETE,
+  manual_orders_list: manual_orders.GET,
+  manual_order_review: manual_review.POST,
+  manual_order_refund: manual_review.REFUND,
   subscriptions_list: subscriptions.GET,
   analytics_funnel: analytics_funnel.GET,
   analytics_overview: analytics_overview.GET,

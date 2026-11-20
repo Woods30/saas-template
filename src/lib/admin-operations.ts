@@ -262,6 +262,90 @@ export const adminOperations: AdminOperation[] = [
       })
       .strict()
   ),
+  // --- Manual (核销) payments ---
+  op(
+    'manual_accounts_list',
+    'List the collection accounts payers can be shown, disabled ones included.',
+    'payments.read',
+    'GET',
+    'manual-payments/accounts',
+    empty
+  ),
+  op(
+    'manual_account_create',
+    'Add a collection account (display name, currency, QR image key). New accounts start disabled until enabled explicitly.',
+    'payments.write',
+    'POST',
+    'manual-payments/accounts',
+    z
+      .object({
+        displayName: z.string().min(1).max(191),
+        channel: z.string().min(1).max(50).optional(),
+        currency: z.string().min(1).max(10).optional(),
+        qrImageKey: z.string().max(500).optional(),
+        enabled: z.boolean().optional(),
+        sortOrder: z.number().int().min(0).max(1_000_000).optional(),
+      })
+      .strict()
+  ),
+  op(
+    'manual_account_update',
+    'Edit a collection account, including turning it on or off.',
+    'payments.write',
+    'PUT',
+    'manual-payments/accounts',
+    z
+      .object({
+        id,
+        displayName: z.string().min(1).max(191).optional(),
+        channel: z.string().min(1).max(50).optional(),
+        currency: z.string().min(1).max(10).optional(),
+        qrImageKey: z.string().max(500).nullable().optional(),
+        enabled: z.boolean().optional(),
+        sortOrder: z.number().int().min(0).max(1_000_000).optional(),
+      })
+      .strict()
+  ),
+  op(
+    'manual_account_delete',
+    'Delete a collection account. Refused while any order still references it.',
+    'payments.write',
+    'DELETE',
+    'manual-payments/accounts',
+    remove
+  ),
+  op(
+    'manual_orders_list',
+    'List manual-payment orders with their verification detail. status filters the detail status: pending_payment, pending_verification, settling, settled, expired, canceled, rejected, requires_refund.',
+    'payments.read',
+    'GET',
+    'manual-payments/orders',
+    z.object({ ...search, status: short.optional() }).strict()
+  ),
+  op(
+    'manual_order_review',
+    'Approve or reject a manual payment. approve settles a live order (the observed amount must equal the payable amount exactly); approve_exception additionally settles an order that already expired; reject closes it as failed. Credits are granted at most once.',
+    'payments.write',
+    'POST',
+    'manual-payments/orders/review',
+    z
+      .object({
+        orderNo: id,
+        action: z.enum(['approve', 'approve_exception', 'reject']),
+        observedAmount: z.number().int().min(1).max(100_000_000).optional(),
+        externalReference: short.optional(),
+        reviewNote: text.optional(),
+      })
+      .strict()
+  ),
+  op(
+    'manual_order_refund',
+    'Refund a settled manual order: marks it refunded and rolls back the credits it granted. The money itself returns outside the app. Irreversible.',
+    'payments.write',
+    'POST',
+    'manual-payments/orders/refund',
+    z.object({ orderNo: id, reviewNote: text.optional() }).strict()
+  ),
   op(
     'analytics_report',
     'Business report for a period, built for scheduled pulls: new users, checkouts, paid orders (new vs renewal), paying and first-time payers, revenue/refunds/net per currency (minor units), checkout→paid and signup→paid rates (0–1, null when no base), subscriptions started/canceled, plus the same metrics for the preceding equal-length period. from/to are ISO timestamps with offset (use the reporting timezone, e.g. from=2026-10-10T00:00:00+08:00&to=2026-10-11T00:00:00+08:00 for one day); default is the last 24 hours; max span 92 days. Agent service accounts are not counted as users.',
