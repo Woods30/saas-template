@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import MarkdownIt from 'markdown-it';
 
-import { docLinkTarget, headingId } from '@/modules/docs/paths';
+import { docLinkTarget, headingId, safeDocHref } from '@/modules/docs/paths';
 
 import '@/styles/mdx.css';
 
@@ -35,6 +35,10 @@ md.renderer.rules.heading_open = (tokens, idx) => {
 /**
  * Links: relative document links become documentation routes, external links
  * open in a new tab.
+ *
+ * Every other link target is validated with {@link safeDocHref}: a target
+ * whose scheme is not allowed loses its `href`, so the text stays readable
+ * but the link is not clickable.
  */
 md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   const token = tokens[idx];
@@ -46,7 +50,19 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
       'href',
       `/docs/${target.slug}${target.hash ? `#${target.hash}` : ''}`
     );
-  } else if (/^https?:\/\//i.test(href)) {
+    return self.renderToken(tokens, idx, options);
+  }
+
+  const safe = safeDocHref(href);
+  if (safe === undefined) {
+    // Unsafe scheme: keep the text, drop the link.
+    const index = token.attrIndex('href');
+    if (index >= 0) token.attrs?.splice(index, 1);
+    return self.renderToken(tokens, idx, options);
+  }
+
+  token.attrSet('href', safe);
+  if (/^https?:\/\//i.test(safe)) {
     token.attrSet('target', '_blank');
     token.attrSet('rel', 'noopener noreferrer');
   }

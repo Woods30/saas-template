@@ -6,6 +6,8 @@ import {
   docsForLocale,
   parseFrontmatter,
   resolveContentLocale,
+  safeDocHref,
+  splitNextSteps,
   type DocFile,
 } from '../src/modules/docs/paths';
 
@@ -157,4 +159,44 @@ test('a file without a title is a hard error', () => {
   const files = [doc('guide.md', { description: 'No title here' })];
 
   assert.throws(() => docsForLocale('en', files, 'en'), /guide\.md/);
+});
+
+test('safeDocHref accepts site-relative and explicit web links', () => {
+  assert.equal(safeDocHref('./guide'), './guide');
+  assert.equal(safeDocHref('../guide#anchor'), '../guide#anchor');
+  assert.equal(safeDocHref('/docs/guide'), '/docs/guide');
+  assert.equal(safeDocHref('#section'), '#section');
+  assert.equal(safeDocHref('https://example.com/x'), 'https://example.com/x');
+  assert.equal(safeDocHref('http://example.com'), 'http://example.com');
+  assert.equal(safeDocHref('mailto:hi@example.com'), 'mailto:hi@example.com');
+});
+
+test('safeDocHref rejects unsafe schemes and malformed references', () => {
+  assert.equal(safeDocHref('javascript:alert(1)'), undefined);
+  assert.equal(safeDocHref('JaVaScRiPt:alert(1)'), undefined);
+  assert.equal(safeDocHref('data:text/html;base64,PHNjcmlwdD4='), undefined);
+  assert.equal(safeDocHref('vbscript:msgbox(1)'), undefined);
+  assert.equal(safeDocHref('  javascript:alert(1)'), undefined);
+  assert.equal(safeDocHref('java\nscript:alert(1)'), undefined);
+  assert.equal(safeDocHref('//evil.example.com'), undefined);
+  assert.equal(safeDocHref(''), undefined);
+});
+
+test('splitNextSteps drops a step with an unsafe href', () => {
+  const markdown = [
+    'Body text.',
+    '',
+    '## Next steps',
+    '',
+    '- [Run it](javascript:alert(1))',
+    '- [Docs](https://example.com)',
+  ].join('\n');
+
+  const { steps } = splitNextSteps(markdown);
+
+  assert.deepEqual(
+    steps.map((step) => step.href),
+    ['https://example.com']
+  );
+  assert.equal(steps[0]?.title, 'Docs');
 });

@@ -13,9 +13,9 @@
  *   guide.v2.md     → dotted name that is not a locale tag, slug `guide.v2`
  *
  * The locale tag is the dot-segment right before `.md` when it looks like a
- * language tag (`^[a-z]{2,3}(-[A-Za-z0-9]+)?$`). Because of that rule a file
- * name of two or three letters (`faq.md`) would be read as a locale tag —
- * name documents with longer names.
+ * language tag (`^[a-z]{2,3}(-[A-Za-z0-9]+)?$`). The tag is always a dot
+ * segment, so a plain name (`faq.md`) has no dot segment at all — it is a
+ * normal base-locale document, not a translation.
  */
 
 /** A content file, before it is parsed into a {@link DocEntry}. */
@@ -524,9 +524,51 @@ export interface SplitNextSteps {
 const NEXT_STEPS_HEADING = /^##\s+(下一步|Next steps)\s*$/i;
 
 /**
+ * Validate the scheme of a link that comes from documentation content.
+ *
+ * Documentation is authored in markdown, so a link target is untrusted input
+ * that ends up in an `href` attribute. Only site-relative references
+ * (`#section`, `/docs/guide`, `./guide`, `../guide`) and the explicit web
+ * protocols `http:`, `https:` and `mailto:` are allowed; everything else
+ * (`javascript:`, `data:`, `vbscript:`, `file:`, protocol-relative `//host`)
+ * is rejected.
+ *
+ * Returns the trimmed value when it is safe, `undefined` otherwise.
+ */
+export function safeDocHref(href: string): string | undefined {
+  const value = href.trim();
+  if (value === '') return undefined;
+
+  // Control characters can hide a scheme (`java<newline>script:`).
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f) return undefined;
+  }
+
+  // Protocol-relative and backslash-prefixed values escape the origin.
+  if (value.startsWith('//')) return undefined;
+  if (value.startsWith('\\')) return undefined;
+
+  // Site-relative references.
+  if (value.startsWith('#')) return value;
+  if (value.startsWith('/')) return value;
+  if (value.startsWith('./')) return value;
+  if (value.startsWith('../')) return value;
+
+  // Explicit web protocols.
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(value)?.[1]?.toLowerCase();
+  if (scheme === 'http' || scheme === 'https' || scheme === 'mailto') {
+    return value;
+  }
+
+  return undefined;
+}
+
+/**
  * Cut the "next steps" section out of a markdown body.
  *
- * The section is removed from the body so it is not rendered twice.
+ * The section is removed from the body so it is not rendered twice. A step
+ * whose link target is not safe is dropped entirely.
  */
 export function splitNextSteps(markdown: string): SplitNextSteps {
   const lines = markdown.split('\n');
@@ -545,9 +587,13 @@ export function splitNextSteps(markdown: string): SplitNextSteps {
   for (const line of lines.slice(start + 1, end)) {
     const match = /^\s{0,3}[-*]\s+\[([^\]]+)\]\(([^)\s]+)\)\s*(.*)$/.exec(line);
     if (match?.[1] !== undefined && match[2] !== undefined) {
+      const href = safeDocHref(match[2]);
+      // An unsafe link target drops the card instead of rendering a broken
+      // or dangerous link.
+      if (href === undefined) continue;
       steps.push({
         title: match[1],
-        href: match[2],
+        href,
         description: (match[3] ?? '').replace(/^[\s—–-]+/, '').trim(),
       });
     }

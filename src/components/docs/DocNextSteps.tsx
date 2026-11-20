@@ -1,7 +1,11 @@
 import { Link } from '@tanstack/react-router';
 import { ArrowRight, Route } from 'lucide-react';
 
-import { docLinkTarget, type NextStep } from '@/modules/docs/paths';
+import {
+  docLinkTarget,
+  safeDocHref,
+  type NextStep,
+} from '@/modules/docs/paths';
 import { m } from '@/paraglide/messages.js';
 import { DOC_FALLBACK_ICON, DOC_ICON } from '@/components/docs/doc-icons';
 
@@ -36,6 +40,9 @@ function StepCard({ step }: { step: NextStep }) {
   const target = docLinkTarget(step.href);
   const Icon = (target && DOC_ICON[target.slug]) || DOC_FALLBACK_ICON;
   const isExternal = target === undefined;
+  // The link target comes from documentation content, so its scheme is
+  // validated before it ever reaches an `href` attribute.
+  const href = safeDocHref(step.href);
 
   const className =
     'group hover:border-primary/40 hover:shadow-sm flex h-full items-start gap-3 rounded-xl border border-border bg-gradient-to-br from-primary/[0.07] to-transparent p-3.5 transition-all';
@@ -71,9 +78,14 @@ function StepCard({ step }: { step: NextStep }) {
   );
 
   if (target === undefined) {
+    // An unsafe link target keeps the card readable but drops the link.
+    if (href === undefined) {
+      return <div className={className}>{content}</div>;
+    }
+
     return (
       <a
-        href={step.href}
+        href={href}
         className={className}
         {...(isExternal ? { rel: 'noopener noreferrer' } : {})}
       >
