@@ -19,3 +19,6 @@ Pre-flight:
   Task 4: complete (commit 206c1a3; PUBLIC_CONFIG_KEYS allowlist module, call-time filter, mask round-trip tests, check-deploy-env gate; typecheck 0, node:test 119/119 pass)
   Task 5: complete (commit a448e87; paraglide:compile/typecheck/pretest/test aggregate + ci.yaml; clean regen OK, typecheck 0, node:test 119/119 pass; dropped stale test:copy script)
   Task 6: complete (manual_payment_account + manual_payment_detail in sqlite/postgres/mysql; partial unique indexes on sqlite/pg, generated columns active_amount_key/settling_user_key on mysql verified via drizzle-kit generate; typecheck 0, node:test 122/122 pass)
+  Task 7: complete (src/modules/manual-payments/{types,accounts,orders,service}.ts; createManualOrder + expireStaleOrders + account CRUD; typecheck 0, node:test 128/128 pass)
+  Task 7: Ruling: order.status for a fresh manual order is `created`, not the plan Step 4 wording `pending` — spec §8.2 projects pending_payment to `created`; the plan text contradicts the spec and the spec is binding. Cost if wrong: order list shows a different initial label.
+  Task 7: Ruling: createAccount defaults to enabled=false so a mis-typed account cannot receive payments until an operator enables it; tests set enabled explicitly. Cost if wrong: admin sees a new account as disabled by default (intended).
