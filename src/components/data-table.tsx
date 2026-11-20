@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import {
+  type ColumnDef,
   flexRender,
   getCoreRowModel,
   useReactTable,
-  type ColumnDef,
 } from '@tanstack/react-table';
 import {
   ChevronLeft,

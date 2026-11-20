@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 import { tDynamic } from '@/core/i18n/dynamic';
-import { getEventDefinition, type EventTone } from '@/config/events';
+import { type EventTone, getEventDefinition } from '@/config/events';
 import { apiGet } from '@/lib/api-client';
 import { formatDateTime } from '@/lib/time';
 import { cn } from '@/lib/utils';

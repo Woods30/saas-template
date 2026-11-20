@@ -27,15 +27,18 @@ execFileSync(
   { stdio: 'pipe', env: process.env }
 );
 
-const { PUBLIC_CONFIG_KEYS } =
-  await import('../src/modules/config/public-keys');
+const { PUBLIC_CONFIG_KEYS } = await import(
+  '../src/modules/config/public-keys'
+);
 const { getAllConfigs } = await import('../src/modules/config/service');
-const { getSettingGroups, getSettings } =
-  await import('../src/modules/config/settings');
+const { getSettingGroups, getSettings } = await import(
+  '../src/modules/config/settings'
+);
 const { pricingCatalog } = await import('../src/config/pricing');
 const { PaymentType } = await import('../src/core/payment/types');
-const { createManualOrder, ManualPaymentError } =
-  await import('../src/modules/manual-payments/service');
+const { createManualOrder, ManualPaymentError } = await import(
+  '../src/modules/manual-payments/service'
+);
 
 after(async () => {
   await rm(directory, { recursive: true, force: true });

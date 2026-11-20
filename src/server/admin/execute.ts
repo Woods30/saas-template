@@ -7,7 +7,7 @@ import {
   getExecution,
   reserveExecution,
 } from '@/modules/admin-access/service';
-import { adminOperations, type AdminOperation } from '@/lib/admin-operations';
+import { type AdminOperation, adminOperations } from '@/lib/admin-operations';
 import { getUuid } from '@/lib/hash';
 import { respErr } from '@/lib/resp';
 
@@ -17,7 +17,7 @@ import {
   requirePermission,
 } from './auth';
 import { handlers } from './handlers';
-import { AdminError, type AdminActor } from './types';
+import { type AdminActor, AdminError } from './types';
 
 const MAX_REQUEST_BYTES = 2_000_000;
 export async function readAdminJson(request: Request): Promise<unknown> {

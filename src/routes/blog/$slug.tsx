@@ -1,5 +1,4 @@
 import { createFileRoute, notFound } from '@tanstack/react-router';
-import { describeSubmitProblem } from '@/routes/settings/guest-posts/-shared';
 import { MDXProvider } from '@mdx-js/react';
 import {
   ArrowLeft,
@@ -25,11 +24,13 @@ import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
+  type BlogPostDetail,
   formatPostDate,
   loadLocalPost,
-  type BlogPostDetail,
 } from '@/content/posts';
 import { getBlogPostFn, getBlogPreviewFn } from '@/content/posts/server';
+
+import { describeSubmitProblem } from '@/routes/settings/guest-posts/-shared';
 
 export const Route = createFileRoute('/blog/$slug')({
   // ?preview=1: an unpublished guest post, for its author or a reviewer.

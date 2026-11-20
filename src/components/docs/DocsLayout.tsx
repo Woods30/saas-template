@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Menu, Search, X } from 'lucide-react';
 
 import { Link } from '@/core/i18n/navigation';

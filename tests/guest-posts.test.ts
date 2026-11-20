@@ -32,8 +32,9 @@ execFileSync(
 const { db } = await import('../src/core/db');
 const { order, post, user } = await import('../src/config/db/schema');
 const gp = await import('../src/modules/guest-posts/service');
-const { settleCheckoutOrder, refundOrder } =
-  await import('../src/modules/payment/service');
+const { settleCheckoutOrder, refundOrder } = await import(
+  '../src/modules/payment/service'
+);
 const posts = await import('../src/modules/posts/service');
 
 after(async () => {
@@ -525,8 +526,9 @@ test('admins can change the slug, even after publishing', async () => {
 test('guest post links get utm tags unless the author already set some', async () => {
   const React = await import('react');
   const { renderToStaticMarkup } = await import('react-dom/server');
-  const { MarkdownContent } =
-    await import('../src/components/markdown-content');
+  const { MarkdownContent } = await import(
+    '../src/components/markdown-content'
+  );
   const hrefs = (props: Record<string, unknown>) =>
     [
       ...renderToStaticMarkup(

@@ -115,6 +115,6 @@ export class EmailManager {
 // Global email manager instance
 export const emailManager = new EmailManager();
 
+export * from './cloudflare';
 // Export all providers
 export * from './resend';
-export * from './cloudflare';

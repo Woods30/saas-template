@@ -165,6 +165,7 @@ To turn it on:
 
 ```markdown
 ---
+
 title: Getting started
 description: How to set the template up.
 order: 1

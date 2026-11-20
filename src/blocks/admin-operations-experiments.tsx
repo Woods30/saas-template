@@ -7,9 +7,9 @@ import { z } from 'zod';
 
 import { apiGet, apiPatch, apiPost } from '@/lib/api-client';
 import {
-  experimentSchema,
   type Experiment,
   type ExperimentInput,
+  experimentSchema,
 } from '@/lib/operations';
 import { m } from '@/paraglide/messages.js';
 import { getLocale } from '@/paraglide/runtime.js';

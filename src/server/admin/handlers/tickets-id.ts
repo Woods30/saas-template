@@ -4,8 +4,8 @@ import {
   getTicketMessages,
   getTicketWithUser,
   sanitizeAttachments,
-  updateTicketStatus,
   type TicketStatus,
+  updateTicketStatus,
 } from '@/modules/tickets/service';
 import { respData, respErr, respOk } from '@/lib/resp';
 

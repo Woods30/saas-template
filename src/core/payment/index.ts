@@ -1,8 +1,8 @@
 import {
-  PaymentProvider,
   type CheckoutSession,
   type PaymentEvent,
   type PaymentOrder,
+  PaymentProvider,
   type PaymentSession,
 } from './types';
 
@@ -123,9 +123,9 @@ export class PaymentManager {
 // Global payment manager instance
 export const paymentManager = new PaymentManager();
 
-// Export all providers
-export * from './stripe';
+export * from './alipay';
 export * from './creem';
 export * from './paypal';
-export * from './alipay';
+// Export all providers
+export * from './stripe';
 export * from './wechat';

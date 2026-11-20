@@ -13,9 +13,9 @@ import { baseLocale } from '@/paraglide/runtime.js';
 
 import {
   contentSlug,
-  docsForLocale as docsForLocalePure,
   type DocEntry,
   type DocFile,
+  docsForLocale as docsForLocalePure,
 } from './paths';
 
 /** Every markdown file under `content/docs`, keyed by its path. */
@@ -50,18 +50,7 @@ export function findDocBySlug(
   return docsForLocale(locale).find((doc) => doc.slug === slug);
 }
 
-/** The slug of a content file name (locale tag stripped). */
-export { contentSlug };
-
 export {
-  docLinkTarget,
-  docNeighbors,
-  extractHeadings,
-  formatUpdatedDate,
-  groupDocs,
-  headingId,
-  searchDocs,
-  splitNextSteps,
   type DocEntry,
   type DocGroup,
   type DocHeading,
@@ -69,5 +58,15 @@ export {
   type DocNeighbor,
   type DocSearchResult,
   type DocSearchSection,
+  docLinkTarget,
+  docNeighbors,
+  extractHeadings,
+  formatUpdatedDate,
+  groupDocs,
+  headingId,
   type NextStep,
+  searchDocs,
+  splitNextSteps,
 } from './paths';
+/** The slug of a content file name (locale tag stripped). */
+export { contentSlug };

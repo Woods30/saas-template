@@ -6,7 +6,7 @@
 import { useEffect, useRef } from 'react';
 import { Image as TiptapImage } from '@tiptap/extension-image';
 import { Placeholder } from '@tiptap/extension-placeholder';
-import { EditorContent, useEditor, type Editor } from '@tiptap/react';
+import { type Editor, EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import {
   Bold,

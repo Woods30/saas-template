@@ -6,8 +6,8 @@ import {
   gte,
   inArray,
   or,
-  sql,
   type SQL,
+  sql,
 } from 'drizzle-orm';
 
 import { db } from '@/core/db';

@@ -1,9 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { guestPostSettings } from '@/server/guest-posts/settings';
 
 import { listGuestPostPackages } from '@/config/pricing';
 import { getAllConfigs } from '@/modules/config/service';
 import { respData } from '@/lib/resp';
+
+import { guestPostSettings } from '@/server/guest-posts/settings';
 
 // Public: whether guest posts are open, the rules and the packages.
 async function GET() {

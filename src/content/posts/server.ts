@@ -1,11 +1,11 @@
 import { createServerFn } from '@tanstack/react-start';
 
 import {
+  type BlogPost,
+  type BlogPostDetail,
   getLocalPosts,
   loadLocalPost,
   mergePosts,
-  type BlogPost,
-  type BlogPostDetail,
 } from './index';
 
 // Database access stays behind server functions (dynamic import keeps
@@ -115,8 +115,9 @@ export const getBlogPreviewFn = createServerFn()
       });
       if (!session?.user) return null;
 
-      const { findGuestPostBySlug } =
-        await import('@/modules/guest-posts/service');
+      const { findGuestPostBySlug } = await import(
+        '@/modules/guest-posts/service'
+      );
       const row = await findGuestPostBySlug(data.slug);
       if (!row) return null;
       if (row.authorId !== session.user.id) {
@@ -129,8 +130,9 @@ export const getBlogPreviewFn = createServerFn()
       const { getPricingProduct } = await import('@/config/pricing');
       const pkg = getPricingProduct(row.productId);
       const { getAllConfigs } = await import('@/modules/config/service');
-      const { guestPostSettings } =
-        await import('@/server/guest-posts/settings');
+      const { guestPostSettings } = await import(
+        '@/server/guest-posts/settings'
+      );
       const { minWords } = guestPostSettings(await getAllConfigs());
       return {
         slug: p.slug,

@@ -53,7 +53,7 @@ export class AIManager {
 
 export const aiManager = new AIManager();
 
+export * from './fal';
+export * from './gemini';
 export * from './kie';
 export * from './replicate';
-export * from './gemini';
-export * from './fal';

@@ -30,7 +30,7 @@ export function getHyperdriveConnectionString(): string {
 export function hasDatabaseConfigured(): boolean {
   return Boolean(
     envConfigs.database_url ||
-    envConfigs.database_provider === 'd1' ||
-    getHyperdriveConnectionString()
+      envConfigs.database_provider === 'd1' ||
+      getHyperdriveConnectionString()
   );
 }

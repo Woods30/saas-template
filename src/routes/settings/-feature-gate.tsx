@@ -2,8 +2,8 @@ import type { ReactNode } from 'react';
 import { Navigate } from '@tanstack/react-router';
 
 import {
-  useUserFeatures,
   type UserFeatureKey,
+  useUserFeatures,
 } from '@/hooks/use-user-features';
 
 /**

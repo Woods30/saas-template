@@ -1,8 +1,8 @@
 import {
   FUNNEL_DIMENSIONS,
-  getFunnelReport,
   type FunnelDimension,
   type FunnelRange,
+  getFunnelReport,
 } from '@/modules/analytics/service';
 import { respData, respErr } from '@/lib/resp';
 

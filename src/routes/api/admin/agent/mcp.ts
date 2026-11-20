@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+
 import { handleAdminMcp } from '@/server/admin/mcp';
 
 export const Route = createFileRoute('/api/admin/agent/mcp')({

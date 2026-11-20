@@ -39,13 +39,13 @@ export function db() {
   return dbInstance;
 }
 
-export type { DbConfig } from './types';
-export { createDb, closeDb } from './create-db';
+export { closeDb, createDb } from './create-db';
 export {
   getHyperdriveConnectionString,
   hasDatabaseConfigured,
   isCloudflareWorker,
 } from './runtime';
+export type { DbConfig } from './types';
 
 /**
  * Rows changed by an UPDATE/DELETE, across drivers: libsql `rowsAffected`,

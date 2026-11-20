@@ -4,10 +4,10 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import {
   createRootRoute,
+  type ErrorComponentProps,
   HeadContent,
   Outlet,
   Scripts,
-  type ErrorComponentProps,
 } from '@tanstack/react-router';
 import { createServerFn } from '@tanstack/react-start';
 import { ThemeProvider } from 'next-themes';

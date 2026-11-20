@@ -3,8 +3,8 @@ import { ArrowRight, Route } from 'lucide-react';
 
 import {
   docLinkTarget,
-  safeDocHref,
   type NextStep,
+  safeDocHref,
 } from '@/modules/docs/paths';
 import { m } from '@/paraglide/messages.js';
 import { DOC_FALLBACK_ICON, DOC_ICON } from '@/components/docs/doc-icons';

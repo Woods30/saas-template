@@ -1,4 +1,4 @@
-import { sql, type SQL } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 
 import { envConfigs } from '@/config';
 
@@ -44,7 +44,11 @@ export function guard(g: Omit<AtomicGuard, 'kind'>): AtomicGuard {
 
 /** A drizzle query builder (not awaited), a guard, or nothing (skipped). */
 export type AtomicStep =
-  AtomicGuard | Record<string, any> | false | null | undefined;
+  | AtomicGuard
+  | Record<string, any>
+  | false
+  | null
+  | undefined;
 
 let forcedMode: 'batch' | 'transaction' | undefined;
 /** Tests: run the D1 code path (batch) against a local libsql database. */

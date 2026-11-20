@@ -4,9 +4,9 @@ import { tDynamic } from '@/core/i18n/dynamic';
 import { m } from '@/paraglide/messages.js';
 import { localizeHref } from '@/paraglide/runtime.js';
 import {
-  packageLabel,
   type GuestPostPackage,
   type GuestPostStatus,
+  packageLabel,
   type SubmitProblem,
 } from '@/hooks/use-guest-posts';
 import { Badge } from '@/components/ui/badge';

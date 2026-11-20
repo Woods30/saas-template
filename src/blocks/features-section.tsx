@@ -3,9 +3,9 @@ import {
   CreditCard,
   FileText,
   Globe,
+  type LucideIcon,
   ShieldCheck,
   Users,
-  type LucideIcon,
 } from 'lucide-react';
 
 import { tDynamic } from '@/core/i18n/dynamic';

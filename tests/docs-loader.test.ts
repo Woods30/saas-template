@@ -3,12 +3,12 @@ import { test } from 'node:test';
 
 import {
   contentSlug,
+  type DocFile,
   docsForLocale,
   parseFrontmatter,
   resolveContentLocale,
   safeDocHref,
   splitNextSteps,
-  type DocFile,
 } from '../src/modules/docs/paths';
 
 const LOCALES = ['en', 'zh'] as const;

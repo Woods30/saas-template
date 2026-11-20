@@ -31,8 +31,9 @@ execFileSync(
 );
 const { db } = await import('../src/core/db');
 const { credit, user } = await import('../src/config/db/schema');
-const { consume, getBalance, grant, revoke } =
-  await import('../src/modules/credits/service');
+const { consume, getBalance, grant, revoke } = await import(
+  '../src/modules/credits/service'
+);
 
 after(async () => {
   await rm(directory, { recursive: true, force: true });

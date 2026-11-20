@@ -16,7 +16,7 @@ import { apiDelete, apiGet, apiPost, type PageResult } from '@/lib/api-client';
 import { formatDateTime } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { m } from '@/paraglide/messages.js';
-import { DataTable, type Column } from '@/components/data-table';
+import { type Column, DataTable } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {

@@ -26,8 +26,8 @@
     "db:studio": "tsx scripts/with-env.ts drizzle-kit studio --config=drizzle.config.ts",
     "rbac:init": "tsx scripts/with-env.ts tsx scripts/init-rbac.ts",
     "rbac:assign": "tsx scripts/with-env.ts tsx scripts/assign-role.ts",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format": "biome check --write .",
+    "format:check": "biome check .",
     "prepare": "husky",
     "admin:token": "tsx scripts/with-env.ts tsx scripts/admin-token.ts",
     "admin:mcp": "tsx scripts/admin-mcp.ts",
@@ -43,8 +43,7 @@
     "check:deploy-env": "node scripts/check-deploy-env.mjs"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx,mjs,cjs}": "prettier --write",
-    "*.{json,css,md,mdx,yaml,yml}": "prettier --write"
+    "*.{ts,tsx,js,jsx,mjs,cjs,json,css,md,mdx,yaml,yml}": "biome check --write --no-errors-on-unmatched"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -99,7 +98,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
+    "@biomejs/biome": "^2.6.8",
     "@inlang/paraglide-js": "^2.29.2",
     "@inlang/plugin-message-format": "4.5.6",
     "@mdx-js/rollup": "^3.1.1",
@@ -117,8 +116,6 @@
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
     "nitro": "3.0.260903-beta",
-    "prettier": "^3.9.10",
-    "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",

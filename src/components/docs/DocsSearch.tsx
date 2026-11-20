@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { CornerDownRight, Search } from 'lucide-react';
 
 import {
-  searchDocs,
   type DocEntry,
   type DocSearchResult,
+  searchDocs,
 } from '@/modules/docs/paths';
 import { m } from '@/paraglide/messages.js';
 import { DOC_FALLBACK_ICON, DOC_ICON } from '@/components/docs/doc-icons';

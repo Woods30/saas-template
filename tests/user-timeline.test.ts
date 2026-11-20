@@ -28,8 +28,9 @@ execFileSync(
 );
 const { db } = await import('../src/core/db');
 const schema = await import('../src/config/db/schema');
-const { GET: timeline } =
-  await import('../src/server/admin/handlers/users-timeline');
+const { GET: timeline } = await import(
+  '../src/server/admin/handlers/users-timeline'
+);
 
 after(async () => {
   await rm(directory, { recursive: true, force: true });

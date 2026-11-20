@@ -27,10 +27,12 @@ execFileSync(
   { stdio: 'pipe', env: process.env }
 );
 const { db } = await import('../src/core/db');
-const { permission, role, rolePermission, user } =
-  await import('../src/config/db/schema');
-const { getUserPermissionCodes, grantRoleForNewUser } =
-  await import('../src/modules/rbac/service');
+const { permission, role, rolePermission, user } = await import(
+  '../src/config/db/schema'
+);
+const { getUserPermissionCodes, grantRoleForNewUser } = await import(
+  '../src/modules/rbac/service'
+);
 
 after(async () => {
   await rm(directory, { recursive: true, force: true });

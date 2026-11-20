@@ -11,11 +11,11 @@ import {
 
 import { db } from '@/core/db';
 import {
+  type Ticket,
+  type TicketMessage,
   ticket,
   ticketMessage,
   user,
-  type Ticket,
-  type TicketMessage,
 } from '@/config/db/schema';
 import { getUuid } from '@/lib/hash';
 import { keywordMatch } from '@/lib/sql-search';

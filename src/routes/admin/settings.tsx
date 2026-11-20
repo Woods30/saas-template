@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import {
@@ -15,9 +15,9 @@ import { toast } from 'sonner';
 import { tDynamic } from '@/core/i18n/dynamic';
 import {
   APPEARANCE_ENABLED_KEY,
+  type AppearanceKey,
   COLOR_MODE_CONFIG_KEY,
   isAppearanceValue,
-  type AppearanceKey,
 } from '@/config/appearance';
 import {
   getSettingGroups,

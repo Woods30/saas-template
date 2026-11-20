@@ -34,8 +34,9 @@ export const Route = createFileRoute('/llms-full.txt')({
 
         let posts = getLocalPosts(baseLocale);
         try {
-          const { listPublishedArticles, findPublishedBySlug } =
-            await import('@/modules/posts/service');
+          const { listPublishedArticles, findPublishedBySlug } = await import(
+            '@/modules/posts/service'
+          );
           const rows = await listPublishedArticles().catch(() => []);
           const dbPosts = rows.map((row) => ({
             slug: row.slug,

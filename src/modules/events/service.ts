@@ -2,8 +2,8 @@ import { db } from '@/core/db';
 import { userEvent } from '@/config/db/schema';
 import {
   EVENT_DETAIL_LIMITS,
-  getEventDefinition,
   type EventDetail,
+  getEventDefinition,
   type UserEventKind,
 } from '@/config/events';
 import { getUuid } from '@/lib/hash';

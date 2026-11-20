@@ -4,7 +4,7 @@ import { Link } from '@/core/i18n/navigation';
 import { m } from '@/paraglide/messages.js';
 import { getLocale } from '@/paraglide/runtime.js';
 import { BlogCard } from '@/components/blog-card';
-import { formatPostDate, type BlogPost } from '@/content/posts';
+import { type BlogPost, formatPostDate } from '@/content/posts';
 
 // Latest-posts landing section. Posts arrive via props (fetched in the
 // landing route's loader through the blog server functions) so this block

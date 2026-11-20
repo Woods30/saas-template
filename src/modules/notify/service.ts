@@ -10,20 +10,20 @@ import { and, count, eq, lte } from 'drizzle-orm';
 
 import { db } from '@/core/db';
 import {
-  sendToChannels,
   type NotifyChannel,
   type NotifyChannelConfig,
   type NotifyResult,
+  sendToChannels,
 } from '@/core/notify';
 import { envConfigs } from '@/config';
 import {
   guestPost,
+  type Order,
   order,
   post,
   subscription,
-  user,
-  type Order,
   type User,
+  user,
 } from '@/config/db/schema';
 import { getPricingProduct } from '@/config/pricing';
 import { getAllConfigs } from '@/modules/config/service';
@@ -31,12 +31,12 @@ import { getAllConfigs } from '@/modules/config/service';
 import {
   GUEST_POST_EVENT_LABELS,
   GUEST_POST_TEMPLATES,
+  type NotifyLanguage,
   normalizeNotifyLanguage,
   PAYMENT_TEMPLATES,
+  type PaymentTemplateVars,
   renderTemplate,
   TICKET_TEMPLATES,
-  type NotifyLanguage,
-  type PaymentTemplateVars,
   type TicketTemplateVars,
 } from './templates';
 
@@ -88,10 +88,11 @@ function formatBillingCycle(
 }
 
 // Currencies whose smallest unit is the whole unit (amounts aren't in cents).
+// biome-ignore format: one currency per slot keeps the list scannable
 const ZERO_DECIMAL_CURRENCIES = new Set([
   'bif', 'clp', 'djf', 'gnf', 'jpy', 'kmf', 'krw', 'mga', 'pyg', 'rwf',
   'ugx', 'vnd', 'vuv', 'xaf', 'xof', 'xpf',
-]); // prettier-ignore
+]);
 
 // --- Config ---
 

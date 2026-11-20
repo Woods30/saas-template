@@ -15,7 +15,10 @@ export async function GET({ request }: AdminHandlerContext) {
     await getOperationsReport({
       days: Number(params.get('days') || 7),
       groupBy: (params.get('groupBy') || 'source') as
-        'source' | 'country' | 'buildId' | 'entryPath',
+        | 'source'
+        | 'country'
+        | 'buildId'
+        | 'entryPath',
     })
   );
 }

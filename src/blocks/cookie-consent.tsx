@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 
 import { usePathname } from '@/core/i18n/navigation';
 import {
+  type CookieConsent as CookieConsentValue,
   saveCookieConsent,
   subscribeCookieSettingsOpen,
-  type CookieConsent as CookieConsentValue,
 } from '@/lib/cookie-consent';
 import { m } from '@/paraglide/messages.js';
 import { useCookieConsent } from '@/hooks/use-cookie-consent';

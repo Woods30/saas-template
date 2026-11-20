@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { userFeatureEnabled } from '@/server/user-features';
 
 import { getAuth } from '@/core/auth';
 import { notifyTicketEvent } from '@/modules/notify/service';
@@ -11,6 +10,8 @@ import {
 } from '@/modules/tickets/service';
 import { enforceMinIntervalRateLimit } from '@/lib/rate-limit';
 import { respData, respErr, respPage } from '@/lib/resp';
+
+import { userFeatureEnabled } from '@/server/user-features';
 
 const VALID_STATUSES: TicketStatus[] = ['open', 'replied', 'closed'];
 

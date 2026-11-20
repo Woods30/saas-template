@@ -11,16 +11,18 @@ import {
   ne,
   notExists,
   or,
-  sql,
   type SQL,
   type SQLWrapper,
+  sql,
 } from 'drizzle-orm';
 
 import { affectedRows, db } from '@/core/db';
 import { envConfigs } from '@/config';
 import {
+  type AnalyticsVisitor,
   aiTask,
   operationsExperiment as experiment,
+  type OperationsExperiment,
   order,
   permission,
   role,
@@ -30,15 +32,13 @@ import {
   userEvent,
   userRole,
   analyticsVisitor as visitor,
-  type AnalyticsVisitor,
-  type OperationsExperiment,
 } from '@/config/db/schema';
 import { getUuid } from '@/lib/hash';
 import {
-  sameTimeWindows,
   type ExperimentInput,
   type OperationsCounts,
   type OperationsReport,
+  sameTimeWindows,
 } from '@/lib/operations';
 
 const DAY = 86400000;

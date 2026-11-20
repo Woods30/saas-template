@@ -10,15 +10,15 @@ import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
-  apiDelete,
   ApiError,
+  apiDelete,
   apiGet,
   apiPost,
   apiPut,
   type PageResult,
 } from '@/lib/api-client';
 import { m } from '@/paraglide/messages.js';
-import { DataTable, type Column } from '@/components/data-table';
+import { type Column, DataTable } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {

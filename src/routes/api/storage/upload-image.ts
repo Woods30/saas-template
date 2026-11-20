@@ -1,6 +1,6 @@
+import { createFileRoute } from '@tanstack/react-router';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { createFileRoute } from '@tanstack/react-router';
 
 import { getAuth } from '@/core/auth';
 import { envConfigs } from '@/config';

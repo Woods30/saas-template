@@ -1,0 +1,79 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!src/components/ui/**",
+      "!src/styles/globals.css",
+      "!src/paraglide/**",
+      "!src/routeTree.gen.ts",
+      "!drizzle/**",
+      "!public/**",
+      "!.output/**",
+      "!.wrangler/**",
+      "!.superpowers/**",
+      "!docs/superpowers/**",
+      "!.claude/**",
+      "!.agents/**",
+      "!.codex/**",
+      "!.cursor/**",
+      "!pnpm-lock.yaml",
+      "!package-lock.json",
+      "!data/**"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "lineWidth": 80,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "jsxQuoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "es5",
+      "arrowParentheses": "always",
+      "bracketSpacing": true
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": {
+          "level": "on",
+          "options": {
+            "groups": [
+              ["react", "react/**"],
+              ["@tanstack/**"],
+              [":NODE:", ":BUN:", ":PACKAGE:"],
+              ":BLANK_LINE:",
+              ["@/core", "@/core/**"],
+              ["@/config", "@/config/**"],
+              ["@/modules", "@/modules/**"],
+              ["@/lib", "@/lib/**"],
+              ["@/paraglide", "@/paraglide/**"],
+              ["@/hooks", "@/hooks/**"],
+              ["@/blocks", "@/blocks/**"],
+              ["@/components", "@/components/**"],
+              ["@/content", "@/content/**"],
+              ":BLANK_LINE:",
+              [":PATH:"]
+            ]
+          }
+        }
+      }
+    }
+  },
+  "linter": {
+    "enabled": false
+  }
+}

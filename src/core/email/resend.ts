@@ -1,5 +1,5 @@
 import { render } from '@react-email/components';
-import { Resend, type CreateEmailOptions } from 'resend';
+import { type CreateEmailOptions, Resend } from 'resend';
 
 import type {
   EmailConfigs,

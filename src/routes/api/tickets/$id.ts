@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { userFeatureEnabled } from '@/server/user-features';
 
 import { getAuth } from '@/core/auth';
 import { notifyTicketEvent } from '@/modules/notify/service';
@@ -11,6 +10,8 @@ import {
   updateTicketStatus,
 } from '@/modules/tickets/service';
 import { respData, respErr, respOk } from '@/lib/resp';
+
+import { userFeatureEnabled } from '@/server/user-features';
 
 async function getOwnedTicket(request: Request, id: string) {
   if (!(await userFeatureEnabled('tickets_enabled'))) {

@@ -28,8 +28,9 @@ execFileSync(
   { stdio: 'pipe', env: process.env }
 );
 
-const { PUBLIC_CONFIG_KEYS } =
-  await import('../src/modules/config/public-keys');
+const { PUBLIC_CONFIG_KEYS } = await import(
+  '../src/modules/config/public-keys'
+);
 const {
   filterPublicConfigs,
   getAdminConfigs,
