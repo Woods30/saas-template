@@ -6,7 +6,12 @@ import {
   type WebsiteConfig,
   websiteConfig,
 } from '@/config/website'
-import { emailPasswordEnabled, requiresEmailVerification, signUpOutcome } from '@/core/auth/flow'
+import {
+  emailPasswordEnabled,
+  requiresEmailVerification,
+  sendsVerificationEmail,
+  signUpOutcome,
+} from '@/core/auth/flow'
 import { resetSettingsCache, saveSettingsTab } from '@/core/config/service'
 
 // 认证页 `beforeLoad` 会调 server function；测试环境没有 TanStack Start 请求上下文。
@@ -16,9 +21,9 @@ vi.mock('@/core/auth/providers', () => ({
 }))
 
 /**
- * 注册流程的两个派生判定。邮箱验证是安全控制而非邮件开关，必须由显式配置
- * `auth.requireEmailVerification` 决定；随 `mail.enabled` 隐式降级会让「没配邮件」
- * 变成「任何人都能拿别人的邮箱注册」。
+ * 注册流程的派生判定。是否要求验证必须由显式配置 `auth.requireEmailVerification`
+ * 决定；随 `mail.enabled` 隐式降级会让「没配邮件」变成「任何人都能拿别人的邮箱注册」。
+ * 是否发送验证邮件则同时取决于该开关与邮件模块是否可用。
  */
 function config(overrides: {
   requireEmailVerification?: boolean
@@ -53,8 +58,32 @@ describe('requiresEmailVerification', () => {
     ).toBe(false)
   })
 
-  it('站点默认要求邮箱验证', () => {
-    expect(requiresEmailVerification()).toBe(true)
+  it('站点默认不要求邮箱验证', () => {
+    expect(requiresEmailVerification()).toBe(false)
+  })
+})
+
+describe('sendsVerificationEmail', () => {
+  it('要求验证且邮件可用时才发', () => {
+    expect(
+      sendsVerificationEmail(config({ requireEmailVerification: true, mailEnabled: true })),
+    ).toBe(true)
+  })
+
+  it('不要求验证时即使邮件可用也不发', () => {
+    expect(
+      sendsVerificationEmail(config({ requireEmailVerification: false, mailEnabled: true })),
+    ).toBe(false)
+  })
+
+  it('要求验证但邮件不可用时不发（发了也送不到）', () => {
+    expect(
+      sendsVerificationEmail(config({ requireEmailVerification: true, mailEnabled: false })),
+    ).toBe(false)
+  })
+
+  it('站点默认不发验证邮件', () => {
+    expect(sendsVerificationEmail()).toBe(false)
   })
 })
 

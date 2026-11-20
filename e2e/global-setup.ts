@@ -209,6 +209,11 @@ const E2E_SETTINGS: ReadonlyArray<readonly [key: string, value: unknown]> = [
   ['auth.githubEnabled', true],
   ['github.clientId', 'e2e-github-client-id'],
   ['github.clientSecret', 'e2e-github-client-secret'],
+  /**
+   * 本地 D1 跨运行保留：旧版本把出厂值当 `true` 时可能留下这一行。E2E 断言的是
+   * 「默认关闭」的注册路径，所以显式钉住，避免被持久化库里的旧值影响。
+   */
+  ['auth.requireEmailVerification', false],
 ]
 
 /**

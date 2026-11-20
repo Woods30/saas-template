@@ -67,6 +67,9 @@ describe('邮箱验证完整流程', () => {
   it('注册不创建会话，未验证登录被拒绝，邮件验证后建立会话并保留购买目标', async () => {
     const { sqlite, binding } = memoryD1()
     email.send.mockClear()
+    // 默认关闭验证；本用例覆盖显式开启后的完整链路。
+    const previous = websiteConfig.auth.requireEmailVerification
+    websiteConfig.auth.requireEmailVerification = true
     const auth = await getAuth({ ...env(), DB: binding })
     const callbackURL = '/zh/auth/verify-email?redirect=%2Fzh%2F%23pricing'
     const credentials = { email: 'buyer@example.com', password: 'StrongPassword123!' }
@@ -110,6 +113,37 @@ describe('邮箱验证完整流程', () => {
       expect(login.status).toBe(200)
       expect(login.headers.get('set-cookie')).toContain('session_token=')
     } finally {
+      websiteConfig.auth.requireEmailVerification = previous
+      sqlite.close()
+    }
+  })
+
+  it('默认关闭验证：注册直接建立会话，不发验证邮件，登录不受限', async () => {
+    const { sqlite, binding } = memoryD1()
+    email.send.mockClear()
+    const auth = await getAuth({ ...env(), DB: binding })
+    const credentials = { email: 'buyer@example.com', password: 'StrongPassword123!' }
+    const post = (path: string, body: object) =>
+      auth.handler(
+        new Request(`http://localhost:3000/api/auth/${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
+          body: JSON.stringify(body),
+        }),
+      )
+    try {
+      const signup = await post('sign-up/email', { ...credentials, name: 'Buyer' })
+      expect(signup.status).toBe(200)
+      expect(signup.headers.get('set-cookie')).toContain('session_token=')
+      expect(sqlite.prepare('SELECT count(*) AS count FROM sessions').get()?.count).toBe(1)
+      expect(sqlite.prepare('SELECT email_verified FROM users').get()?.email_verified).toBe(0)
+      // 关键回归：注册不该在「没要求验证」时发验证邮件。
+      expect(email.send.mock.calls.map(([input]) => input.kind)).toEqual([])
+
+      const login = await post('sign-in/email', credentials)
+      expect(login.status).toBe(200)
+      expect(login.headers.get('set-cookie')).toContain('session_token=')
+    } finally {
       sqlite.close()
     }
   })
@@ -144,14 +178,46 @@ describe('会话 cookie 缓存', () => {
 })
 
 describe('邮箱验证接线', () => {
-  it('注册和未验证登录均发验证邮件，验证后自动登录', async () => {
-    const auth = await getAuth(env())
-    const ctx = await auth.$context
-    expect(ctx.options.emailAndPassword?.requireEmailVerification).toBe(true)
-    expect(ctx.options.emailVerification?.sendOnSignUp).toBe(true)
-    expect(ctx.options.emailVerification?.sendOnSignIn).toBe(true)
-    expect(ctx.options.emailVerification?.autoSignInAfterVerification).toBe(true)
+  it('默认不要求验证，也不发验证邮件', async () => {
+    const ctx = await (await getAuth(env())).$context
+    expect(ctx.options.emailAndPassword?.requireEmailVerification).toBe(false)
+    expect(ctx.options.emailVerification?.sendOnSignUp).toBe(false)
+    expect(ctx.options.emailVerification?.sendOnSignIn).toBe(false)
   })
+
+  it('开启验证后注册和未验证登录均发验证邮件，验证后自动登录', async () => {
+    const previous = websiteConfig.auth.requireEmailVerification
+    websiteConfig.auth.requireEmailVerification = true
+    try {
+      const auth = await getAuth(env())
+      const ctx = await auth.$context
+      expect(ctx.options.emailAndPassword?.requireEmailVerification).toBe(true)
+      expect(ctx.options.emailVerification?.sendOnSignUp).toBe(true)
+      expect(ctx.options.emailVerification?.sendOnSignIn).toBe(true)
+      expect(ctx.options.emailVerification?.autoSignInAfterVerification).toBe(true)
+    } finally {
+      websiteConfig.auth.requireEmailVerification = previous
+    }
+  })
+
+  it('验证关闭时手动重发验证邮件也不发信', async () => {
+    const ctx = await (await getAuth(env())).$context
+    email.send.mockClear()
+    const user = {
+      id: 'u1',
+      name: 'Buyer',
+      email: 'buyer@example.com',
+      emailVerified: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    await ctx.options.emailVerification?.sendVerificationEmail?.(
+      { user, url: 'http://localhost:3000/api/auth/verify-email?token=test', token: 'test' },
+      new Request('http://localhost:3000/api/auth/send-verification-email'),
+    )
+    expect(email.send).not.toHaveBeenCalled()
+  })
+
   it('欢迎邮件只在邮箱验证后发送', async () => {
     const previous = websiteConfig.mail.enabled
     websiteConfig.mail.enabled = true

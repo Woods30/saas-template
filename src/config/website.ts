@@ -177,13 +177,15 @@ export interface WebsiteConfig {
     /** GitHub 登录：还需配齐 clientId / clientSecret 才会真正启用。 */
     githubEnabled: boolean
     /**
-     * 注册后是否必须先验证邮箱才能登录。
+     * 注册后是否必须先验证邮箱才能登录，同时决定注册 / 登录时是否发送验证邮件。
      *
-     * 这是安全控制而非邮件功能开关：邮箱在下游被当作身份依据（Stripe 的
+     * 默认 `false`（真实默认值在 `core/config/registry.ts` 的 `auth.requireEmailVerification`
+     * 字段；本文件的 auth 分支由配置表覆盖）：注册即登录，不发验证邮件，也不需要配齐邮件服务。
+     *
+     * 设为 `true` 时它同时是安全控制：邮箱在下游被当作身份依据（Stripe 的
      * `customerEmail`、`ADMIN_EMAILS`），放行未验证邮箱等于允许冒用他人地址。
-     *
-     * 当前默认 `true`，邮件必须配置完整。`true` + 邮件未配齐是矛盾配置，
-     * `getServiceStatuses()` 会报 incomplete，不会自动降级为免验证登录。
+     * `true` + 邮件未配齐是矛盾配置：`getServiceStatuses()` 会报 incomplete，
+     * 不会自动降级为免验证登录。
      */
     requireEmailVerification: boolean
   }
@@ -304,7 +306,7 @@ export function createWebsiteConfig(env: PublicEnv): WebsiteConfig {
         emailEnabled: true,
         googleEnabled: true,
         githubEnabled: false,
-        requireEmailVerification: true,
+        requireEmailVerification: false,
       },
       userFeatures: {
         billing: true,

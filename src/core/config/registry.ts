@@ -295,7 +295,9 @@ export const SETTING_TABS: readonly SettingTab[] = [
           boolean(
             'auth.requireEmailVerification',
             m.admin_settings_auth_require_email_verification,
-            true,
+            // 出厂默认关闭：注册即登录、不发验证邮件，也不要求配齐邮件服务。
+            // 这里是**真实默认值**——`website.ts` 的 auth 分支由本表覆盖。
+            false,
             { hint: m.admin_settings_auth_require_email_verification_hint },
           ),
         ],

@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { toast } from '@/components/ui/toast'
 import { settingsRoutes } from '@/config/routes'
 import { authClient } from '@/core/auth/client'
+import { requiresEmailVerification } from '@/core/auth/flow'
 import { createProfileSchema } from '@/core/auth/validation'
 import { settingsHead } from '@/lib/page-head'
 import { m } from '@/locale/paraglide/messages.js'
@@ -96,18 +97,21 @@ function ProfilePage() {
           <CardTitle>{m.settings_profile_email_label()}</CardTitle>
           <CardDescription>{session.user.email}</CardDescription>
         </CardHeader>
-        <CardContent className="flex items-center gap-3">
-          <Badge variant={session.user.emailVerified ? 'default' : 'secondary'}>
-            {session.user.emailVerified
-              ? m.settings_profile_email_verified()
-              : m.settings_profile_email_unverified()}
-          </Badge>
-          {!session.user.emailVerified && (
-            <Button type="button" variant="outline" size="sm" onClick={onSendVerification}>
-              {m.settings_profile_send_verification()}
-            </Button>
-          )}
-        </CardContent>
+        {/* 验证关闭时没有「未验证」这回事，也不该留一个永远无意义的发信入口。 */}
+        {requiresEmailVerification() && (
+          <CardContent className="flex items-center gap-3">
+            <Badge variant={session.user.emailVerified ? 'default' : 'secondary'}>
+              {session.user.emailVerified
+                ? m.settings_profile_email_verified()
+                : m.settings_profile_email_unverified()}
+            </Badge>
+            {!session.user.emailVerified && (
+              <Button type="button" variant="outline" size="sm" onClick={onSendVerification}>
+                {m.settings_profile_send_verification()}
+              </Button>
+            )}
+          </CardContent>
+        )}
       </Card>
     </div>
   )

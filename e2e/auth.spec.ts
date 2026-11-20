@@ -2,7 +2,13 @@ import { execFileSync } from 'node:child_process'
 import { expect, test } from '@playwright/test'
 import { seedVerifiedUser } from '../scripts/e2e-seed-subscription'
 
-/** E2E: 注册无 session → 未验证拒绝登录 → 本地捕获验证邮件 → 登录 → 登出。 */
+/**
+ * E2E: 注册即登录（默认关闭邮箱验证）→ 登出。
+ *
+ * 邮箱验证默认关闭，所以这里不覆盖「注册 → 收验证邮件 → 点链接」的链路；
+ * 开启验证后的完整接线（拒绝登录、重发、验证后建会话）由
+ * `tests/unit/auth-adapter.test.ts` 用真实 SQLite 覆盖。
+ */
 
 const PASSWORD = 'e2e-password-12345'
 
@@ -15,9 +21,10 @@ async function waitForForm(page: import('@playwright/test').Page) {
 }
 
 test.describe('Auth', () => {
-  test('注册不产生会话，未验证不能登录，验证邮件后登录并登出', async ({ page }) => {
+  test('注册即登录，不发送验证邮件，可正常登出', async ({ page }) => {
     const email = `e2e-${Date.now()}-${crypto.randomUUID().slice(0, 8)}@example.com`
-    await page.goto('/zh/auth/register')
+    // 带安全回跳：注册后直接落到受保护页面，能同时证明会话已建立。
+    await page.goto('/zh/auth/register?redirect=%2Fzh%2Fsettings%2Fprofile')
 
     await waitForForm(page)
     await page.getByLabel('昵称').fill('E2E 用户')
@@ -25,48 +32,23 @@ test.describe('Auth', () => {
     await page.getByLabel('密码（≥ 8 字符）').fill(PASSWORD)
     await page.getByRole('button', { name: '注册' }).click()
 
-    await expect(page.getByRole('heading', { name: '请查收邮件' })).toBeVisible()
-    expect(await (await page.request.get('/api/auth/get-session')).json()).toBeNull()
-    await page.goto('/zh/auth/login')
-    await waitForForm(page)
-    await page.getByLabel('邮箱').fill(email)
-    await page.getByLabel('密码', { exact: true }).fill(PASSWORD)
-    const denied = page.waitForResponse((response) =>
-      response.url().includes('/api/auth/sign-in/email'),
-    )
-    await page.getByRole('button', { name: '登录', exact: true }).click()
-    expect((await denied).status()).toBe(403)
-    await expect(page.getByRole('alert')).toContainText('请先验证邮箱')
-    expect(await (await page.request.get('/api/auth/get-session')).json()).toBeNull()
-    await page.goto('/zh/settings/profile')
-    await expect(page).toHaveURL(/\/zh\/auth\/login/)
+    await page.waitForURL((url) => url.pathname === '/zh/settings/profile')
+    const session = (await (await page.request.get('/api/auth/get-session')).json()) as {
+      user?: { email?: string }
+    } | null
+    expect(session?.user?.email).toBe(email)
 
-    let verificationURL = ''
-    await expect(async () => {
-      const response = await page.request.get('/__e2e/mail', { params: { email } })
-      const { html } = (await response.json()) as { html: string | null }
-      const href = html?.match(/href="([^"]*\/api\/auth\/verify-email[^"]*)"/)?.[1]
-      expect(href, '本地捕获服务应收到真实模板生成的验证链接').toBeTruthy()
-      verificationURL = href?.replaceAll('&amp;', '&') ?? ''
-    }).toPass({ timeout: 15000 })
-    expect(new URL(verificationURL).origin).toBe(new URL(page.url()).origin)
-    await page.goto(verificationURL)
-    await expect(
-      page
-        .getByRole('button', { name: '继续', exact: true })
-        .or(page.getByRole('link', { name: '继续', exact: true })),
-    ).toBeVisible()
-    await page
-      .getByRole('button', { name: '继续', exact: true })
-      .or(page.getByRole('link', { name: '继续', exact: true }))
-      .click()
-    await page.waitForURL((url) => url.pathname === '/zh' || url.pathname === '/')
+    // 默认关闭验证：注册不应发出任何验证邮件。
+    const captured = await page.request.get('/__e2e/mail', { params: { email } })
+    expect(((await captured.json()) as { html: string | null }).html).toBeNull()
+
+    // 资料页侧栏也有同名用户按钮，登出菜单只挂在营销页导航栏上，先回到首页。
+    await page.goto('/zh')
     // 15s：冷启动时会话请求可能晚于导航返回，导航栏短暂渲染未登录回退。
     const trigger = page.getByRole('button', { name: 'E2E 用户' })
     await expect(trigger).toBeVisible({ timeout: 15000 })
     await trigger.click()
-    await expect(page.getByText(email)).toBeVisible()
-
+    await expect(page.getByText('退出登录')).toBeVisible()
     await page.getByText('退出登录').click()
     await page.waitForURL((url) => url.pathname === '/zh' || url.pathname === '/')
     await expect(

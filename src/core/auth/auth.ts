@@ -4,7 +4,11 @@ import { betterAuth } from 'better-auth/minimal'
 import { admin } from 'better-auth/plugins/admin'
 import { getConfigEpoch, websiteConfig } from '@/config/website'
 import { sendAuthEmailForRequest } from '@/core/auth/emails'
-import { emailPasswordEnabled, requiresEmailVerification } from '@/core/auth/flow'
+import {
+  emailPasswordEnabled,
+  requiresEmailVerification,
+  sendsVerificationEmail,
+} from '@/core/auth/flow'
 import { socialProviderOptions } from '@/core/auth/social-providers'
 import { runUserCreatedHooks } from '@/core/auth/user-hooks'
 import { createDbFromEnv, schema } from '@/core/db'
@@ -110,9 +114,10 @@ export async function createAuth(env: Env) {
       },
     },
     emailVerification: {
-      // 概念与上面的 `requireEmailVerification` 不同：这里问的是「要不要发验证邮件」。
-      sendOnSignUp: websiteConfig.mail.enabled,
-      sendOnSignIn: websiteConfig.mail.enabled && requiresEmailVerification(),
+      // 「要不要发验证邮件」由 `sendsVerificationEmail` 统一判定：只在要求验证且
+      // 邮件模块可用时发。否则注册会发一封与登录无关的验证信。
+      sendOnSignUp: sendsVerificationEmail(),
+      sendOnSignIn: sendsVerificationEmail(),
       autoSignInAfterVerification: true,
       afterEmailVerification: async (user, request) => {
         if (!websiteConfig.mail.enabled) return
@@ -122,6 +127,8 @@ export async function createAuth(env: Env) {
         )
       },
       sendVerificationEmail: async ({ user, url }, request) => {
+        // 手动重发接口同样受开关约束：验证关闭时发信没有意义，UI 也不提供入口。
+        if (!sendsVerificationEmail()) return
         await dispatch(
           {
             kind: 'verifyEmail',

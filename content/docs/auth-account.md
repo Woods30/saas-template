@@ -9,13 +9,13 @@ updated: 2026-11-19
 
 The account area behind sign-in lives at `/{locale}/settings/*` and is reachable from the user menu in the navbar. Opening it while signed out redirects to `/{locale}/auth/login`.
 
-![Account center · Profile](/docs/screenshots/settings-profile.png "Account center · Profile: name and email, with a verification entry point when the address is unverified")
+![Account center · Profile](/docs/screenshots/settings-profile.png "Account center · Profile: name and email; with email verification enabled and the address unverified, a verification entry point appears")
 
 ## Routes and sections
 
 | Path | Section | What it does |
 |---|---|---|
-| `/settings/profile` | Profile | Change the display name, see the email verification state, resend verification when unverified |
+| `/settings/profile` | Profile | Change the display name; with email verification enabled, shows the verification state and lets unverified users resend the email |
 | `/settings/security` | Security | Change the password, change the email address, delete the account |
 | `/settings/sessions` | Sessions | See signed-in devices, revoke one or sign out all other devices |
 | `/settings/notifications` | Notifications | Subscribe and unsubscribe from mail; needs the `newsletter` module |

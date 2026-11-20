@@ -132,9 +132,10 @@ settings 行 → 解密 → 逐字段校验 → resolveSettingsValues → applyS
 缺的字段连位置一起报（`环境变量` / `数据库配置` / `源码配置`）。管理台概览与 `pnpm check`
 都读这份诊断。
 
-`auth.requireEmailVerification` 是**安全控制**，不是邮件开关：下游把邮箱当身份依据
-（支付渠道的 `customerEmail`、`ADMIN_EMAILS`）。要求验证但邮件未配齐时，`auth` 报
-`incomplete`、认证 API 返回 503，不会自动降级为免验证登录。
+`auth.requireEmailVerification` 默认关闭：注册即登录，不发验证邮件。设为开启后它同时是
+**安全控制**，不是邮件开关：下游把邮箱当身份依据（支付渠道的 `customerEmail`、
+`ADMIN_EMAILS`）。要求验证但邮件未配齐时，`auth` 报 `incomplete`、认证 API 返回 503，
+不会自动降级为免验证登录。
 
 ## 不在注册表里的结构值
 

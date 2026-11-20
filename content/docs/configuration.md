@@ -151,7 +151,8 @@ APIs return `503 SERVICE_UNAVAILABLE` while pages and navigation remain visible.
 which fields are missing and where they belong (`环境变量` / `数据库配置` / `源码配置`).
 The admin overview and `pnpm check` both consume that diagnosis.
 
-`auth.requireEmailVerification` is a **security control**, not a mail toggle: downstream code
+`auth.requireEmailVerification` defaults to off: sign-up signs the user in and sends no
+verification email. Once enabled it is a **security control**, not a mail toggle: downstream code
 treats the email as an identity anchor (payment `customerEmail`, `ADMIN_EMAILS`). If
 verification is required while mail is incomplete, `auth` reports `incomplete` and auth APIs
 return 503 — it never silently downgrades to unverified sign-in.

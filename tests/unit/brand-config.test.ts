@@ -48,7 +48,7 @@ describe('websiteConfig 品牌信息', () => {
     expect(config.payment.provider).toBe('stripe')
     expect(config.notification.provider).toBe('discord')
     expect(config.analytics.providers).toEqual(['ga'])
-    expect(config.auth.requireEmailVerification).toBe(true)
+    expect(config.auth.requireEmailVerification).toBe(false)
     expect(config.social).toEqual({})
     expect(config.ui).toEqual({
       defaultTheme: 'system',

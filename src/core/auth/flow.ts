@@ -18,6 +18,17 @@ export function requiresEmailVerification(config: WebsiteConfig = websiteConfig)
 }
 
 /**
+ * 是否发送验证邮件。注册、登录重发与手动重发共用此判定。
+ *
+ * 不能只看 `mail.enabled`：邮件模块开着不等于要验证邮箱，没要求验证时发信只会
+ * 让用户收到一封点不点都无所谓的邮件。也不能只看 `requireEmailVerification`：
+ * 邮件模块关闭时 better-auth 仍会调用发送回调，只是必然失败并刷日志。
+ */
+export function sendsVerificationEmail(config: WebsiteConfig = websiteConfig): boolean {
+  return requiresEmailVerification(config) && config.mail.enabled
+}
+
+/**
  * 是否启用邮箱 + 密码登录。与 `getAuth` 的 `emailAndPassword.enabled` 同源。
  *
  * 登录 / 注册页据此隐藏邮箱表单；关闭后页面只保留社交登录。

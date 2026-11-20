@@ -10,13 +10,13 @@ updated: 2026-11-19
 个人中心是登录后的账号设置区，地址在 `/{locale}/settings/*`，入口在导航栏的用户菜单里。
 未登录访问会被重定向到 `/{locale}/auth/login`。
 
-![个人中心 · 资料页](/docs/screenshots/settings-profile.png "个人中心 · 资料：昵称与邮箱，邮箱未验证时提供验证入口")
+![个人中心 · 资料页](/docs/screenshots/settings-profile.png "个人中心 · 资料：昵称与邮箱；开启邮箱验证且未验证时提供验证入口")
 
 ## 路由与板块
 
 | 路径 | 板块 | 做什么 |
 |---|---|---|
-| `/settings/profile` | 资料 | 改昵称、看邮箱验证状态，未验证时可重发验证邮件 |
+| `/settings/profile` | 资料 | 改昵称；开启邮箱验证后显示验证状态，未验证时可重发验证邮件 |
 | `/settings/security` | 安全 | 改密码、换邮箱、注销账号 |
 | `/settings/sessions` | 登录设备 | 看已登录设备，单个吊销或一次性注销其它设备 |
 | `/settings/notifications` | 通知偏好 | 订阅与退订邮件，需 `newsletter` 模块 |

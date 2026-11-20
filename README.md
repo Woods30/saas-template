@@ -38,7 +38,7 @@ pnpm dev             # http://localhost:3000
 `pnpm db:seed` 把站点配置的六组默认值写进数据库；品牌名、支持邮箱可以直接在命令行
 给（`--brand` / `--email`），其余在后台「系统设置」页改。详见[文档站 · 网站配置](content/docs/configuration.zh.md)。
 
-当前默认启用 Resend 和注册邮箱验证。使用注册、登录前，在 `.env` 填写 `RESEND_API_KEY` 与已验证域名下的 `MAIL_FROM`，并确保 `BETTER_AUTH_URL` 与 `VITE_BASE_URL` 一致。缺少邮件配置时认证 API 返回 503；详见[Resend 接入](content/docs/email-resend.zh.md)。
+邮件模块默认开启，但**邮箱验证默认关闭**：注册后直接登录，不需要配置邮件服务。需要邮箱验证时，在后台「系统设置 → 认证」打开「注册后必须验证邮箱」，并配好 `RESEND_API_KEY` 与已验证域名下的 `MAIL_FROM`；缺少邮件配置时认证 API 返回 503。另请确保 `BETTER_AUTH_URL` 与 `VITE_BASE_URL` 一致（重置密码等邮件链接依赖它）；详见[Resend 接入](content/docs/email-resend.zh.md)。
 
 ## 改成你自己的项目
 

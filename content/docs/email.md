@@ -35,10 +35,12 @@ variables in `.env` are only initial values for `pnpm db:seed`.
 
 ## What you get once it is on
 
-- **Auth email**: with `auth.requireEmailVerification` at `true` (the default), sign-up sends a
+- **Auth email**: with `auth.requireEmailVerification` at `true`, sign-up sends a
   verification email, successful verification sends the welcome email, and password reset sends
-  the reset link. When mail is not fully configured, `auth` is flagged as a conflict and
-  `/api/auth/*` returns 503 — verification is **never** silently turned off.
+  the reset link. The flag defaults to `false`, in which case neither sign-up nor sign-in
+  sends a verification email; password reset is unaffected. When verification is enabled but mail
+  is not fully configured, `auth` is flagged as a conflict and `/api/auth/*` returns 503 —
+  verification is **never** silently turned off.
 - **Contact form**: with `contact.enabled` at `true`, submissions are sent to
   `mail.supportEmail`. It depends on the mail module being fully configured; otherwise
   `/api/contact` returns 503 rather than telling the visitor the message was delivered.
