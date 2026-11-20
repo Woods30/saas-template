@@ -52,6 +52,10 @@ function AdminLayout() {
       group,
       items: [
         { href: '/admin/payments', label: m['admin.nav.payments']() },
+        {
+          href: '/admin/manual-payments',
+          label: m['admin.nav.manual_payments'](),
+        },
         { href: '/admin/subscriptions', label: m['admin.nav.subscriptions']() },
         { href: '/admin/credits', label: m['admin.nav.credits']() },
       ],

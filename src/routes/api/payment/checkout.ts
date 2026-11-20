@@ -4,6 +4,11 @@ import { resolveCharge } from '@/server/payment/charge';
 import { getAuth } from '@/core/auth';
 import { getPricingProduct } from '@/config/pricing';
 import { getAllConfigs } from '@/modules/config/service';
+import {
+  createManualOrder,
+  MANUAL_PAYMENT_PROVIDER,
+  ManualPaymentError,
+} from '@/modules/manual-payments/service';
 import { createCheckout } from '@/modules/payment/service';
 import { localizedPath } from '@/lib/locale-path';
 import { enforceMinIntervalRateLimit } from '@/lib/rate-limit';
@@ -69,6 +74,33 @@ async function POST({ request }: { request: Request }) {
     // Catalog price for the chosen provider (CNY providers, admin test
     // amounts): see resolveCharge.
     const configs = await getAllConfigs();
+    const baseUrl = configs.app_url || 'http://localhost:3000';
+
+    // Manual payments: the payer transfers the money to a collection account
+    // and uploads a receipt. There is no external checkout session - the
+    // order is created here and the buyer is sent to its payment page.
+    const wantsManual =
+      payment_provider === MANUAL_PAYMENT_PROVIDER ||
+      (!payment_provider &&
+        configs.default_payment_provider === MANUAL_PAYMENT_PROVIDER);
+    if (wantsManual) {
+      try {
+        const created = await createManualOrder({
+          userId: session.user.id,
+          userEmail: session.user.email,
+          product,
+        });
+        return respData({
+          checkout_url: `${baseUrl}/settings/payments/${created.orderNo}`,
+        });
+      } catch (error) {
+        if (error instanceof ManualPaymentError) {
+          return respErr(error.message);
+        }
+        throw error;
+      }
+    }
+
     const charge = await resolveCharge({
       product,
       paymentProvider: payment_provider,
@@ -79,8 +111,7 @@ async function POST({ request }: { request: Request }) {
     const chargeAmount = charge.amount;
     const currency = charge.currency;
 
-    // Build success/cancel URLs — only accept same-origin redirects.
-    const baseUrl = configs.app_url || 'http://localhost:3000';
+    // Build success/cancel URLs - only accept same-origin redirects.
     const safeRedirectPath = safeSameOriginPath(
       redirect,
       '/settings/payments',

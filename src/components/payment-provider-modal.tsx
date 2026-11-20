@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog';
 
 export type PaymentProvider =
-  'stripe' | 'creem' | 'paypal' | 'alipay' | 'wechat';
+  'stripe' | 'creem' | 'paypal' | 'alipay' | 'wechat' | 'manual_payments';
 
 interface Props {
   open: boolean;
@@ -31,6 +31,7 @@ const providerLabel: Record<PaymentProvider, string> = {
   paypal: 'PayPal',
   alipay: 'Alipay',
   wechat: 'WeChat Pay',
+  manual_payments: 'Manual transfer',
 };
 
 export function PaymentProviderModal({

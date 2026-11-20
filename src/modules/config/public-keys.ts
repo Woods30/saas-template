@@ -18,6 +18,7 @@ export const PUBLIC_CONFIG_KEYS = [
   'credits_enabled',
   'billing_enabled',
   'payments_enabled',
+  'manual_payments_enabled',
   'apikeys_enabled',
   'tickets_enabled',
   // Custom URL schemes /auth-callback may hand a session token to.

@@ -39,6 +39,7 @@ const ALL_PROVIDERS: PaymentProvider[] = [
   'paypal',
   'alipay',
   'wechat',
+  'manual_payments',
 ];
 
 export function PricingSection({ title }: { title?: string } = {}) {

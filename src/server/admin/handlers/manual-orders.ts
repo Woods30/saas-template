@@ -2,7 +2,7 @@ import { and, count, desc, eq, type SQL } from 'drizzle-orm';
 
 import { db } from '@/core/db';
 import { manualPaymentDetail, order, user } from '@/config/db/schema';
-import { respData, respErr, respPage } from '@/lib/resp';
+import { respErr, respPage } from '@/lib/resp';
 import { keywordMatch } from '@/lib/sql-search';
 
 import type { AdminHandlerContext } from '../types';
@@ -63,25 +63,6 @@ export async function GET({ request }: AdminHandlerContext) {
       .offset((page - 1) * pageSize);
 
     return respPage(rows, totalResult.count);
-  } catch (error: any) {
-    return respErr(error.message || 'Internal error');
-  }
-}
-
-/** One order with its detail, for the review page. */
-export async function FIND({ request }: AdminHandlerContext) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const orderNo = searchParams.get('orderNo');
-    if (!orderNo) return respErr('orderNo is required');
-    const [row] = await db()
-      .select({ order, detail: manualPaymentDetail, user })
-      .from(order)
-      .innerJoin(manualPaymentDetail, eq(manualPaymentDetail.orderId, order.id))
-      .leftJoin(user, eq(order.userId, user.id))
-      .where(eq(order.orderNo, orderNo));
-    if (!row) return respErr('Order not found');
-    return respData(row);
   } catch (error: any) {
     return respErr(error.message || 'Internal error');
   }

@@ -190,6 +190,13 @@ function PaymentsPage() {
           >
             <ExternalLink className="size-3.5" />
           </a>
+        ) : o.paymentProvider === 'manual_payments' ? (
+          <Link
+            href={'/settings/payments/' + o.orderNo}
+            className="text-primary text-sm hover:underline"
+          >
+            {m['settings.payments.view_details']()}
+          </Link>
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
