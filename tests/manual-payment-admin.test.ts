@@ -241,6 +241,43 @@ test('orders are listed with their detail and approved through the API', async (
   assert.equal(detail.status, 'settled');
 });
 
+test('rejecting or approving as an exception requires a note', async () => {
+  const created = await makePendingOrder('u-api-note');
+
+  const rejectedWithoutNote = await executeAdmin(
+    findOperation('manual_order_review'),
+    { orderNo: created.orderNo, action: 'reject' },
+    writer,
+    'idem-review-note-1'
+  );
+  assert.equal(rejectedWithoutNote.status, 400);
+
+  const exceptionWithoutNote = await executeAdmin(
+    findOperation('manual_order_review'),
+    {
+      orderNo: created.orderNo,
+      action: 'approve_exception',
+      observedAmount: created.payableAmount,
+    },
+    writer,
+    'idem-review-note-2'
+  );
+  assert.equal(exceptionWithoutNote.status, 400);
+
+  // A plain approval still needs no note.
+  const plain = await executeAdmin(
+    findOperation('manual_order_review'),
+    {
+      orderNo: created.orderNo,
+      action: 'approve',
+      observedAmount: created.payableAmount,
+    },
+    writer,
+    'idem-review-note-3'
+  );
+  assert.equal(plain.status, 200);
+});
+
 test('review rejects a bad amount and refund closes the order', async () => {
   const created = await makePendingOrder('u-api-refund');
 

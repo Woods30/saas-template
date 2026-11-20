@@ -334,9 +334,16 @@ export const adminOperations: AdminOperation[] = [
         action: z.enum(['approve', 'approve_exception', 'reject']),
         observedAmount: z.number().int().min(1).max(100_000_000).optional(),
         externalReference: short.optional(),
+        // A plain approval needs no explanation; an exception or a rejection
+        // is a judgement call the payer may later ask about.
         reviewNote: text.optional(),
       })
       .strict()
+      .refine(
+        (value) =>
+          value.action === 'approve' || (value.reviewNote ?? '').trim() !== '',
+        { message: 'reviewNote is required for approve_exception and reject.' }
+      )
   ),
   op(
     'manual_order_refund',

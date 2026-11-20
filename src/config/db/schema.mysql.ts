@@ -757,10 +757,16 @@ export const manualPaymentDetail = table(
     settledAt: timestamp('settled_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
-    activeAmountKey: text('active_amount_key').generatedAlwaysAs(
+    // Bounded, not TEXT: MySQL cannot build a UNIQUE index on a generated
+    // TEXT column (ER 1170). 36-char account id + ':' + amount fits in 191.
+    activeAmountKey: varchar('active_amount_key', {
+      length: 191,
+    }).generatedAlwaysAs(
       sql`case when \`status\` in ('pending_payment','pending_verification','settling') then concat(\`account_id\`, ':', \`payable_amount\`) else null end`
     ),
-    settlingUserKey: text('settling_user_key').generatedAlwaysAs(
+    settlingUserKey: varchar('settling_user_key', {
+      length: 191,
+    }).generatedAlwaysAs(
       sql`case when \`status\` = 'settling' then \`user_id\` else null end`
     ),
   },

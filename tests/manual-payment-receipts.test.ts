@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -39,6 +39,7 @@ const { saveConfigs } = await import('../src/modules/config/service');
 const {
   createAccount,
   createManualOrder,
+  attachReceipt,
   submitReceipt,
   openReceipt,
   ManualPaymentError,
@@ -197,6 +198,110 @@ test('svg, non-images and files over 10MB are refused', async () => {
   );
 
   // Nothing was stored, so the order is still waiting for payment.
+  const [detail] = await db()
+    .select()
+    .from(schema.manualPaymentDetail)
+    .where(eq(schema.manualPaymentDetail.orderId, order.orderId));
+  assert.equal(detail.status, 'pending_payment');
+  assert.equal(detail.receiptKey, null);
+});
+
+test('a receipt that loses the race with expiry writes nothing', async () => {
+  const order = await makeOrder('u-race');
+
+  // Simulate the race: the order expired between the read in submitReceipt and
+  // the atomic write. The write must not resurrect the order on its own.
+  await db()
+    .update(schema.manualPaymentDetail)
+    .set({ status: 'expired' })
+    .where(eq(schema.manualPaymentDetail.orderId, order.orderId));
+  await db()
+    .update(schema.order)
+    .set({ status: 'failed' })
+    .where(eq(schema.order.id, order.orderId));
+
+  await assert.rejects(
+    attachReceipt({
+      orderId: order.orderId,
+      receiptKey: 'manual-receipts/x/race.png',
+      payerNote: null,
+      now: new Date(),
+    }),
+    (error: unknown) => error instanceof Error
+  );
+
+  const [row] = await db()
+    .select()
+    .from(schema.order)
+    .where(eq(schema.order.id, order.orderId));
+  assert.equal(row.status, 'failed');
+
+  const [detail] = await db()
+    .select()
+    .from(schema.manualPaymentDetail)
+    .where(eq(schema.manualPaymentDetail.orderId, order.orderId));
+  assert.equal(detail.status, 'expired');
+  assert.equal(detail.receiptKey, null);
+});
+
+test('a receipt is encrypted at rest and decrypts back to the image', async () => {
+  const order = await makeOrder('u-encrypted');
+  const plain = new Uint8Array(64).fill(7);
+
+  const { receiptKey } = await submitReceipt({
+    orderNo: order.orderNo,
+    userId: 'u-encrypted',
+    file: pngFile(64),
+  });
+  assert.ok(receiptKey.endsWith('.enc'), receiptKey);
+
+  // The bytes on disk are ciphertext: neither the image nor a known prefix.
+  const stored = new Uint8Array(await readFile(join(uploadDir, receiptKey)));
+  assert.notDeepEqual(stored, plain);
+  // IV + GCM tag are prepended, so the ciphertext is never the plain length.
+  assert.notEqual(stored.length, plain.length);
+
+  const opened = await openReceipt({
+    orderNo: order.orderNo,
+    userId: 'u-encrypted',
+    isAdmin: false,
+  });
+  assert.ok(opened);
+  assert.deepEqual(opened.body, plain);
+  assert.equal(opened.contentType, 'image/png');
+});
+
+test('a public storage domain without an encryption key refuses the receipt', async () => {
+  await saveConfigs({
+    r2_access_key: 'key',
+    r2_secret_key: 'secret',
+    r2_bucket_name: 'bucket',
+    r2_domain: 'https://cdn.example.com',
+  });
+  const order = await makeOrder('u-public');
+  const savedKey = process.env.CONFIG_ENCRYPTION_KEY;
+  delete process.env.CONFIG_ENCRYPTION_KEY;
+  try {
+    await assert.rejects(
+      submitReceipt({
+        orderNo: order.orderNo,
+        userId: 'u-public',
+        file: pngFile(),
+      }),
+      (error: unknown) =>
+        error instanceof ManualPaymentError &&
+        error.code === 'RECEIPT_STORAGE_NOT_PRIVATE'
+    );
+  } finally {
+    process.env.CONFIG_ENCRYPTION_KEY = savedKey;
+    await saveConfigs({
+      r2_access_key: '',
+      r2_secret_key: '',
+      r2_bucket_name: '',
+      r2_domain: '',
+    });
+  }
+
   const [detail] = await db()
     .select()
     .from(schema.manualPaymentDetail)

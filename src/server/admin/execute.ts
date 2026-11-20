@@ -92,7 +92,15 @@ export async function executeAdmin(
   idempotencyKey?: string | null
 ) {
   requirePermission(actor, operation.permission);
-  const input = operation.schema.parse(rawInput) as Record<string, unknown>;
+  // Validation failures answer 400 like every other rejection; executeAdmin
+  // returns a Response on every path, so a caller never has to catch.
+  let input: Record<string, unknown>;
+  try {
+    input = operation.schema.parse(rawInput) as Record<string, unknown>;
+  } catch (error) {
+    if (error instanceof z.ZodError) return adminErrorResponse(error);
+    throw error;
+  }
   if (!operation.readOnly && actor.tokenId && !idempotencyKey)
     throw new AdminError('Idempotency-Key is required for admin token writes');
   if (idempotencyKey && !/^[A-Za-z0-9_.:-]{8,128}$/.test(idempotencyKey))

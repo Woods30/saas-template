@@ -103,8 +103,14 @@ export async function reviewManualOrder(input: {
       'This order has expired; use approve_exception to settle it.'
     );
   }
+  // A rejection is reversible: the bank record may later show the money did
+  // arrive, and the operator corrects a mistake instead of asking the payer
+  // to pay twice. Only the explicit exception may do that.
+  const revivesRejected =
+    input.action === 'approve_exception' && detail.status === 'rejected';
   if (
     !expired &&
+    !revivesRejected &&
     detail.status !== 'pending_verification' &&
     detail.status !== 'pending_payment'
   ) {

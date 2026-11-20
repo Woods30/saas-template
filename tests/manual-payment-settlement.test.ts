@@ -243,6 +243,36 @@ test('reject closes the detail and fails the order', async () => {
   assert.equal(await grantCount(created.orderNo), 0);
 });
 
+test('a rejected order can still be settled with an exception', async () => {
+  const created = await makePaidCandidate('u-revive');
+  await submitReceipt({
+    orderNo: created.orderNo,
+    userId: 'u-revive',
+    file: pngFile(),
+  });
+  await reviewManualOrder({
+    orderNo: created.orderNo,
+    action: 'reject',
+    reviewerId: 'admin-1',
+    reviewNote: 'looked like the wrong amount',
+  });
+  assert.equal((await detailOf(created.orderId)).status, 'rejected');
+
+  // The bank statement later shows the money did arrive; the operator must be
+  // able to correct the mistake without a second order.
+  await reviewManualOrder({
+    orderNo: created.orderNo,
+    action: 'approve_exception',
+    reviewerId: 'admin-1',
+    observedAmount: created.payableAmount,
+    reviewNote: 'bank statement confirms the transfer',
+  });
+
+  assert.equal((await orderOf(created.orderId)).status, 'paid');
+  assert.equal((await detailOf(created.orderId)).status, 'settled');
+  assert.equal(await grantCount(created.orderNo), 1);
+});
+
 test('refunding a manual order rolls credits back exactly once', async () => {
   const created = await makePaidCandidate('u-refund');
   await submitReceipt({

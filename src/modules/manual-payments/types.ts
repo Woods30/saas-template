@@ -40,7 +40,8 @@ export type ManualPaymentErrorCode =
   | 'ORDER_NOT_FOUND'
   | 'ORDER_NOT_PAYABLE'
   | 'INVALID_TRANSITION'
-  | 'RECEIPT_REQUIRED';
+  | 'RECEIPT_REQUIRED'
+  | 'RECEIPT_STORAGE_NOT_PRIVATE';
 
 export class ManualPaymentError extends Error {
   readonly code: ManualPaymentErrorCode;

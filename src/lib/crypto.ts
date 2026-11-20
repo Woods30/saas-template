@@ -120,3 +120,65 @@ export async function decryptSecret(value: string): Promise<string | null> {
     return null;
   }
 }
+
+/**
+ * Encrypt raw bytes (payment receipts) with the same key as the settings
+ * secrets. Unlike {@link encryptSecret} this never passes data through: a
+ * receipt that cannot be encrypted must not be stored in the clear, so a
+ * missing key is an error here, and the caller decides what to do about it.
+ */
+export async function encryptBytes(
+  plain: Uint8Array
+): Promise<Uint8Array<ArrayBuffer>> {
+  const secret = getEncryptionSecret();
+  if (!secret) throw new Error('CONFIG_ENCRYPTION_KEY is not configured');
+
+  // Copy into an ArrayBuffer-backed view: Web Crypto's BufferSource does not
+  // accept views over a SharedArrayBuffer, which is what an arbitrary
+  // Uint8Array is typed as.
+  const data = new Uint8Array(plain);
+  const key = await deriveKey(secret);
+  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+  const sealed = new Uint8Array(
+    await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data)
+  );
+  const ciphertext = sealed.subarray(0, sealed.length - TAG_LENGTH);
+  const tag = sealed.subarray(sealed.length - TAG_LENGTH);
+
+  const packed = new Uint8Array(IV_LENGTH + TAG_LENGTH + ciphertext.length);
+  packed.set(iv, 0);
+  packed.set(tag, IV_LENGTH);
+  packed.set(ciphertext, IV_LENGTH + TAG_LENGTH);
+  return packed;
+}
+
+/** Reverse of {@link encryptBytes}; throws when the key is missing or wrong. */
+export async function decryptBytes(
+  packed: Uint8Array
+): Promise<Uint8Array<ArrayBuffer>> {
+  const secret = getEncryptionSecret();
+  if (!secret) throw new Error('CONFIG_ENCRYPTION_KEY is not configured');
+  if (packed.length <= IV_LENGTH + TAG_LENGTH) {
+    throw new Error('Encrypted object is too short');
+  }
+
+  const iv = new Uint8Array(packed.subarray(0, IV_LENGTH));
+  const tag = packed.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
+  const ciphertext = packed.subarray(IV_LENGTH + TAG_LENGTH);
+  const sealed = new Uint8Array(ciphertext.length + TAG_LENGTH);
+  sealed.set(ciphertext, 0);
+  sealed.set(tag, ciphertext.length);
+
+  const key = await deriveKey(secret);
+  const plain = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    sealed
+  );
+  return new Uint8Array(plain);
+}
+
+/** Whether receipt bytes can be encrypted at rest right now. */
+export function canEncryptObjects(): boolean {
+  return getEncryptionSecret() !== undefined;
+}

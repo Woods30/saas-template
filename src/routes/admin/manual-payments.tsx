@@ -311,6 +311,33 @@ function ManualPaymentsPage() {
       ),
     },
     {
+      header: m['admin.manual_payments.receipt'](),
+      cell: (o) => (
+        <div className="flex max-w-[220px] flex-col gap-1">
+          {o.detail.receiptKey ? (
+            <a
+              href={`/api/payment/manual/receipt/${encodeURIComponent(o.orderNo)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary text-xs underline-offset-2 hover:underline"
+            >
+              {m['admin.manual_payments.view_receipt']()}
+            </a>
+          ) : (
+            <span className="text-muted-foreground text-xs">—</span>
+          )}
+          {o.detail.payerNote && (
+            <span
+              className="text-muted-foreground text-xs break-words"
+              title={o.detail.payerNote}
+            >
+              {o.detail.payerNote}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
       header: m['admin.manual_payments.actions'](),
       className: 'w-[160px]',
       cell: (o) => (
@@ -676,34 +703,55 @@ function ManualPaymentsPage() {
               </Button>
               <Button
                 type="button"
+                variant="outline"
+                disabled={review.isPending}
+                onClick={() => {
+                  if (!reviewing) return;
+                  const amount = Number(observedAmount);
+                  if (!Number.isInteger(amount) || amount <= 0) {
+                    toast.error(m['admin.manual_payments.amount_invalid']());
+                    return;
+                  }
+                  const note = reviewNote.trim();
+                  if (note === '') {
+                    // The server requires a reason for an exception; asking
+                    // here keeps the operator from losing the dialog to a 400.
+                    toast.error(
+                      m['admin.manual_payments.review_note_required']()
+                    );
+                    return;
+                  }
+                  review.mutate({
+                    orderNo: reviewing.orderNo,
+                    action: 'approve_exception',
+                    observedAmount: amount,
+                    externalReference: externalReference.trim() || undefined,
+                    reviewNote: note,
+                  });
+                }}
+              >
+                {m['admin.manual_payments.approve_exception']()}
+              </Button>
+              <Button
+                type="button"
                 variant="destructive"
                 disabled={review.isPending}
                 onClick={() => {
                   if (!reviewing) return;
+                  const note = reviewNote.trim();
+                  if (note === '') {
+                    toast.error(
+                      m['admin.manual_payments.review_note_required']()
+                    );
+                    return;
+                  }
                   review.mutate({
                     orderNo: reviewing.orderNo,
                     action: 'reject',
-                    reviewNote: reviewNote.trim() || undefined,
+                    reviewNote: note,
                   });
                 }}
               >
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={review.isPending}
-                  onClick={() => {
-                    if (!reviewing) return;
-                    review.mutate({
-                      orderNo: reviewing.orderNo,
-                      action: 'approve_exception',
-                      observedAmount: Number(observedAmount),
-                      externalReference: externalReference.trim() || undefined,
-                      reviewNote: reviewNote.trim() || undefined,
-                    });
-                  }}
-                >
-                  {m['admin.manual_payments.approve_exception']()}
-                </Button>
                 {m['admin.manual_payments.reject']()}
               </Button>
               <Button type="submit" disabled={review.isPending}>

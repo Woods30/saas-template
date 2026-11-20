@@ -331,13 +331,13 @@ test('admin operations require dedicated permissions; concurrent conclusions can
     }),
   ]);
   assert.equal(conclusions.filter(Boolean).length, 1);
-  await assert.rejects(() =>
-    executeAdmin(
-      findOperation('operations_experiments_conclude'),
-      { id: entry.id, status: 'completed', result: '' },
-      { userId: 'buyer', permissions: ['admin.operations.write'] }
-    )
+  // Validation failures come back as a 400 response, not a thrown error.
+  const invalidConclusion = await executeAdmin(
+    findOperation('operations_experiments_conclude'),
+    { id: entry.id, status: 'completed', result: '' },
+    { userId: 'buyer', permissions: ['admin.operations.write'] }
   );
+  assert.equal(invalidConclusion.status, 400);
 });
 
 test('visitor endpoint rejects cross-origin requests and forged user IDs; consent stops collection', async () => {

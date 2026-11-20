@@ -161,6 +161,18 @@ export class StorageManager {
     return provider.getObject(options);
   }
 
+  /**
+   * True when the default provider serves objects from a public domain, i.e.
+   * anything written to it is readable by anyone who guesses or sees the key.
+   * Callers handling private objects must account for this.
+   */
+  isPubliclyReadable(): boolean {
+    const provider = this.ensureDefaultProvider();
+    return Boolean(
+      (provider.configs as { publicDomain?: string }).publicDomain
+    );
+  }
+
   // get public url using default provider (if supported)
   getPublicUrl(options: { key: string; bucket?: string }): string | undefined {
     const provider = this.ensureDefaultProvider();

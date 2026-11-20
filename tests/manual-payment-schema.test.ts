@@ -131,6 +131,19 @@ test('a user has at most one settling order', async () => {
   await insertDetail({ userId: 'u1', status: 'settled' });
 });
 
+test('the MySQL generated index columns are bounded varchar, not text', async () => {
+  // MySQL refuses a UNIQUE index on a generated TEXT column (ER 1170: BLOB/TEXT
+  // column used in key specification without a key length). The two keys that
+  // carry the partial uniques must therefore be VARCHAR(191).
+  const mysql = await import('../src/config/db/schema.mysql');
+  const detail = mysql.manualPaymentDetail as unknown as Record<
+    string,
+    { getSQLType: () => string }
+  >;
+  assert.equal(detail.activeAmountKey.getSQLType(), 'varchar(191)');
+  assert.equal(detail.settlingUserKey.getSQLType(), 'varchar(191)');
+});
+
 test('deleting an order removes its manual payment detail', async () => {
   const orderId = await insertDetail({ userId: 'u2' });
   await db().delete(schema.order).where(eq(schema.order.id, orderId));

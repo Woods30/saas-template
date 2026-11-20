@@ -1534,5 +1534,8 @@
   "docs.updated": "Updated",
   "docs.sidebar_title": "Documentation",
   "docs.sidebar_open": "Open navigation",
-  "docs.sidebar_close": "Close navigation"
+  "docs.sidebar_close": "Close navigation",
+  "admin.manual_payments.review_note_required": "Enter a note explaining this decision.",
+  "admin.manual_payments.receipt": "Receipt",
+  "admin.manual_payments.view_receipt": "View receipt"
 }

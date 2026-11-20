@@ -223,7 +223,8 @@ test('invalid keys, foreign hosts, unsafe protocols, credentials, and oversized 
     throw new Error('Unexpected network request');
   });
   await assert.rejects(saveIndexNowKey('../bad'), /Invalid/);
-  await assert.rejects(call('indexnow_update', { key: 'short' }));
+  // Validation failures come back as a 400 response, not a thrown error.
+  assert.equal((await call('indexnow_update', { key: 'short' })).status, 400);
   for (const url of [
     'https://other.example.com/page',
     'ftp://indexnow.example.com/page',
