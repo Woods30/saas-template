@@ -67,3 +67,6 @@ package-lock.json
 
 # Runtime image uploads (no-storage local fallback)
 /public/uploads/
+
+# Superpowers SDD workspace (scratch, per-plan)
+.superpowers/
