@@ -87,4 +87,9 @@ export const envConfigs: Record<string, string> = {
 
   // Locale (public)
   locale: publicEnv('VITE_DEFAULT_LOCALE') ?? 'en',
+
+  // Documentation (public)
+  // The docs site is off unless the admin turns it on; the content
+  // directory ships empty.
+  docs_enabled: publicEnv('VITE_DOCS_ENABLED') ?? 'false',
 };

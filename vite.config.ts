@@ -84,11 +84,13 @@ export default defineConfig({
   plugins: [
     // MDX must run before the react plugin so JSX in compiled MDX gets transformed.
     // .claude/ holds agent skills served verbatim (`?raw`) — never compile them.
+    // content/docs/ holds the documentation as plain markdown — the docs
+    // loader reads it as raw text (`?raw`), so it must not be compiled either.
     {
       enforce: 'pre',
       ...mdx({
         providerImportSource: '@mdx-js/react',
-        exclude: /\/\.claude\//,
+        exclude: [/\/\.claude\//, /\/content\/docs\//],
       }),
     },
     tailwindcss(),

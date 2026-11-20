@@ -54,7 +54,10 @@ const DEFAULT_FOOTER_SOCIALS: FooterSocial[] = [
 
 const rootRoute = getRouteApi('__root__');
 
-function defaultFooterColumns(cookieConsentEnabled: boolean): FooterColumn[] {
+function defaultFooterColumns(
+  cookieConsentEnabled: boolean,
+  docsEnabled: boolean
+): FooterColumn[] {
   return [
     {
       title: m['landing.footer.feature'](),
@@ -71,6 +74,8 @@ function defaultFooterColumns(cookieConsentEnabled: boolean): FooterColumn[] {
       title: m['landing.footer.resources'](),
       links: [
         { label: m['landing.footer.blog'](), href: '/blog' },
+        // The documentation site is a module the admin can switch off.
+        ...(docsEnabled ? [{ label: m['docs.nav'](), href: '/docs' }] : []),
         {
           label: m['landing.footer.github'](),
           href: 'https://github.com',
@@ -109,10 +114,11 @@ export function SiteFooter({
   copyright?: string;
   badges?: ReactNode;
 }) {
-  const cookieConsentEnabled =
-    !!rootRoute.useLoaderData()?.cookieConsentEnabled;
+  const rootData = rootRoute.useLoaderData();
+  const cookieConsentEnabled = !!rootData?.cookieConsentEnabled;
+  const docsEnabled = !!rootData?.docsEnabled;
   tagline ??= m['landing.footer.tagline']();
-  columns ??= defaultFooterColumns(cookieConsentEnabled);
+  columns ??= defaultFooterColumns(cookieConsentEnabled, docsEnabled);
   socials ??= DEFAULT_FOOTER_SOCIALS;
   const year = new Date().getFullYear();
 

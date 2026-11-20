@@ -1517,5 +1517,22 @@
   "admin.manual_payments.status_requires_refund": "Requires refund",
   "admin.nav.manual_payments": "Manual payments",
   "common.pricing.manual_payments": "Manual transfer",
-  "settings.payments.view_details": "View details"
+  "settings.payments.view_details": "View details",
+  "docs.nav": "Docs",
+  "docs.title": "Documentation",
+  "docs.description": "Guides and reference for building with this template.",
+  "docs.empty": "No documentation has been published yet.",
+  "docs.not_found": "Document not found",
+  "docs.search_label": "Search documentation",
+  "docs.search_placeholder": "Search documentation",
+  "docs.search_hint": "Type a keyword to search the documentation.",
+  "docs.search_empty": "No document matches this keyword.",
+  "docs.on_this_page": "On this page",
+  "docs.previous": "Previous",
+  "docs.next": "Next",
+  "docs.next_steps": "Next steps",
+  "docs.updated": "Updated",
+  "docs.sidebar_title": "Documentation",
+  "docs.sidebar_open": "Open navigation",
+  "docs.sidebar_close": "Close navigation"
 }

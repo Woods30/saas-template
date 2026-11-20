@@ -62,6 +62,8 @@ const getAnalyticsConfigs = createServerFn().handler(async () => {
   const plausibleSrc = safeEmbedSetting('plausible_src', rawPlausibleSrc);
   const plausibleOff = !!rawPlausibleSrc && !plausibleSrc;
   const cookieConsentEnabled = configs.cookie_consent_enabled === 'true';
+  // Documentation site: off unless the admin turns it on.
+  const docsEnabled = configs.docs_enabled === 'true';
   // Appearance: off by default, and then the code's own styles apply
   // untouched. On: the admin's site settings; users may override only the
   // theme color (cookie) when allowed. Everything goes through the allow-list.
@@ -94,6 +96,7 @@ const getAnalyticsConfigs = createServerFn().handler(async () => {
     userTheme: user.theme,
     userThemeEnabled,
     cookieConsentEnabled,
+    docsEnabled,
     // The visitor's saved choice, so SSR can render consented scripts.
     cookieConsent: cookieConsentEnabled
       ? parseCookieConsent(getCookie('cookie_consent'))

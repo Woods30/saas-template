@@ -74,6 +74,12 @@ export function getSettingGroups(): SettingGroup[] {
       description: 'Theme color, font, font size and sidebar layout',
       tab: 'general',
     },
+    {
+      name: 'docs',
+      title: 'Documentation',
+      description: 'Show the documentation site at /docs',
+      tab: 'general',
+    },
 
     // Users
     {
@@ -320,6 +326,17 @@ export function getSettings(): Setting[] {
       placeholder: 'https://example.com',
       group: 'appinfo',
       tab: 'general',
+    },
+
+    // ─── General / Documentation ─────────────────────────────────────
+    {
+      name: 'docs_enabled',
+      title: 'Enable documentation',
+      type: 'switch',
+      group: 'docs',
+      tab: 'general',
+      // Off by default: the content directory ships empty.
+      defaultValue: 'false',
     },
 
     // ─── General / Appearance ────────────────────────────────────────

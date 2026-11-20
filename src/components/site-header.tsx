@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { getRouteApi } from '@tanstack/react-router';
 import { ArrowRight, Menu, X } from 'lucide-react';
 
 import { useSession } from '@/core/auth/client';
@@ -29,8 +30,21 @@ const DEFAULT_NAV_LINKS: NavLink[] = [
   { href: '/blog', label: m['landing.nav.blog']() },
 ];
 
+/** The documentation link — only shown when the documentation is enabled. */
+const DOCS_NAV_LINK: NavLink = {
+  href: '/docs',
+  label: m['docs.nav'](),
+};
+
+const rootRoute = getRouteApi('__root__');
+
 export function SiteHeader({ navLinks }: { navLinks?: NavLink[] }) {
-  const links = navLinks ?? DEFAULT_NAV_LINKS;
+  // The documentation site is a module the admin can switch off — then it
+  // is not part of the navigation.
+  const docsEnabled = !!rootRoute.useLoaderData()?.docsEnabled;
+  const links =
+    navLinks ??
+    (docsEnabled ? [...DEFAULT_NAV_LINKS, DOCS_NAV_LINK] : DEFAULT_NAV_LINKS);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { data: session } = useSession();
   const user = session?.user;
