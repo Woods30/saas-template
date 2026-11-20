@@ -100,12 +100,6 @@ export function getSettingGroups(): SettingGroup[] {
       description: 'Optional pages in the user center',
       tab: 'user',
     },
-    {
-      name: 'guest_post',
-      title: 'Guest Posts',
-      description: 'Paid articles from outside authors',
-      tab: 'user',
-    },
 
     // Auth
     {
@@ -449,23 +443,6 @@ export function getSettings(): Setting[] {
       group: 'user_features',
       tab: 'user',
       defaultValue: String(USER_FEATURES.tickets_enabled),
-    },
-
-    // ─── Users / Guest posts ─────────────────────────────────────────
-    {
-      name: 'guest_post_enabled',
-      title: 'Accept guest posts',
-      type: 'switch',
-      group: 'guest_post',
-      tab: 'user',
-    },
-    {
-      name: 'guest_post_min_words',
-      title: 'Minimum words',
-      type: 'number',
-      placeholder: '300',
-      group: 'guest_post',
-      tab: 'user',
     },
 
     // ─── Users / User Roles ──────────────────────────────────────────
@@ -1183,15 +1160,6 @@ export function getSettings(): Setting[] {
       group: 'notify_settings',
       tab: 'notify',
       defaultValue: 'false',
-    },
-    {
-      name: 'notify_guest_post_enabled',
-      title: 'Guest posts',
-      type: 'switch',
-      group: 'notify_settings',
-      tab: 'notify',
-      // On by default: a new submission is money waiting for review.
-      defaultValue: 'true',
     },
     {
       name: 'notify_timezone',

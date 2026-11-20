@@ -241,7 +241,7 @@ Removes every consumer of the feature while `guest_post` still exists in the sch
 - Consumes: Task 1's Biome config (all new code must be Biome-clean).
 - Produces: no route, hook, block, module or notify channel mentions guest posts; `post.type` no longer has a `'guest'` member; `settings.ts` no longer declares `guest_post_enabled`, `guest_post_min_words`, `notify_guest_post_enabled` or the `guest_post` setting group.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/guest-post-removal.test.ts`:
 
@@ -273,12 +273,12 @@ test('the public blog can only surface article rows', async () => {
 
 `PUBLIC_BLOG_TYPES` is the renamed, exported `BLOG_TYPES`. Today it is `[ARTICLE, GUEST]`, so a migrated database still full of `type='guest'` rows would keep publishing them; after this task it is `[ARTICLE]` and those rows simply stop appearing in the blog list. That is the intended degradation — invisible, never a crash. No sanitising helper is needed: the existing `inArray(post.type, PUBLIC_BLOG_TYPES)` filter already does the work.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --import tsx --test tests/guest-post-removal.test.ts`
 Expected: FAIL on the first assertion (`settings.ts` still declares the switch); the third test fails with `normalizePostType` not exported.
 
-- [ ] **Step 3: Delete the feature and add `normalizePostType`**
+- [x] **Step 3: Delete the feature and add `normalizePostType`**
 
 Delete the files listed above. Then:
 
@@ -295,17 +295,17 @@ Delete the files listed above. Then:
 - `src/routes/admin/route.tsx`, `src/routes/settings/route.tsx`, `src/routes/settings/index.tsx`, `src/routes/settings/payments.tsx`: drop the nav entries and the guest-post summary cards.
 - `src/routes/api/payment/checkout.ts`, `src/routes/api/user/orders.ts`, `src/server/admin/handlers/posts.ts`, `src/server/admin/handlers/settings-test.ts`: drop the guest-post branches and test fixtures.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `node --import tsx --test tests/guest-post-removal.test.ts`
 Expected: PASS, 3/3.
 
-- [ ] **Step 5: Verify nothing regressed**
+- [x] **Step 5: Verify nothing regressed**
 
 Run: `pnpm typecheck && pnpm test && pnpm build`
 Expected: green. Test count drops by the two deleted files.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A

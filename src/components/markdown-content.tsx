@@ -30,39 +30,13 @@ md.renderer.rules.heading_open = function (tokens, idx) {
   return `<h${level}>`;
 };
 
-/**
- * `href` tagged with utm_source/utm_medium, so the linked site can see the
- * traffic in its analytics. Links that already carry any utm_ parameter (the
- * author's own tracking) and URLs that don't parse are left as they are.
- */
-function withUtm(href: string, source: string, medium: string) {
-  try {
-    const url = new URL(href);
-    for (const key of url.searchParams.keys()) {
-      if (key.toLowerCase().startsWith('utm_')) return href;
-    }
-    url.searchParams.set('utm_source', source);
-    url.searchParams.set('utm_medium', medium);
-    return url.toString();
-  } catch {
-    return href;
-  }
-}
-
-// External links open in a new tab with nofollow; in paid content
-// (env.sponsored) also rel="sponsored", as search engines require.
-// env.utmSource tags them for the linked site's analytics.
-md.renderer.rules.link_open = function (tokens, idx, options, env, renderer) {
+// External links open in a new tab and are nofollowed, so a link posted by
+// anyone with write access never passes ranking signal to its target.
+md.renderer.rules.link_open = function (tokens, idx, options, _env, renderer) {
   const token = tokens[idx];
   const href = token.attrGet('href');
   if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
-    if (env?.utmSource) {
-      token.attrSet('href', withUtm(href, env.utmSource, env.utmMedium));
-    }
-    token.attrSet(
-      'rel',
-      env?.sponsored ? 'sponsored nofollow noopener' : 'nofollow noopener'
-    );
+    token.attrSet('rel', 'nofollow noopener');
     token.attrSet('target', '_blank');
   }
   return renderer.renderToken(tokens, idx, options);
@@ -92,23 +66,11 @@ export const markdownStyles = cn(
 export function MarkdownContent({
   content,
   className,
-  sponsored = false,
-  utm,
 }: {
   content: string;
   className?: string;
-  /** Paid content: external links get rel="sponsored". */
-  sponsored?: boolean;
-  /** Tag external links with utm_source/utm_medium (unless already tagged). */
-  utm?: { source: string; medium: string };
 }) {
-  const html = content
-    ? md.render(content, {
-        sponsored,
-        utmSource: utm?.source,
-        utmMedium: utm?.medium,
-      })
-    : '';
+  const html = content ? md.render(content) : '';
 
   return (
     <div

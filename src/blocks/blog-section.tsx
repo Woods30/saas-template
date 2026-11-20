@@ -36,7 +36,6 @@ export function BlogSection({ posts }: { posts: BlogPost[] }) {
               date={formatPostDate(post.createdAt, locale)}
               authorName={post.authorName}
               authorImage={post.authorImage}
-              badge={post.sponsored ? m['blog.sponsored']() : undefined}
             />
           ))}
         </div>

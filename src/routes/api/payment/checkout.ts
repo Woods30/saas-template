@@ -67,11 +67,6 @@ async function POST({ request }: { request: Request }) {
     if (!product) {
       return respErr('Unknown product');
     }
-    // Guest post packages are bought against an approved submission only.
-    if (product.kind === 'guest_post') {
-      return respErr('Unknown product');
-    }
-
     // Catalog price for the chosen provider (CNY providers, admin test
     // amounts): see resolveCharge.
     const configs = await getAllConfigs();

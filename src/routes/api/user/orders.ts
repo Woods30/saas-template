@@ -1,9 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { and, count, desc, eq, inArray, like, or, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, like, or, type SQL } from 'drizzle-orm';
 
 import { getAuth } from '@/core/auth';
 import { db } from '@/core/db';
-import { guestPost, order, post } from '@/config/db/schema';
+import { order } from '@/config/db/schema';
 import { respErr, respPage } from '@/lib/resp';
 
 async function GET({ request }: { request: Request }) {
@@ -66,44 +66,8 @@ async function GET({ request }: { request: Request }) {
       .limit(pageSize)
       .offset(offset);
 
-    // What a reference points to, e.g. the guest post an order paid for
-    // (the buyer's own only).
-    const refs: (string | null)[] = rows.map(
-      (r: { reference: string | null }) => r.reference
-    );
-    const guestIds = refs
-      .filter((r): r is string => !!r?.startsWith('guest_post:'))
-      .map((r) => r.slice('guest_post:'.length));
-    const titles = new Map<string, string>();
-    if (guestIds.length) {
-      const found = await db()
-        .select({ id: guestPost.id, title: post.title })
-        .from(guestPost)
-        .innerJoin(post, eq(post.id, guestPost.postId))
-        .where(
-          and(
-            inArray(guestPost.id, guestIds),
-            eq(guestPost.userId, session.user.id)
-          )
-        );
-      for (const g of found as { id: string; title: string | null }[]) {
-        titles.set(g.id, g.title || '');
-      }
-    }
     const items = rows.map(
-      ({
-        reference,
-        ...r
-      }: { reference: string | null } & Record<string, unknown>) => {
-        const id = reference?.startsWith('guest_post:')
-          ? reference.slice('guest_post:'.length)
-          : null;
-        return {
-          ...r,
-          guestPost:
-            id && titles.has(id) ? { id, title: titles.get(id) || '' } : null,
-        };
-      }
+      ({ reference: _reference, ...r }: Record<string, unknown>) => r
     );
 
     return respPage(items, totalResult.count);

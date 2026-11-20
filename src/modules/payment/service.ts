@@ -34,15 +34,8 @@ import {
   calculateCreditExpirationTime,
   planDeductForRefund,
 } from '@/modules/credits/service';
-import {
-  planGuestPostFulfillment,
-  planGuestPostRefund,
-} from '@/modules/guest-posts/service';
 import { MANUAL_PAYMENT_PROVIDER } from '@/modules/manual-payments/types';
-import {
-  notifyGuestPostSubmitted,
-  notifyPaymentSuccess,
-} from '@/modules/notify/service';
+import { notifyPaymentSuccess } from '@/modules/notify/service';
 import {
   findByProviderSubscriptionId,
   findBySubscriptionNo,
@@ -459,9 +452,6 @@ export async function settleCheckoutOrder(
       status: 'active',
     };
 
-    // Guest post orders submit their draft for review in the same write.
-    const guestPost = planGuestPostFulfillment(existingOrder);
-
     let claimed = false;
     try {
       await atomic((q) => [
@@ -483,9 +473,7 @@ export async function settleCheckoutOrder(
         // 2. Subscription, 3. credits.
         newSub && q.insert(subscription).values(newSub),
         newCredit && q.insert(credit).values(newCredit),
-        // 4. Guest post: the paid draft enters review.
-        ...(guestPost ? guestPost.steps(q) : []),
-        // 5. Caller's own steps (manual-payment detail), same commit.
+        // 4. Caller's own steps (manual-payment detail), same commit.
         ...(extraSteps ? extraSteps(q) : []),
       ]);
       claimed = true;
@@ -498,7 +486,6 @@ export async function settleCheckoutOrder(
     // and only from the request that claimed them.
     if (claimed) {
       await notifyPaymentSuccess(existingOrder.orderNo);
-      if (guestPost) await notifyGuestPostSubmitted(guestPost.guestPostId);
     }
   } else if (
     session.paymentStatus === PaymentStatus.FAILED ||
@@ -900,8 +887,6 @@ export async function refundOrder(params: {
         message: 'Order refund claim lost',
       }),
       ...deduction.steps(q),
-      // A refunded guest post order rejects (or takes down) its submission.
-      ...planGuestPostRefund(existingOrder.orderNo)(q),
       // A refunded manual order closes its detail in the same commit.
       ...(isManual
         ? [

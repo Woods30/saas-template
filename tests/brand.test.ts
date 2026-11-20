@@ -25,7 +25,16 @@ test('no upstream brand string survives outside the design docs', () => {
   try {
     out = execFileSync(
       'git',
-      ['grep', '-il', 'shipany', '--', '.', ':!docs/superpowers'],
+      // The needle itself lives in this file, so it excludes itself.
+      [
+        'grep',
+        '-il',
+        'shipany',
+        '--',
+        '.',
+        ':!docs/superpowers',
+        ':!tests/brand.test.ts',
+      ],
       { encoding: 'utf8', cwd: new URL('..', import.meta.url) }
     );
   } catch (e) {

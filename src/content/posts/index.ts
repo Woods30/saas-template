@@ -37,27 +37,11 @@ export type BlogPost = {
   authorName?: string;
   authorImage?: string;
   source: 'local' | 'db';
-  /** A paid guest post: shown with a Sponsored label, links rel="sponsored". */
-  sponsored?: boolean;
 };
 
 export type BlogPostDetail = BlogPost & {
   /** Raw markdown — set for database posts */
   content?: string;
-  /** An unpublished guest post shown to its author or a reviewer. */
-  preview?: boolean;
-  /** Preview only: where the submission stands, for the banner's next step. */
-  previewInfo?: {
-    guestPostId: string;
-    status: string;
-    isAuthor: boolean;
-    /** Package price, formatted on the client. */
-    priceInCents: number;
-    currency: string;
-    /** Submit rules, checked before checkout. */
-    minWords: number;
-    maxLinks: number;
-  };
 };
 
 // Eagerly bundle the local MDX posts (small markdown files), mirroring the

@@ -17,20 +17,15 @@ import {
 } from '@/core/notify';
 import { envConfigs } from '@/config';
 import {
-  guestPost,
   type Order,
   order,
-  post,
   subscription,
   type User,
   user,
 } from '@/config/db/schema';
-import { getPricingProduct } from '@/config/pricing';
 import { getAllConfigs } from '@/modules/config/service';
 
 import {
-  GUEST_POST_EVENT_LABELS,
-  GUEST_POST_TEMPLATES,
   type NotifyLanguage,
   normalizeNotifyLanguage,
   PAYMENT_TEMPLATES,
@@ -568,178 +563,6 @@ export async function notifyTicketEvent(params: {
   } catch (error) {
     console.error('[notify] ticket notification failed', error);
   }
-}
-
-type GuestPostEvent = 'submitted' | 'resubmitted';
-
-function buildGuestPostVars(params: {
-  event: GuestPostEvent;
-  guestPost: {
-    id: string;
-    title: string;
-    slug: string;
-    packageName: string;
-    submittedAt: Date | null;
-  };
-  /** What the author paid (the order), if known. */
-  paid?: { amount: number; currency: string } | null;
-  user?: TicketAuthor | null;
-  configs: Record<string, string>;
-}) {
-  const { guestPost: g, user: u, configs } = params;
-  const language = normalizeNotifyLanguage(configs.notify_language);
-  const timeZone = configs.notify_timezone?.trim() || 'Asia/Shanghai';
-  const base = adminBase(configs);
-  return {
-    event: GUEST_POST_EVENT_LABELS[language][params.event],
-    app_name: configs.app_name || envConfigs.app_name,
-    title: g.title,
-    package: g.packageName,
-    amount: params.paid
-      ? formatMoney(params.paid.amount, params.paid.currency)
-      : '',
-    user: formatUser(u?.name, u?.email || ''),
-    registered_at: formatTime(u?.createdAt, timeZone),
-    submitted_at: formatTime(g.submittedAt || new Date(), timeZone),
-    country: formatCountry((u?.country || '').toUpperCase(), language),
-    preview_url: g.slug
-      ? `${base}/blog/${encodeURIComponent(g.slug)}?preview=1`
-      : '',
-    admin_url: `${base}/admin/guest-posts?id=${encodeURIComponent(g.id)}`,
-  };
-}
-
-/**
- * A guest post entered the review queue: paid (`submitted`) or edited after
- * a change request (`resubmitted`). On unless the admin turned it off.
- * Never throws.
- */
-export async function notifyGuestPostSubmitted(
-  guestPostId: string,
-  event: GuestPostEvent = 'submitted'
-): Promise<void> {
-  try {
-    const configs = await getAllConfigs();
-    if (configs.notify_guest_post_enabled === 'false') return;
-    const channels = getNotifyChannelConfig(configs);
-    if (Object.keys(channels).length === 0) return;
-
-    const [row] = await db()
-      .select({
-        title: post.title,
-        slug: post.slug,
-        productId: guestPost.productId,
-        submittedAt: guestPost.submittedAt,
-        orderNo: guestPost.orderNo,
-        userName: user.name,
-        userEmail: user.email,
-        userCreatedAt: user.createdAt,
-        userCountry: user.country,
-      })
-      .from(guestPost)
-      .innerJoin(post, eq(post.id, guestPost.postId))
-      .leftJoin(user, eq(user.id, guestPost.userId))
-      .where(eq(guestPost.id, guestPostId))
-      .limit(1);
-    if (!row) return;
-
-    const [paidOrder] = row.orderNo
-      ? await db()
-          .select({
-            amount: order.amount,
-            paymentAmount: order.paymentAmount,
-            currency: order.currency,
-          })
-          .from(order)
-          .where(eq(order.orderNo, row.orderNo))
-          .limit(1)
-      : [];
-
-    const vars = buildGuestPostVars({
-      event,
-      guestPost: {
-        id: guestPostId,
-        title: row.title || '',
-        slug: row.slug,
-        packageName:
-          getPricingProduct(row.productId)?.planName || row.productId,
-        submittedAt: row.submittedAt,
-      },
-      paid: paidOrder
-        ? {
-            amount: paidOrder.paymentAmount ?? paidOrder.amount,
-            currency: paidOrder.currency,
-          }
-        : null,
-      user: row.userEmail
-        ? {
-            name: row.userName,
-            email: row.userEmail,
-            createdAt: row.userCreatedAt,
-            country: row.userCountry,
-          }
-        : null,
-      configs,
-    });
-    const language = normalizeNotifyLanguage(configs.notify_language);
-    const results = await sendToChannels(
-      channels,
-      renderTemplate(GUEST_POST_TEMPLATES[language], vars),
-      {
-        event: `guest_post.${event}`,
-        data: { guest_post_id: guestPostId, ...vars },
-      }
-    );
-    for (const r of results) {
-      if (!r.success) {
-        console.error(
-          `[notify] ${r.channel} failed for guest post ${guestPostId}:`,
-          r.error
-        );
-      }
-    }
-  } catch (error) {
-    console.error('[notify] guest post notification failed', error);
-  }
-}
-
-/** Admin "Test" button: a sample guest post submission. */
-export async function sendTestGuestPostNotification(
-  configs: Record<string, string>
-): Promise<NotifyResult[]> {
-  const channels = getNotifyChannelConfig(configs);
-  if (Object.keys(channels).length === 0) {
-    throw new Error('No notification channel is configured');
-  }
-  const now = new Date();
-  const vars = buildGuestPostVars({
-    event: 'submitted',
-    guestPost: {
-      id: 'TEST-GUEST-POST',
-      title: '10 ways to lift SaaS conversion',
-      slug: 'test-guest-post',
-      packageName: 'Premium',
-      submittedAt: now,
-    },
-    paid: { amount: 19900, currency: 'usd' },
-    user: {
-      name: 'Test Author',
-      email: 'author@example.com',
-      createdAt: new Date(now.getTime() - 3 * 86_400_000),
-      country: 'US',
-    },
-    configs,
-  });
-  const language = normalizeNotifyLanguage(configs.notify_language);
-  return sendToChannels(
-    channels,
-    '[Test] ' + renderTemplate(GUEST_POST_TEMPLATES[language], vars),
-    {
-      event: 'guest_post.submitted',
-      data: { guest_post_id: 'TEST-GUEST-POST', ...vars },
-      test: true,
-    }
-  );
 }
 
 /** Admin "Test" button for the ticket group: send a sample ticket. */

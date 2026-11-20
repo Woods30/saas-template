@@ -18,12 +18,14 @@ export enum PostType {
   ARTICLE = 'article',
   PAGE = 'page',
   LOG = 'log',
-  /** Paid guest post (src/modules/guest-posts); managed there, not here. */
-  GUEST = 'guest',
 }
 
-/** Types the public blog shows at /blog/<slug>. */
-const BLOG_TYPES = [PostType.ARTICLE, PostType.GUEST];
+/**
+ * Types the public blog shows at /blog/<slug>. Rows of any other type — a
+ * legacy `guest` row from an older schema included — simply never match, so
+ * they stay invisible instead of 404-ing the whole list.
+ */
+export const PUBLIC_BLOG_TYPES = [PostType.ARTICLE];
 
 export enum PostStatus {
   PUBLISHED = 'published',
@@ -125,7 +127,10 @@ export async function listPublishedArticles(
     })
     .from(post)
     .where(
-      and(inArray(post.type, BLOG_TYPES), eq(post.status, PostStatus.PUBLISHED))
+      and(
+        inArray(post.type, PUBLIC_BLOG_TYPES),
+        eq(post.status, PostStatus.PUBLISHED)
+      )
     )
     .orderBy(desc(post.createdAt))
     .limit(limit);
@@ -141,7 +146,7 @@ export async function findPublishedBySlug(
       and(
         eq(post.slug, slug.toLowerCase()),
         // Pages and update logs aren't blog posts.
-        inArray(post.type, BLOG_TYPES),
+        inArray(post.type, PUBLIC_BLOG_TYPES),
         eq(post.status, PostStatus.PUBLISHED)
       )
     )
