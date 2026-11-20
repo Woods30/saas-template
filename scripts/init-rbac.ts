@@ -101,31 +101,6 @@ const defaultPermissions = [
     description: 'Delete posts',
   },
 
-  // Guest posts (paid submissions). Review approves (publishes), asks for
-  // changes, edits or unpublishes. Reject refunds the payment, so it has its
-  // own code and is never granted through a wildcard.
-  {
-    code: 'admin.guest-posts.read',
-    resource: 'guest-posts',
-    action: 'read',
-    title: 'Read Guest Posts',
-    description: 'View guest post submissions',
-  },
-  {
-    code: 'admin.guest-posts.review',
-    resource: 'guest-posts',
-    action: 'review',
-    title: 'Review Guest Posts',
-    description: 'Approve, request changes, edit and unpublish guest posts',
-  },
-  {
-    code: 'admin.guest-posts.reject',
-    resource: 'guest-posts',
-    action: 'reject',
-    title: 'Reject Guest Posts',
-    description: 'Reject paid guest posts and refund them (moves money)',
-  },
-
   // Categories management
   {
     code: 'admin.categories.read',
@@ -352,9 +327,6 @@ const defaultRoles = [
       'admin.access',
       'admin.users.*',
       'admin.posts.*',
-      // Explicit: guest-posts.reject refunds, like payments.refund.
-      'admin.guest-posts.read',
-      'admin.guest-posts.review',
       'admin.categories.*',
       // Explicit, not admin.payments.*: wildcards expand to every payments
       // code at seed time, which would silently hand out refunds (real money).
@@ -382,8 +354,6 @@ const defaultRoles = [
       'admin.access',
       'admin.posts.read',
       'admin.posts.write',
-      'admin.guest-posts.read',
-      'admin.guest-posts.review',
       'admin.categories.read',
       'admin.categories.write',
     ],

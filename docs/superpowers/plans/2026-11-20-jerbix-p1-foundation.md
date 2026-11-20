@@ -325,7 +325,7 @@ git commit -m "refactor: remove guest posts from every code path"
 - Consumes: Task 3 (no code reads `guest_post` any more).
 - Produces: `guestPost` gone from all three templates; `pricingCatalog` has no `kind: 'guest_post'` entry and no `listGuestPostPackages()`; `init-rbac.ts` seeds no `admin.guest-posts.*` code.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/guest-post-data.test.ts`:
 
@@ -362,12 +362,12 @@ test('RBAC seeds no guest-post permission codes', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --import tsx --test tests/guest-post-data.test.ts`
 Expected: FAIL — `schema.sqlite.ts` still contains `guest_post`.
 
-- [ ] **Step 3: Drop the table, catalog entries, seeds and copy**
+- [x] **Step 3: Drop the table, catalog entries, seeds and copy**
 
 - Three schema templates: delete the `guestPost` table definition and its `GuestPost` / `NewGuestPost` exports. In the `order` comment at line ~245, drop the ``guest_post:<id>`` example, keeping `reference` documented generically.
 - `pnpm db:setup` to regenerate `src/config/db/schema.ts`.
@@ -376,12 +376,12 @@ Expected: FAIL — `schema.sqlite.ts` still contains `guest_post`.
 - `scripts/init-rbac.ts`: delete the three `admin.guest-posts.*` permission entries and their grants in the role lists around lines 355–386.
 - `messages/en.json`: delete every `guest_posts.*`, `admin.guest_posts.*`, `settings.guest_posts.*` key (69 in the `guest_posts` group alone) plus `blog.write_for_us`, `blog.sponsored`, `blog.preview_banner`, `guest_posts.preview`.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `node --import tsx --test tests/guest-post-data.test.ts`
 Expected: PASS, 4/4.
 
-- [ ] **Step 5: Verify the greps and the suite**
+- [x] **Step 5: Verify the greps and the suite**
 
 ```bash
 rg -i "guest.?post" src/ scripts/ tests/ messages/    # expect: no output
@@ -390,7 +390,7 @@ pnpm typecheck && pnpm test && pnpm build              # expect: green
 
 Also confirm an admin role holding only `admin.users.read` still matches that permission after the seed change (the `rolev` fixture in `tests/admin-agent.test.ts` covers the general case; re-run it).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
