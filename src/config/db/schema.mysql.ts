@@ -6,6 +6,7 @@
  * then copy this file's content into schema.ts.
  */
 
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -14,6 +15,7 @@ import {
   mysqlTable,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
 } from 'drizzle-orm/mysql-core';
 
@@ -701,6 +703,77 @@ export const operationsExperiment = table(
     updatedAt: timestamp('updated_at').notNull(),
   },
   (t) => [index('idx_operations_experiment_created').on(t.createdAt)]
+);
+
+// ─── Manual payments (核销支付) ───────────────────────────────────────────────
+
+export const manualPaymentAccount = table(
+  'manual_payment_account',
+  {
+    id: varchar191('id').primaryKey(),
+    channel: varchar('channel', { length: 50 }).notNull(),
+    displayName: varchar('display_name', { length: 191 }).notNull(),
+    currency: varchar('currency', { length: 10 }).notNull(),
+    qrImageKey: text('qr_image_key'),
+    enabled: boolean('enabled').default(true).notNull(),
+    sortOrder: int('sort_order').default(0).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    index('manual_payment_account_enabled_idx').on(t.enabled, t.sortOrder),
+  ]
+);
+
+// MySQL has no partial indexes: two generated columns collapse the partial
+// unique indexes into plain functional keys. NULLs never collide in a MySQL
+// unique index, so the semantics match SQLite/Postgres.
+export const manualPaymentDetail = table(
+  'manual_payment_detail',
+  {
+    orderId: varchar191('order_id')
+      .primaryKey()
+      .references(() => order.id, { onDelete: 'cascade' }),
+    userId: varchar191('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    accountId: varchar191('account_id')
+      .notNull()
+      .references(() => manualPaymentAccount.id, { onDelete: 'restrict' }),
+    fingerprint: int('fingerprint').notNull(),
+    baseAmount: int('base_amount').notNull(),
+    payableAmount: int('payable_amount').notNull(),
+    currency: varchar('currency', { length: 10 }).notNull(),
+    status: varchar('status', { length: 50 }).notNull(),
+    payerNote: text('payer_note'),
+    receiptKey: text('receipt_key'),
+    submittedAt: timestamp('submitted_at'),
+    observedAmount: int('observed_amount'),
+    externalReference: varchar('external_reference', { length: 191 }),
+    reviewNote: text('review_note'),
+    reviewedBy: varchar191('reviewed_by'),
+    reviewedAt: timestamp('reviewed_at'),
+    expiresAt: timestamp('expires_at').notNull(),
+    settledAt: timestamp('settled_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+    activeAmountKey: text('active_amount_key').generatedAlwaysAs(
+      sql`case when \`status\` in ('pending_payment','pending_verification','settling') then concat(\`account_id\`, ':', \`payable_amount\`) else null end`
+    ),
+    settlingUserKey: text('settling_user_key').generatedAlwaysAs(
+      sql`case when \`status\` = 'settling' then \`user_id\` else null end`
+    ),
+  },
+  (t) => [
+    index('manual_payment_detail_status_expires_idx').on(t.status, t.expiresAt),
+    index('manual_payment_detail_user_status_idx').on(t.userId, t.status),
+    uniqueIndex('manual_payment_detail_active_amount_unique').on(
+      t.activeAmountKey
+    ),
+    uniqueIndex('manual_payment_detail_settling_user_unique').on(
+      t.settlingUserKey
+    ),
+  ]
 );
 
 export type AnalyticsVisitor = typeof analyticsVisitor.$inferSelect;

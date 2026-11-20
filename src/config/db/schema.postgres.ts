@@ -6,6 +6,7 @@
  * then copy this file's content into schema.ts.
  */
 
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -13,6 +14,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 const table = pgTable;
@@ -776,6 +778,81 @@ export const operationsExperiment = table(
     updatedAt: timestamp('updated_at').notNull(),
   },
   (t) => [index('idx_operations_experiment_created').on(t.createdAt)]
+);
+
+// ─── Manual payments (核销支付) ───────────────────────────────────────────────
+
+// Collection accounts shown to the payer. The list lives only in the database.
+export const manualPaymentAccount = table(
+  'manual_payment_account',
+  {
+    id: text('id').primaryKey(),
+    channel: text('channel').notNull(),
+    displayName: text('display_name').notNull(),
+    currency: text('currency').notNull(),
+    qrImageKey: text('qr_image_key'),
+    enabled: boolean('enabled').default(true).notNull(),
+    sortOrder: integer('sort_order').default(0).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index('manual_payment_account_enabled_idx').on(t.enabled, t.sortOrder),
+  ]
+);
+
+// Per-order verification detail, 1:1 with `order`.
+export const manualPaymentDetail = table(
+  'manual_payment_detail',
+  {
+    orderId: text('order_id')
+      .primaryKey()
+      .references(() => order.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    accountId: text('account_id')
+      .notNull()
+      .references(() => manualPaymentAccount.id, { onDelete: 'restrict' }),
+    fingerprint: integer('fingerprint').notNull(),
+    baseAmount: integer('base_amount').notNull(),
+    payableAmount: integer('payable_amount').notNull(),
+    currency: text('currency').notNull(),
+    status: text('status').notNull(),
+    payerNote: text('payer_note'),
+    receiptKey: text('receipt_key'),
+    submittedAt: timestamp('submitted_at'),
+    observedAmount: integer('observed_amount'),
+    externalReference: text('external_reference'),
+    reviewNote: text('review_note'),
+    reviewedBy: text('reviewed_by'),
+    reviewedAt: timestamp('reviewed_at'),
+    expiresAt: timestamp('expires_at').notNull(),
+    settledAt: timestamp('settled_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index('manual_payment_detail_status_expires_idx').on(t.status, t.expiresAt),
+    index('manual_payment_detail_user_status_idx').on(t.userId, t.status),
+    // Only one live order may hold a given amount on an account; expired or
+    // closed rows are outside the predicate so their amount is reusable.
+    uniqueIndex('manual_payment_detail_active_amount_unique')
+      .on(t.accountId, t.payableAmount)
+      .where(
+        sql`status in ('pending_payment','pending_verification','settling')`
+      ),
+    // A user may only ever have one order in the settling critical section.
+    uniqueIndex('manual_payment_detail_settling_user_unique')
+      .on(t.userId)
+      .where(sql`status = 'settling'`),
+  ]
 );
 
 export type AnalyticsVisitor = typeof analyticsVisitor.$inferSelect;
