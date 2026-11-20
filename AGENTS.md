@@ -46,7 +46,7 @@ English only. `project.inlang/settings.json` declares `locales: ["en"]` and `bas
 - `pnpm admin:mcp` — stdio MCP bridge for the admin API
 - `pnpm cf:build` / `pnpm cf:deploy` — Cloudflare Workers build and deploy
 - `pnpm check:deploy-env` — refuse to deploy without a real `AUTH_SECRET` and `CONFIG_ENCRYPTION_KEY`
-- `pnpm format` / `pnpm format:check` — Prettier
+- `pnpm format` / `pnpm format:check` — Biome (format + import order; `format:check` is read-only)
 
 ### First-time setup
 
@@ -106,7 +106,6 @@ src/
 │   ├── config/service.ts        # DB key-value config, masking, encryption
 │   ├── ai-tasks/service.ts      # AI task tracking with credit deduction/revocation
 │   ├── notify/service.ts        # Bot notifications (paid orders) + client-safe templates.ts
-│   ├── guest-posts/service.ts   # Paid guest posts: pay → review → publish (refund on reject)
 │   ├── posts/, taxonomy/        # Blog posts and categories
 │   ├── events/service.ts        # Product events (recordEvent) shown in the admin user timeline
 │   ├── admin-access/            # Agent accounts and admin API keys
@@ -185,7 +184,6 @@ API routes are thin server-route wrappers — they check auth, parse params, cal
 - Exception: `payment/service.ts` calls `credits/` and `subscriptions/` because payment success triggers credit granting and subscription creation. This is the ONE allowed cross-module dependency.
 - `ai-tasks/service.ts` calls `credits/` for consumption/revocation. This is the second.
 - `payment/service.ts` also calls `notify/` to push a bot message (Telegram/Feishu/WeCom/webhook, configured in Admin → Settings → Notify) after a paid order commits. Channel senders live in `@/core/notify`.
-- `payment/service.ts` calls `guest-posts/` (`planGuestPostFulfillment`, `planGuestPostRefund`) so a paid guest post order publishes its article, and a refund takes it down, in the same atomic write. This is the third.
 - All other modules are fully independent.
 
 ## Key Patterns
@@ -469,18 +467,13 @@ The docs are an optional module: **off by default**, with an **empty** `content/
 - Frontmatter fields: `title` (required), `description`, `order`, `group`, `updated`.
 - Add a language later by adding the locale to `project.inlang/settings.json`, a `messages/<locale>.json` catalog and `*.zh.md` files — no loader change needed.
 
-### Guest posts (paid articles)
+### Tying an order to a record
 
-Off until an admin turns on Settings → Users → Guest Posts. Outside authors write at `/settings/guest-posts` and pay to submit; an admin reviews at `/admin/guest-posts` and approves (publishes to `/blog`), requests changes (the author resubmits free) or rejects, which refunds the order. `/guest-post` is the public pitch page. Packages and prices live in `src/config/pricing.ts` (like the main plans): edit the `kind: 'guest_post'` entries, or add one in the same shape.
-
-- The article is a `post` row with `type = 'guest'`, kept `draft` until approved; `guest_post` tracks the submission. Its checkout orders carry `order.reference = 'guest_post:<id>'`: settlement reads it to submit the paid draft, and a refund of that order rejects the submission (or takes a published one down) in the same atomic write. The generic posts admin/API refuses `guest` posts.
-- `order.reference` is the generic hook for any product tied to a specific record (`<kind>:<id>`): pass `reference` to `createCheckout()`, then fulfill from `existingOrder.reference` in `settleCheckoutOrder`.
-- Packages are `pricingCatalog` entries with `kind: 'guest_post'` (price and `maxLinks`). They're sold only by `/api/guest-posts/$id/checkout`; the generic checkout refuses them.
-- Rejecting refunds, so it has its own permission (`admin.guest-posts.reject`) that seeds never grant through a wildcard. No admin action marks one paid. Every external link in a guest post renders `rel="sponsored nofollow"` and the page shows a Sponsored label. Keep both: search engines require them for paid links.
-- On the published page, its external links also get `utm_source=<site host>&utm_medium=guest_post` (render time only; links the author already tagged with any `utm_` parameter are left alone).
-- Authors pick the slug (`normalizeSlug`: 3–80 chars of `a-z0-9-`); an empty one comes from the title. `?preview=1` on `/blog/<slug>` shows an unpublished post to its author and to admins only (noindex).
-- Word/link limits are counted by `src/lib/guest-post-rules.ts`, shared by the server and the editor so a submit that would fail never saves.
-- A paid submit or a resubmit calls `notifyGuestPostSubmitted` (bot message, `notify_guest_post_enabled`, on by default). No emails: authors read the review result on their list page. Keep it that way unless the project adds a mail flow for everything.
+`order.reference` carries `<kind>:<id>` when a product exists to sell one
+specific record rather than a catalog item. Set it on `createCheckout()`;
+on settlement, read it back as `existingOrder.reference` and fulfill
+whatever that kind means. The column is general — any future product of
+that shape reuses it instead of adding a table.
 
 ### User-center feature switches
 
@@ -614,7 +607,7 @@ These come from real findings. Follow them for every feature that touches money,
 - `pretest` runs `pnpm paraglide:compile`, so the generated `src/paraglide/` messages exist before the suite starts. On a fresh clone, run `pnpm install` first (it compiles nothing) and then `pnpm test` — the `pretest` hook covers it.
 - The tests create their own temporary SQLite database and push the schema themselves; no external service is needed.
 - `src/paraglide/` and `src/routeTree.gen.ts` are gitignored. `pnpm typecheck` regenerates the route tree via `pretypecheck`; `pnpm build` regenerates the Paraglide output via the Vite plugin.
-- Focus areas today: admin agent API, atomic writes, config security, credits guards, docs loader, English-only policy, guest posts, IndexNow, initial role, manual payments (schema, config, orders, receipts, settlement, admin), operations, payment guards and idempotency, refunds, user events and the user timeline.
+- Focus areas today: admin agent API, atomic writes, config security, credits guards, docs loader, English-only policy, IndexNow, initial role, manual payments (schema, config, orders, receipts, settlement, admin), operations, payment guards and idempotency, refunds, tooling, user events and the user timeline.
 - CI (`.github/workflows/ci.yaml`, on push and PR to `main`) runs on Node 22 with the pnpm version pinned in `package.json`: `pnpm install --frozen-lockfile` → `pnpm paraglide:compile` → `pnpm typecheck` → `pnpm test` → `pnpm build`. `.github/workflows/docker-build.yaml` builds the Docker image.
 
 ## Agent Skills
@@ -685,7 +678,7 @@ Each template exports **strong types** for all tables (`User`, `NewUser`, `Order
 **Auth:** user, session, account, verification
 **Business:** order, subscription, credit, apikey, inviteCode, userInvite
 **RBAC:** role, permission, rolePermission, userRole
-**Content:** post, taxonomy, config, guestPost
+**Content:** post, taxonomy, config
 **AI:** aiTask, chat, chatMessage
 **Support:** ticket, ticketMessage
 **Manual payments:** manualPaymentAccount, manualPaymentDetail
@@ -699,7 +692,7 @@ Public, client-visible vars use the `VITE_` prefix (read via `import.meta.env` o
 
 ```env
 VITE_APP_URL=http://localhost:3000
-VITE_APP_NAME=My App
+VITE_APP_NAME=Jerbix
 DATABASE_PROVIDER=sqlite        # sqlite | postgres | mysql | turso | d1
 DATABASE_URL=file:data/local.db
 AUTH_SECRET=<openssl rand -base64 32>

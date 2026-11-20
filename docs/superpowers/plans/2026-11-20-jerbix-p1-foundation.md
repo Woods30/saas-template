@@ -411,7 +411,7 @@ This is the one breaking schema change in P1 — note it for the README upgrade 
 - Consumes: Tasks 1–4. This task documents what those tasks shipped; it must not describe anything not yet built (the admin and marketing work land in P2/P3).
 - Produces: no command or table in the docs that the repo no longer has.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/docs-sync.test.ts`:
 
@@ -441,12 +441,12 @@ test('AGENTS.md documents the real command surface', () => {
 
 The last assertion is deliberately loose: it only fires if P3's rename has landed while the docs still say `admin.operations.read`. It passes today.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --import tsx --test tests/docs-sync.test.ts`
 Expected: FAIL — `AGENTS.md` still contains guest-post sections and `Prettier`.
 
-- [ ] **Step 3: Rewrite the affected doc sections**
+- [x] **Step 3: Rewrite the affected doc sections**
 
 `AGENTS.md`:
 - Modules list: remove the guest-posts entry and its "How modules connect" paragraph; remove the payment → guest-posts dependency bullet, leaving credits/subscriptions and ai-tasks.
@@ -459,17 +459,17 @@ Expected: FAIL — `AGENTS.md` still contains guest-post sections and `Prettier`
 - Feature list: remove paid guest posts.
 - Add an **Upgrade notes** section stating that schema migration drops `guest_post` and its rows, and that an existing deployment must re-run `pnpm db:push` (or apply the generated migration).
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `node --import tsx --test tests/docs-sync.test.ts`
 Expected: PASS, 2/2.
 
-- [ ] **Step 5: Verify the full suite and build**
+- [x] **Step 5: Verify the full suite and build**
 
 Run: `pnpm typecheck && pnpm test && pnpm build`
 Expected: green. Report the total test count — it is the baseline for P2.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
