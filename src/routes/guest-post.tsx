@@ -2,9 +2,9 @@ import { createFileRoute } from '@tanstack/react-router';
 
 import { m } from '@/paraglide/messages.js';
 import { getLocale } from '@/paraglide/runtime.js';
-import { Footer } from '@/blocks/footer';
 import { GuestPostLanding } from '@/blocks/guest-post';
-import { Header } from '@/blocks/header';
+import { SiteFooter } from '@/components/site-footer';
+import { SiteHeader } from '@/components/site-header';
 
 export const Route = createFileRoute('/guest-post')({
   loader: () => {
@@ -28,11 +28,11 @@ export const Route = createFileRoute('/guest-post')({
 function GuestPostPage() {
   return (
     <div className="bg-background text-foreground flex min-h-screen flex-col">
-      <Header />
+      <SiteHeader />
       <main className="flex-1">
         <GuestPostLanding />
       </main>
-      <Footer />
+      <SiteFooter />
     </div>
   );
 }

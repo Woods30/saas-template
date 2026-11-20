@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { m } from '@/paraglide/messages.js';
 import { buttonVariants } from '@/components/ui/button';
 
-export function CTA() {
+export function CtaSection() {
   return (
     <section className="px-4 pb-24 sm:pb-24">
       <div className="mx-auto max-w-5xl">

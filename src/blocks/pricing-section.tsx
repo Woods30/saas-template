@@ -41,7 +41,7 @@ const ALL_PROVIDERS: PaymentProvider[] = [
   'wechat',
 ];
 
-export function Pricing({ title }: { title?: string } = {}) {
+export function PricingSection({ title }: { title?: string } = {}) {
   const router = useRouter();
   const { data: session } = useSession();
 

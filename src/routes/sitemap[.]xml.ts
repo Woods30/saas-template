@@ -55,7 +55,7 @@ export const Route = createFileRoute('/sitemap.xml')({
           priority: path === '' ? 1 : 0.8,
         }));
 
-        // Blog posts: db posts merged with local MDX posts.
+        // BlogSection posts: db posts merged with local MDX posts.
         try {
           const { listPublishedArticles } =
             await import('@/modules/posts/service');

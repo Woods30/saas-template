@@ -11,7 +11,7 @@ import {
 import { tDynamic } from '@/core/i18n/dynamic';
 import { m } from '@/paraglide/messages.js';
 
-export function Features() {
+export function FeaturesSection() {
   const features: { key: string; icon: LucideIcon }[] = [
     { key: 'auth', icon: ShieldCheck },
     { key: 'payment', icon: CreditCard },

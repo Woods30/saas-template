@@ -15,7 +15,7 @@ const FAQ_KEYS = [
   'license',
 ] as const;
 
-export function FAQ() {
+export function FaqSection() {
   return (
     <section id="faq" className="px-4 py-24 sm:py-32">
       <div className="mx-auto max-w-3xl">

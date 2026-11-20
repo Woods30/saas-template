@@ -2,9 +2,9 @@ import { createFileRoute } from '@tanstack/react-router';
 
 import { m } from '@/paraglide/messages.js';
 import { getLocale } from '@/paraglide/runtime.js';
-import { Footer } from '@/blocks/footer';
-import { Header } from '@/blocks/header';
-import { Pricing } from '@/blocks/pricing';
+import { PricingSection } from '@/blocks/pricing-section';
+import { SiteFooter } from '@/components/site-footer';
+import { SiteHeader } from '@/components/site-header';
 
 export const Route = createFileRoute('/pricing')({
   loader: () => {
@@ -28,11 +28,11 @@ export const Route = createFileRoute('/pricing')({
 function PricingPage() {
   return (
     <div className="bg-background text-foreground flex min-h-screen flex-col">
-      <Header />
+      <SiteHeader />
       <main className="flex-1">
-        <Pricing />
+        <PricingSection />
       </main>
-      <Footer />
+      <SiteFooter />
     </div>
   );
 }

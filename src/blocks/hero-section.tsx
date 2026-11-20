@@ -7,7 +7,7 @@ import { m } from '@/paraglide/messages.js';
 import { buttonVariants } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
 
-export function Hero() {
+export function HeroSection() {
   return (
     <section className="relative isolate flex flex-col items-center justify-center overflow-hidden px-4 pt-24 pb-20 sm:pt-40 sm:pb-32">
       <DotPattern

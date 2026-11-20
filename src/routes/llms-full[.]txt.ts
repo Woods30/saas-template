@@ -6,8 +6,12 @@ import { getLocalPosts, mergePosts } from '@/content/posts';
 
 const STATIC_PAGES: { path: string; title: string; description: string }[] = [
   { path: '', title: 'Home', description: 'Landing page' },
-  { path: '/pricing', title: 'Pricing', description: 'Pricing plans' },
-  { path: '/blog', title: 'Blog', description: 'Blog posts and articles' },
+  { path: '/pricing', title: 'Pricing', description: 'PricingSection plans' },
+  {
+    path: '/blog',
+    title: 'Blog',
+    description: 'BlogSection posts and articles',
+  },
 ];
 
 export const Route = createFileRoute('/llms-full.txt')({
@@ -43,7 +47,7 @@ export const Route = createFileRoute('/llms-full.txt')({
           posts = mergePosts(dbPosts, posts);
 
           if (posts.length > 0) {
-            lines.push('', '## Blog Posts', '');
+            lines.push('', '## BlogSection Posts', '');
 
             for (const post of posts) {
               lines.push(`### ${post.title}`, '');
@@ -67,7 +71,7 @@ export const Route = createFileRoute('/llms-full.txt')({
         } catch {
           // Database unreachable — list local posts without content.
           if (posts.length > 0) {
-            lines.push('', '## Blog Posts', '');
+            lines.push('', '## BlogSection Posts', '');
             for (const post of posts) {
               lines.push(`### ${post.title}`, '');
               lines.push(`URL: ${app_url}/blog/${post.slug}`);

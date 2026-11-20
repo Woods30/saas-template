@@ -182,7 +182,7 @@ function RecentRow({
 function DashboardPage() {
   const { data: session } = useSession();
 
-  // Cards and lists follow the admin's User Features switches.
+  // Cards and lists follow the admin's User FeaturesSection switches.
   const features = useUserFeatures();
   // Until the switches load, fetch nothing (a page may turn out to be off).
   const guestPostInfo = useGuestPostInfo();

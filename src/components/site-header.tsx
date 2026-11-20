@@ -23,7 +23,14 @@ export interface NavLink {
 /** Off-site URLs render as plain <a>; internal paths use the locale-aware Link. */
 const isExternalHref = (href: string) => /^https?:\/\//.test(href);
 
+const DEFAULT_NAV_LINKS: NavLink[] = [
+  { href: '/#features', label: m['landing.nav.features']() },
+  { href: '/pricing', label: m['landing.nav.pricing']() },
+  { href: '/blog', label: m['landing.nav.blog']() },
+];
+
 export function SiteHeader({ navLinks }: { navLinks?: NavLink[] }) {
+  const links = navLinks ?? DEFAULT_NAV_LINKS;
   const [mobileOpen, setMobileOpen] = useState(false);
   const { data: session } = useSession();
   const user = session?.user;
@@ -40,7 +47,7 @@ export function SiteHeader({ navLinks }: { navLinks?: NavLink[] }) {
 
         {/* Desktop nav */}
         <nav className="hidden items-center gap-6 md:flex">
-          {navLinks?.map((link) =>
+          {links.map((link) =>
             isExternalHref(link.href) ? (
               <a
                 key={link.href}
@@ -97,7 +104,7 @@ export function SiteHeader({ navLinks }: { navLinks?: NavLink[] }) {
       {mobileOpen && (
         <div className="border-border border-t px-4 pt-2 pb-4 md:hidden">
           <nav className="flex flex-col gap-2">
-            {navLinks?.map((link) =>
+            {links.map((link) =>
               isExternalHref(link.href) ? (
                 <a
                   key={link.href}

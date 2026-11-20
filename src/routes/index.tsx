@@ -3,15 +3,15 @@ import { createFileRoute } from '@tanstack/react-router';
 import { envConfigs } from '@/config';
 import { m } from '@/paraglide/messages.js';
 import { getLocale, locales, localizeUrl } from '@/paraglide/runtime.js';
-import { Blog } from '@/blocks/blog';
-import { CTA } from '@/blocks/cta';
-import { FAQ } from '@/blocks/faq';
-import { Features } from '@/blocks/features';
-import { Footer } from '@/blocks/footer';
-import { Header } from '@/blocks/header';
-import { Hero } from '@/blocks/hero';
-import { Pricing } from '@/blocks/pricing';
+import { BlogSection } from '@/blocks/blog-section';
+import { CtaSection } from '@/blocks/cta-section';
+import { FaqSection } from '@/blocks/faq-section';
+import { FeaturesSection } from '@/blocks/features-section';
+import { HeroSection } from '@/blocks/hero-section';
+import { PricingSection } from '@/blocks/pricing-section';
 import { SupportWidget } from '@/blocks/support-widget';
+import { SiteFooter } from '@/components/site-footer';
+import { SiteHeader } from '@/components/site-header';
 import { getBlogPostsFn } from '@/content/posts/server';
 
 /**
@@ -24,16 +24,16 @@ function HomePage() {
 
   return (
     <div className="bg-background text-foreground flex min-h-screen flex-col">
-      <Header />
+      <SiteHeader />
       <main>
-        <Hero />
-        <Features />
-        <Pricing />
-        <FAQ />
-        <Blog posts={posts} />
-        <CTA />
+        <HeroSection />
+        <FeaturesSection />
+        <PricingSection />
+        <FaqSection />
+        <BlogSection posts={posts} />
+        <CtaSection />
       </main>
-      <Footer />
+      <SiteFooter />
       <SupportWidget />
     </div>
   );

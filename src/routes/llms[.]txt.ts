@@ -6,8 +6,12 @@ import { getLocalPosts, mergePosts } from '@/content/posts';
 
 const STATIC_PAGES: { path: string; title: string; description: string }[] = [
   { path: '', title: 'Home', description: 'Landing page' },
-  { path: '/pricing', title: 'Pricing', description: 'Pricing plans' },
-  { path: '/blog', title: 'Blog', description: 'Blog posts and articles' },
+  { path: '/pricing', title: 'Pricing', description: 'PricingSection plans' },
+  {
+    path: '/blog',
+    title: 'Blog',
+    description: 'BlogSection posts and articles',
+  },
 ];
 
 export const Route = createFileRoute('/llms.txt')({
@@ -46,7 +50,7 @@ export const Route = createFileRoute('/llms.txt')({
         ];
 
         if (posts.length > 0) {
-          lines.push('', '## Blog Posts', '');
+          lines.push('', '## BlogSection Posts', '');
           for (const post of posts) {
             lines.push(
               `- [${post.title}](${app_url}/blog/${post.slug}): ${post.description}`

@@ -5,9 +5,9 @@ import { Link } from '@/core/i18n/navigation';
 import { envConfigs } from '@/config';
 import { m } from '@/paraglide/messages.js';
 import { getLocale, locales, localizeUrl } from '@/paraglide/runtime.js';
-import { Footer } from '@/blocks/footer';
-import { Header } from '@/blocks/header';
 import { BlogCard } from '@/components/blog-card';
+import { SiteFooter } from '@/components/site-footer';
+import { SiteHeader } from '@/components/site-header';
 import { formatPostDate } from '@/content/posts';
 import { getBlogPostsFn, getGuestPostsOpenFn } from '@/content/posts/server';
 
@@ -52,7 +52,7 @@ function BlogPage() {
 
   return (
     <div className="bg-background text-foreground flex min-h-screen flex-col">
-      <Header />
+      <SiteHeader />
       <main className="flex-1 px-4 py-16 sm:py-24">
         <div className="mx-auto max-w-5xl">
           <div className="mb-16 text-center">
@@ -95,7 +95,7 @@ function BlogPage() {
           )}
         </div>
       </main>
-      <Footer />
+      <SiteFooter />
     </div>
   );
 }

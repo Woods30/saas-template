@@ -182,7 +182,7 @@ export function PricingTable({
               </p>
             )}
 
-            {/* CTA — full-width pill */}
+            {/* CtaSection — full-width pill */}
             <Button
               variant={plan.featured ? 'default' : 'outline'}
               className="h-10 w-full rounded-full text-sm font-medium"
@@ -194,7 +194,7 @@ export function PricingTable({
                 : plan.buttonText || m['common.pricing.get_started']()}
             </Button>
 
-            {/* Features */}
+            {/* FeaturesSection */}
             <ul className="mt-8 space-y-3">
               {plan.features.map((feature, i) => {
                 const isObj = typeof feature !== 'string';

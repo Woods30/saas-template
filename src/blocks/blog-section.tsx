@@ -9,7 +9,7 @@ import { formatPostDate, type BlogPost } from '@/content/posts';
 // Latest-posts landing section. Posts arrive via props (fetched in the
 // landing route's loader through the blog server functions) so this block
 // stays free of database imports.
-export function Blog({ posts }: { posts: BlogPost[] }) {
+export function BlogSection({ posts }: { posts: BlogPost[] }) {
   const locale = getLocale();
 
   if (posts.length === 0) return null;

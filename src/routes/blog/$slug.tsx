@@ -18,11 +18,11 @@ import { m } from '@/paraglide/messages.js';
 import { getLocale, localizeUrl } from '@/paraglide/runtime.js';
 import { useGuestPostCheckout } from '@/hooks/use-guest-post-checkout';
 import { formatPrice, guestPostSubmitProblem } from '@/hooks/use-guest-posts';
-import { Footer } from '@/blocks/footer';
-import { Header } from '@/blocks/header';
 import { MarkdownContent } from '@/components/markdown-content';
 import { mdxComponents } from '@/components/mdx-components';
 import { PaymentProviderModal } from '@/components/payment-provider-modal';
+import { SiteFooter } from '@/components/site-footer';
+import { SiteHeader } from '@/components/site-header';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   formatPostDate,
@@ -210,7 +210,7 @@ function BlogPostPage() {
 
   return (
     <div className="bg-background text-foreground flex min-h-screen flex-col">
-      <Header />
+      <SiteHeader />
       <main className="flex-1 px-6 py-12 md:px-8 md:py-16">
         {post.preview && (
           <PreviewBanner
@@ -292,7 +292,7 @@ function BlogPostPage() {
           )}
         </article>
       </main>
-      <Footer />
+      <SiteFooter />
     </div>
   );
 }
