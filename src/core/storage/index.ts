@@ -59,6 +59,13 @@ export interface StorageProvider {
   // get public url for key (optional)
   getPublicUrl?: (options: { key: string; bucket?: string }) => string;
 
+  // read an object back (optional) — private objects are never served by a
+  // public URL, so the server streams them itself
+  getObject?: (options: {
+    key: string;
+    bucket?: string;
+  }) => Promise<StorageObject | null>;
+
   // upload file
   uploadFile(options: StorageUploadOptions): Promise<StorageUploadResult>;
 
@@ -66,6 +73,15 @@ export interface StorageProvider {
   downloadAndUpload(
     options: StorageDownloadUploadOptions
   ): Promise<StorageUploadResult>;
+}
+
+/**
+ * Object read back from storage. `contentType` falls back to
+ * application/octet-stream when the provider did not record one.
+ */
+export interface StorageObject {
+  body: Uint8Array;
+  contentType: string;
 }
 
 /**
@@ -135,6 +151,16 @@ export class StorageManager {
     return provider.exists(options);
   }
 
+  // read an object using default provider (optional)
+  async getObject(options: {
+    key: string;
+    bucket?: string;
+  }): Promise<StorageObject | null> {
+    const provider = this.ensureDefaultProvider();
+    if (!provider.getObject) return null;
+    return provider.getObject(options);
+  }
+
   // get public url using default provider (if supported)
   getPublicUrl(options: { key: string; bucket?: string }): string | undefined {
     const provider = this.ensureDefaultProvider();
@@ -166,3 +192,4 @@ export const storageManager = new StorageManager();
 // Export all providers
 export * from './s3';
 export * from './r2';
+export * from './local-private';
