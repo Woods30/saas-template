@@ -180,6 +180,10 @@ test('safeDocHref rejects unsafe schemes and malformed references', () => {
   assert.equal(safeDocHref('java\nscript:alert(1)'), undefined);
   assert.equal(safeDocHref('//evil.example.com'), undefined);
   assert.equal(safeDocHref(''), undefined);
+  // A bare relative reference carries no scheme, so it stays safe.
+  assert.equal(safeDocHref('guide'), 'guide');
+  assert.equal(safeDocHref('guide#anchor'), 'guide#anchor');
+  assert.equal(safeDocHref('getting-started'), 'getting-started');
 });
 
 test('splitNextSteps drops a step with an unsafe href', () => {

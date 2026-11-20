@@ -527,11 +527,12 @@ const NEXT_STEPS_HEADING = /^##\s+(下一步|Next steps)\s*$/i;
  * Validate the scheme of a link that comes from documentation content.
  *
  * Documentation is authored in markdown, so a link target is untrusted input
- * that ends up in an `href` attribute. Only site-relative references
+ * that ends up in an `href` attribute. Site-relative references
  * (`#section`, `/docs/guide`, `./guide`, `../guide`) and the explicit web
- * protocols `http:`, `https:` and `mailto:` are allowed; everything else
- * (`javascript:`, `data:`, `vbscript:`, `file:`, protocol-relative `//host`)
- * is rejected.
+ * protocols `http:`, `https:` and `mailto:` are allowed; a bare relative
+ * reference (`guide`, `guide#section`) is allowed as well because it carries
+ * no scheme at all. Everything else (`javascript:`, `data:`, `vbscript:`,
+ * `file:`, protocol-relative `//host`) is rejected.
  *
  * Returns the trimmed value when it is safe, `undefined` otherwise.
  */
@@ -560,6 +561,10 @@ export function safeDocHref(href: string): string | undefined {
   if (scheme === 'http' || scheme === 'https' || scheme === 'mailto') {
     return value;
   }
+
+  // No scheme at all: a bare relative reference such as `guide#section`.
+  // Without a scheme it cannot carry an executable protocol.
+  if (scheme === undefined) return value;
 
   return undefined;
 }
