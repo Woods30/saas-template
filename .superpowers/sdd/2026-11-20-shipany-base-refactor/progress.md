@@ -17,3 +17,4 @@ Pre-flight:
   Task 3: complete (commit 3208b14; blocks renamed to *-section.tsx with Section exports, Header/Footer wrappers merged into SiteHeader/SiteFooter, typecheck 0, tests 115/115, build OK)
   Task 3: Ruling: SiteFooter defaults read cookie-consent state via getRouteApi('**root**') at module scope and useLoaderData inside the component — marketing routes render SiteFooter without props, so the default config must live in the component. Cost if wrong: SiteFooter cannot render outside the router (no test does; statically different default could throw).
   Task 4: complete (commit 206c1a3; PUBLIC_CONFIG_KEYS allowlist module, call-time filter, mask round-trip tests, check-deploy-env gate; typecheck 0, node:test 119/119 pass)
+  Task 5: complete (commit a448e87; paraglide:compile/typecheck/pretest/test aggregate + ci.yaml; clean regen OK, typecheck 0, node:test 119/119 pass; dropped stale test:copy script)
