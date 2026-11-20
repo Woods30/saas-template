@@ -7,7 +7,7 @@ import { after, before, test } from 'node:test';
 import { and, eq } from 'drizzle-orm';
 
 // Isolated SQLite DB; no application modules load before the env is set.
-const directory = await mkdtemp(join(tmpdir(), 'shipany-refund-test-'));
+const directory = await mkdtemp(join(tmpdir(), 'saas-template-refund-test-'));
 Object.assign(process.env, {
   DATABASE_PROVIDER: 'sqlite',
   DATABASE_URL: `file:${directory}/test.db`,

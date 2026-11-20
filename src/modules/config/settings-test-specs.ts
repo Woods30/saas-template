@@ -5,8 +5,6 @@
  * Kept in its own file so the client bundle doesn't pull in provider SDKs.
  */
 
-import { seeApiTestSpec } from '@/config/seeapi';
-
 export interface TestField {
   name: string;
   label: string;
@@ -28,7 +26,6 @@ export interface TestResult {
 }
 
 export const testSpecs: Record<string, TestSpec> = {
-  seeapi: seeApiTestSpec,
   resend: {
     group: 'resend',
     fields: [

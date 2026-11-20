@@ -9,7 +9,9 @@ import { after, test } from 'node:test';
 import { eq } from 'drizzle-orm';
 
 // Isolated SQLite database and a local webhook receiver; no real channel.
-const directory = await mkdtemp(join(tmpdir(), 'shipany-gp-notify-test-'));
+const directory = await mkdtemp(
+  join(tmpdir(), 'saas-template-gp-notify-test-')
+);
 Object.assign(process.env, {
   DATABASE_PROVIDER: 'sqlite',
   DATABASE_URL: `file:${directory}/test.db`,

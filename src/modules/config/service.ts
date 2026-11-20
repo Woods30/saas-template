@@ -4,7 +4,6 @@ import { db, hasDatabaseConfigured, isCloudflareWorker } from '@/core/db';
 import { atomic } from '@/core/db/atomic';
 import { envConfigs } from '@/config';
 import { config } from '@/config/db/schema';
-import { normalizeSeeApiConfigs } from '@/config/seeapi';
 import { decryptSecret, encryptSecret, isEncryptedSecret } from '@/lib/crypto';
 
 import { getSettings } from './settings';
@@ -98,7 +97,6 @@ const PROTECTED_CONFIG_KEYS: ReadonlySet<string> = new Set([
 
 // Dedicated modules own their validation, permissions, and persistence.
 const MODULE_MANAGED_CONFIG_KEYS: ReadonlySet<string> = new Set([
-  'footer_badges',
   'indexnow_key',
 ]);
 
@@ -141,7 +139,6 @@ export function isMaskedConfigValue(value: string): boolean {
 
 /** Endpoint settings → the saved secrets that get sent to that endpoint. */
 const ENDPOINT_SECRETS: Record<string, string[]> = {
-  seeapi_base_url: ['seeapi_api_key'],
   openai_base_url: ['openai_api_key'],
   anthropic_base_url: ['anthropic_api_key'],
   r2_endpoint: ['r2_secret_key'],
@@ -186,7 +183,6 @@ export function assertEndpointSecretsResupplied(
  * encrypted at rest — see SECRET_SETTING_NAMES / SECRET_KEY_PATTERN.
  */
 export async function saveConfigs(configs: ConfigMap) {
-  configs = normalizeSeeApiConfigs(configs);
   assertEndpointSecretsResupplied(configs, await getAllConfigs());
   const entries = await Promise.all(
     Object.entries(configs)

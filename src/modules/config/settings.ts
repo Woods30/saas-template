@@ -16,7 +16,6 @@ import {
   SIDEBAR_VARIANTS,
   THEMES,
 } from '@/config/appearance';
-import { seeApiSettingGroup, seeApiSettings } from '@/config/seeapi';
 import { USER_FEATURES } from '@/config/user-features';
 
 export interface Setting {
@@ -189,7 +188,6 @@ export function getSettingGroups(): SettingGroup[] {
     },
 
     // AI
-    seeApiSettingGroup,
     {
       name: 'openai',
       title: 'OpenAI',
@@ -974,9 +972,6 @@ export function getSettings(): Setting[] {
       group: 'r2',
       tab: 'storage',
     },
-
-    // ─── AI / SeeAPI ─────────────────────────────────────────────────
-    ...seeApiSettings,
 
     // ─── AI / OpenAI ─────────────────────────────────────────────────
     {

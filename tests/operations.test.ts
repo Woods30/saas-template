@@ -6,7 +6,9 @@ import { join } from 'node:path';
 import { after, test } from 'node:test';
 import { eq } from 'drizzle-orm';
 
-const directory = await mkdtemp(join(tmpdir(), 'shipany-operations-test-'));
+const directory = await mkdtemp(
+  join(tmpdir(), 'saas-template-operations-test-')
+);
 Object.assign(process.env, {
   DATABASE_PROVIDER: 'sqlite',
   DATABASE_URL: `file:${directory}/test.db`,

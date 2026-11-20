@@ -3,7 +3,6 @@ import { getRouteApi } from '@tanstack/react-router';
 
 import { openCookieSettings } from '@/lib/cookie-consent';
 import { m } from '@/paraglide/messages.js';
-import { FooterBadgeList } from '@/components/footer-badge-list';
 import {
   SiteFooter,
   type FooterColumn,
@@ -81,7 +80,6 @@ export function Footer() {
       tagline={m['landing.footer.tagline']()}
       columns={columns}
       socials={socials}
-      badges={<FooterBadgeList className="mt-10" />}
     />
   );
 }

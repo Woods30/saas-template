@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { after, test } from 'node:test';
 
 // Isolated SQLite DB; no application modules load before the env is set.
-const directory = await mkdtemp(join(tmpdir(), 'shipany-timeline-test-'));
+const directory = await mkdtemp(join(tmpdir(), 'saas-template-timeline-test-'));
 Object.assign(process.env, {
   DATABASE_PROVIDER: 'sqlite',
   DATABASE_URL: `file:${directory}/test.db`,

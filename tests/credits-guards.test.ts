@@ -9,7 +9,7 @@ import { and, eq } from 'drizzle-orm';
 // Isolated SQLite database; no application modules load before the env is set.
 // Real concurrency needs Postgres/MySQL (SQLite serializes writers), so these
 // cover the guards' sequential behavior.
-const directory = await mkdtemp(join(tmpdir(), 'shipany-credits-test-'));
+const directory = await mkdtemp(join(tmpdir(), 'saas-template-credits-test-'));
 Object.assign(process.env, {
   DATABASE_PROVIDER: 'sqlite',
   DATABASE_URL: `file:${directory}/test.db`,

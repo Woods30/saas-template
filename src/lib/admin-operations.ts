@@ -153,22 +153,6 @@ export const adminOperations: AdminOperation[] = [
       .strict()
   ),
   op(
-    'footer_badges_get',
-    'Read the public footer badges. Requires super administrator (*) access.',
-    'footer-badges.read',
-    'GET',
-    'footer-badges',
-    empty
-  ),
-  op(
-    'footer_badges_update',
-    'Replace the public footer badge list with validated HTTPS links and images. Requires super administrator (*) access.',
-    'footer-badges.write',
-    'POST',
-    'footer-badges',
-    z.object({ badges: z.array(z.unknown()).max(200) }).strict()
-  ),
-  op(
     'users_list',
     "List users with balances. Search matches email or name; verify an exact email before a write. utm_source filters by exact sign-up source; '' selects untagged (direct) users.",
     'users.read',

@@ -1,10 +1,7 @@
 import { fromJsonSchema, McpServer } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 
-import {
-  adminConnection,
-  adminRequest,
-} from '../.claude/skills/shipany-admin/scripts/admin-client.mjs';
+import { adminConnection, adminRequest } from './admin-client.mjs';
 
 // No env-file loader or stdout logging here: stdout belongs to MCP exclusively.
 const connection = adminConnection();

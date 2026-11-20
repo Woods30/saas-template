@@ -28,7 +28,6 @@ drizzle
 .cursor
 .claude
 # bundled into the build by src/routes/api/admin/agent/skill.ts
-!.claude/skills/shipany-admin
 .agents
 .codex
 .vercel

@@ -7,7 +7,9 @@ import { after, test } from 'node:test';
 import { eq } from 'drizzle-orm';
 
 // Isolated SQLite database; no application modules load before the env is set.
-const directory = await mkdtemp(join(tmpdir(), 'shipany-guest-post-test-'));
+const directory = await mkdtemp(
+  join(tmpdir(), 'saas-template-guest-post-test-')
+);
 Object.assign(process.env, {
   DATABASE_PROVIDER: 'sqlite',
   DATABASE_URL: `file:${directory}/test.db`,
@@ -537,12 +539,12 @@ test('guest post links get utm tags unless the author already set some', async (
     hrefs({
       content: md,
       sponsored: true,
-      utm: { source: 'shipany.site', medium: 'guest_post' },
+      utm: { source: 'example.test', medium: 'guest_post' },
     }),
     [
-      'https://snapok.app/?utm_source=shipany.site&utm_medium=guest_post',
+      'https://snapok.app/?utm_source=example.test&utm_medium=guest_post',
       'https://x.example/p?utm_source=mine',
-      'https://y.example/?q=1&utm_source=shipany.site&utm_medium=guest_post#top',
+      'https://y.example/?q=1&utm_source=example.test&utm_medium=guest_post#top',
       '/internal',
     ]
   );

@@ -8,7 +8,6 @@ import {
   sanitizeReferrer,
   sanitizeUtm,
 } from './lib/cookie';
-import { redirectChineseEdition } from './lib/english-only';
 import { paraglideMiddleware } from './paraglide/server.js';
 
 // On Cloudflare Workers, stash the binding env (D1, ASSETS, …) on globalThis
@@ -90,8 +89,6 @@ function withMutableHeaders(response: Response): Response {
 // so getLocale() resolves per-request (AsyncLocalStorage) during SSR.
 export default {
   async fetch(req: Request): Promise<Response> {
-    const redirect = redirectChineseEdition(req);
-    if (redirect) return withMutableHeaders(redirect);
     await ensureCloudflareEnv();
     // Wrap the whole request so anything before/after the handler shares
     // the same db client too.

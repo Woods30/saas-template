@@ -5,7 +5,6 @@ import * as categories from './handlers/categories';
 import * as config from './handlers/config';
 import * as config_custom from './handlers/config-custom';
 import * as credits from './handlers/credits';
-import * as footer_badges from './handlers/footer-badges';
 import * as guest_posts from './handlers/guest-posts';
 import * as guest_posts_id from './handlers/guest-posts-id';
 import * as indexnow from './handlers/indexnow';
@@ -41,8 +40,6 @@ export const handlers: Record<
   indexnow_get: indexnow.GET,
   indexnow_update: indexnow.PUT,
   indexnow_submit: indexnow.POST,
-  footer_badges_get: footer_badges.GET,
-  footer_badges_update: footer_badges.POST,
   users_list: users_index.GET,
   users_get: users_id.GET,
   users_sources: users_sources.GET,

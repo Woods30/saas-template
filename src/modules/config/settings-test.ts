@@ -10,7 +10,6 @@
 
 import { FalProvider } from '@/core/ai/fal';
 import { ReplicateProvider } from '@/core/ai/replicate';
-import { testSeeApiConnection } from '@/core/ai/seeapi';
 import { AIMediaType } from '@/core/ai/types';
 import { ResendProvider } from '@/core/email/resend';
 import {
@@ -37,8 +36,6 @@ export async function runTest(
 ): Promise<TestResult> {
   try {
     switch (group) {
-      case 'seeapi':
-        return await testSeeApiConnection(configs);
       case 'resend':
         return await testResend(inputs, configs);
       case 'stripe':

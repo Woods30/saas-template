@@ -8,7 +8,7 @@ import { verifyPassword } from 'better-auth/crypto';
 import { and, eq } from 'drizzle-orm';
 
 // Isolated SQLite DB; no application modules load before the env is set.
-const directory = await mkdtemp(join(tmpdir(), 'shipany-password-test-'));
+const directory = await mkdtemp(join(tmpdir(), 'saas-template-password-test-'));
 Object.assign(process.env, {
   DATABASE_PROVIDER: 'sqlite',
   DATABASE_URL: `file:${directory}/test.db`,

@@ -82,15 +82,6 @@ function AdminLayout() {
   }
 
   const footerNavItems = [
-    ...(isSuperAdmin
-      ? [
-          {
-            href: '/admin/footer-badges',
-            label: m['admin.nav.footer_badges'](),
-            icon: BadgeCheck,
-          },
-        ]
-      : []),
     {
       href: '/admin/agent',
       label: m['admin.nav.agent'](),

@@ -1,5 +1,5 @@
 export const AUTH_SECRET_PLACEHOLDER =
-  'shipany-dev-secret-change-in-production';
+  'development-secret-change-in-production';
 
 // Isomorphic env access:
 // - Public (client-visible) vars are VITE_-prefixed and read from

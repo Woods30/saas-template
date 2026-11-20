@@ -13,7 +13,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { eq } from 'drizzle-orm';
 
 // No application modules are loaded until the isolated environment is installed.
-const directory = await mkdtemp(join(tmpdir(), 'shipany-admin-test-'));
+const directory = await mkdtemp(join(tmpdir(), 'saas-template-admin-test-'));
 Object.assign(process.env, {
   DATABASE_PROVIDER: 'sqlite',
   DATABASE_URL: `file:${directory}/test.db`,
@@ -832,93 +832,6 @@ test('a new project can save, read and render the trusted Cadcraft Plausible scr
     });
   }
 });
-test('SeeAPI settings and tests respect admin permissions and reuse masked keys without leaking them', async () => {
-  const secret = 'seeapi-admin-isolated-test-key';
-  for (const operation of ['settings_update', 'settings_test']) {
-    const input =
-      operation === 'settings_test'
-        ? { group: 'seeapi', configs: { seeapi_api_key: secret } }
-        : { seeapi_api_key: secret };
-    assert.equal(
-      (await request(operation, input, readToken, `seeapi-denied-${operation}`))
-        .status,
-      403
-    );
-  }
-  assert.equal(
-    (
-      await request(
-        'settings_update',
-        {
-          seeapi_base_url: 'https://api.seeapi.com',
-          seeapi_api_key: secret,
-        },
-        fullToken,
-        'seeapi-save-key'
-      )
-    ).status,
-    200
-  );
-  const saved = await (await request('settings_get', {})).json();
-  const masked = saved.data.seeapi_api_key;
-  assert.match(masked, /^••••••••/);
-  assert(!JSON.stringify(saved).includes(secret));
-  const nativeFetch = globalThis.fetch;
-  let calls = 0;
-  globalThis.fetch = async (input, init) => {
-    calls++;
-    assert.equal(String(input), 'https://api.seeapi.com/v1/credits');
-    assert.equal(
-      new Headers(init?.headers).get('Authorization'),
-      `Bearer ${secret}`
-    );
-    return Response.json({ credits: { balance: 10 } });
-  };
-  try {
-    const checked = await (
-      await request(
-        'settings_test',
-        {
-          group: 'seeapi',
-          configs: { seeapi_api_key: masked },
-        },
-        fullToken,
-        'seeapi-check-key'
-      )
-    ).json();
-    assert.equal(checked.data.success, true);
-    assert.equal(calls, 1);
-    assert(!JSON.stringify(checked).includes(secret));
-    const rejected = await request(
-      'settings_test',
-      {
-        group: 'seeapi',
-        configs: { seeapi_base_url: 'https://foreign.example' },
-      },
-      fullToken,
-      'seeapi-reject-key-forward'
-    );
-    assert.equal(rejected.status, 400);
-    assert.equal(calls, 1);
-  } finally {
-    globalThis.fetch = nativeFetch;
-  }
-  const { Route: publicConfig } =
-    await import('../src/routes/api/config/public');
-  const publicHandlers = publicConfig.options.server!.handlers as {
-    GET: (context: { request: Request }) => Promise<Response>;
-  };
-  const publicResponse = await publicHandlers.GET({
-    request: new Request('http://localhost:3000/api/config/public'),
-  });
-  assert(!(await publicResponse.text()).includes('seeapi_api_key'));
-  const audit = await access.listExecutions({
-    userId: fullAgentId,
-    pageSize: 100,
-  });
-  assert(!JSON.stringify(audit).includes(secret));
-});
-
 test('configuration secrets are masked and audit never exposes payloads or raw credentials', async () => {
   const secret = 'test-only-secret-value';
   assert.equal(
@@ -1016,8 +929,8 @@ test('stdio MCP and standalone skill client use the published API contract', asy
     cwd: process.cwd(),
     env: {
       PATH: process.env.PATH!,
-      SHIPANY_ADMIN_URL: baseUrl,
-      SHIPANY_ADMIN_TOKEN: readToken,
+      SITE_ADMIN_URL: baseUrl,
+      SITE_ADMIN_TOKEN: readToken,
     },
     stderr: 'pipe',
   });
@@ -1036,11 +949,11 @@ test('stdio MCP and standalone skill client use the published API contract', asy
     await client.close();
   }
   const { adminConnection, adminRequest } =
-    await import('../.claude/skills/shipany-admin/scripts/admin-client.mjs');
+    await import('../scripts/admin-client.mjs');
   assert.throws(() =>
     adminConnection({
-      SHIPANY_ADMIN_URL: 'http://remote.example',
-      SHIPANY_ADMIN_TOKEN: 'hidden',
+      SITE_ADMIN_URL: 'http://remote.example',
+      SITE_ADMIN_TOKEN: 'hidden',
     })
   );
   const result = await adminRequest('/api/admin/agent/operations', undefined, {
@@ -1050,23 +963,21 @@ test('stdio MCP and standalone skill client use the published API contract', asy
   assert.equal(result.result.data.length, 4);
 });
 test('skill client manages several projects in a private store and never prints keys', async () => {
-  const client =
-    await import('../.claude/skills/shipany-admin/scripts/admin-client.mjs');
+  const client = await import('../scripts/admin-client.mjs');
   const configFile = join(directory, 'projects', 'p.json');
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    SHIPANY_ADMIN_CONFIG: configFile,
+    SITE_ADMIN_CONFIG: configFile,
   };
   for (const key of [
-    'SITE_ADMIN_CONFIG',
     'SITE_ADMIN_URL',
     'SITE_ADMIN_TOKEN',
     'SITE_ADMIN_PROJECT',
   ])
     delete env[key];
-  delete env.SHIPANY_ADMIN_URL;
-  delete env.SHIPANY_ADMIN_TOKEN;
-  delete env.SHIPANY_ADMIN_PROJECT;
+  delete env.SITE_ADMIN_URL;
+  delete env.SITE_ADMIN_TOKEN;
+  delete env.SITE_ADMIN_PROJECT;
   // A key the site rejects is never saved.
   await assert.rejects(
     client.addProject('bad', baseUrl, `sa_admin_${'x'.repeat(43)}`, env),
@@ -1098,7 +1009,7 @@ test('skill client manages several projects in a private store and never prints 
   await assert.rejects(client.resolveConnection({ env }), /Several projects/);
   // The single-site env pair still works and wins when no project is named.
   const viaEnv = await client.resolveConnection({
-    env: { ...env, SHIPANY_ADMIN_URL: baseUrl, SHIPANY_ADMIN_TOKEN: readToken },
+    env: { ...env, SITE_ADMIN_URL: baseUrl, SITE_ADMIN_TOKEN: readToken },
   });
   assert.equal(viaEnv.token, readToken);
   const modernEnv = {
@@ -1112,19 +1023,13 @@ test('skill client manages several projects in a private store and never prints 
     fullToken
   );
   assert.equal(client.storePath(modernEnv), configFile);
-  await assert.rejects(
-    client.resolveConnection({
-      env: { SITE_ADMIN_URL: baseUrl, SHIPANY_ADMIN_TOKEN: readToken },
-    }),
-    /SITE_ADMIN_URL and SITE_ADMIN_TOKEN/
-  );
   // CLI: key on stdin, masked everywhere in output. Spawned asynchronously:
   // the API server runs in this process and must keep serving meanwhile.
   const run = (args: string[], input?: string) =>
     new Promise<string>((done, fail) => {
       const child = spawn(
         process.execPath,
-        ['.claude/skills/shipany-admin/scripts/admin-client.mjs', ...args],
+        ['scripts/admin-client.mjs', ...args],
         { env }
       );
       let out = '';

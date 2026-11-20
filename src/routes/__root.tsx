@@ -38,7 +38,6 @@ import { OperationsTracker } from '@/components/analytics/operations-tracker';
 import { Plausible } from '@/components/analytics/plausible';
 import { CustomerService } from '@/components/customer-service';
 import { GoogleOneTap } from '@/components/google-one-tap';
-import { SandboxPreviewBridge } from '@/components/sandbox-preview-bridge';
 import { Toaster } from '@/components/ui/sonner';
 
 import '@fontsource-variable/inter';
@@ -53,14 +52,9 @@ import '@/styles/globals.css';
 // server function so drizzle/db code never reaches the client bundle.
 const getAnalyticsConfigs = createServerFn().handler(async () => {
   const { getAllConfigs } = await import('@/modules/config/service');
-  const { getStoredFooterBadges } =
-    await import('@/modules/footer-badges/service');
   const { getCookie } = await import('@tanstack/react-start/server');
   const { safeEmbedSetting } = await import('@/lib/embed-ids');
-  const [configs, storedFooterBadges] = await Promise.all([
-    getAllConfigs(),
-    getStoredFooterBadges(),
-  ]);
+  const configs = await getAllConfigs();
   // Hosts come from the template trust list and runtime PLAUSIBLE_SCRIPT_HOSTS. A
   // configured src that fails it turns Plausible off rather than falling
   // back to the plausible.io script.
@@ -91,7 +85,6 @@ const getAnalyticsConfigs = createServerFn().handler(async () => {
       ? rawColorMode
       : DEFAULT_COLOR_MODE;
   return {
-    footerBadges: storedFooterBadges ?? null,
     appearanceEnabled,
     colorMode,
     colorModeForced:
@@ -182,7 +175,6 @@ function RootComponent() {
         <OperationsTracker
           allowed={!consentEnabled || consent === 'accepted'}
         />
-        <SandboxPreviewBridge />
         {/* Appearance on: toasts follow the theme (globals.css). */}
         <Toaster
           position="top-center"

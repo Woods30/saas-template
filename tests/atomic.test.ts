@@ -12,10 +12,10 @@ import { and, eq } from 'drizzle-orm';
 // batch and error semantics. ATOMIC_PG_URL (a Postgres server URL) uses a
 // throwaway database for the transaction path — run via `pnpm test:atomic:pg`,
 // which maps the schema to schema.postgres.ts.
-const directory = await mkdtemp(join(tmpdir(), 'shipany-atomic-test-'));
+const directory = await mkdtemp(join(tmpdir(), 'saas-template-atomic-test-'));
 const pgServer = process.env.ATOMIC_PG_URL;
 const useD1 = process.env.ATOMIC_D1 === '1';
-const pgDatabase = `shipany_atomic_${process.pid}`;
+const pgDatabase = `saas_template_atomic_${process.pid}`;
 const psql = (sql: string) =>
   execFileSync('psql', [pgServer!, '-Atc', sql], { stdio: 'pipe' });
 if (pgServer) {

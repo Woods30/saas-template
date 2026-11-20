@@ -9,3 +9,4 @@ Pre-flight:
 - T12→T13: docs_enabled public key produced T12, consumed T13 beforeLoad. Clean.
   Ruling (T1): keep docs/superpowers/ (spec+plan) when clearing old tree — they are this refactor's record, not "old docs". Cost if wrong: stray doc dir in template (removable before release).
   Ruling (T1): rsync --delete wiped .superpowers/ and docs/superpowers/ (excludes didn't name them); restored from main worktree backup and re-ran rsync with --exclude .superpowers --exclude docs/superpowers. Cost if wrong: none (backup was current).
+  Task 1: complete (commit 3a00c80, base vendored @3305a34, pnpm db:push + rbac:init OK, GET / → 200 on :3005 — :3000 occupied by another local process)
