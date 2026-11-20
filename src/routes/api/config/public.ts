@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 
+import { PUBLIC_CONFIG_KEYS } from '@/modules/config/public-keys';
 import { filterPublicConfigs, getAllConfigs } from '@/modules/config/service';
 import { respData } from '@/lib/resp';
 
@@ -8,35 +9,6 @@ const noStore = {
     'Cache-Control': 'no-store, no-cache, must-revalidate',
   },
 };
-
-const publicKeys = [
-  'app_name',
-  'app_description',
-  'app_logo',
-  'email_auth_enabled',
-  'google_auth_enabled',
-  'google_one_tap_enabled',
-  'google_client_id',
-  'github_auth_enabled',
-  'invite_code_required',
-  'credits_enabled',
-  'billing_enabled',
-  'payments_enabled',
-  'apikeys_enabled',
-  'tickets_enabled',
-  // Custom URL schemes /auth-callback may hand a session token to.
-  'desktop_auth_schemes',
-  'select_payment_enabled',
-  'default_payment_provider',
-  'stripe_enabled',
-  'creem_enabled',
-  'paypal_enabled',
-  'alipay_enabled',
-  'wechat_enabled',
-  'google_analytics_id',
-  'plausible_domain',
-  'plausible_src',
-];
 
 function isEmailSendingConfigured(configs: Record<string, string>): boolean {
   const provider = configs.email_provider || 'resend';
@@ -52,7 +24,7 @@ function isEmailSendingConfigured(configs: Record<string, string>): boolean {
 
 async function GET({ request }: { request: Request }) {
   const configs = await getAllConfigs();
-  const result = filterPublicConfigs(configs, publicKeys);
+  const result = filterPublicConfigs(configs, [...PUBLIC_CONFIG_KEYS]);
   const emailConfigured = isEmailSendingConfigured(configs);
   result.password_reset_enabled =
     configs.email_auth_enabled !== 'false' && emailConfigured
