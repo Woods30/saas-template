@@ -1,172 +1,160 @@
-import { defaultKeyHasher } from '@better-auth/api-key'
-import { eq, sql } from 'drizzle-orm'
-import type { DB } from '@/core/db'
-import { apikey, users } from '@/core/db/schema'
+import * as crypto from 'crypto';
+import { and, count, eq, isNull, like, sql, type SQL } from 'drizzle-orm';
 
-export type ExtractedApiKey =
-  | { kind: 'present'; key: string }
-  | { kind: 'missing' }
-  | { kind: 'malformed' }
+import { db } from '@/core/db';
+import { apikey } from '@/config/db/schema';
+import { decryptSecret, encryptSecret } from '@/lib/crypto';
+import { getUuid } from '@/lib/hash';
 
-export type ApiKeyRejectReason =
-  | 'INVALID_KEY'
-  | 'DISABLED'
-  | 'EXPIRED'
-  | 'QUOTA_EXCEEDED'
-  | 'USER_BANNED'
+const KEY_PREFIX = 'sk_';
+const KEY_PREVIEW_LEN = 8; // chars of randomness shown in the prefix
 
-export type ValidateApiKeyResult =
-  | {
-      valid: true
-      keyId: string
-      userId: string
-      name: string | null
-    }
-  | {
-      valid: false
-      reason: ApiKeyRejectReason
-    }
-
-export type AuthenticateApiKeyResult =
-  | {
-      ok: true
-      keyId: string
-      userId: string
-      name: string | null
-    }
-  | {
-      ok: false
-      status: 401 | 403
-      error: 'MISSING_API_KEY' | 'MALFORMED_AUTH_HEADER' | ApiKeyRejectReason
-    }
-
-/** 与 `@better-auth/api-key` 共用同一 SHA-256 base64url 散列实现。 */
-export async function hashApiKey(rawKey: string): Promise<string> {
-  return defaultKeyHasher(rawKey)
+function hashKey(key: string): string {
+  return crypto.createHash('sha256').update(key, 'utf8').digest('hex');
 }
 
-/** 从 `Authorization: Bearer <key>` 或 `x-api-key` 请求头提取密钥。 */
-export function extractApiKeyFromHeaders(headers: Headers): ExtractedApiKey {
-  const authHeader = headers.get('authorization')
-  if (authHeader !== null) {
-    const trimmed = authHeader.trim()
-    if (!/^Bearer\s+/i.test(trimmed)) {
-      return { kind: 'malformed' }
-    }
-    const token = trimmed.replace(/^Bearer\s+/i, '').trim()
-    if (!token) {
-      return { kind: 'malformed' }
-    }
-    return { kind: 'present', key: token }
-  }
-
-  const xApiKey = headers.get('x-api-key')?.trim()
-  if (xApiKey) {
-    return { kind: 'present', key: xApiKey }
-  }
-
-  return { kind: 'missing' }
+function generateKey(): { key: string; keyHash: string; keyPrefix: string } {
+  // 32 random bytes → ~43 chars base64url, plus the literal "sk_" prefix
+  const rand = crypto.randomBytes(32).toString('base64url');
+  const key = `${KEY_PREFIX}${rand}`;
+  return {
+    key,
+    keyHash: hashKey(key),
+    // Stored so the user can identify the key in the list UI without us
+    // having to keep the plaintext around.
+    keyPrefix: `${KEY_PREFIX}${rand.slice(0, KEY_PREVIEW_LEN)}`,
+  };
 }
 
-/** 校验原始 API Key 并原子累加调用次数。 */
-export async function validateApiKey(
-  db: DB,
-  rawKey: string,
-  now: Date = new Date(),
-): Promise<ValidateApiKeyResult> {
-  const trimmed = rawKey.trim()
-  if (!trimmed) {
-    return { valid: false, reason: 'INVALID_KEY' }
-  }
+/**
+ * Create a new API key for a user. The `key` is also persisted (AES-encrypted
+ * when CONFIG_ENCRYPTION_KEY is set, plaintext otherwise) so the user can copy
+ * it again from the list UI; validation still goes through the indexed sha256
+ * hash.
+ */
+export async function create(params: {
+  userId: string;
+  title: string;
+}): Promise<{ id: string; key: string; title: string }> {
+  const { userId, title } = params;
+  const { key, keyHash, keyPrefix } = generateKey();
 
-  const hashed = await hashApiKey(trimmed)
-  const rows = await db
+  const [row] = await db()
+    .insert(apikey)
+    .values({
+      id: getUuid(),
+      userId,
+      keyHash,
+      keyPrefix,
+      key: await encryptSecret(key),
+      title,
+      status: 'active',
+    })
+    .returning();
+
+  return { id: row.id, key, title: row.title };
+}
+
+/**
+ * List active API keys for a user with pagination and optional search on
+ * title, most recently used (falling back to created) first.
+ */
+export async function list(
+  userId: string,
+  page = 1,
+  pageSize = 10,
+  search?: string
+) {
+  const conditions: SQL[] = [
+    eq(apikey.userId, userId),
+    eq(apikey.type, 'user'),
+    eq(apikey.status, 'active'),
+    isNull(apikey.deletedAt) as unknown as SQL,
+  ];
+  if (search) {
+    conditions.push(like(apikey.title, `%${search}%`));
+  }
+  const where = and(...conditions);
+
+  const [totalResult] = await db()
+    .select({ count: count() })
+    .from(apikey)
+    .where(where);
+
+  const items = await db()
     .select({
       id: apikey.id,
-      name: apikey.name,
-      referenceId: apikey.referenceId,
-      enabled: apikey.enabled,
-      expiresAt: apikey.expiresAt,
-      remaining: apikey.remaining,
+      keyPrefix: apikey.keyPrefix,
+      key: apikey.key,
+      title: apikey.title,
+      status: apikey.status,
+      lastUsedAt: apikey.lastUsedAt,
+      createdAt: apikey.createdAt,
     })
     .from(apikey)
-    .where(eq(apikey.key, hashed))
-    .limit(1)
+    .where(where)
+    .orderBy(sql`coalesce(${apikey.lastUsedAt}, ${apikey.createdAt}) desc`)
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
 
-  const row = rows[0]
-  if (!row) {
-    return { valid: false, reason: 'INVALID_KEY' }
-  }
-  if (row.enabled === false) {
-    return { valid: false, reason: 'DISABLED' }
-  }
-  if (row.expiresAt && row.expiresAt.getTime() <= now.getTime()) {
-    return { valid: false, reason: 'EXPIRED' }
-  }
-  if (row.remaining !== null && row.remaining !== undefined && row.remaining <= 0) {
-    return { valid: false, reason: 'QUOTA_EXCEEDED' }
-  }
+  // Decrypt stored keys for the copy action; undecryptable rows (rotated or
+  // missing CONFIG_ENCRYPTION_KEY) return key=null and the UI hides copy.
+  const decrypted = await Promise.all(
+    items.map(async (item: (typeof items)[number]) => ({
+      ...item,
+      key: item.key ? await decryptSecret(item.key) : null,
+    }))
+  );
 
-  const userRows = await db
-    .select({
-      id: users.id,
-      banned: users.banned,
-    })
-    .from(users)
-    .where(eq(users.id, row.referenceId))
-    .limit(1)
-
-  const owner = userRows[0]
-  if (!owner || owner.banned) {
-    return { valid: false, reason: 'USER_BANNED' }
-  }
-
-  await db
-    .update(apikey)
-    .set({
-      requestCount: sql`COALESCE(${apikey.requestCount}, 0) + 1`,
-      lastRequest: now,
-      updatedAt: now,
-    })
-    .where(eq(apikey.id, row.id))
-
-  return {
-    valid: true,
-    keyId: row.id,
-    userId: row.referenceId,
-    name: row.name ?? null,
-  }
+  return { items: decrypted, total: totalResult.count };
 }
 
-/** 面向业务 API 路由的请求级鉴权入口。 */
-export async function authenticateApiKeyRequest(
-  db: DB,
-  request: Request,
-  now: Date = new Date(),
-): Promise<AuthenticateApiKeyResult> {
-  const extracted = extractApiKeyFromHeaders(request.headers)
-  if (extracted.kind === 'missing') {
-    return { ok: false, status: 401, error: 'MISSING_API_KEY' }
-  }
-  if (extracted.kind === 'malformed') {
-    return { ok: false, status: 401, error: 'MALFORMED_AUTH_HEADER' }
-  }
+/**
+ * Delete (soft) an API key.
+ */
+export async function remove(params: { userId: string; keyId: string }) {
+  const { userId, keyId } = params;
 
-  const validated = await validateApiKey(db, extracted.key, now)
-  if (!validated.valid) {
-    const status =
-      validated.reason === 'USER_BANNED' ||
-      validated.reason === 'DISABLED' ||
-      validated.reason === 'QUOTA_EXCEEDED'
-        ? 403
-        : 401
-    return { ok: false, status, error: validated.reason }
-  }
+  await db()
+    .update(apikey)
+    .set({ status: 'deleted', deletedAt: new Date() })
+    .where(
+      and(
+        eq(apikey.id, keyId),
+        eq(apikey.userId, userId),
+        eq(apikey.type, 'user')
+      )
+    );
+}
 
-  return {
-    ok: true,
-    keyId: validated.keyId,
-    userId: validated.userId,
-    name: validated.name,
-  }
+/**
+ * Validate an API key. Returns the userId if valid, null otherwise.
+ */
+export async function validate(key: string): Promise<string | null> {
+  if (!key) return null;
+  const keyHash = hashKey(key);
+  const [row] = await db()
+    .select({ id: apikey.id, userId: apikey.userId })
+    .from(apikey)
+    .where(
+      and(
+        eq(apikey.keyHash, keyHash),
+        // Admin/agent keys (type 'admin') never authenticate the product API.
+        eq(apikey.type, 'user'),
+        eq(apikey.status, 'active'),
+        isNull(apikey.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!row) return null;
+
+  // Best-effort usage tracking — a failed bump must not fail the request.
+  db()
+    .update(apikey)
+    .set({ lastUsedAt: new Date() })
+    .where(eq(apikey.id, row.id))
+    .catch(() => {});
+
+  return row.userId;
 }

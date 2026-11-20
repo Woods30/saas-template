@@ -1,23 +1,89 @@
-import { drizzle as drizzlePg } from 'drizzle-orm/postgres-js'
-import postgres from 'postgres'
-import * as schema from './schema'
-import type { DB } from './types'
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 
-/**
- * 创建 PostgreSQL 连接。
- *
- * `prepare: false`：事务池（Supabase / Neon / PgBouncer）与部分托管实例不支持
- * 服务端预编译语句，开了会在特定场景报 "prepared statement already exists"。
- * Hyperdrive 自己缓存语句，不依赖客户端预编译。
- *
- * `max: 1`：连接由 Hyperdrive 在服务端池化，客户端只需一条连接；
- * Workers 上每请求新建客户端，多连接会徒增握手开销。
- */
-export function createPostgresDb(url: string): DB {
-  const client = postgres(url, {
+import { getHyperdriveConnectionString, isCloudflareWorker } from './runtime';
+import type { DbConfig } from './types';
+
+// Global database connection instance (singleton pattern)
+let dbInstance: ReturnType<typeof drizzle> | null = null;
+let client: ReturnType<typeof postgres> | null = null;
+
+export function createPostgresDb(config: DbConfig) {
+  let databaseUrl = config.database_url;
+
+  const schemaName = (config.db_schema || 'public').trim();
+  const connectionSchemaOptions =
+    schemaName && schemaName !== 'public'
+      ? { connection: { options: `-c search_path=${schemaName}` } }
+      : {};
+
+  // Prefer the Hyperdrive binding on Workers — direct Workers→Postgres pays a
+  // full TCP+TLS+auth handshake per connection; Hyperdrive pools at the edge.
+  databaseUrl = getHyperdriveConnectionString() || databaseUrl;
+
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is not set');
+  }
+
+  // In Cloudflare Workers, one client per request (db() caches it in the
+  // request scope). Options follow Cloudflare's Hyperdrive + postgres.js
+  // guidance. No explicit end(): SSR responses stream and deferred loaders
+  // may still query after fetch() returns; workerd closes the request's
+  // sockets when it finishes.
+  if (isCloudflareWorker) {
+    const client = postgres(databaseUrl, {
+      // Workers allow at most 6 concurrent outbound connections per request.
+      max: 5,
+      // Skip the pg_type lookup on every new connection (an origin round
+      // trip). Safe while the schema has no array columns — re-check if you
+      // add one.
+      fetch_types: false,
+      // Hyperdrive supports prepared statements; prepare:false can make
+      // queries hang or fail intermittently there. (The Node branches below
+      // keep prepare:false for pgbouncer/Supabase transaction poolers.)
+      prepare: true,
+      idle_timeout: 10,
+      connect_timeout: 5,
+      ...connectionSchemaOptions,
+    });
+
+    return drizzle(client);
+  }
+
+  // Singleton mode: reuse existing connection
+  if (config.db_singleton_enabled === 'true') {
+    if (dbInstance) {
+      return dbInstance;
+    }
+
+    client = postgres(databaseUrl, {
+      prepare: false,
+      max: Number(config.db_max_connections) || 1,
+      idle_timeout: 30,
+      connect_timeout: 10,
+      ...connectionSchemaOptions,
+    });
+
+    dbInstance = drizzle({ client });
+    return dbInstance;
+  }
+
+  // Non-singleton mode: create new connection each time
+  const serverlessClient = postgres(databaseUrl, {
     prepare: false,
     max: 1,
     idle_timeout: 20,
-  })
-  return drizzlePg(client, { schema }) as unknown as DB
+    connect_timeout: 10,
+    ...connectionSchemaOptions,
+  });
+
+  return drizzle({ client: serverlessClient });
+}
+
+export async function closePostgresDb(config: DbConfig) {
+  if (config.db_singleton_enabled && client) {
+    await client.end();
+    client = null;
+    dbInstance = null;
+  }
 }

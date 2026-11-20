@@ -1,24 +1,16 @@
-@import "tailwindcss";
-/*
- * 字体自托管（不走 Google Fonts），CSP 的 `font-src` 因此不必放开第三方源。
- * 三套字体都不含中日韩字形，中文由 `--font-sans` 里的系统字体栈接管。
- * `@import` 必须排在所有其他 at-rule 之前，因此放在 `@plugin` 之上。
- */
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/quicksand";
-@import "@fontsource-variable/jetbrains-mono";
-@plugin "@tailwindcss/typography";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
-/*
- * 主题采用 shadcn v4 的两层变量约定：语义 token 以裸变量定义，`@theme inline` 再把
- * 它们映射为 Tailwind 工具类。缺少裸层时 `var(--secondary)` 之类会解析为空。
- *
- * 明暗由 `<html data-theme>` 驱动，每个 token 用 `light-dark(明, 暗)` 一次声明两值，
- * 由 color-scheme 决定取哪一个，因此不存在重复的明暗声明块。
- *
- * 配色取自 tweakcn 紫系主题，所有取值都过了 WCAG AA（见各 token 注释）。
- * **紫只出现在强调位**：正文区、代码块、边框仍是中性灰。
- */
+@custom-variant dark (&:is(.dark *));
+
+/* Font families — loaded via @fontsource imports (Inter, Libre Baskerville)
+   and a Google Fonts <link> (Noto Serif SC) in src/routes/__root.tsx.
+   These variables were previously injected by next/font. */
+:root {
+  --font-sans: 'Inter Variable', 'Inter', sans-serif;
+  --font-serif-display: 'Libre Baskerville', serif;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -33,15 +25,17 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
-  --color-highlight: var(--highlight);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
-  --color-success: var(--success);
-  --color-warning: var(--warning);
-  --color-logo-plate: var(--logo-plate);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -50,1066 +44,384 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  /*
-   * shadcn 原件不用 `destructive-foreground`（走 `bg-destructive/10 + text-destructive`），
-   * 但实心 destructive 按钮需要它；留在这里避免下游手写 `text-white` 绕过主题。
-   * `chart-*` 是自定义图表的默认序列色。
-   */
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-
-  /*
-   * 三套字体都**不含中日韩字形**，`PingFang SC` / `Microsoft YaHei` 是必需的后备项，
-   * 否则中文会落到浏览器默认字体，与拉丁字母的字重、行高对不上。
-   */
-  --font-sans:
-    "Inter Variable", "Quicksand Variable", ui-sans-serif, system-ui, "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --font-mono:
-    "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, "PingFang SC", monospace;
-  --font-serif: Georgia, "Songti SC", serif;
-  /*
-   * 品牌字标用的展示字体：Quicksand 的圆角几何形最接近品牌稿里的字标，
-   * 且已随 `@fontsource-variable/quicksand` 自托管。品牌 Logo 的站名用它渲染。
-   */
-  --font-display:
-    "Quicksand Variable", "Inter Variable", ui-sans-serif, system-ui, "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  /* 导出稿的 `--tracking-normal: -0.01em`：紧排字距，与 Inter 的字形配套。 */
-  --tracking-normal: -0.01em;
-
-  /*
-   * 圆角派生尺度：逐档照抄 shadcn v4 约定。以 `--radius` 为基准，sm/md 递减、
-   * xl 递增 4px；2xl 以上直接取 Tailwind v4 默认值。
-   */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: 1rem;
-  --radius-3xl: 1.5rem;
-  --radius-4xl: 2rem;
-
-  /*
-   * 阴影八档：`shadow-*` 工具类直接读同名的 `--shadow-*`，覆盖它们即可换掉整套投影语言，
-   * 不必改调用处。
-   *
-   * **不能像颜色那样用 `light-dark()` 折叠**：它只在颜色上下文被解析，`box-shadow` 会
-   * 当成未知值（结果是 `shadow: none`）。因此默认值是浅色档，深色档另行覆盖。
-   */
-  --shadow-2xs: 0px 4px 15px 0px hsl(252 100% 63.7255% / 0.04);
-  --shadow-xs: var(--shadow-2xs);
-  --shadow-sm:
-    0px 4px 15px 0px hsl(252 100% 63.7255% / 0.08), 0px 1px 2px -1px hsl(252 100% 63.7255% / 0.08);
-  --shadow: var(--shadow-sm);
-  --shadow-md:
-    0px 4px 15px 0px hsl(252 100% 63.7255% / 0.08), 0px 2px 4px -1px hsl(252 100% 63.7255% / 0.08);
-  --shadow-lg:
-    0px 4px 15px 0px hsl(252 100% 63.7255% / 0.08), 0px 4px 6px -1px hsl(252 100% 63.7255% / 0.08);
-  --shadow-xl:
-    0px 4px 15px 0px hsl(252 100% 63.7255% / 0.08), 0px 8px 10px -1px hsl(252 100% 63.7255% / 0.08);
-  --shadow-2xl: 0px 4px 15px 0px hsl(252 100% 63.7255% / 0.2);
+  --font-sans:
+    var(--font-sans), -apple-system, 'system-ui', 'Segoe UI', Helvetica, Arial,
+    sans-serif;
+  /* CJK serif glyphs use locally-installed fonts — a Chinese serif webfont
+     ships 300+ @font-face subsets (~100KB render-blocking CSS on every page)
+     and is not worth it for headings. */
+  --font-serif:
+    var(--font-serif-display), ui-serif, Georgia, Cambria, 'Times New Roman',
+    'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'SimSun', Times, serif;
 }
 
-/* ---- 明暗选择：改写 color-scheme，light-dark() 据此取值 ---- */
-/* 默认跟随系统；显式选择时覆盖。 */
-:root {
-  color-scheme: light dark;
-}
-:root[data-theme="light"] {
-  color-scheme: light;
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-}
-
-/*
- * 自定义 `dark:` variant：内置的 dark: 只看系统 prefers-color-scheme，与显式主题选择
- * 脱节。这里改按「有效主题」判定：dark 恒真、light 恒假，仅 system 时跟随系统偏好。
- * 选择器同时匹配 <html> 自身与其后代元素。
- */
-@custom-variant dark {
-  &:where([data-theme="dark"], [data-theme="dark"] *) {
-    @slot;
+@layer base {
+  :root {
+    --background: oklch(0.977 0.004 75);
+    --foreground: oklch(0.275 0.007 60);
+    --card: oklch(0.988 0.003 75);
+    --card-foreground: oklch(0.275 0.007 60);
+    --popover: oklch(0.988 0.003 75);
+    --popover-foreground: oklch(0.275 0.007 60);
+    --primary: oklch(0.22 0.005 60);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.948 0.006 75);
+    --secondary-foreground: oklch(0.275 0.007 60);
+    --muted: oklch(0.948 0.006 75);
+    --muted-foreground: oklch(0.5 0.005 60);
+    --accent: oklch(0.948 0.006 75);
+    --accent-foreground: oklch(0.275 0.007 60);
+    --destructive: oklch(0.577 0.245 27.325);
+    --destructive-foreground: oklch(0.577 0.245 27.325);
+    --border: oklch(0.908 0.005 75);
+    --input: oklch(0.908 0.005 75);
+    --ring: oklch(0.708 0 0);
+    --chart-1: oklch(0.646 0.222 41.116);
+    --chart-2: oklch(0.6 0.118 184.714);
+    --chart-3: oklch(0.398 0.07 227.392);
+    --chart-4: oklch(0.828 0.189 84.429);
+    --chart-5: oklch(0.769 0.188 70.08);
+    --radius: 0.625rem;
+    --sidebar: oklch(0.988 0.003 75);
+    --sidebar-foreground: oklch(0.275 0.007 60);
+    --sidebar-primary: oklch(0.22 0.005 60);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.948 0.006 75);
+    --sidebar-accent-foreground: oklch(0.275 0.007 60);
+    --sidebar-border: oklch(0.908 0.005 75);
+    --sidebar-ring: oklch(0.708 0 0);
   }
-  @media (prefers-color-scheme: dark) {
-    &:where([data-theme="system"], [data-theme="system"] *) {
-      @slot;
+
+  .dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.145 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.145 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.985 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --destructive-foreground: oklch(0.577 0.245 27.325);
+    --border: oklch(0.269 0 0);
+    --input: oklch(0.269 0 0);
+    --ring: oklch(0.439 0 0);
+    --chart-1: oklch(0.488 0.243 264.376);
+    --chart-2: oklch(0.696 0.17 162.48);
+    --chart-3: oklch(0.769 0.188 70.08);
+    --chart-4: oklch(0.627 0.265 303.9);
+    --chart-5: oklch(0.645 0.246 16.439);
+    --sidebar: oklch(0.18 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.985 0 0);
+    --sidebar-primary-foreground: oklch(0.205 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(0.269 0 0);
+    --sidebar-ring: oklch(0.439 0 0);
+  }
+}
+
+/* Color themes — see src/config/appearance.ts. Each theme sets three brand
+   tokens per mode plus a tint (hue + base chroma); the shared blocks below
+   derive primary, the solid sidebar and the tinted neutrals (background,
+   cards, muted, borders) from them. Only applied while the admin's
+   appearance switch is on (<html data-theme>); off, the :root/.dark palette
+   above is used untouched. */
+@layer base {
+  /* Classic: a layered neutral (gray frame, white content card). */
+  [data-theme='classic'] {
+    --background: oklch(0.993 0.002 75);
+    --card: oklch(1 0 0);
+    --popover: oklch(1 0 0);
+    --secondary: oklch(0.962 0.004 75);
+    --muted: oklch(0.962 0.004 75);
+    --muted-foreground: oklch(0.52 0.006 60);
+    --accent: oklch(0.955 0.005 75);
+    --border: oklch(0.912 0.004 75);
+    --input: oklch(0.9 0.004 75);
+    --ring: oklch(0.55 0.01 60);
+    --sidebar: oklch(0.958 0.004 75);
+    --sidebar-accent: oklch(0.995 0.002 75);
+    --sidebar-border: oklch(0.9 0.005 75);
+    --sidebar-ring: oklch(0.55 0.01 60);
+  }
+  .dark[data-theme='classic'] {
+    --background: oklch(0.195 0.003 60);
+    --card: oklch(0.228 0.003 60);
+    --popover: oklch(0.228 0.003 60);
+    --secondary: oklch(0.275 0.004 60);
+    --muted: oklch(0.275 0.004 60);
+    --muted-foreground: oklch(0.72 0.005 60);
+    --accent: oklch(0.285 0.004 60);
+    --border: oklch(0.3 0.004 60);
+    --input: oklch(0.32 0.004 60);
+    --sidebar: oklch(0.16 0.003 60);
+    --sidebar-accent: oklch(0.245 0.004 60);
+    --sidebar-border: oklch(0.26 0.004 60);
+  }
+
+  [data-theme]:not([data-theme='classic']) {
+    --background: oklch(0.975 calc(var(--tint-c) * 0.6) var(--tint-h));
+    --foreground: oklch(0.27 calc(var(--tint-c) * 1.2) var(--tint-h));
+    --card: oklch(0.99 calc(var(--tint-c) * 0.3) var(--tint-h));
+    --card-foreground: var(--foreground);
+    --popover: var(--card);
+    --popover-foreground: var(--foreground);
+    --secondary: oklch(0.945 var(--tint-c) var(--tint-h));
+    --secondary-foreground: var(--foreground);
+    --muted: oklch(0.948 var(--tint-c) var(--tint-h));
+    --muted-foreground: oklch(0.5 calc(var(--tint-c) * 1.4) var(--tint-h));
+    --accent: oklch(0.93 calc(var(--tint-c) * 2) var(--tint-h));
+    --accent-foreground: oklch(0.3 calc(var(--tint-c) * 3) var(--tint-h));
+    --border: oklch(0.905 calc(var(--tint-c) * 1.1) var(--tint-h));
+    --input: var(--border);
+    --brand-foreground: oklch(0.985 0 0);
+    --primary: var(--brand);
+    --primary-foreground: var(--brand-foreground);
+    --ring: var(--brand);
+    --sidebar: var(--brand-sidebar);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.985 0 0);
+    --sidebar-primary-foreground: var(--brand-sidebar);
+    --sidebar-accent: oklch(1 0 0 / 0.16);
+    --sidebar-accent-foreground: oklch(1 0 0);
+    --sidebar-border: oklch(1 0 0 / 0.14);
+    --sidebar-ring: oklch(1 0 0 / 0.45);
+  }
+  .dark[data-theme]:not([data-theme='classic']) {
+    --background: oklch(0.205 calc(var(--tint-c) * 1.1) var(--tint-h));
+    --foreground: oklch(0.96 calc(var(--tint-c) * 0.4) var(--tint-h));
+    --card: oklch(0.24 calc(var(--tint-c) * 1.2) var(--tint-h));
+    --secondary: oklch(0.29 calc(var(--tint-c) * 1.3) var(--tint-h));
+    --muted: oklch(0.29 calc(var(--tint-c) * 1.3) var(--tint-h));
+    --muted-foreground: oklch(0.74 calc(var(--tint-c) * 1.4) var(--tint-h));
+    --accent: oklch(0.33 calc(var(--tint-c) * 2.4) var(--tint-h));
+    --accent-foreground: oklch(0.96 calc(var(--tint-c) * 0.6) var(--tint-h));
+    --border: oklch(0.32 calc(var(--tint-c) * 1.4) var(--tint-h));
+    --input: oklch(0.34 calc(var(--tint-c) * 1.4) var(--tint-h));
+    --sidebar-accent: oklch(1 0 0 / 0.12);
+    --sidebar-border: oklch(1 0 0 / 0.1);
+  }
+  /* Classic: the active nav item is a raised card on the gray sidebar. */
+  [data-theme='classic'] [data-sidebar='menu-button'][data-active] {
+    box-shadow:
+      0 0 0 1px var(--sidebar-border),
+      0 1px 2px oklch(0 0 0 / 0.06);
+  }
+  .dark[data-theme='classic'] [data-sidebar='menu-button'][data-active] {
+    box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.06);
+  }
+  /* Outline the active nav item so it reads on a saturated sidebar. */
+  [data-theme]:not([data-theme='classic'])
+    [data-sidebar='menu-button'][data-active] {
+    box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.14);
+  }
+
+  [data-theme='forest'] {
+    --tint-h: 150;
+    --tint-c: 0.018;
+    --brand: oklch(0.48 0.13 150);
+    --brand-sidebar: oklch(0.5 0.12 150);
+  }
+  .dark[data-theme='forest'] {
+    --brand: oklch(0.72 0.15 150);
+    --brand-foreground: oklch(0.2 0.04 150);
+    --brand-sidebar: oklch(0.33 0.08 150);
+  }
+
+  [data-theme='ocean'] {
+    --tint-h: 258;
+    --tint-c: 0.018;
+    --brand: oklch(0.5 0.17 258);
+    --brand-sidebar: oklch(0.47 0.15 258);
+  }
+  .dark[data-theme='ocean'] {
+    --brand: oklch(0.7 0.14 258);
+    --brand-foreground: oklch(0.2 0.04 258);
+    --brand-sidebar: oklch(0.32 0.09 258);
+  }
+
+  [data-theme='violet'] {
+    --tint-h: 290;
+    --tint-c: 0.02;
+    --brand: oklch(0.5 0.19 290);
+    --brand-sidebar: oklch(0.45 0.17 290);
+  }
+  .dark[data-theme='violet'] {
+    --brand: oklch(0.72 0.15 290);
+    --brand-foreground: oklch(0.2 0.05 290);
+    --brand-sidebar: oklch(0.32 0.1 290);
+  }
+
+  [data-theme='sunset'] {
+    --tint-h: 50;
+    --tint-c: 0.018;
+    --brand: oklch(0.56 0.17 40);
+    --brand-sidebar: oklch(0.55 0.15 42);
+  }
+  .dark[data-theme='sunset'] {
+    --brand: oklch(0.74 0.15 50);
+    --brand-foreground: oklch(0.22 0.05 45);
+    --brand-sidebar: oklch(0.34 0.08 45);
+  }
+
+  [data-theme='rose'] {
+    --tint-h: 10;
+    --tint-c: 0.018;
+    --brand: oklch(0.54 0.2 10);
+    --brand-sidebar: oklch(0.5 0.17 10);
+  }
+  .dark[data-theme='rose'] {
+    --brand: oklch(0.72 0.16 10);
+    --brand-foreground: oklch(0.2 0.05 10);
+    --brand-sidebar: oklch(0.32 0.09 10);
+  }
+
+  [data-theme='slate'] {
+    --tint-h: 260;
+    --tint-c: 0.012;
+    --brand: oklch(0.3 0.03 260);
+    --brand-sidebar: oklch(0.26 0.025 260);
+  }
+  .dark[data-theme='slate'] {
+    --brand: oklch(0.88 0.02 260);
+    --brand-foreground: oklch(0.2 0.02 260);
+    --brand-sidebar: oklch(0.27 0.02 260);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  /* Tailwind v4 dropped the pointer cursor on buttons; bring it back for
+     anything clickable (disabled buttons keep the default cursor). */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+
+  @keyframes drift-a {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    50% {
+      transform: translate3d(6%, -4%, 0) scale(1.1);
+    }
+  }
+  @keyframes drift-b {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    50% {
+      transform: translate3d(-5%, 5%, 0) scale(0.95);
+    }
+  }
+  @keyframes drift-c {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    50% {
+      transform: translate3d(4%, 6%, 0) scale(1.08);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-drift-a,
+    .animate-drift-b,
+    .animate-drift-c {
+      animation: none !important;
     }
   }
 }
 
-/*
- * 深色档的阴影：换成黑色，且位移与模糊更大。
- *
- * `data-theme="system"` 时也要走 `@media` 那段，否则跟随系统的用户会把浅紫投影带进
- * 深色外观。两段选择器与 `@custom-variant dark` 保持一致。
- */
-:root[data-theme="dark"] {
-  --shadow-2xs: 0px 8px 25px 0px hsl(0 0% 0% / 0.2);
-  --shadow-xs: var(--shadow-2xs);
-  --shadow-sm: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 1px 2px -1px hsl(0 0% 0% / 0.4);
-  --shadow-md: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 2px 4px -1px hsl(0 0% 0% / 0.4);
-  --shadow-lg: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 4px 6px -1px hsl(0 0% 0% / 0.4);
-  --shadow-xl: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 8px 10px -1px hsl(0 0% 0% / 0.4);
-  --shadow-2xl: 0px 8px 25px 0px hsl(0 0% 0% / 1);
-}
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="system"] {
-    --shadow-2xs: 0px 8px 25px 0px hsl(0 0% 0% / 0.2);
-    --shadow-xs: var(--shadow-2xs);
-    --shadow-sm: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 1px 2px -1px hsl(0 0% 0% / 0.4);
-    --shadow-md: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 2px 4px -1px hsl(0 0% 0% / 0.4);
-    --shadow-lg: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 4px 6px -1px hsl(0 0% 0% / 0.4);
-    --shadow-xl: 0px 8px 25px 0px hsl(0 0% 0% / 0.4), 0px 8px 10px -1px hsl(0 0% 0% / 0.4);
-    --shadow-2xl: 0px 8px 25px 0px hsl(0 0% 0% / 1);
+@layer utilities {
+  @keyframes badge-marquee {
+    from {
+      transform: translate3d(-50%, 0, 0);
+    }
+    to {
+      transform: translate3d(0, 0, 0);
+    }
+  }
+  .badge-marquee {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 6%,
+      #000 94%,
+      transparent
+    );
+  }
+  .badge-marquee-track {
+    animation: badge-marquee var(--badge-marquee-duration, 60s) linear infinite;
+  }
+  .badge-marquee:hover .badge-marquee-track,
+  .badge-marquee:focus-within .badge-marquee-track {
+    animation-play-state: paused;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .badge-marquee {
+      overflow-x: auto;
+    }
+    .badge-marquee-track {
+      animation: none !important;
+    }
+    .badge-marquee-track > [aria-hidden='true'] {
+      display: none;
+    }
   }
 }
 
-/* ---- 品牌 token：每个 token 用 light-dark(明, 暗) 一次声明 ---- */
-:root {
-  /* 页面底：`#FCFAFF`（带一丝紫的冷白）/ `#0A0A0F`（近黑）。 */
-  --background: light-dark(oklch(0.988 0.0069 304.2448), oklch(0.1473 0.0107 285.0074));
-  /*
-   * 正文：对 background 18.01（浅）/ 17.39（深）。深色档比纯白低一档，
-   * 在近黑底上是柔和的浅灰而非白斑。
-   */
-  --foreground: light-dark(oklch(0.1845 0.0101 285.3646), oklch(0.9566 0.0067 286.2732));
-  /* 卡片比页面底更亮（浅色纯白 / 深色抬一档），让内容块从底色上浮起来。 */
-  --card: light-dark(oklch(1 0 0), oklch(0.1873 0.0203 284.2753));
-  --card-foreground: light-dark(oklch(0.1845 0.0101 285.3646), oklch(0.9566 0.0067 286.2732));
-  --popover: light-dark(oklch(1 0 0), oklch(0.1873 0.0203 284.2753));
-  --popover-foreground: light-dark(oklch(0.1845 0.0101 285.3646), oklch(0.9566 0.0067 286.2732));
-  /*
-   * 主色：`#6B46FF` / `#8061FF`。
-   *
-   * 深色档 L 从导出稿的 0.5990 提到 0.615，是让链接色达 AA 的最小改动。
-   * **深色档前景用墨色而非白**：白字压在提亮后的主色上只有 3.9:1。
-   */
-  --primary: light-dark(oklch(0.5553 0.2554 283.4559), oklch(0.615 0.2299 286.2047));
-  --primary-foreground: light-dark(oklch(1 0 0), oklch(0.1473 0.0107 285.0074));
-  /*
-   * 次级面与强调面**都带明显紫调**，只作小面积底色（菜单 hover、选中项、标签）；
-   * 大面积分区用 `--muted`，否则页面会泛薰衣草色。
-   *
-   * `secondary-foreground` / `accent-foreground` 浅色档用 L=0.545 而非导出稿的 0.5553，
-   * 只为达 AA。
-   */
-  --secondary: light-dark(oklch(0.9498 0.0272 297.3155), oklch(0.244 0.0341 283.5857));
-  --secondary-foreground: light-dark(oklch(0.4357 0.1578 283.9596), oklch(0.8145 0.0994 289.1546));
-  --muted: light-dark(oklch(0.9686 0.0066 286.2752), oklch(0.244 0.0341 283.5857));
-  /* 次要文本：对 background 6.13（浅）/ 6.29（深），对 muted 5.80 / 5.21，达 AA。 */
-  --muted-foreground: light-dark(oklch(0.4878 0.0254 285.4193), oklch(0.6586 0.0235 285.736));
-  --accent: light-dark(oklch(0.939 0.0326 295.3163), oklch(0.2984 0.0486 283.0603));
-  --accent-foreground: light-dark(oklch(0.545 0.2554 283.4559), oklch(0.7118 0.1627 290.5306));
-  /*
-   * 高亮色：落地页的点、轨道、连接线与渐变光斑。
-   *
-   * `--accent` 是**面**而非强调色，拿它画装饰元素会得到一块面而不是一个点。
-   * 非文本图形按 WCAG 1.4.11 需 ≥ 3:1：对底色 3.79（浅）/ 6.92（深）。
-   */
-  --highlight: light-dark(oklch(0.6197 0.1908 292.6297), oklch(0.6979 0.1743 292.6297));
-  /*
-   * 危险色：导出稿原值两头都不达 AA，浅色压到 L=0.58、深色提到 L=0.64。
-   */
-  --destructive: light-dark(oklch(0.58 0.2146 25.0397), oklch(0.64 0.1613 26.8994));
-  /*
-   * 危险色上的前景：实心 destructive 按钮 / 徽章的文字色。两档取值相反，
-   * 不要退化成 `text-white`。
-   */
-  --destructive-foreground: light-dark(oklch(1 0 0), oklch(0.1473 0.0107 285.0074));
-  /*
-   * 成功色：对 `--background` 的对比度为 5.13（浅）/ 8.57（深），达 WCAG AA。
-   * 只作为**文字 / 图标色**使用；需要底色时配 `/10` 透明度，不要整块填充。
-   */
-  --success: light-dark(oklch(0.5131 0.1373 151.23), oklch(0.7224 0.1598 151.88));
-  /*
-   * 警告色：用于需要用户注意但不阻断操作的提示。对 `--background` 的对比度为
-   * 4.80（浅）/ 10.34（深），达 WCAG AA。
-   */
-  --warning: light-dark(oklch(0.5521 0.1255 63.42), oklch(0.7995 0.15 75.2));
-  /*
-   * 图表默认序列色：`ChartConfig` 未指定 `color` 时按序取用，保证同页多条序列不撞色。
-   * 只用于数据可视化，不要拿它画 UI 元素。
-   */
-  --chart-1: light-dark(oklch(0.5553 0.2554 283.4559), oklch(0.599 0.2299 286.2047));
-  --chart-2: light-dark(oklch(0.6268 0.2325 303.9004), oklch(0.7217 0.1767 305.5038));
-  --chart-3: light-dark(oklch(0.6231 0.188 259.8145), oklch(0.7137 0.1434 254.624));
-  --chart-4: light-dark(oklch(0.7845 0.1325 181.912), oklch(0.8335 0.1384 186.7342));
-  --chart-5: light-dark(oklch(0.645 0.2154 16.4393), oklch(0.7192 0.169 13.428));
-  /*
-   * 品牌 Logo 的 CSS 变量：`src/components/layout/brand/*.svg` 用 `--jbx-*` 上色。
-   *
-   * 取值**直接用品牌稿原色**，不映射到站点语义 token——混入站点色会让 Logo 偏离品牌规范。
-   * 站点主色与品牌紫几乎同值，页面上不会被看成两个色。
-   */
-  --jbx-text: light-dark(#111318, #f8fafc);
-  --jbx-mascot: light-dark(#111318, #f8fafc);
-  --jbx-accent: light-dark(#6948ff, #8066ff);
-  --jbx-code: light-dark(#ffffff, #ffffff);
-  --jbx-shadow: light-dark(#e3e4e7, #05070b);
-  /* Logo 自带深浅两套配色，两种主题下都能直接放在页面底色上，无需垫板。 */
-  --logo-plate: transparent;
-  --border: light-dark(oklch(0.9278 0.0134 286.1348), oklch(0.2954 0.0397 283.7017));
-  /*
-   * 输入框描边比 `--border` 重一档：非文本 UI 组件按 WCAG 1.4.11 需对底色 ≥ 3:1，
-   * 导出稿把两者写成同值，表单框会几乎看不见。
-   */
-  --input: light-dark(oklch(0.623 0.02 286.137), oklch(0.52 0.025 284.7));
-  --ring: light-dark(oklch(0.5553 0.2554 283.4559), oklch(0.615 0.2299 286.2047));
-  /*
-   * 侧栏语义色完全沿用导出稿：**侧栏与页面底同色，靠 `--sidebar-border` 的 1px 描边
-   * 分界**。不要再单独压暗 sidebar，否则选中态的淡紫底会浮在一层灰上。
-   *
-   * `sidebar-accent-foreground` 深色档从 0.5990 提到 0.66 是唯一偏离，为达 AA。
-   * `sidebar-primary` 跟随 `--primary`，前景因此也用墨色。
-   */
-  --sidebar: light-dark(oklch(0.988 0.0069 304.2448), oklch(0.1473 0.0107 285.0074));
-  --sidebar-foreground: light-dark(oklch(0.3665 0.0274 284.9708), oklch(0.7109 0.0231 285.7983));
-  --sidebar-primary: light-dark(oklch(0.5553 0.2554 283.4559), oklch(0.615 0.2299 286.2047));
-  --sidebar-primary-foreground: light-dark(oklch(1 0 0), oklch(0.1473 0.0107 285.0074));
-  --sidebar-accent: light-dark(oklch(0.9498 0.0272 297.3155), oklch(0.244 0.0341 283.5857));
-  --sidebar-accent-foreground: light-dark(
-    oklch(0.5553 0.2554 283.4559),
-    oklch(0.66 0.2299 286.2047)
-  );
-  --sidebar-border: light-dark(oklch(0.9278 0.0134 286.1348), oklch(0.2954 0.0397 283.7017));
-  --sidebar-ring: light-dark(oklch(0.5553 0.2554 283.4559), oklch(0.615 0.2299 286.2047));
-  /* 圆角 0.75rem：取自 tweakcn 主题，偏圆润，与品牌 mascot 的轮廓呼应。 */
-  --radius: 0.75rem;
-}
-
-/*
- * prose 品牌化：把 typography 的 --tw-prose-* 映射到本站语义令牌。
- * 令牌本身是 light-dark()，故明暗自动跟随，无需 prose-invert。
- */
-.prose {
-  --tw-prose-body: var(--foreground);
-  --tw-prose-headings: var(--foreground);
-  --tw-prose-lead: var(--muted-foreground);
-  --tw-prose-links: var(--primary);
-  --tw-prose-bold: var(--foreground);
-  --tw-prose-counters: var(--muted-foreground);
-  --tw-prose-bullets: var(--border);
-  --tw-prose-hr: var(--border);
-  --tw-prose-quotes: var(--foreground);
-  --tw-prose-quote-borders: var(--border);
-  --tw-prose-captions: var(--muted-foreground);
-  --tw-prose-code: var(--foreground);
-  --tw-prose-pre-code: var(--foreground);
-  --tw-prose-pre-bg: var(--muted);
-  --tw-prose-th-borders: var(--border);
-  --tw-prose-td-borders: var(--border);
-}
-
-/*
- * 表格容器外框：一处定义，所有表格共用。
- *
- * `ui/table` 没有外层容器，外框若写在调用处容易分叉。这里统一给 `Table` 自带的滚动
- * 容器上框，调用处零改动；`.not-prose` 那层不重复给框。
- * 圆角取 `--radius-lg`（与 shadcn `dashboard-01` 一致），颜色走 `--border`。
- */
-[data-slot="table-container"] {
-  overflow: hidden;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-}
-
-/*
- * 表头：一整行染 `--muted` 底色并在滚动容器内吸顶。
- *
- * 底色给在 `thead` 而非每个 `th` 上，否则单元格间的空隙会露出白底。
- * `Table` 的滚动容器只横向滚动，因此吸顶仅在调用处自建滚动区时生效。
- */
-[data-slot="table-header"] {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background-color: var(--muted);
-}
-
-/* 锚点平滑滚动；用户偏好减少动效时关闭。 */
-html {
-  scroll-behavior: smooth;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
-}
-
-/*
- * shadcn v4 的 base layer。
- *
- * Tailwind v4 的默认边框色是 `currentColor`，而 shadcn 组件大量使用不带颜色的边框
- * 工具类，缺了这段行线会取文字色。`@layer base` 的 `*` 优先级最低，组件显式写的
- * `border-primary` 之类仍然胜出。
- */
+/* With the appearance switch on, toasts follow the theme: card surface +
+   theme border/text from the Toaster's popover tokens; only the icon
+   carries the type color. Off, <Toaster richColors> keeps the old look. */
 @layer base {
-  *,
-  ::after,
-  ::before,
-  ::backdrop,
-  ::file-selector-button {
-    border-color: var(--border);
-    /* 与 shadcn 的 `outline-ring/50` 一致：焦点环是半透明的辅助提示，不是实心描边。 */
-    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+  [data-theme] [data-sonner-toaster] [data-sonner-toast] {
+    box-shadow:
+      0 1px 2px oklch(0 0 0 / 0.04),
+      0 8px 24px -6px oklch(0 0 0 / 0.12);
   }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  /* 与导出稿的 `@layer base { body { letter-spacing: var(--tracking-normal) } }` 一致。 */
-  font-family: var(--font-sans);
-  letter-spacing: var(--tracking-normal);
-  /* 中英混排：中文段落里不要自动插入西文间距（导出稿的字体是拉丁专用字面）。 */
-  font-synthesis-weight: none;
-}
-
-/*
- * 卡片间距：`ui/card` 的 utility 类硬编码了 `[--card-spacing:--spacing(4)]`，会覆盖
- * `@theme` 里的变量，所以必须直接给 `[data-slot="card"]` 定值。
- *
- * 自定义属性只受同名声明影响，子选择器覆盖不了父级，只能写在卡片本体。
- * `data-size="sm"` 那档排除在外：小卡本就是紧凑布局。
- */
-[data-slot="card"]:not([data-size="sm"]) {
-  --card-spacing: 1.5rem;
-}
-
-/*
- * 产品实验室：轨道、场景预览与工作流共用品牌 token。
- *
- * 混合空间一律用 **oklab**，不要用 oklch：oklch 按色相角度插值，白/灰的色相是任意的，
- * 与品牌紫混合时会绕经红/粉区间，9% 紫 + 白会得到粉色而非淡紫。
- */
-.landing-lab {
-  --lab-surface: light-dark(
-    color-mix(in oklab, var(--card) 84%, var(--background)),
-    color-mix(in oklab, var(--card) 90%, var(--background))
-  );
-  --lab-glass: color-mix(in oklab, var(--lab-surface) 88%, transparent);
-  --lab-line: color-mix(in oklab, var(--primary) 20%, var(--border));
-  --lab-shadow: light-dark(
-    color-mix(in oklab, var(--foreground) 9%, transparent),
-    color-mix(in oklab, var(--background) 65%, transparent)
-  );
-  --lab-terminal-bg: light-dark(var(--foreground), var(--background));
-  --lab-terminal-ink: light-dark(var(--background), var(--foreground));
-  --lab-float-duration: 6s;
-  --lab-signal-duration: 3.6s;
-  --lab-enter-duration: 420ms;
-  --lab-interaction-duration: 180ms;
-  min-width: 0;
-  color: var(--foreground);
-}
-
-.landing-lab a svg {
-  transition: translate var(--lab-interaction-duration) ease;
-}
-
-.landing-lab .lab-hero {
-  position: relative;
-  isolation: isolate;
-  background-image:
-    radial-gradient(
-      ellipse at 80% 32%,
-      color-mix(in oklab, var(--highlight) 12%, transparent),
-      transparent 48%
-    ),
-    radial-gradient(
-      ellipse at 60% 64%,
-      color-mix(in oklab, var(--primary) 9%, transparent),
-      transparent 55%
-    ),
-    linear-gradient(color-mix(in oklab, var(--border) 45%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in oklab, var(--border) 45%, transparent) 1px, transparent 1px);
-  background-size:
-    auto,
-    auto,
-    3rem 3rem,
-    3rem 3rem;
-}
-
-.landing-lab .lab-reveal[data-revealed="true"] {
-  animation: lab-reveal-enter var(--lab-enter-duration) ease-out both;
-}
-
-.landing-lab .lab-stage {
-  position: relative;
-  isolation: isolate;
-  width: 100%;
-  max-width: 38rem;
-  min-width: 0;
-  margin: 0 auto;
-  padding: clamp(0.75rem, 2vw, 1.75rem);
-  overflow: hidden;
-  border: 1px solid var(--lab-line);
-  border-radius: calc(var(--radius) * 2.6);
-  background:
-    radial-gradient(
-      circle at 50% 46%,
-      color-mix(in oklab, var(--primary) 11%, transparent),
-      transparent 62%
-    ),
-    var(--lab-glass);
-  box-shadow:
-    0 1px 0 color-mix(in oklab, var(--card) 70%, transparent) inset,
-    0 1.5rem 4rem -2rem var(--lab-shadow);
-}
-
-.landing-lab .leap-scene {
-  position: relative;
-  margin-top: 1.5rem;
-  aspect-ratio: 400 / 260;
-  isolation: isolate;
-}
-
-.landing-lab .leap-trail {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-.landing-lab .leap-trail path {
-  stroke: var(--primary);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-dasharray: 4 7;
-  animation: leap-trail-flow var(--lab-float-duration) linear infinite;
-}
-
-.landing-lab .leap-trail .leap-trail-small {
-  stroke: var(--highlight);
-}
-
-.landing-lab .leap-trail circle {
-  fill: var(--highlight);
-  stroke: var(--background);
-  stroke-width: 3;
-}
-
-.landing-lab .leap-horizon {
-  position: absolute;
-  top: 8%;
-  right: 0;
-  width: 38%;
-  aspect-ratio: 1;
-  border: 1px solid color-mix(in oklab, var(--highlight) 24%, transparent);
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    color-mix(in oklab, var(--highlight) 14%, transparent),
-    transparent 70%
-  );
-}
-
-.landing-lab .leap-mascot {
-  position: absolute;
-  z-index: 1;
-  top: 48%;
-  left: 28%;
-  width: 56%;
-  object-fit: contain;
-  transform: translate(-50%, -50%);
-  filter: drop-shadow(0 1.25rem 1.25rem var(--lab-shadow));
-  animation: lab-mascot-float var(--lab-float-duration) ease-in-out infinite;
-  transition:
-    top 600ms ease,
-    left 600ms ease;
-  pointer-events: none;
-}
-
-.landing-lab .leap-scene[data-step="1"] .leap-mascot {
-  top: 35%;
-  left: 48%;
-}
-
-.landing-lab .leap-scene[data-step="2"] .leap-mascot {
-  top: 28%;
-  left: 70%;
-}
-
-/*
- * 深色主题的 mascot：浅色版在白底上抠图，深色下边缘会像描了发光的边。
- *
- * 用 `visibility` 而非 `display`：隐藏的那层必须继续占位，
- * 否则动画的 transform 基准会随主题变化。
- */
-.landing-lab .leap-mascot-on-dark {
-  visibility: hidden;
-
-  @variant dark {
-    visibility: visible;
+  [data-theme]
+    [data-sonner-toaster]
+    [data-sonner-toast][data-type='success']
+    [data-icon],
+  [data-theme]
+    [data-sonner-toaster]
+    [data-sonner-toast][data-type='info']
+    [data-icon],
+  [data-theme]
+    [data-sonner-toaster]
+    [data-sonner-toast][data-type='loading']
+    [data-icon] {
+    color: var(--primary);
   }
-}
-
-.landing-lab .leap-mascot:not(.leap-mascot-on-dark) {
-  @variant dark {
-    visibility: hidden;
+  [data-theme]
+    [data-sonner-toaster]
+    [data-sonner-toast][data-type='error']
+    [data-icon] {
+    color: var(--destructive);
   }
-}
-
-.landing-lab .leap-stops {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin-top: 1rem;
-}
-
-.landing-lab .leap-stop {
-  display: flex;
-  width: 100%;
-  min-height: 5rem;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border: 1px solid var(--lab-line);
-  border-radius: var(--radius);
-  background: var(--lab-glass);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background-color var(--lab-interaction-duration) ease,
-    border-color var(--lab-interaction-duration) ease;
-}
-
-.landing-lab .leap-stop-icon {
-  color: var(--primary);
-}
-
-.landing-lab .leap-stop[aria-pressed="true"] {
-  border-color: var(--primary);
-  background: color-mix(in oklab, var(--primary) 10%, var(--card));
-}
-
-.landing-lab .leap-story {
-  display: grid;
-  gap: 2.5rem;
-}
-
-.landing-lab .leap-story-copy {
-  display: grid;
-  align-content: center;
-  gap: 1.5rem;
-  color: var(--muted-foreground);
-  font-size: 1rem;
-  line-height: 1.9;
-}
-
-@keyframes leap-trail-flow {
-  to {
-    stroke-dashoffset: -66;
-  }
-}
-
-.landing-lab .lab-signal-line {
-  position: relative;
-  width: 100%;
-  height: 1px;
-  margin-block: 1rem;
-  overflow: hidden;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--lab-line) 18%,
-    var(--lab-line) 82%,
-    transparent
-  );
-}
-
-.landing-lab .lab-signal-line::after {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 22%;
-  background: linear-gradient(90deg, transparent, var(--highlight), var(--primary), transparent);
-  animation: lab-signal-travel var(--lab-signal-duration) linear infinite;
-  content: "";
-}
-
-.landing-lab .lab-preview {
-  position: relative;
-  display: grid;
-  min-width: 0;
-  min-height: 7.5rem;
-  gap: 0.75rem;
-  margin-top: 1.25rem;
-  padding: 1rem;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) * 1.4);
-  background:
-    radial-gradient(
-      ellipse at 100% 0,
-      color-mix(in oklab, var(--highlight) 6%, transparent),
-      transparent 65%
-    ),
-    color-mix(in oklab, var(--secondary) 65%, var(--background));
-}
-
-.landing-lab .lab-preview-header {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  color: var(--muted-foreground);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  line-height: 1.5;
-}
-
-.landing-lab .lab-auth-preview {
-  display: grid;
-  width: 100%;
-  max-width: 17rem;
-  min-width: 0;
-  gap: 0.625rem;
-  margin-inline: auto;
-  padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-  color: var(--card-foreground);
-  box-shadow: 0 0.75rem 2rem -1.25rem var(--lab-shadow);
-  font-size: 0.75rem;
-}
-
-.landing-lab .lab-flow-node,
-.landing-lab .lab-stack-node {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.625rem 0.75rem;
-  border: 1px solid var(--lab-line);
-  border-radius: calc(var(--radius) * 0.8);
-  background: var(--lab-surface);
-  color: var(--foreground);
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.landing-lab .lab-flow-line {
-  position: relative;
-  width: 100%;
-  min-width: 0.5rem;
-  height: 1px;
-  max-width: 1.5rem;
-  flex: 0 0 0.75rem;
-  background: var(--lab-line);
-}
-
-.landing-lab .lab-flow-line::after {
-  position: absolute;
-  inset: -2px auto auto 0;
-  width: 0.3rem;
-  height: 0.3rem;
-  border-radius: 50%;
-  background: var(--highlight);
-  animation: lab-connector-travel var(--lab-signal-duration) ease-in-out infinite;
-  content: "";
-}
-
-.landing-lab .lab-file-row {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.625rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) * 0.8);
-  background: var(--lab-surface);
-  color: var(--foreground);
-  font-size: 0.75rem;
-  overflow-wrap: anywhere;
-}
-
-.landing-lab .lab-file-row > svg,
-.landing-lab .lab-stack-node > svg,
-.landing-lab .lab-flow-node > svg {
-  flex-shrink: 0;
-  color: var(--primary);
-}
-
-.landing-lab .lab-file-row > :not(svg) {
-  min-width: 0;
-}
-
-.landing-lab .lab-mail-envelope {
-  position: relative;
-  display: grid;
-  width: 5.5rem;
-  height: 3.75rem;
-  align-items: end;
-  justify-items: center;
-  margin: 0.75rem auto;
-  padding-bottom: 0.5rem;
-  overflow: hidden;
-  border: 1px solid var(--lab-line);
-  border-radius: calc(var(--radius) * 0.8);
-  background: var(--lab-surface);
-  color: var(--primary);
-  box-shadow: 0 0.75rem 1.5rem -1rem var(--lab-shadow);
-  animation: lab-envelope-float var(--lab-float-duration) ease-in-out infinite;
-}
-
-.landing-lab .lab-mail-envelope::before {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 60%;
-  background: color-mix(in oklab, var(--primary) 18%, var(--lab-surface));
-  clip-path: polygon(0 0, 100% 0, 50% 100%);
-  content: "";
-}
-
-.landing-lab .lab-language-copy {
-  min-width: 0;
-  padding: 0.75rem;
-  border-inline-start: 2px solid var(--highlight);
-  border-radius: 0 calc(var(--radius) * 0.6) calc(var(--radius) * 0.6) 0;
-  background: color-mix(in oklab, var(--card) 70%, transparent);
-  color: var(--foreground);
-  font-size: 0.8125rem;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
-}
-
-.landing-lab .lab-preview-select {
-  padding: 0.375rem 0.625rem;
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) * 0.6);
-  background: var(--lab-surface);
-  color: var(--muted-foreground);
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    border-color var(--lab-interaction-duration) ease,
-    background-color var(--lab-interaction-duration) ease,
-    color var(--lab-interaction-duration) ease;
-}
-
-.landing-lab .lab-workflow {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: clamp(1.5rem, 4vw, 3.5rem);
-}
-
-.landing-lab .lab-step {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  min-width: 0;
-  align-items: flex-start;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) * 1.2);
-  background: var(--lab-surface);
-  color: var(--foreground);
-  text-align: start;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-  transition:
-    transform var(--lab-interaction-duration) ease,
-    border-color var(--lab-interaction-duration) ease,
-    background-color var(--lab-interaction-duration) ease,
-    box-shadow var(--lab-interaction-duration) ease;
-}
-
-.landing-lab .lab-step > * {
-  min-width: 0;
-  width: 100%;
-}
-
-.landing-lab .leap-stop[aria-pressed="true"],
-.landing-lab .lab-step[aria-pressed="true"],
-.landing-lab .lab-preview-select[aria-pressed="true"] {
-  border-color: color-mix(in oklab, var(--primary) 65%, var(--border));
-  background: color-mix(in oklab, var(--primary) 9%, var(--lab-surface));
-  color: var(--foreground);
-  box-shadow:
-    0 0 0 1px color-mix(in oklab, var(--primary) 12%, transparent),
-    0 0.5rem 1.5rem -1rem var(--lab-shadow);
-}
-
-.landing-lab .lab-terminal {
-  position: relative;
-  min-width: 0;
-  padding: clamp(1rem, 3vw, 1.75rem);
-  overflow: hidden;
-  border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--lab-terminal-bg));
-  border-radius: calc(var(--radius) * 1.6);
-  background:
-    radial-gradient(
-      ellipse at 100% 0,
-      color-mix(in oklab, var(--primary) 15%, transparent),
-      transparent 65%
-    ),
-    var(--lab-terminal-bg);
-  color: var(--lab-terminal-ink);
-  box-shadow: 0 1.5rem 3rem -2rem var(--lab-shadow);
-  font-family: var(--font-mono);
-  font-size: clamp(0.6875rem, 1.2vw, 0.8125rem);
-  line-height: 1.8;
-}
-
-/*
- * 终端内部的层次：次级文字与分隔线一律用 ink 的透明度派生，不要写死 `text-white/*`。
- * 终端底色在明暗下互为反转，写死白色会在深色主题下消失。
- */
-.landing-lab .lab-terminal-rule {
-  border-color: color-mix(in oklab, var(--lab-terminal-ink) 12%, transparent);
-}
-
-.landing-lab .lab-terminal-muted {
-  color: color-mix(in oklab, var(--lab-terminal-ink) 60%, transparent);
-}
-
-.landing-lab .lab-terminal-faint {
-  color: color-mix(in oklab, var(--lab-terminal-ink) 40%, transparent);
-}
-
-.landing-lab .lab-terminal-dot {
-  background: color-mix(in oklab, var(--lab-terminal-ink) 30%, transparent);
-}
-
-.landing-lab .lab-terminal-dot-faint {
-  background: color-mix(in oklab, var(--lab-terminal-ink) 20%, transparent);
-}
-
-.landing-lab .lab-terminal pre,
-.landing-lab .lab-terminal code {
-  min-width: 0;
-  margin: 0;
-  font: inherit;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.landing-lab .lab-terminal-line {
-  display: block;
-  min-width: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  animation: lab-terminal-enter var(--lab-enter-duration) ease-out both;
-}
-
-.landing-lab .lab-motion-toggle {
-  display: inline-flex;
-  min-height: 2.5rem;
-  align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--lab-glass);
-  color: var(--muted-foreground);
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1.4;
-  cursor: pointer;
-}
-
-.landing-lab .lab-motion-toggle svg {
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
-}
-
-.landing-lab .lab-tilt {
-  transform: perspective(900px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
-  transform-origin: center;
-  transition: transform var(--lab-interaction-duration) ease-out;
-}
-
-.landing-lab .lab-feature-card {
-  min-width: 0;
-  border-color: var(--border);
-  transition:
-    translate var(--lab-interaction-duration) ease,
-    border-color var(--lab-interaction-duration) ease,
-    box-shadow var(--lab-interaction-duration) ease;
-}
-
-.landing-lab .lab-feature-card:focus-within {
-  border-color: var(--ring);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 18%, transparent);
-}
-
-.landing-lab :is(.leap-stop, .lab-step, .lab-preview-select, .lab-motion-toggle):focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 3px;
-}
-
-@media (min-width: 1024px) {
-  .landing-lab .leap-story {
-    grid-template-columns: 1fr 1fr;
-    gap: 5rem;
-  }
-
-  .landing-lab .lab-workflow {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-    align-items: center;
-  }
-}
-
-/* 触屏保持稳定布局；位移反馈只用于精细指针。 */
-@media (hover: hover) and (pointer: fine) {
-  .landing-lab .lab-feature-card:hover {
-    translate: 0 -0.25rem;
-    border-color: var(--lab-line);
-    box-shadow: 0 1.25rem 2.5rem -1.5rem var(--lab-shadow);
-  }
-
-  .landing-lab .leap-stop:hover,
-  .landing-lab .lab-step:hover {
-    transform: translateY(-2px);
-    border-color: color-mix(in oklab, var(--primary) 55%, var(--border));
-    box-shadow: 0 0.75rem 1.75rem -1rem var(--lab-shadow);
-  }
-
-  .landing-lab .lab-preview-select:hover,
-  .landing-lab .lab-motion-toggle:hover {
-    color: var(--foreground);
-    border-color: var(--lab-line);
-  }
-
-  .landing-lab a:hover svg:last-child {
-    translate: 0.2rem 0;
-  }
-}
-
-@media (hover: none), (pointer: coarse) {
-  .landing-lab .lab-tilt {
-    transform: none;
-  }
-}
-
-/* 全局暂停仍保留按钮与链接交互，离屏暂停包含动画伪元素。 */
-.landing-lab.landing-lab[data-motion="paused"] *,
-.landing-lab.landing-lab[data-motion="paused"] *::before,
-.landing-lab.landing-lab[data-motion="paused"] *::after {
-  animation-play-state: paused;
-  transition: none;
-}
-
-.landing-lab [data-ambient][data-in-view="false"],
-.landing-lab [data-ambient][data-in-view="false"] *,
-.landing-lab [data-ambient][data-in-view="false"]::before,
-.landing-lab [data-ambient][data-in-view="false"]::after,
-.landing-lab [data-ambient][data-in-view="false"] *::before,
-.landing-lab [data-ambient][data-in-view="false"] *::after {
-  animation-play-state: paused;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  /* 提高作用域优先级，覆盖 reveal 属性选择器，无需 !important。 */
-  .landing-lab.landing-lab.landing-lab *,
-  .landing-lab.landing-lab.landing-lab *::before,
-  .landing-lab.landing-lab.landing-lab *::after {
-    animation: none;
-    transition: none;
-  }
-
-  .landing-lab .lab-tilt {
-    transform: none;
-  }
-
-  .landing-lab .lab-feature-card,
-  .landing-lab .lab-feature-card:hover,
-  .landing-lab a svg,
-  .landing-lab a:hover svg:last-child {
-    translate: none;
-  }
-
-  .landing-lab .leap-stop:hover,
-  .landing-lab .lab-step:hover {
-    transform: none;
-  }
-}
-
-@keyframes lab-reveal-enter {
-  from {
-    opacity: 0.7;
-    translate: 0 0.5rem;
-  }
-  to {
-    opacity: 1;
-    translate: 0 0;
-  }
-}
-
-@keyframes lab-mascot-float {
-  0%,
-  100% {
-    translate: 0 0;
-  }
-  50% {
-    translate: 0 -0.5rem;
-  }
-}
-
-@keyframes lab-envelope-float {
-  0%,
-  100% {
-    translate: 0 0;
-  }
-  50% {
-    translate: 0 -0.25rem;
-  }
-}
-
-@keyframes lab-signal-travel {
-  from {
-    left: -22%;
-  }
-  to {
-    left: 100%;
-  }
-}
-
-@keyframes lab-connector-travel {
-  0% {
-    left: 0;
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    left: calc(100% - 0.3rem);
-    opacity: 0.4;
-  }
-}
-
-@keyframes lab-terminal-enter {
-  from {
-    opacity: 0.55;
-    translate: 0 0.25rem;
-  }
-  to {
-    opacity: 1;
-    translate: 0 0;
+  [data-theme]
+    [data-sonner-toaster]
+    [data-sonner-toast][data-type='warning']
+    [data-icon] {
+    color: oklch(0.7 0.16 70);
   }
 }

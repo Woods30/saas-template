@@ -2,10 +2,49 @@
 
 import * as React from "react"
 import { Select as SelectPrimitive } from "@base-ui/react/select"
-import { cn } from "cn"
-import { IconSelector, IconCheck, IconChevronUp, IconChevronDown } from "@tabler/icons-react"
 
-const Select = SelectPrimitive.Root
+import { cn } from "@/lib/utils"
+import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
+
+type CollectedItem = { label: React.ReactNode; value: unknown }
+
+/**
+ * Walks the JSX tree and collects every `<SelectItem value=... >label</SelectItem>`.
+ * Base UI only knows an item's label while the popup is mounted, so a closed
+ * trigger falls back to rendering the raw value ("all") unless `items` is given.
+ */
+function collectSelectItems(node: React.ReactNode, acc: CollectedItem[]) {
+  React.Children.forEach(node, (child) => {
+    if (!React.isValidElement(child)) return
+    const props = child.props as { children?: React.ReactNode; value?: unknown }
+    if (child.type === SelectItem || child.type === SelectPrimitive.Item) {
+      if (props.value !== undefined) {
+        acc.push({ value: props.value, label: props.children })
+      }
+      return
+    }
+    if (props.children) collectSelectItems(props.children, acc)
+  })
+}
+
+function Select<Value, Multiple extends boolean | undefined = false>({
+  children,
+  items,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  const resolvedItems = React.useMemo(() => {
+    if (items) return items
+    const acc: CollectedItem[] = []
+    collectSelectItems(children, acc)
+    return acc.length ? acc : undefined
+  }, [items, children])
+
+  return (
+    <SelectPrimitive.Root items={resolvedItems} {...props}>
+      {children}
+    </SelectPrimitive.Root>
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
@@ -48,7 +87,7 @@ function SelectTrigger({
       {children}
       <SelectPrimitive.Icon
         render={
-          <IconSelector className="pointer-events-none size-4 text-muted-foreground" />
+          <ChevronDownIcon className="pointer-events-none size-4 text-muted-foreground" />
         }
       />
     </SelectPrimitive.Trigger>
@@ -129,7 +168,7 @@ function SelectItem({
           <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center" />
         }
       >
-        <IconCheck className="pointer-events-none" />
+        <CheckIcon className="pointer-events-none" />
       </SelectPrimitive.ItemIndicator>
     </SelectPrimitive.Item>
   )
@@ -161,7 +200,7 @@ function SelectScrollUpButton({
       )}
       {...props}
     >
-      <IconChevronUp
+      <ChevronUpIcon
       />
     </SelectPrimitive.ScrollUpArrow>
   )
@@ -180,7 +219,7 @@ function SelectScrollDownButton({
       )}
       {...props}
     >
-      <IconChevronDown
+      <ChevronDownIcon
       />
     </SelectPrimitive.ScrollDownArrow>
   )

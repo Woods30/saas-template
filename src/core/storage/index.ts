@@ -1,48 +1,168 @@
 /**
- * Storage 模块。
- *
- * 使用 ALS 注入的 `R2StorageProvider`（per-request）而非 module-level 单例；
- * 无 ALS context 时（如测试环境）各函数抛出错误。
+ * Storage upload options interface
  */
-import { getServerContext } from '@/lib/server-context'
-import type { R2StorageProvider } from './provider/r2'
-import type { FileInfo, UploadOptions, UploadResult } from './types'
+export interface StorageUploadOptions {
+  body: Buffer | Uint8Array;
+  key: string;
+  contentType?: string;
+  bucket?: string;
+  onProgress?: (progress: number) => void;
+  disposition?: 'inline' | 'attachment';
+}
 
-export type { FileInfo, UploadOptions, UploadResult }
+/**
+ * Storage download and upload options interface
+ */
+export interface StorageDownloadUploadOptions {
+  url: string;
+  key: string;
+  bucket?: string;
+  contentType?: string;
+  disposition?: 'inline' | 'attachment';
+}
 
-/** 获取当前请求的 storage provider；ALS context 外调用会抛出错误。 */
-export function getStorageProvider(): R2StorageProvider {
-  const { storageProvider } = getServerContext()
-  if (!storageProvider) {
-    throw new Error('Storage provider 不可用（无 ALS context）')
+/**
+ * Storage upload result interface
+ */
+export interface StorageUploadResult {
+  success: boolean;
+  location?: string;
+  bucket?: string;
+  uploadPath?: string;
+  key?: string;
+  filename?: string;
+  url?: string;
+  error?: string;
+  provider: string;
+}
+
+/**
+ * Storage configs interface
+ */
+export interface StorageConfigs {
+  [key: string]: any;
+}
+
+/**
+ * Storage provider interface
+ */
+export interface StorageProvider {
+  // provider name
+  readonly name: string;
+
+  // provider configs
+  configs: StorageConfigs;
+
+  // check if object exists (optional)
+  exists?: (options: { key: string; bucket?: string }) => Promise<boolean>;
+
+  // get public url for key (optional)
+  getPublicUrl?: (options: { key: string; bucket?: string }) => string;
+
+  // upload file
+  uploadFile(options: StorageUploadOptions): Promise<StorageUploadResult>;
+
+  // download and upload
+  downloadAndUpload(
+    options: StorageDownloadUploadOptions
+  ): Promise<StorageUploadResult>;
+}
+
+/**
+ * Storage manager to manage all storage providers
+ */
+export class StorageManager {
+  // storage providers
+  private providers: StorageProvider[] = [];
+  private defaultProvider?: StorageProvider;
+
+  private ensureDefaultProvider() {
+    // set default provider if not set
+    if (!this.defaultProvider && this.providers.length > 0) {
+      this.defaultProvider = this.providers[0];
+    }
+
+    if (!this.defaultProvider) {
+      throw new Error('No storage provider configured');
+    }
+
+    return this.defaultProvider;
   }
-  return storageProvider
+
+  // add storage provider
+  addProvider(provider: StorageProvider, isDefault = false) {
+    this.providers.push(provider);
+    if (isDefault) {
+      this.defaultProvider = provider;
+    }
+  }
+
+  // get provider by name
+  getProvider(name: string): StorageProvider | undefined {
+    return this.providers.find((p) => p.name === name);
+  }
+
+  // upload file using default provider
+  async uploadFile(
+    options: StorageUploadOptions
+  ): Promise<StorageUploadResult> {
+    return this.ensureDefaultProvider().uploadFile(options);
+  }
+
+  // upload file using specific provider
+  async uploadFileWithProvider(
+    options: StorageUploadOptions,
+    providerName: string
+  ): Promise<StorageUploadResult> {
+    const provider = this.getProvider(providerName);
+    if (!provider) {
+      throw new Error(`Storage provider '${providerName}' not found`);
+    }
+    return provider.uploadFile(options);
+  }
+
+  // download and upload using default provider
+  async downloadAndUpload(
+    options: StorageDownloadUploadOptions
+  ): Promise<StorageUploadResult> {
+    return this.ensureDefaultProvider().downloadAndUpload(options);
+  }
+
+  // check if object exists using default provider (if supported)
+  async exists(options: { key: string; bucket?: string }): Promise<boolean> {
+    const provider = this.ensureDefaultProvider();
+    if (!provider.exists) return false;
+    return provider.exists(options);
+  }
+
+  // get public url using default provider (if supported)
+  getPublicUrl(options: { key: string; bucket?: string }): string | undefined {
+    const provider = this.ensureDefaultProvider();
+    if (!provider.getPublicUrl) return undefined;
+    return provider.getPublicUrl(options);
+  }
+
+  // download and upload using specific provider
+  async downloadAndUploadWithProvider(
+    options: StorageDownloadUploadOptions,
+    providerName: string
+  ): Promise<StorageUploadResult> {
+    const provider = this.getProvider(providerName);
+    if (!provider) {
+      throw new Error(`Storage provider '${providerName}' not found`);
+    }
+    return provider.downloadAndUpload(options);
+  }
+
+  // get all provider names
+  getProviderNames(): string[] {
+    return this.providers.map((p) => p.name);
+  }
 }
 
-export async function uploadFile(
-  file: ArrayBuffer | Uint8Array,
-  filename: string,
-  contentType: string,
-  options?: UploadOptions,
-): Promise<UploadResult> {
-  return getStorageProvider().uploadFile(file, filename, contentType, options ?? {})
-}
+// Global storage manager instance
+export const storageManager = new StorageManager();
 
-export async function deleteFile(key: string, authorized?: boolean): Promise<void> {
-  return getStorageProvider().deleteFile(key, authorized)
-}
-
-export async function downloadFile(
-  key: string,
-  authorized?: boolean,
-): Promise<ReadableStream | null> {
-  return getStorageProvider().downloadFile(key, authorized)
-}
-
-export async function getFileInfo(key: string): Promise<FileInfo | null> {
-  return getStorageProvider().getFileInfo(key)
-}
-
-export async function listUserFiles(userId: string, cursor?: string) {
-  return getStorageProvider().listUserFiles(userId, cursor)
-}
+// Export all providers
+export * from './s3';
+export * from './r2';

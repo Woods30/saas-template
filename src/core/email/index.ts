@@ -1,59 +1,120 @@
+import { ReactNode } from 'react';
+
 /**
- * Mail module — ALS-based provider registry.
- *
- * Provider factories are registered per-request in `src/server.ts` via
- * `als.run({ ..., mailProviderRegistry }, ...)`; business code calls
- * `getMailProvider(name)`. No module-level singleton provider state.
+ * Email attachment interface
  */
-import { als } from '@/lib/server-context'
-import type { MailProvider, SendEmailResult, SendTemplateParams } from './types'
-
-type ProviderName = 'cloudflare' | 'resend'
-type ProviderFactory = () => MailProvider
-
-interface MailProviderRegistry {
-  [key: string]: ProviderFactory | undefined
-}
-
-function getRegistry(): MailProviderRegistry {
-  const ctx = als.getStore() as { mailProviderRegistry?: MailProviderRegistry } | undefined
-  return ctx?.mailProviderRegistry ?? {}
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer | string;
+  contentType?: string;
 }
 
 /**
- * Register a mail provider factory into the current request's ALS context.
+ * Email message interface
  */
-export function registerMailProvider(name: ProviderName, factory: ProviderFactory) {
-  const ctx = als.getStore() as { mailProviderRegistry?: MailProviderRegistry } | undefined
-  if (ctx) {
-    ctx.mailProviderRegistry ??= {}
-    ctx.mailProviderRegistry[name] = factory
+export interface EmailMessage {
+  from?: string;
+  to: string | string[];
+  cc?: string | string[];
+  bcc?: string | string[];
+  subject: string;
+  text?: string;
+  html?: string;
+  attachments?: EmailAttachment[];
+  replyTo?: string;
+  priority?: 'high' | 'normal' | 'low';
+  tags?: string[];
+  headers?: Record<string, string>;
+  react?: ReactNode;
+}
+
+/**
+ * Email send result interface
+ */
+export interface EmailSendResult {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+  provider: string;
+}
+
+/**
+ * Email configs interface
+ */
+export interface EmailConfigs {
+  [key: string]: any;
+}
+
+/**
+ * Email provider interface
+ */
+export interface EmailProvider {
+  // provider name
+  readonly name: string;
+
+  // provider configs
+  configs: EmailConfigs;
+
+  // send email
+  sendEmail(email: EmailMessage): Promise<EmailSendResult>;
+}
+
+/**
+ * Email manager to manage all email providers
+ */
+export class EmailManager {
+  // email providers
+  private providers: EmailProvider[] = [];
+  private defaultProvider?: EmailProvider;
+
+  // add email provider
+  addProvider(provider: EmailProvider, isDefault = false) {
+    this.providers.push(provider);
+    if (isDefault) {
+      this.defaultProvider = provider;
+    }
+  }
+
+  // get provider by name
+  getProvider(name: string): EmailProvider | undefined {
+    return this.providers.find((p) => p.name === name);
+  }
+
+  // send email using default provider
+  async sendEmail(email: EmailMessage): Promise<EmailSendResult> {
+    // set default provider if not set
+    if (!this.defaultProvider && this.providers.length > 0) {
+      this.defaultProvider = this.providers[0];
+    }
+
+    if (!this.defaultProvider) {
+      throw new Error('No email provider configured');
+    }
+
+    return this.defaultProvider.sendEmail(email);
+  }
+
+  // send email using specific provider
+  async sendEmailWithProvider(
+    email: EmailMessage,
+    providerName: string
+  ): Promise<EmailSendResult> {
+    const provider = this.getProvider(providerName);
+    if (!provider) {
+      throw new Error(`Email provider '${providerName}' not found`);
+    }
+    return provider.sendEmail(email);
+  }
+
+  // get all provider names
+  getProviderNames(): string[] {
+    return this.providers.map((p) => p.name);
   }
 }
 
-/** Retrieve a mail provider from the current request's ALS context. */
-export function getMailProvider(name: ProviderName): MailProvider {
-  const factory = getRegistry()[name]
-  if (!factory) throw new Error(`Mail provider 未注册：${name}`)
-  return factory()
-}
+// Global email manager instance
+export const emailManager = new EmailManager();
 
-/** Send an email via the named provider, with up to 3 attempts. */
-export async function sendMail(
-  providerName: ProviderName,
-  params: SendTemplateParams,
-): Promise<SendEmailResult> {
-  const provider = getMailProvider(providerName)
-  let lastErr: string | undefined
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const result = await provider.sendTemplate(params)
-    if (result.ok) return result
-    lastErr = result.error
-    await new Promise((r) => setTimeout(r, 250 * (attempt + 1)))
-  }
-  return { ok: false, error: lastErr ?? 'unknown' }
-}
-
-export { CloudflareEmailProvider } from './provider/cloudflare'
-export { ResendMailProvider } from './provider/resend'
-export type { MailProvider, SendEmailResult, SendTemplateParams }
+// Export all providers
+export * from './resend';
+export * from './cloudflare';

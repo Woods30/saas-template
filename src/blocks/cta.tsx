@@ -1,87 +1,35 @@
-import { IconArrowUpRight } from '@tabler/icons-react'
-import { Link } from '@tanstack/react-router'
+import { ArrowRight } from 'lucide-react';
 
-export interface CtaProps {
-  title: string
-  variant?: 'default' | 'quiet'
-  description?: string
-  primaryCta: { label: string; href: string }
-  secondaryCta?: { label: string; href: string }
-}
+import { Link } from '@/core/i18n/navigation';
+import { cn } from '@/lib/utils';
+import { m } from '@/paraglide/messages.js';
+import { buttonVariants } from '@/components/ui/button';
 
-export function Cta({
-  title,
-  description,
-  primaryCta,
-  secondaryCta,
-  variant = 'default',
-}: CtaProps) {
-  const quiet = variant === 'quiet'
+export function CTA() {
   return (
-    <section
-      className={
-        quiet
-          ? 'mx-auto max-w-6xl px-6 pb-20 pt-6'
-          : 'bg-primary px-6 py-16 text-primary-foreground'
-      }
-    >
-      <div
-        className={
-          quiet
-            ? 'flex flex-col items-start gap-7 rounded-2xl border border-border bg-secondary/50 p-8 md:flex-row md:items-center md:justify-between md:p-10'
-            : 'mx-auto max-w-3xl text-center'
-        }
-      >
-        <div>
-          <h2
-            className={
-              quiet
-                ? 'max-w-xl text-2xl font-semibold tracking-tight md:text-3xl'
-                : 'text-3xl font-bold'
-            }
-          >
-            {title}
+    <section className="px-4 pb-24 sm:pb-24">
+      <div className="mx-auto max-w-5xl">
+        <div className="rounded-3xl border border-dashed px-6 py-12 text-center sm:px-10 sm:py-16">
+          <h2 className="mx-auto max-w-3xl font-serif text-4xl leading-[1.1] font-medium tracking-tight sm:text-5xl lg:text-5xl">
+            {m['landing.cta.headline']()}
           </h2>
-          {description && (
-            <p
-              className={
-                quiet
-                  ? 'mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground'
-                  : 'mt-2 opacity-90'
-              }
-            >
-              {description}
-            </p>
-          )}
-        </div>
-        <div
-          className={
-            quiet
-              ? 'flex shrink-0 flex-wrap gap-3'
-              : 'mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center'
-          }
-        >
-          <Link
-            to={primaryCta.href}
-            className={
-              quiet
-                ? 'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring motion-reduce:transition-none'
-                : 'rounded bg-secondary px-4 py-2 text-secondary-foreground hover:bg-secondary/90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring'
-            }
-          >
-            {primaryCta.label}
-            {quiet && <IconArrowUpRight size={17} aria-hidden="true" />}
-          </Link>
-          {secondaryCta && (
+          <p className="text-muted-foreground mx-auto mt-6 max-w-4xl text-base leading-relaxed sm:text-lg">
+            {m['landing.cta.subheadline']()}
+          </p>
+          <div className="mt-8 flex justify-center">
             <Link
-              to={secondaryCta.href}
-              className="rounded border border-current px-4 py-2 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+              href="/settings"
+              className={cn(
+                buttonVariants({ size: 'lg' }),
+                'h-12 gap-2 rounded-full px-8'
+              )}
             >
-              {secondaryCta.label}
+              {m['landing.cta.button']()}
+              <ArrowRight className="size-4" />
             </Link>
-          )}
+          </div>
         </div>
       </div>
     </section>
-  )
+  );
 }

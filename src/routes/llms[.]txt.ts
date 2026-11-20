@@ -1,17 +1,65 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { llmsTextResponse } from '@/lib/llms-response.server'
+import { createFileRoute } from '@tanstack/react-router';
 
-/**
- * `/llms.txt` —— 面向 AI 抓取器的站点索引（英文）。
- *
- * 给模型一份「这个站是什么、包含什么、多少钱、去哪看」的速览，
- * 让它在回答「有没有 XX 模板」这类问题时能准确复述并给出链接。
- * 中文版见 `/llms.zh.txt`，全文版见 `/llms-full.txt`。
- */
+import { envConfigs } from '@/config';
+import { baseLocale } from '@/paraglide/runtime.js';
+import { getLocalPosts, mergePosts } from '@/content/posts';
+
+const STATIC_PAGES: { path: string; title: string; description: string }[] = [
+  { path: '', title: 'Home', description: 'Landing page' },
+  { path: '/pricing', title: 'Pricing', description: 'Pricing plans' },
+  { path: '/blog', title: 'Blog', description: 'Blog posts and articles' },
+];
+
 export const Route = createFileRoute('/llms.txt')({
   server: {
     handlers: {
-      GET: async () => llmsTextResponse('en', 'index'),
+      GET: async () => {
+        const { app_url, app_name, app_description } = envConfigs;
+
+        let posts = getLocalPosts(baseLocale);
+        try {
+          const { listPublishedArticles } =
+            await import('@/modules/posts/service');
+          const rows = await listPublishedArticles().catch(() => []);
+          const dbPosts = rows.map((row) => ({
+            slug: row.slug,
+            title: row.title || row.slug,
+            description: row.description || '',
+            createdAt: new Date(row.createdAt).toISOString(),
+            source: 'db' as const,
+          }));
+          posts = mergePosts(dbPosts, posts);
+        } catch {
+          // Database unreachable — local posts still listed.
+        }
+
+        const lines: string[] = [
+          `# ${app_name}`,
+          '',
+          `> ${app_description}`,
+          '',
+          '## Pages',
+          '',
+          ...STATIC_PAGES.map(
+            (p) => `- [${p.title}](${app_url}${p.path}): ${p.description}`
+          ),
+        ];
+
+        if (posts.length > 0) {
+          lines.push('', '## Blog Posts', '');
+          for (const post of posts) {
+            lines.push(
+              `- [${post.title}](${app_url}/blog/${post.slug}): ${post.description}`
+            );
+          }
+        }
+
+        lines.push('');
+
+        return new Response(lines.join('\n'), {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+      },
     },
   },
-})
+});

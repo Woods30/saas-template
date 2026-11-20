@@ -1,58 +1,124 @@
-import { watchFile } from 'node:fs'
-import { cloudflare } from '@cloudflare/vite-plugin'
-import contentCollections from '@content-collections/vite'
-import { paraglideVitePlugin } from '@inlang/paraglide-js'
-import tailwindcss from '@tailwindcss/vite'
-import { tanstackStart } from '@tanstack/react-start/plugin/vite'
-import viteReact from '@vitejs/plugin-react'
-import { defineConfig, type Plugin } from 'vite'
-import {
-  GENERATED_INDEX_PATH,
-  normalizeGeneratedFile,
-} from './scripts/normalize-content-collections.ts'
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { tanstackStart } from '@tanstack/react-start/plugin/vite';
+import { paraglideVitePlugin } from '@inlang/paraglide-js';
+import mdx from '@mdx-js/rollup';
+import tailwindcss from '@tailwindcss/vite';
+import viteReact from '@vitejs/plugin-react';
+import { nitro } from 'nitro/vite';
+import { defineConfig } from 'vite';
 
-/**
- * 抹掉 content-collections 生成头的时间戳，避免每次 dev/build 都留下噪音 diff。
- *
- * build 侧必须标 `sequential: true`：Vite 8 的 `buildStart` 是并发钩子，仅靠注册顺序
- * 无法保证在本插件之前跑完 content-collections 的 `builder.build()`。dev 侧不走
- * `buildStart`，改用轮询；`normalizeGeneratedFile` 只在内容变化时写回，不会自激。
- */
-function normalizeContentCollectionsHeader(): Plugin {
-  return {
-    name: 'normalize-content-collections-header',
-    buildStart: {
-      sequential: true,
-      handler: () => {
-        normalizeGeneratedFile(GENERATED_INDEX_PATH)
-      },
-    },
-    configureServer() {
-      // 轮询而非 fs.watch：跨平台稳定，且规避编辑器原子写产生的 rename 事件。
-      watchFile(GENERATED_INDEX_PATH, { interval: 300 }, () => {
-        normalizeGeneratedFile(GENERATED_INDEX_PATH)
-      })
-    },
+import { loadEnvFiles } from './src/lib/env.ts';
+
+// Populate process.env from .env.local / .env.{NODE_ENV} / .env for the
+// dev server and build process (Vite only exposes VITE_* via import.meta.env;
+// server code reads secrets from process.env). In production, env comes
+// from the actual host/container environment.
+loadEnvFiles();
+
+// Cloudflare Workers build (pnpm cf:build / cf:deploy): stub out unused DB
+// drivers — mysql2 crashes workerd at module evaluation (node:net,
+// node:process requires); postgres.js runs fine under nodejs_compat but is
+// dead weight when the backend is D1. Which driver the bundle keeps follows
+// wrangler.jsonc `vars.DATABASE_PROVIDER` (the runtime truth on workerd) —
+// d1 stubs both, postgresql keeps postgres.js for the Hyperdrive binding.
+const isCloudflareBuild = (process.env.NITRO_PRESET || '').includes(
+  'cloudflare'
+);
+const driverStub = new URL('./src/core/db/driver-stub.ts', import.meta.url)
+  .pathname;
+
+// Prefer wrangler.jsonc over the build-time env, which can be polluted by
+// .env.local (e.g. DATABASE_PROVIDER=sqlite for local dev).
+function workersDbProvider(): string {
+  try {
+    const raw = readFileSync(
+      new URL('./wrangler.jsonc', import.meta.url),
+      'utf8'
+    );
+    const m = raw.match(/"DATABASE_PROVIDER"\s*:\s*"([^"]+)"/);
+    if (m) return m[1];
+  } catch {
+    // no wrangler.jsonc yet (fresh clone) — fall through
   }
+  return process.env.DATABASE_PROVIDER || 'd1';
 }
 
+const workersDb = isCloudflareBuild ? workersDbProvider() : '';
+const keepPostgres = workersDb === 'postgresql' || workersDb === 'postgres';
+const buildId =
+  process.env.VITE_BUILD_ID ||
+  (() => {
+    try {
+      return execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+    } catch {
+      return 'development';
+    }
+  })();
+
 export default defineConfig({
-  // Vite 8 内置 tsconfig paths 解析，无需再装 `vite-tsconfig-paths`。
+  define: {
+    'import.meta.env.VITE_BUILD_ID': JSON.stringify(
+      buildId.trim().slice(0, 191)
+    ),
+  },
+  server: {
+    port: 3000,
+    // Cloud sandboxes (ShipAny Code / e2b) proxy the dev server through a
+    // per-sandbox subdomain; without this Vite's host check blocks the
+    // preview with "Blocked request. This host is not allowed."
+    allowedHosts: ['.e2b.app'],
+  },
   resolve: {
     tsconfigPaths: true,
+    alias: isCloudflareBuild
+      ? {
+          mysql2: driverStub,
+          ...(keepPostgres ? {} : { postgres: driverStub }),
+        }
+      : {},
   },
   plugins: [
-    // cloudflare 必须最先注册：它注入 `cloudflare:env` 等虚拟模块并接管 ssr environment。
-    cloudflare({ viteEnvironment: { name: 'ssr' } }),
-    tanstackStart(),
-    // 编译 `project.inlang` 到 `src/locale/paraglide`，与 CLI 共享同一份配置。
-    paraglideVitePlugin({ project: './project.inlang' }),
-    // Tailwind v4 官方推荐置于 tanstackStart 之后。
+    // MDX must run before the react plugin so JSX in compiled MDX gets transformed.
+    // .claude/ holds agent skills served verbatim (`?raw`) — never compile them.
+    {
+      enforce: 'pre',
+      ...mdx({
+        providerImportSource: '@mdx-js/react',
+        exclude: /\/\.claude\//,
+      }),
+    },
     tailwindcss(),
-    // 缺少本插件时 `vite dev` 会直接抛错：Start 的 React dev 模式依赖 /@react-refresh。
+    paraglideVitePlugin({
+      project: './project.inlang',
+      outdir: './src/paraglide',
+      outputStructure: 'message-modules',
+      strategy: ['url', 'baseLocale'],
+      urlPatterns: [
+        // API endpoints are never locale-prefixed.
+        {
+          pattern: '/api/:path(.*)?',
+          localized: [['en', '/api/:path(.*)?']],
+        },
+        // English is served without a locale prefix.
+        {
+          pattern: '/',
+          localized: [['en', '/']],
+        },
+        // Keep all English page URLs locale-free.
+        {
+          pattern: '/:path(.*)?',
+          localized: [['en', '/:path(.*)?']],
+        },
+      ],
+    }),
+    tanstackStart({
+      srcDirectory: 'src',
+    }),
     viteReact(),
-    contentCollections(),
-    // 依赖上一条的 `buildStart`，必须排在其后。
-    normalizeContentCollectionsHeader(),
+    nitro(),
   ],
-})
+});

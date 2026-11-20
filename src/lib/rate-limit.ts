@@ -1,46 +1,88 @@
-import { createCacheKey } from '@/core/cache'
-import { getServerContext } from '@/lib/server-context'
+type MinIntervalOptions = {
+  intervalMs: number;
+  keyPrefix?: string;
+  extraKey?: string;
+};
+
+type Store = Map<string, number>;
+
+declare global {
+  var __minIntervalRateLimitStore: Store | undefined;
+}
+
+// Prefer Cloudflare's unspoofable cf-connecting-ip over x-forwarded-for.
+function getClientIpFromRequest(request: Request): string {
+  const cfIp = request.headers.get('cf-connecting-ip');
+  if (cfIp) return cfIp;
+  const xff = request.headers.get('x-forwarded-for');
+  if (xff) return xff.split(',')[0]?.trim() || '';
+  return request.headers.get('x-real-ip') || '';
+}
+
+function getStore(): Store {
+  if (!globalThis.__minIntervalRateLimitStore) {
+    globalThis.__minIntervalRateLimitStore = new Map();
+  }
+  return globalThis.__minIntervalRateLimitStore;
+}
 
 /**
- * Check if the given IP/action pair exceeds rate limit.
- * Returns true if allowed, false if rate-limited.
- *
- * Uses a list-of-timestamps approach (no read-modify-write counter race).
- *
- * Security notes:
- * - cf-connecting-ip is trusted; x-forwarded-for is spoofable and unused.
- * - When cache is unavailable, fails closed.
- * - Unknown IPs get a stricter limit (1/min).
+ * Keyed by `extraKey` (pass the session user id once the caller is
+ * authenticated) or else the client IP — never by cookies, which a client can
+ * vary freely to get a fresh bucket on every request.
  */
-export async function checkRateLimit(opts: {
-  ip: string
-  action: string
-  limit: number
-  windowSeconds: number
-  prefix?: string
-}): Promise<boolean> {
-  const { cacheProvider } = getServerContext()
+function buildKey(request: Request, opts: MinIntervalOptions): string {
+  const url = new URL(request.url);
+  const who = opts.extraKey
+    ? `user:${opts.extraKey}`
+    : `ip:${getClientIpFromRequest(request) || 'unknown'}`;
+  const prefix = opts.keyPrefix || 'min-interval';
+  return `${prefix}|${request.method}|${url.pathname}|${who}`;
+}
 
-  if (!cacheProvider) {
-    return false
+// Entries only matter for one interval; drop stale ones so a flood of
+// distinct IPs can't grow the map without bound.
+const MAX_ENTRIES = 10_000;
+const STALE_MS = 10 * 60 * 1000;
+function prune(store: Store, now: number) {
+  if (store.size < MAX_ENTRIES) return;
+  for (const [key, at] of store) if (now - at > STALE_MS) store.delete(key);
+  if (store.size >= MAX_ENTRIES) store.clear();
+}
+
+export function enforceMinIntervalRateLimit(
+  request: Request,
+  opts: MinIntervalOptions
+): Response | null {
+  const intervalMs = Math.max(0, Number(opts.intervalMs) || 0);
+  if (!intervalMs) return null;
+  const now = Date.now();
+  const store = getStore();
+  const key = buildKey(request, opts);
+  const last = store.get(key);
+  if (typeof last === 'number') {
+    const delta = now - last;
+    if (delta >= 0 && delta < intervalMs) {
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil((intervalMs - delta) / 1000)
+      );
+      return Response.json(
+        {
+          error: 'too_many_requests',
+          message: `Please retry after ${retryAfterSeconds}s.`,
+        },
+        {
+          status: 429,
+          headers: {
+            'cache-control': 'no-store',
+            'retry-after': String(retryAfterSeconds),
+          },
+        }
+      );
+    }
   }
-
-  const { ip, action, limit, windowSeconds, prefix = 'ratelimit' } = opts
-  const isUnknown = ip === 'unknown'
-  const maxRequests = isUnknown ? 1 : limit
-
-  const key = createCacheKey(prefix, ip, action)
-  const now = Date.now()
-  const windowMs = windowSeconds * 1000
-
-  const raw = await cacheProvider.get<number[]>(key)
-  const timestamps: number[] = raw !== null ? raw.filter((t) => now - t < windowMs) : []
-
-  if (timestamps.length >= maxRequests) {
-    return false
-  }
-
-  timestamps.push(now)
-  await cacheProvider.set(key, timestamps, windowSeconds)
-  return true
+  prune(store, now);
+  store.set(key, now);
+  return null;
 }

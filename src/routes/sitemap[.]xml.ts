@@ -1,199 +1,105 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { allBlogs, allDocs } from 'content-collections'
-import type { WebsiteConfig } from '@/config/website'
-import { websiteConfig } from '@/config/website'
-import { contentSlug } from '@/lib/content-locale'
-import { LOCALES, type Locale, parseLocale } from '@/lib/locale'
-import { DOCS_INDEX_SLUG, docsPublicPath } from '@/modules/docs/service'
+import { createFileRoute } from '@tanstack/react-router';
 
-/** 单条 sitemap 记录：绝对 loc、同页其他语言的 alternate 链接、内容更新时间。 */
-export interface SitemapEntry {
-  loc: string
-  alternates: Array<{ hreflang: Locale; href: string }>
-  /**
-   * 内容最近更新日期（`YYYY-MM-DD`）。
-   *
-   * 搜索引擎与 AI 抓取器靠它判断「这篇内容是不是新的」，所以只在真有日期来源时
-   * 填写——静态营销页没有日期来源，宁可不给，也比编一个假日期好。
-   */
-  lastmod?: string
+import { serverSiteOrigin } from '@/lib/site-origin';
+import { baseLocale, locales, localizeUrl } from '@/paraglide/runtime.js';
+import { getLocalPosts, mergePosts } from '@/content/posts';
+
+const STATIC_PATHS = [
+  '',
+  '/pricing',
+  '/blog',
+  '/privacy-policy',
+  '/terms-of-service',
+];
+
+type Entry = {
+  path: string;
+  lastModified?: string;
+  changeFrequency: string;
+  priority: number;
+};
+
+function urlFor(path: string, locale: string, origin: string): string {
+  return localizeUrl(`${origin}${path || '/'}`, {
+    locale: locale as (typeof locales)[number],
+  }).href;
 }
 
-/** 动态内容来源；缺省时读取构建期生成的博客 / 文档清单，便于单测注入。 */
-export interface SitemapSource {
-  blogs: ReadonlyArray<{
-    locale: string
-    published: boolean
-    _meta: { path: string; fileName: string }
-    /** 发布日期（ISO）；提供时写入 `<lastmod>`。 */
-    date?: string
-  }>
-  docs: ReadonlyArray<{
-    locale: string
-    _meta: { fileName: string }
-    /** 最近更新日期（`YYYY-MM-DD`）；提供时写入 `<lastmod>`。 */
-    updated?: string
-  }>
-}
-
-/** 默认内容来源：Content Collections 生成的清单。 */
-function defaultSource(): SitemapSource {
-  return { blogs: allBlogs, docs: allDocs }
-}
-
-/** 用站点基址拼装绝对 URL；path 缺省表示站点根。 */
-function buildUrl(baseUrl: string, locale: Locale, path?: string): string {
-  const normalized = baseUrl.replace(/\/+$/, '')
-  return new URL(`/${locale}${path ?? ''}`, normalized).toString()
-}
-
-/**
- * 生成全部 sitemap 路径（纯函数，不读 env / 不发请求）。
- *
- * alternates 只在对方语言确实存在同 slug 内容时生成，不伪造缺失翻译；
- * 静态页在所有语言都存在，故包含除自身外的全部语言。
- */
-export function getSitemapPaths(
-  config: WebsiteConfig,
-  locale: Locale,
-  source: SitemapSource = defaultSource(),
-): SitemapEntry[] {
-  const baseUrl = config.baseUrl
-  const entries: SitemapEntry[] = []
-
-  // 所有语言都存在该静态页时，为除当前语言外的语言生成 alternate。
-  const staticAlternates = (path?: string): SitemapEntry['alternates'] =>
-    LOCALES.filter((l) => l !== locale).map((l) => ({
-      hreflang: l,
-      href: buildUrl(baseUrl, l, path),
-    }))
-
-  const pushStatic = (path?: string) => {
-    entries.push({ loc: buildUrl(baseUrl, locale, path), alternates: staticAlternates(path) })
-  }
-
-  // 文档站独立部署时对外没有 `/docs` 这一层，canonical 与 sitemap 必须跟着换。
-  const docsPath = (slug?: string) => docsPublicPath(slug, config.docs.asHome === true)
-
-  pushStatic()
-  pushStatic('/marketing/features')
-  pushStatic('/marketing/about')
-  // roadmap 无条件收录；waitlist 按站点定位开关，关闭时页面 404，不能写进 sitemap。
-  pushStatic('/marketing/roadmap')
-  if (config.pages.waitlist) pushStatic('/marketing/waitlist')
-  pushStatic('/marketing/legal/terms')
-  pushStatic('/marketing/legal/privacy')
-
-  if (config.docs.enabled) {
-    // 文档首页的正式地址是 `docsPath()`；它的更新时间取首页文档的 `updated`。
-    const landingUpdated = source.docs.find(
-      (d) => d.locale === locale && contentSlug(d._meta.fileName) === DOCS_INDEX_SLUG,
-    )?.updated
-    entries.push({
-      loc: buildUrl(baseUrl, locale, docsPath()),
-      alternates: staticAlternates(docsPath()),
-      ...(landingUpdated ? { lastmod: landingUpdated } : {}),
-    })
-  }
-  if (config.blog.enabled) pushStatic('/marketing/blog')
-  if (config.changelog.enabled) pushStatic('/marketing/changelog')
-  if (config.contact.enabled) pushStatic('/marketing/contact')
-
-  // 博客 slug 取 `_meta.path`，URL 前缀是真实路由 `/marketing/blog/`。
-  if (config.blog.enabled) {
-    const keyOf = (post: { _meta: { path: string; fileName: string } }) =>
-      contentSlug(post._meta.fileName)
-    for (const post of source.blogs) {
-      if (post.locale !== locale || !post.published) continue
-      const slug = post._meta.path
-      const key = keyOf(post)
-      const alternates = source.blogs
-        .filter((b) => b.locale !== locale && b.published && keyOf(b) === key)
-        .flatMap((b) => {
-          // hreflang 必须是合法语言标签，不支持的取值宁可跳过也不写进 sitemap。
-          const alt = parseLocale(b.locale)
-          return alt
-            ? [{ hreflang: alt, href: buildUrl(baseUrl, alt, `/marketing/blog/${b._meta.path}`) }]
-            : []
-        })
-      entries.push({
-        loc: buildUrl(baseUrl, locale, `/marketing/blog/${slug}`),
-        alternates,
-        lastmod: post.date ? toDatePart(post.date) : undefined,
-      })
-    }
-  }
-
-  if (config.docs.enabled) {
-    const slugOf = (doc: { _meta: { fileName: string } }) => contentSlug(doc._meta.fileName)
-    for (const doc of source.docs) {
-      if (doc.locale !== locale) continue
-      const slug = slugOf(doc)
-      // 首页文档已按 `docsPath()` 收录；这里跳过，否则同一篇内容会有两个 URL。
-      if (slug === DOCS_INDEX_SLUG) continue
-      const alternates = source.docs
-        .filter((d) => d.locale !== locale && slugOf(d) === slug)
-        .flatMap((d) => {
-          const alt = parseLocale(d.locale)
-          return alt ? [{ hreflang: alt, href: buildUrl(baseUrl, alt, docsPath(slug)) }] : []
-        })
-      entries.push({
-        loc: buildUrl(baseUrl, locale, docsPath(slug)),
-        alternates,
-        lastmod: doc.updated,
-      })
-    }
-  }
-
-  return entries
-}
-
-/** 把 ISO 时间戳截到日期部分（`YYYY-MM-DD`）；已是日期时原样返回。 */
-function toDatePart(value: string): string {
-  return value.slice(0, 10)
-}
-
-/** 对 XML 文本节点 / 属性值做转义，避免内容破坏文档结构。 */
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
-}
-
-/** 把路径序列化为 sitemap XML；路由 handler 只做这一步。 */
-export function renderSitemapXml(entries: readonly SitemapEntry[]): string {
-  const urls = entries
-    .map((entry) => {
-      const alternates = entry.alternates
-        .map(
-          (a) =>
-            `<xhtml:link rel="alternate" hreflang="${escapeXml(a.hreflang)}" href="${escapeXml(a.href)}"/>`,
-        )
-        .join('')
-      // 没有日期来源时不输出该元素：空标签比缺省更容易被解析器误读。
-      const lastmod = entry.lastmod ? `<lastmod>${escapeXml(entry.lastmod)}</lastmod>` : ''
-      return `<url><loc>${escapeXml(entry.loc)}</loc>${alternates}${lastmod}<changefreq>weekly</changefreq></url>`
-    })
-    .join('\n')
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:xhtml="http://www.w3.org/1999/xhtml">
-${urls}
-</urlset>`
+function entryXml(e: Entry, origin: string): string {
+  const alternates = locales
+    .map(
+      (loc) =>
+        `    <xhtml:link rel="alternate" hreflang="${loc}" href="${urlFor(e.path, loc, origin)}"/>`
+    )
+    .join('\n');
+  return [
+    '  <url>',
+    `    <loc>${urlFor(e.path, baseLocale, origin)}</loc>`,
+    alternates,
+    e.lastModified ? `    <lastmod>${e.lastModified}</lastmod>` : null,
+    `    <changefreq>${e.changeFrequency}</changefreq>`,
+    `    <priority>${e.priority}</priority>`,
+    '  </url>',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 export const Route = createFileRoute('/sitemap.xml')({
   server: {
     handlers: {
-      GET: () => {
-        const paths = LOCALES.flatMap((locale) => getSitemapPaths(websiteConfig, locale))
-        return new Response(renderSitemapXml(paths), {
+      GET: async () => {
+        const entries: Entry[] = STATIC_PATHS.map((path) => ({
+          path,
+          changeFrequency: path === '/blog' ? 'daily' : 'weekly',
+          priority: path === '' ? 1 : 0.8,
+        }));
+
+        // Blog posts: db posts merged with local MDX posts.
+        try {
+          const { listPublishedArticles } =
+            await import('@/modules/posts/service');
+          const rows = await listPublishedArticles().catch(() => []);
+          const dbPosts = rows.map((row) => ({
+            slug: row.slug,
+            title: row.title || row.slug,
+            description: row.description || '',
+            createdAt: new Date(row.createdAt).toISOString(),
+            source: 'db' as const,
+          }));
+          const posts = mergePosts(dbPosts, getLocalPosts(baseLocale));
+          for (const post of posts) {
+            entries.push({
+              path: `/blog/${post.slug}`,
+              lastModified: post.createdAt,
+              changeFrequency: 'monthly',
+              priority: 0.6,
+            });
+          }
+        } catch {
+          // Database unreachable — static paths + local posts still listed.
+          for (const post of getLocalPosts(baseLocale)) {
+            entries.push({
+              path: `/blog/${post.slug}`,
+              lastModified: post.createdAt,
+              changeFrequency: 'monthly',
+              priority: 0.6,
+            });
+          }
+        }
+
+        const xml = [
+          '<?xml version="1.0" encoding="UTF-8"?>',
+          '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">',
+          ...entries.map((entry) => entryXml(entry, serverSiteOrigin())),
+          '</urlset>',
+          '',
+        ].join('\n');
+
+        return new Response(xml, {
           headers: { 'Content-Type': 'application/xml' },
-        })
+        });
       },
     },
   },
-})
+});

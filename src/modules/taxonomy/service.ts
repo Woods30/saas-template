@@ -1,158 +1,119 @@
-import { createServerFn } from '@tanstack/react-start'
-import { and, asc, eq } from 'drizzle-orm'
-import { z } from 'zod'
-import type { DB } from '@/core/db'
-import { taxonomies } from '@/core/db/schema'
-import { safeRecordAuditLog } from '@/modules/audit/service'
-import { DEFAULT_TAXONOMIES, type TaxonomySeed, type TaxonomyType, taxonomyIdOf } from './catalog'
+import { and, count, desc, eq, like, or, type SQL } from 'drizzle-orm';
 
-export { DEFAULT_TAXONOMIES, type TaxonomySeed, type TaxonomyType, taxonomyIdOf }
+import { db } from '@/core/db';
+import { taxonomy } from '@/config/db/schema';
+import { getUuid } from '@/lib/hash';
 
-export interface TaxonomyRecord {
-  id: string
-  type: TaxonomyType
-  slug: string
-  name: string
-  description: string | null
-  sortOrder: number
-  createdAt: Date
-  updatedAt: Date
+export enum TaxonomyType {
+  CATEGORY = 'category',
+  TAG = 'tag',
 }
 
-/** 幂等初始化默认分类与标签。 */
-export async function ensureDefaultTaxonomies(db: DB): Promise<void> {
-  const existing = await db
-    .select({ type: taxonomies.type, slug: taxonomies.slug })
-    .from(taxonomies)
-  const existingKeys = new Set(existing.map((item) => `${item.type}:${item.slug}`))
-  const now = new Date()
+export enum TaxonomyStatus {
+  PUBLISHED = 'published',
+  PENDING = 'pending',
+  DRAFT = 'draft',
+  ARCHIVED = 'archived',
+}
 
-  const missing = DEFAULT_TAXONOMIES.filter(
-    (seed) => !existingKeys.has(`${seed.type}:${seed.slug}`),
-  ).map((seed) => ({
-    id: taxonomyIdOf(seed.type, seed.slug),
-    type: seed.type,
-    slug: seed.slug,
-    name: seed.name,
-    description: seed.description,
-    sortOrder: seed.sortOrder,
-    createdAt: now,
-    updatedAt: now,
-  }))
+type NewTaxonomy = typeof taxonomy.$inferInsert;
 
-  if (missing.length > 0) {
-    await db.insert(taxonomies).values(missing).onConflictDoNothing()
+export async function list(params: {
+  type?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}) {
+  const { type, status, search, page = 1, pageSize = 10 } = params;
+  const offset = (page - 1) * pageSize;
+
+  const conditions: SQL[] = [];
+  if (type) conditions.push(eq(taxonomy.type, type));
+  if (status) conditions.push(eq(taxonomy.status, status));
+  else conditions.push(eq(taxonomy.status, TaxonomyStatus.PUBLISHED));
+  if (search) {
+    conditions.push(
+      or(
+        like(taxonomy.title, `%${search}%`),
+        like(taxonomy.slug, `%${search}%`)
+      )!
+    );
   }
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const [totalResult] = await db()
+    .select({ count: count() })
+    .from(taxonomy)
+    .where(where);
+  const total = totalResult.count;
+
+  const items = await db()
+    .select()
+    .from(taxonomy)
+    .where(where)
+    .orderBy(desc(taxonomy.createdAt))
+    .limit(pageSize)
+    .offset(offset);
+
+  return { items, total };
 }
 
-export async function listTaxonomies(db: DB, type?: TaxonomyType): Promise<TaxonomyRecord[]> {
-  await ensureDefaultTaxonomies(db)
-  const rows = await db
-    .select()
-    .from(taxonomies)
-    .where(type ? eq(taxonomies.type, type) : undefined)
-    .orderBy(asc(taxonomies.sortOrder), asc(taxonomies.slug))
-
-  return rows.map((row) => ({
-    ...row,
-    type: row.type as TaxonomyType,
-  }))
-}
-
-export async function upsertTaxonomy(
-  db: DB,
-  input: {
-    id?: string
-    type: TaxonomyType
-    slug: string
-    name: string
-    description?: string | null
-    sortOrder?: number
-  },
-): Promise<TaxonomyRecord> {
-  const normalizedSlug = input.slug.trim().toLowerCase()
-  const now = new Date()
-
-  const existingRows = await db
-    .select()
-    .from(taxonomies)
+export async function getAll(type: string) {
+  return db()
+    .select({ id: taxonomy.id, title: taxonomy.title, slug: taxonomy.slug })
+    .from(taxonomy)
     .where(
-      input.id
-        ? eq(taxonomies.id, input.id)
-        : and(eq(taxonomies.type, input.type), eq(taxonomies.slug, normalizedSlug)),
+      and(
+        eq(taxonomy.type, type),
+        eq(taxonomy.status, TaxonomyStatus.PUBLISHED)
+      )
     )
-    .limit(1)
-
-  const existing = existingRows[0]
-  if (existing) {
-    const updated: TaxonomyRecord = {
-      ...existing,
-      type: input.type,
-      slug: normalizedSlug,
-      name: input.name.trim(),
-      description: input.description?.trim() ?? null,
-      sortOrder: input.sortOrder ?? existing.sortOrder,
-      updatedAt: now,
-    }
-    await db
-      .update(taxonomies)
-      .set({
-        type: updated.type,
-        slug: updated.slug,
-        name: updated.name,
-        description: updated.description,
-        sortOrder: updated.sortOrder,
-        updatedAt: updated.updatedAt,
-      })
-      .where(eq(taxonomies.id, existing.id))
-    return updated
-  }
-
-  const created: TaxonomyRecord = {
-    id: taxonomyIdOf(input.type, normalizedSlug),
-    type: input.type,
-    slug: normalizedSlug,
-    name: input.name.trim(),
-    description: input.description?.trim() ?? null,
-    sortOrder: input.sortOrder ?? 100,
-    createdAt: now,
-    updatedAt: now,
-  }
-  await db.insert(taxonomies).values(created)
-  return created
+    .orderBy(desc(taxonomy.createdAt));
 }
 
-export async function deleteTaxonomy(db: DB, id: string): Promise<void> {
-  await db.delete(taxonomies).where(eq(taxonomies.id, id))
+export async function create(data: {
+  userId: string;
+  slug: string;
+  type: string;
+  title: string;
+  description?: string;
+}) {
+  const newTaxonomy: NewTaxonomy = {
+    id: getUuid(),
+    userId: data.userId,
+    slug: data.slug.toLowerCase(),
+    type: data.type,
+    title: data.title,
+    description: data.description || '',
+    status: TaxonomyStatus.PUBLISHED,
+  };
+  const [result] = await db().insert(taxonomy).values(newTaxonomy).returning();
+  return result;
 }
 
-const upsertTaxonomySchema = z.object({
-  id: z.string().optional(),
-  type: z.enum(['category', 'tag']).default('category'),
-  slug: z
-    .string()
-    .trim()
-    .min(1)
-    .max(60)
-    .regex(/^[a-z0-9-]+$/),
-  name: z.string().trim().min(1).max(80),
-  description: z.string().trim().max(240).nullable().optional(),
-  sortOrder: z.number().int().min(0).max(9999).default(100),
-})
+export async function update(
+  id: string,
+  data: {
+    slug?: string;
+    title?: string;
+    description?: string;
+    status?: string;
+  }
+) {
+  const updateData: any = { ...data };
+  if (updateData.slug) updateData.slug = updateData.slug.toLowerCase();
+  const [result] = await db()
+    .update(taxonomy)
+    .set(updateData)
+    .where(eq(taxonomy.id, id))
+    .returning();
+  return result;
+}
 
-export const saveAdminTaxonomy = createServerFn({ method: 'POST' })
-  .validator((input: unknown) => upsertTaxonomySchema.parse(input))
-  .handler(async ({ data }): Promise<TaxonomyRecord> => {
-    const { requirePermissionDb } = await import('@/modules/rbac/service')
-    const { db, adminId } = await requirePermissionDb('admin.content.write')
-    const saved = await upsertTaxonomy(db, data)
-    await safeRecordAuditLog(db, {
-      actorId: adminId,
-      actorType: 'admin',
-      operation: 'cms.taxonomy.save',
-      targetType: 'taxonomy',
-      targetId: saved.id,
-      summary: `保存分类/标签 ${saved.name} (${saved.slug})`,
-    })
-    return saved
-  })
+export async function remove(id: string) {
+  await db()
+    .update(taxonomy)
+    .set({ status: TaxonomyStatus.ARCHIVED })
+    .where(eq(taxonomy.id, id));
+}

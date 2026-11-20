@@ -1,139 +1,337 @@
-import type { Locale } from '@/config/locale'
-import type { PricingInterval } from '@/types/pricing'
-
-export type SubscriptionStatus =
-  | 'active'
-  | 'canceled'
-  | 'incomplete'
-  | 'incomplete_expired'
-  | 'past_due'
-  | 'paused'
-  | 'trialing'
-  | 'unpaid'
-
-export interface CheckoutParams {
-  priceId: string
-  userId: string
-  customerEmail: string
-  customerId?: string
-  successUrl: string
-  cancelUrl: string
-  locale?: Locale
-  mode: 'subscription' | 'payment'
-  productId: string
-  offerId: string
-  idempotencyKey: string
-  expiresAt?: number
-}
-export interface CheckoutResult {
-  url: string
-  sessionId: string
-  expiresAt: number
-}
-export interface PortalParams {
-  customerId: string
-  returnUrl: string
-}
-export interface PortalResult {
-  url: string
+/**
+ * Payment price interface
+ */
+export interface PaymentPrice {
+  amount: number;
+  currency: string;
 }
 
-export interface ProviderPrice {
-  id: string
-  reference: string
-  amount: number | null
-  currency: string
-  mode: 'subscription' | 'payment'
-  interval: Exclude<PricingInterval, 'one_time'> | null
-  intervalCount: number | null
+/**
+ * Payment discount interface
+ */
+export interface PaymentDiscount {
+  code: string;
 }
 
-export interface ProviderSubscription {
-  id: string
-  userId: string | null
-  customerId: string | null
-  priceId: string
-  reference: string | null
-  /**
-   * 直接归属：没有销售引用的链路（如核销型支付）用它携带商品与付费方式。
-   * 有值时优先于 `reference` 反查。
-   */
-  productId?: string | null
-  offerId?: string | null
-  amount: number | null
-  currency: string | null
-  interval: string | null
-  intervalCount: number | null
-  currentPeriodStart: number | null
-  currentPeriodEnd: number | null
-  cancelAtPeriodEnd: boolean
-  status: SubscriptionStatus
+/**
+ * Payment customer interface
+ */
+export interface PaymentCustomer {
+  id?: string;
+  email?: string;
+  name?: string;
+  metadata?: Record<string, any>;
 }
 
-export interface PaymentEvent {
-  id: string
-  provider: string
-  type: string
-  created: number
-  /** 这笔资金事实对应的结账订单；历史事件或无法归属时为空。 */
-  orderId?: string | null
-  subscriptionId?: string
-  subscription?: ProviderSubscription
-  payment?: {
-    id: string
-    invoiceId: string | null
-    chargeId: string | null
-    customerId: string | null
-    userId: string | null
-    productId: string | null
-    offerId: string | null
-    subscriptionId: string | null
-    type: 'subscription' | 'one_time'
-    amount: number
-    currency: string
-    status: 'paid' | 'failed'
+export interface PaymentCustomField {
+  type: string;
+  name: string;
+  label: string;
+  isRequired?: boolean;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Payment product interface
+ */
+export interface PaymentProduct {
+  id: string;
+  name?: string;
+  description?: string;
+  price: PaymentPrice;
+  metadata?: Record<string, any>;
+}
+
+export enum PaymentType {
+  ONE_TIME = 'one-time',
+  SUBSCRIPTION = 'subscription',
+  RENEW = 'renew',
+}
+
+export enum PaymentInterval {
+  ONE_TIME = 'one-time',
+  DAY = 'day',
+  WEEK = 'week',
+  MONTH = 'month',
+  YEAR = 'year',
+}
+
+export enum PaymentStatus {
+  PROCESSING = 'processing', // processing means waiting for payment
+  // final status
+  SUCCESS = 'paid', // paid means payment success
+  FAILED = 'failed', // failed means payment failed
+  CANCELED = 'canceled', // canceled means payment canceled
+}
+
+/**
+ * Payment subscription plan interface
+ */
+export interface PaymentPlan {
+  id?: string;
+  name: string;
+  description?: string;
+  interval: PaymentInterval;
+  intervalCount?: number;
+  trialPeriodDays?: number;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Payment order interface for create payment
+ */
+export interface PaymentOrder {
+  type?: PaymentType; // optional
+  orderNo?: string; // order no
+  productId?: string; // create product first
+  requestId?: string; // request id
+  price?: PaymentPrice; // required if productId is not provided
+  discount?: PaymentDiscount; // discount code
+  quantity?: number; // quantity
+  customer?: PaymentCustomer;
+  description?: string; // checkout description
+  successUrl?: string;
+  cancelUrl?: string;
+  metadata?: Record<string, any>;
+  plan?: PaymentPlan; // required for subscription
+  customFields?: PaymentCustomField[]; // optional for custom fields
+}
+
+/**
+ * Checkout info interface
+ */
+export interface CheckoutInfo {
+  sessionId: string;
+  checkoutUrl: string;
+}
+
+export enum SubscriptionCycleType {
+  CREATE = 'create',
+  RENEWAL = 'renew',
+}
+
+/**
+ * Payment info interface
+ */
+export interface PaymentInfo {
+  description?: string;
+  transactionId?: string;
+  amount?: number;
+  currency?: string;
+  discountCode?: string;
+  discountAmount?: number;
+  discountCurrency?: string;
+  paymentAmount: number;
+  paymentCurrency: string;
+  paymentEmail?: string;
+  paymentUserName?: string;
+  paymentUserId?: string;
+  paidAt?: Date;
+  invoiceId?: string;
+  invoiceUrl?: string;
+  subscriptionCycleType?: SubscriptionCycleType;
+}
+
+export enum SubscriptionStatus {
+  ACTIVE = 'active',
+  PENDING_CANCEL = 'pending_cancel',
+  CANCELED = 'canceled',
+  TRIALING = 'trialing',
+  EXPIRED = 'expired',
+  PAUSED = 'paused',
+}
+
+export interface SubscriptionInfo {
+  subscriptionId: string;
+  planId?: string;
+  productId?: string;
+  description?: string;
+  amount?: number;
+  currency?: string;
+  interval?: PaymentInterval;
+  intervalCount?: number;
+  trialPeriodDays?: number;
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date;
+  billingUrl?: string;
+  metadata?: Record<string, any>;
+  status?: SubscriptionStatus;
+  canceledAt?: Date; // cancel apply at
+  canceledReason?: string; // cancel reason
+  canceledReasonType?: string; // cancel reason type
+  canceledEndAt?: Date; // cancel end at
+}
+
+/**
+ * Checkout session interface
+ */
+export interface CheckoutSession {
+  provider: string;
+
+  checkoutParams: any; // checkout request params
+  checkoutInfo: CheckoutInfo; // checkout info after checkout success
+  checkoutResult: any; // provider checkout result
+
+  metadata: any;
+}
+
+/**
+ * Payment session interface
+ */
+export interface PaymentSession {
+  provider: string;
+
+  // payment info
+  paymentStatus?: PaymentStatus; // payment status
+  paymentInfo?: PaymentInfo; // payment info after payment success
+  paymentResult?: any; // provider payment result
+
+  // subscription info
+  subscriptionId?: string;
+  subscriptionInfo?: SubscriptionInfo; // subscription info after subscription success
+  subscriptionResult?: any; // provider subscription result
+
+  metadata?: any;
+}
+
+export enum PaymentEventType {
+  CHECKOUT_SUCCESS = 'checkout.success', // checkout success
+  PAYMENT_SUCCESS = 'payment.success', // payment success
+  PAYMENT_FAILED = 'payment.failed', // payment failed
+  PAYMENT_REFUNDED = 'payment.refunded', // payment refunded
+  SUBSCRIBE_UPDATED = 'subscribe.updated', // subscription updated
+  SUBSCRIBE_CANCELED = 'subscribe.canceled', // subscription canceled
+}
+
+export interface EventInfo {}
+
+/**
+ * Thrown when a webhook is authentic but carries an event this app does not
+ * process (unknown event type, or one with no handler). The webhook route acks
+ * these with 2xx so the provider stops redelivering them; every other error is
+ * a real failure and must return a non-2xx so the provider retries.
+ */
+export class WebhookIgnoredError extends Error {
+  // Duck-typed marker: `instanceof` is unreliable when the class is duplicated
+  // across bundle chunks (Workers builds), so isWebhookIgnored checks this too.
+  readonly webhookIgnored = true;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'WebhookIgnoredError';
   }
-  payments?: NonNullable<PaymentEvent['payment']>[]
-  refund?: { chargeId: string; amount: number }
-  checkoutId?: string
 }
 
-/** 取消订阅后的快照。取消一律**期末生效**：本周期内仍是有效订阅。 */
-export interface SubscriptionCancellation {
-  status: SubscriptionStatus
-  cancelAtPeriodEnd: boolean
-  currentPeriodEnd: number | null
+export function isWebhookIgnored(error: unknown): boolean {
+  return (
+    error instanceof WebhookIgnoredError ||
+    (typeof error === 'object' &&
+      error !== null &&
+      (error as { webhookIgnored?: boolean }).webhookIgnored === true)
+  );
 }
 
-/** 渠道的退款状态（两家 provider 的取值收敛到这里）。 */
-export type RefundStatus = 'pending' | 'requires_action' | 'succeeded' | 'failed' | 'canceled'
+/**
+ * Payment event interface
+ */
+export interface PaymentEvent {
+  eventType: PaymentEventType;
+  eventResult: any; // provider event result
 
-export interface RefundParams {
-  /** Stripe：PaymentIntent id。 */
-  paymentIntentId?: string | null
-  /** Creem：交易号。 */
-  transactionId?: string | null
-  /** 省略表示全额退款。 */
-  amount?: number
+  paymentSession?: PaymentSession;
 }
 
-export interface RefundResult {
-  status: RefundStatus
+export interface PaymentInvoice {
+  invoiceId: string;
+  invoiceUrl?: string;
+  amount?: number;
+  currency?: string;
 }
 
+export interface PaymentBilling {
+  billingUrl?: string;
+}
+
+/**
+ * Refund request — identifiers stored on the local order. Providers pick
+ * whichever one their refund API is keyed on.
+ */
+export interface PaymentRefundRequest {
+  orderNo: string; // our order no — also the refund idempotency key
+  sessionId?: string; // checkout session id (order.paymentSessionId)
+  transactionId?: string; // provider transaction id (order.transactionId)
+  invoiceId?: string; // provider invoice / capture id (order.invoiceId)
+  paymentType?: string; // one-time | subscription | renew
+  amount: number; // order total in minor units — refunded in full
+  currency: string;
+  reason?: string;
+}
+
+export enum RefundStatus {
+  PENDING = 'pending', // accepted, provider settles asynchronously
+  SUCCEEDED = 'succeeded',
+}
+
+export interface PaymentRefund {
+  refundId?: string;
+  status: RefundStatus;
+  amount?: number; // minor units, when the provider reports it
+  refundResult: any; // raw provider response
+}
+
+/**
+ * Payment configs interface
+ */
+export interface PaymentConfigs {
+  [key: string]: any;
+}
+
+/**
+ * Payment provider interface
+ */
 export interface PaymentProvider {
-  getProviderName(): string
-  listPrices(references: string[]): Promise<ProviderPrice[]>
-  createCheckoutSession(params: CheckoutParams): Promise<CheckoutResult>
-  retrieveCheckoutSession(sessionId: string): Promise<{
-    status: 'open' | 'complete' | 'expired'
-    subscriptionId: string | null
-  }>
-  createCustomerPortalLink(params: PortalParams): Promise<PortalResult>
-  retrieveSubscription(subscriptionId: string): Promise<ProviderSubscription>
-  /** 期末取消：不立即终止，用户用完已付的周期。 */
-  cancelSubscription(subscriptionId: string): Promise<SubscriptionCancellation>
-  /** 发起退款；返回渠道的受理状态，最终到账以渠道回调为准。 */
-  refundPayment(params: RefundParams): Promise<RefundResult>
-  parseWebhookEvent(rawBody: string, signature: string): Promise<PaymentEvent>
+  // provider name
+  readonly name: string;
+
+  // provider configs
+  configs: PaymentConfigs;
+
+  // create payment
+  createPayment({ order }: { order: PaymentOrder }): Promise<CheckoutSession>;
+
+  // get payment session
+  getPaymentSession({
+    sessionId,
+  }: {
+    sessionId: string;
+  }): Promise<PaymentSession>;
+
+  // get payment event from webhook notification
+  getPaymentEvent({ req }: { req: Request }): Promise<PaymentEvent>;
+
+  // get payment invoice
+  getPaymentInvoice?({
+    invoiceId,
+  }: {
+    invoiceId: string;
+  }): Promise<PaymentInvoice>;
+
+  // get payment billing
+  getPaymentBilling?({
+    customerId,
+    returnUrl,
+  }: {
+    customerId: string;
+    returnUrl?: string;
+  }): Promise<PaymentBilling>;
+
+  // cancel subscription
+  cancelSubscription?({
+    subscriptionId,
+  }: {
+    subscriptionId: string;
+  }): Promise<PaymentSession>;
+
+  // refund a paid order in full
+  refundPayment?(request: PaymentRefundRequest): Promise<PaymentRefund>;
 }

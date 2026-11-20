@@ -1,40 +1,37 @@
-import { defineConfig } from 'drizzle-kit'
-import { dialectOf, migrationDirOf, resolveDatabaseProvider } from './src/core/db/provider'
+import { defineConfig } from 'drizzle-kit';
 
-/**
- * Drizzle 配置（按 DATABASE_PROVIDER 分派）。
- *
- * 注意 drizzle-kit 只读 `process.env`，不走 `src/core/env` 的两层校验。
- *
- * - `sqlite` / `d1`：D1 HTTP 驱动，连远端 D1（`db:generate` 不连库，只比对 schema）。
- * - `postgres`：直连连接串。
- *
- * 迁移输出按方言分目录：两个方言的 SQL 不可混用。
- */
-const provider = resolveDatabaseProvider(process.env.DATABASE_PROVIDER)
-const out = `./src/core/db/migrations/${migrationDirOf(provider)}`
+import { loadEnvFiles } from './src/lib/env';
 
-export default defineConfig(
-  provider === 'postgres'
+loadEnvFiles();
+
+const provider = process.env.DATABASE_PROVIDER || 'sqlite';
+
+const dialectMap: Record<string, 'sqlite' | 'postgresql' | 'mysql' | 'turso'> =
+  {
+    sqlite: 'sqlite',
+    postgres: 'postgresql',
+    postgresql: 'postgresql',
+    mysql: 'mysql',
+    turso: 'turso',
+  };
+
+const dialect = dialectMap[provider] || 'sqlite';
+
+// Turso is a remote libsql database: it needs an auth token in addition to the
+// libsql:// URL. Other dialects (sqlite/postgres/mysql) use the URL alone.
+const dbCredentials =
+  dialect === 'turso'
     ? {
-        schema: './src/core/db/schema.ts',
-        out,
-        dialect: dialectOf(provider),
-        dbCredentials: { url: process.env.DATABASE_URL ?? '' },
-        verbose: true,
-        strict: true,
+        url: process.env.DATABASE_URL || 'file:data/local.db',
+        authToken: process.env.DATABASE_AUTH_TOKEN,
       }
     : {
-        schema: './src/core/db/schema.ts',
-        out,
-        dialect: dialectOf(provider),
-        driver: 'd1-http',
-        dbCredentials: {
-          accountId: String(process.env.CLOUDFLARE_ACCOUNT_ID ?? ''),
-          databaseId: String(process.env.CLOUDFLARE_DATABASE_ID ?? ''),
-          token: String(process.env.CLOUDFLARE_API_TOKEN ?? ''),
-        },
-        verbose: true,
-        strict: true,
-      },
-)
+        url: process.env.DATABASE_URL || 'file:data/local.db',
+      };
+
+export default defineConfig({
+  schema: './src/config/db/schema.ts',
+  out: './drizzle',
+  dialect,
+  dbCredentials,
+});

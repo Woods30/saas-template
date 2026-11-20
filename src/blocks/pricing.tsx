@@ -1,218 +1,331 @@
-import { Link } from '@tanstack/react-router'
-import { type ReactNode, useState } from 'react'
-import { Badge } from '@/components/ui/badge'
-import { m } from '@/locale/paraglide/messages.js'
-import type { PricingProduct, ProductPrice } from '@/types/pricing'
+'use client';
 
-export type { PricingInterval, PricingProduct, ProductPrice } from '@/types/pricing'
+import { useMemo, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import {
+  Check,
+  Folder,
+  Folders,
+  Headphones,
+  Infinity as InfinityIcon,
+  Mail,
+  Puzzle,
+  Sparkles,
+  Terminal,
+  Zap,
+} from 'lucide-react';
+import { toast } from 'sonner';
 
-export interface PricingProps {
-  title?: string
-  subtitle?: string
-  /** 产品列表；每个产品的付费方式由产品定义决定。 */
-  products: PricingProduct[]
-  initialSelection?: { productId: string; offerId: string }
-  /**
-   * 渲染自定义 CTA（用于接 authClient + startCheckout）。
-   *
-   * `option` 可能为 `undefined`：免费档没有付费方式，它仍然要渲染 CTA
-   * （走「注册 / 进控制台」而不是结账）。
-   */
-  renderCta?: (product: PricingProduct, option: ProductPrice | undefined) => ReactNode
-}
+import { useSession } from '@/core/auth/client';
+import { useRouter } from '@/core/i18n/navigation';
+import { apiPost } from '@/lib/api-client';
+import { currentPathWithQuery } from '@/lib/redirect';
+import { m } from '@/paraglide/messages.js';
+import { getLocale } from '@/paraglide/runtime.js';
+import { usePublicConfig } from '@/hooks/use-public-config';
+import {
+  PaymentProviderModal,
+  type PaymentProvider,
+} from '@/components/payment-provider-modal';
+import {
+  PricingTable,
+  type PricingGroup,
+  type PricingPlan,
+} from '@/components/pricing-table';
 
-/**
- * 定价卡片列表。一个产品有多个付费方式时，卡片内只显示选中的那个——
- * 同时列出月付与年付会被误读成要付两份钱。
- *
- * 渲染的金额来自 Stripe 的实时价格（`product.options` 由 `mergePricingProducts` 填好），
- * 不是写死的文案常量：展示价与实际扣款价必须是同一个数。
- */
-export function Pricing({ title, subtitle, products, renderCta, initialSelection }: PricingProps) {
-  return (
-    <section className="mx-auto max-w-6xl px-6 py-20">
-      {title && <h2 className="text-center text-3xl font-bold">{title}</h2>}
-      {subtitle && <p className="mt-2 text-center text-muted-foreground">{subtitle}</p>}
-      <div className="mt-10 grid gap-6 md:grid-cols-3">
-        {products.map((product) => (
-          <ProductCard
-            key={product.id}
-            product={product}
-            renderCta={renderCta}
-            initialOffer={
-              initialSelection?.productId === product.id ? initialSelection.offerId : undefined
-            }
-          />
-        ))}
-      </div>
-    </section>
-  )
-}
+const ALL_PROVIDERS: PaymentProvider[] = [
+  'stripe',
+  'creem',
+  'paypal',
+  'alipay',
+  'wechat',
+];
 
-/**
- * 单个产品的卡片。
- *
- * 付费方式的切换器放在卡内而不是页面顶部：不同产品的付费方式可以完全不同
- * （订阅产品有月付 / 年付，买断产品只有一次性），一个全局切换器无法表达
- * 「切到一次性」对买断产品意味着什么。
- */
-function ProductCard({
-  product,
-  renderCta,
-  initialOffer,
-}: {
-  product: PricingProduct
-  initialOffer?: string
-  renderCta?: (product: PricingProduct, option: ProductPrice | undefined) => ReactNode
-}) {
-  // 默认选第一个已配置价格的付费方式；没有价格时保持 `undefined`（只渲染 CTA）。
-  const [selected, setSelected] = useState<string | undefined>(
-    initialOffer ?? product.options[0]?.id,
-  )
-  const option = resolveOption(product, selected)
-  // 多个购买选项在卡片内选择，支持订阅与一次性混合。
-  const switchable = product.options
+export function Pricing({ title }: { title?: string } = {}) {
+  const router = useRouter();
+  const { data: session } = useSession();
 
-  return (
-    <div
-      className={`relative flex flex-col rounded-lg border p-6 ${
-        product.recommended ? 'border-primary shadow-lg ring-2 ring-primary/20' : 'border-border'
-      }`}
-    >
-      {(product.recommended ? m.pricing_recommended() : '') && (
-        <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
-          {product.recommended ? m.pricing_recommended() : ''}
-        </span>
-      )}
-      <h3 className="text-xl font-semibold">{product.name}</h3>
-      {product.description && (
-        <p className="mt-1 text-sm text-muted-foreground">{product.description}</p>
-      )}
-      {switchable.length > 1 && (
-        // `fieldset` 而不是 `div[role=group]`：Biome 的 `noGroupSemanticElements` 要求
-        // 一组语义上相关的控件用原生元素表达，而不是靠 ARIA 硬套角色。
-        <fieldset className="mt-4 w-fit rounded-lg border border-border p-1">
-          <legend className="sr-only">{product.name}</legend>
-          <div className="flex gap-1 text-sm">
-            {switchable.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                aria-pressed={item.id === option?.id}
-                onClick={() => setSelected(item.id)}
-                className={`rounded-md px-3 py-1 transition-colors ${
-                  item.id === option?.id
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-      )}
-      <div className="mt-4 space-y-1">
-        {option && (
-          <p className="text-2xl font-bold">
-            {(
-              option.amount /
-              10 **
-                (new Intl.NumberFormat('en-US', {
-                  style: 'currency',
-                  currency: option.currency,
-                }).resolvedOptions().maximumFractionDigits ?? 2)
-            ).toLocaleString('en-US', {
-              style: 'currency',
-              currency: option.currency.toUpperCase(),
-            })}
-            {option.interval && option.interval !== 'one_time' && (
-              <span className="text-sm font-normal text-muted-foreground">
-                {' '}
-                /
-                {option.intervalCount && option.intervalCount > 1 ? `${option.intervalCount} ` : ''}
-                {option.interval === 'month'
-                  ? 'mo'
-                  : option.interval === 'year'
-                    ? 'yr'
-                    : option.interval}
-              </span>
-            )}
-          </p>
-        )}
-        <YearlySavingHint product={product} option={option} />
-      </div>
-      <ul className="mt-4 flex-1 space-y-2 text-sm">
-        {product.features.map((f, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: static ordered list
-          <li key={i} className="flex gap-2">
-            <span aria-hidden>✓</span>
-            {f}
-          </li>
-        ))}
-      </ul>
-      <div className="mt-6">
-        {renderCta ? (
-          renderCta(product, option)
-        ) : (
-          <Link
-            to="/{-$locale}"
-            hash="pricing"
-            className="rounded bg-primary px-4 py-2 text-center text-primary-foreground"
-          >
-            {m.pricing_pro_cta()}
-          </Link>
-        )}
-      </div>
-    </div>
-  )
-}
+  const { data: configsData } = usePublicConfig();
+  const configs = configsData ?? {};
+  const [modalOpen, setModalOpen] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<PricingPlan | null>(null);
+  const [loadingProvider, setLoadingProvider] =
+    useState<PaymentProvider | null>(null);
 
-/**
- * 选中的付费方式。
- *
- * 选中的周期没有对应价格时（配置里配了月付与年付，但 Stripe 上只配了月付）退回
- * 第一个有价格的方式：给用户一个真实可买的价格，好过显示空白。
- */
-function resolveOption(product: PricingProduct, id: string | undefined): ProductPrice | undefined {
-  if (product.options.length === 0) return undefined
-  if (id) {
-    const match = product.options.find((option) => option.id === id)
-    if (match) return match
+  const enabledProviders = useMemo<PaymentProvider[]>(
+    () => ALL_PROVIDERS.filter((p) => configs[`${p}_enabled`] === 'true'),
+    [configs]
+  );
+
+  const starterFeatures = [
+    { icon: Folder, label: m['landing.pricing.feature_1_project']() },
+    { icon: Sparkles, label: m['landing.pricing.feature_5k_credits']() },
+    { icon: Mail, label: m['landing.pricing.feature_email_support']() },
+  ];
+  const proFeatures = [
+    { icon: Folders, label: m['landing.pricing.feature_unlimited_projects']() },
+    { icon: Sparkles, label: m['landing.pricing.feature_50k_credits']() },
+    { icon: Zap, label: m['landing.pricing.feature_priority_support']() },
+    { icon: Terminal, label: m['landing.pricing.feature_api_access']() },
+  ];
+  const enterpriseFeatures = [
+    { icon: Check, label: m['landing.pricing.feature_everything_pro']() },
+    {
+      icon: InfinityIcon,
+      label: m['landing.pricing.feature_unlimited_credits'](),
+    },
+    {
+      icon: Headphones,
+      label: m['landing.pricing.feature_dedicated_support'](),
+    },
+    { icon: Puzzle, label: m['landing.pricing.feature_custom_integrations']() },
+  ];
+
+  const groups: PricingGroup[] = [
+    {
+      key: 'monthly',
+      label: m['landing.pricing.monthly'](),
+      plans: [
+        {
+          id: 'starter-monthly',
+          name: m['landing.pricing.starter'](),
+          description: m['landing.pricing.starter_desc'](),
+          price: '$9',
+          interval: 'mo',
+          features: starterFeatures,
+          productId: 'starter_monthly',
+          priceInCents: 900,
+          currency: 'usd',
+          credits: 5000,
+          plan: { name: 'Starter', interval: 'month', intervalCount: 1 },
+        },
+        {
+          id: 'pro-monthly',
+          name: m['landing.pricing.pro'](),
+          description: m['landing.pricing.pro_desc'](),
+          price: '$29',
+          interval: 'mo',
+          featured: true,
+          badge: m['landing.pricing.popular'](),
+          features: proFeatures,
+          productId: 'pro_monthly',
+          priceInCents: 2900,
+          currency: 'usd',
+          credits: 50000,
+          plan: { name: 'Pro', interval: 'month', intervalCount: 1 },
+        },
+        {
+          id: 'enterprise-monthly',
+          name: m['landing.pricing.enterprise'](),
+          description: m['landing.pricing.enterprise_desc'](),
+          price: '$99',
+          interval: 'mo',
+          features: enterpriseFeatures,
+          productId: 'enterprise_monthly',
+          priceInCents: 9900,
+          currency: 'usd',
+          credits: 500000,
+          plan: { name: 'Enterprise', interval: 'month', intervalCount: 1 },
+        },
+      ],
+    },
+    {
+      key: 'yearly',
+      label: m['landing.pricing.yearly'](),
+      plans: [
+        {
+          id: 'starter-yearly',
+          name: m['landing.pricing.starter'](),
+          description: m['landing.pricing.starter_desc'](),
+          price: '$86',
+          originalPrice: '$108',
+          interval: 'yr',
+          features: starterFeatures,
+          productId: 'starter_yearly',
+          priceInCents: 8600,
+          currency: 'usd',
+          credits: 60000,
+          plan: { name: 'Starter', interval: 'year', intervalCount: 1 },
+        },
+        {
+          id: 'pro-yearly',
+          name: m['landing.pricing.pro'](),
+          description: m['landing.pricing.pro_desc'](),
+          price: '$278',
+          originalPrice: '$348',
+          interval: 'yr',
+          featured: true,
+          badge: m['landing.pricing.popular'](),
+          features: proFeatures,
+          productId: 'pro_yearly',
+          priceInCents: 27800,
+          currency: 'usd',
+          credits: 600000,
+          plan: { name: 'Pro', interval: 'year', intervalCount: 1 },
+        },
+        {
+          id: 'enterprise-yearly',
+          name: m['landing.pricing.enterprise'](),
+          description: m['landing.pricing.enterprise_desc'](),
+          price: '$950',
+          originalPrice: '$1,188',
+          interval: 'yr',
+          features: enterpriseFeatures,
+          productId: 'enterprise_yearly',
+          priceInCents: 95000,
+          currency: 'usd',
+          credits: 6000000,
+          plan: { name: 'Enterprise', interval: 'year', intervalCount: 1 },
+        },
+      ],
+    },
+    {
+      key: 'lifetime',
+      label: m['landing.pricing.lifetime'](),
+      plans: [
+        {
+          id: 'starter-lifetime',
+          name: m['landing.pricing.starter'](),
+          description: m['landing.pricing.starter_desc'](),
+          price: '$149',
+          features: starterFeatures,
+          productId: 'starter_lifetime',
+          priceInCents: 14900,
+          currency: 'usd',
+          credits: 100000,
+          buttonText: m['landing.pricing.buy_lifetime'](),
+        },
+        {
+          id: 'pro-lifetime',
+          name: m['landing.pricing.pro'](),
+          description: m['landing.pricing.pro_desc'](),
+          price: '$499',
+          features: proFeatures,
+          featured: true,
+          badge: m['landing.pricing.best_value'](),
+          productId: 'pro_lifetime',
+          priceInCents: 49900,
+          currency: 'usd',
+          credits: 1000000,
+          buttonText: m['landing.pricing.buy_lifetime'](),
+        },
+        {
+          id: 'enterprise-lifetime',
+          name: m['landing.pricing.enterprise'](),
+          description: m['landing.pricing.enterprise_desc'](),
+          price: '$1,999',
+          features: enterpriseFeatures,
+          productId: 'enterprise_lifetime',
+          priceInCents: 199900,
+          currency: 'usd',
+          credits: 10000000,
+          buttonText: m['landing.pricing.buy_lifetime'](),
+        },
+      ],
+    },
+  ];
+
+  const checkoutMutation = useMutation({
+    mutationFn: ({
+      plan,
+      provider,
+    }: {
+      plan: PricingPlan;
+      provider: PaymentProvider;
+    }) =>
+      apiPost<{ checkout_url?: string }>('/api/payment/checkout', {
+        product_id: plan.productId,
+        product_name: plan.productName || plan.name,
+        plan_name: plan.plan?.name || plan.name,
+        price: plan.priceInCents,
+        currency: plan.currency || 'usd',
+        type: plan.plan ? 'subscription' : 'one-time',
+        description: plan.name,
+        plan: plan.plan,
+        credits: plan.credits,
+        credits_valid_days: plan.creditsValidDays,
+        payment_provider: provider,
+        // Land on the order list so the user sees the payment they just made.
+        redirect: '/settings/payments',
+        locale: getLocale(),
+      }),
+    onSuccess: (data) => {
+      if (!data?.checkout_url) {
+        toast.error('Checkout failed');
+        setLoadingProvider(null);
+        return;
+      }
+      window.location.href = data.checkout_url;
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Checkout failed');
+      setLoadingProvider(null);
+    },
+  });
+
+  function startCheckout(plan: PricingPlan, provider: PaymentProvider) {
+    setLoadingProvider(provider);
+    checkoutMutation.mutate({ plan, provider });
   }
-  return product.options[0]
-}
 
-/**
- * 年付相对月付的月度节省比例。
- *
- * 两个数都是 Stripe 上的真实价格（不是写死的展示文案），所以这个折扣不会骗人。
- * 只在选中年付时提示。
- */
-function YearlySavingHint({
-  product,
-  option,
-}: {
-  product: PricingProduct
-  option: ProductPrice | undefined
-}) {
-  if (option?.interval !== 'year' || (option.intervalCount ?? 1) !== 1) return null
-  const month = product.options.find(
-    (item) =>
-      item.interval === 'month' &&
-      (item.intervalCount ?? 1) === 1 &&
-      item.currency === option.currency,
-  )
-  if (!month?.amount || !option.amount) return null
-  const monthlyEquivalent = option.amount / 12
-  const percent = Math.round((1 - monthlyEquivalent / month.amount) * 100)
-  if (!Number.isFinite(percent) || percent <= 0) return null
+  async function handleCheckout(plan: PricingPlan) {
+    if (!session?.user) {
+      const callbackUrl = encodeURIComponent(currentPathWithQuery('/pricing'));
+      router.push(`/sign-in?callbackUrl=${callbackUrl}`);
+      return;
+    }
+
+    const selectEnabled = configs.select_payment_enabled === 'true';
+    const defaultProvider = (configs.default_payment_provider ||
+      enabledProviders[0] ||
+      'stripe') as PaymentProvider;
+
+    if (selectEnabled && enabledProviders.length > 1) {
+      setPendingPlan(plan);
+      setModalOpen(true);
+      return;
+    }
+
+    await startCheckout(plan, defaultProvider);
+  }
+
+  function handleProviderSelect(provider: PaymentProvider) {
+    if (!pendingPlan) return;
+    startCheckout(pendingPlan, provider);
+  }
+
   return (
-    <p className="text-sm text-muted-foreground">
-      <Badge variant="secondary" className="mr-2">
-        -{percent}%
-      </Badge>
-      {m.pricing_yearly_hint({ percent })}
-    </p>
-  )
+    <section
+      id="pricing"
+      className="border-border border-t px-4 py-24 sm:py-32"
+    >
+      <div className="mx-auto max-w-5xl">
+        <div className="mb-20 text-center">
+          <h2 className="font-serif text-4xl font-normal tracking-tight sm:text-5xl">
+            {title ?? m['landing.pricing.title']()}
+          </h2>
+          <p className="text-muted-foreground mt-5">
+            {m['landing.pricing.description']()}
+          </p>
+        </div>
+        <PricingTable groups={groups} onCheckout={handleCheckout} />
+      </div>
+
+      <PaymentProviderModal
+        open={modalOpen}
+        onOpenChange={(open) => {
+          setModalOpen(open);
+          if (!open) {
+            setPendingPlan(null);
+            setLoadingProvider(null);
+          }
+        }}
+        providers={enabledProviders.length ? enabledProviders : ['stripe']}
+        loadingProvider={loadingProvider}
+        onSelect={handleProviderSelect}
+        planName={pendingPlan?.name}
+        price={pendingPlan?.price}
+      />
+    </section>
+  );
 }
