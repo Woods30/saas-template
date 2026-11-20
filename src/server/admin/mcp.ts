@@ -17,7 +17,7 @@ export async function handleAdminMcp(request: Request) {
     if (origin && origin !== new URL(request.url).origin)
       throw new AdminError('Origin not allowed', 403);
     const actor = await authenticateAdmin(request);
-    const site = envConfigs.app_name || 'My App';
+    const site = envConfigs.app_name || 'Jerbix';
     const siteUrl = (envConfigs.app_url || new URL(request.url).origin).replace(
       /\/$/,
       ''

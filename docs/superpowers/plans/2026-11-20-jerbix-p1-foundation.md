@@ -153,7 +153,7 @@ git commit -m "chore: replace prettier with biome"
 - Consumes: nothing.
 - Produces: `envConfigs.app_name` defaults to `Jerbix`; the repo contains no upstream brand string outside `docs/superpowers/`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/brand.test.ts`:
 
@@ -194,12 +194,12 @@ test('the app defaults to the Jerbix name', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --import tsx --test tests/brand.test.ts`
 Expected: FAIL — `ENOENT` on `LICENSE`.
 
-- [ ] **Step 3: Write LICENSE, sweep the brand**
+- [x] **Step 3: Write LICENSE, sweep the brand**
 
 `LICENSE`: two tiers, **Personal** (one person, unlimited products) and **Team** (multi-seat, unlimited products); both forbid reselling the template itself; no warranty; enterprise enquiries by email rather than a third tier. Drafted from scratch — no sentence may resemble the previous licence text (spec §4).
 
@@ -209,17 +209,17 @@ Brand sweep:
 - `src/routes/__root.tsx`: title/description defaults, favicon link.
 - `public/favicon.svg`: the ledger-tick mark as a hand-written SVG. `public/logo.svg`: the text mark. No raster assets.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `node --import tsx --test tests/brand.test.ts`
 Expected: PASS, 3/3.
 
-- [ ] **Step 5: Verify the whole suite**
+- [x] **Step 5: Verify the whole suite**
 
 Run: `pnpm typecheck && pnpm test && pnpm build`
 Expected: green.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A

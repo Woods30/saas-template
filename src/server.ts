@@ -41,7 +41,7 @@ function ensureDefaultUserAgent() {
   if (fetchPatched) return;
   fetchPatched = true;
   const nativeFetch = globalThis.fetch;
-  const userAgent = `${envConfigs.app_name || 'My App'} (+${envConfigs.app_url})`;
+  const userAgent = `${envConfigs.app_name || 'Jerbix'} (+${envConfigs.app_url})`;
   globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     const headers = new Headers(
       init?.headers ?? (input instanceof Request ? input.headers : undefined)

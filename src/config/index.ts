@@ -16,10 +16,10 @@ const publicEnv = (key: string) => metaEnv[key] ?? procEnv[key];
 export const envConfigs: Record<string, string> = {
   // App (public)
   app_url: publicEnv('VITE_APP_URL') ?? 'http://localhost:3000',
-  app_name: publicEnv('VITE_APP_NAME') ?? 'My App',
+  app_name: publicEnv('VITE_APP_NAME') ?? 'Jerbix',
   app_description:
     publicEnv('VITE_APP_DESCRIPTION') ??
-    'Your workspace for projects and tools.',
+    'The SaaS starter that takes payments.',
   app_logo: publicEnv('VITE_APP_LOGO') ?? '/logo.svg',
 
   // Database

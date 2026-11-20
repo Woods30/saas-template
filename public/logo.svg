@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Logo">
-  <rect width="512" height="512" rx="112" fill="#0a0a0a"/>
-  <rect x="128" y="128" width="112" height="256" rx="28" fill="#ffffff"/>
-  <rect x="272" y="128" width="112" height="112" rx="28" fill="#ffffff"/>
-  <rect x="272" y="272" width="112" height="112" rx="28" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Jerbix">
+  <rect width="512" height="512" rx="128" fill="#B4432B"/>
+  <path d="M232 128 H376 M304 128 V300 A64 64 0 0 1 176 300" fill="none" stroke="#FBF9F5" stroke-width="60" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="176" y="396" width="160" height="24" rx="12" fill="#FBF9F5" opacity="0.65"/>
 </svg>
