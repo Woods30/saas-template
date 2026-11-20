@@ -14,7 +14,7 @@
     "prebuild": "node scripts/db-setup.mjs",
     "build": "vite build",
     "start": "node .output/server/index.mjs",
-    "precf:build": "node scripts/db-setup.mjs",
+    "precf:build": "node scripts/db-setup.mjs && node scripts/check-wrangler-config.mjs",
     "cf:build": "NITRO_PRESET=cloudflare_module vite build",
     "precf:deploy": "pnpm check:deploy-env",
     "cf:deploy": "sh -c 'set -a && [ -f .env.production ] && . ./.env.production; set +a && pnpm cf:build && exec wrangler deploy'",

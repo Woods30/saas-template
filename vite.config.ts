@@ -67,7 +67,7 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    // Cloud sandboxes (ShipAny Code / e2b) proxy the dev server through a
+    // Cloud sandboxes (e2b and friends) proxy the dev server through a
     // per-sandbox subdomain; without this Vite's host check blocks the
     // preview with "Blocked request. This host is not allowed."
     allowedHosts: ['.e2b.app'],
