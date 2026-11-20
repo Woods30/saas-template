@@ -134,6 +134,7 @@ export const pricingCatalog: Record<string, PricingProduct> = {
     type: PaymentType.ONE_TIME,
     priceInCents: 14900,
     currency: 'usd',
+    cnyPriceInCents: 69900,
     credits: 100000,
   },
   pro_lifetime: {
@@ -144,6 +145,7 @@ export const pricingCatalog: Record<string, PricingProduct> = {
     type: PaymentType.ONE_TIME,
     priceInCents: 49900,
     currency: 'usd',
+    cnyPriceInCents: 349900,
     credits: 1000000,
   },
   enterprise_lifetime: {
@@ -154,6 +156,7 @@ export const pricingCatalog: Record<string, PricingProduct> = {
     type: PaymentType.ONE_TIME,
     priceInCents: 199900,
     currency: 'usd',
+    cnyPriceInCents: 1399900,
     credits: 10000000,
   },
 

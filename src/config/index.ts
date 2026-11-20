@@ -81,6 +81,10 @@ export const envConfigs: Record<string, string> = {
   // to them would let the admin "Test" silently pass on the machine's own key.
   replicate_api_token: procEnv.REPLICATE_API_TOKEN ?? '',
 
+  // Payment - Manual (offline transfer)
+  manual_payments_enabled: procEnv.MANUAL_PAYMENTS_ENABLED ?? 'false',
+  manual_payments_sla_hours: procEnv.MANUAL_PAYMENTS_SLA_HOURS ?? '24',
+
   // Locale (public)
   locale: publicEnv('VITE_DEFAULT_LOCALE') ?? 'en',
 };

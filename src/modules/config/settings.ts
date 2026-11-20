@@ -158,6 +158,13 @@ export function getSettingGroups(): SettingGroup[] {
       description: 'WeChat Pay gateway (native)',
       tab: 'payment',
     },
+    {
+      name: 'manual_payments',
+      title: 'Manual payments',
+      description:
+        'Offline transfer (bank / Alipay QR): the payer sends the money and uploads a receipt, an operator verifies it.',
+      tab: 'payment',
+    },
 
     // Email
     {
@@ -607,6 +614,27 @@ export function getSettings(): Setting[] {
       ],
       group: 'basic_payment',
       tab: 'payment',
+    },
+
+    // ─── Payment / Manual ────────────────────────────────────────────
+    {
+      name: 'manual_payments_enabled',
+      title: 'Enable manual payments',
+      type: 'switch',
+      tip: 'One-time products only. Collection accounts are managed in the admin panel.',
+      group: 'manual_payments',
+      tab: 'payment',
+      defaultValue: 'false',
+    },
+    {
+      name: 'manual_payments_sla_hours',
+      title: 'Verification SLA (hours)',
+      type: 'number',
+      placeholder: '24',
+      tip: 'How long an operator is expected to verify a receipt.',
+      group: 'manual_payments',
+      tab: 'payment',
+      defaultValue: '24',
     },
 
     // ─── Payment / Stripe ────────────────────────────────────────────
