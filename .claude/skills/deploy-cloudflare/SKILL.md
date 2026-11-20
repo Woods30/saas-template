@@ -7,7 +7,28 @@ user-invocable: true
 
 # Deploy to Cloudflare Workers — $ARGUMENTS
 
-You are driving a Cloudflare Workers deployment of this TanStack Start project. The build pipeline is `NITRO_PRESET=cloudflare_module vite build` (nitro merges the root `wrangler.jsonc` into the generated `.output/server/wrangler.json`, plus a `.wrangler/deploy/config.json` redirect), then `wrangler deploy`. Both are wrapped in `pnpm run cf:deploy`.
+You are driving a Cloudflare Workers deployment of this TanStack Start project.
+
+## The commands in this repo
+
+| Command | What it actually does |
+|---|---|
+| `pnpm cf:build` | Runs the `precf:build` hook first — `node scripts/db-setup.mjs` (stamps the schema dialect matching `DATABASE_PROVIDER` into `src/config/db/schema.ts`) and `node scripts/check-wrangler-config.mjs` (rejects a wrangler config that is not plain JSON). Then `NITRO_PRESET=cloudflare_module vite build`: nitro merges the root `wrangler.jsonc` into the generated `.output/server/wrangler.json` and writes a `.wrangler/deploy/config.json` redirect. |
+| `pnpm cf:deploy` | Runs the `precf:deploy` hook first — `pnpm check:deploy-env`, which refuses to deploy when `AUTH_SECRET` is missing/placeholder or `CONFIG_ENCRYPTION_KEY` is missing/shorter than 32 characters. Then it sources `.env.production` into the shell, runs `pnpm cf:build`, and runs `wrangler deploy` (wrangler picks up the generated config via the `.wrangler/deploy/config.json` redirect). |
+| `pnpm check:deploy-env` | The standalone gate. Same checks `precf:deploy` runs. Run it by hand before any production deploy, and before building the Docker image (see "Node (Docker) deployment" below). |
+
+Resources in this repo (from `wrangler.example.jsonc`): Worker **`saas-template`**, D1 database **`saas-template-db`**.
+
+## The wrangler config must be plain JSON
+
+`scripts/check-wrangler-config.mjs` runs on every `pnpm cf:build` and fails the build when the working config is not valid JSON. This is not pedantry: the nitro `cloudflare_module` preset parses the root `wrangler.json` / `wrangler.jsonc` with `JSON.parse`, so **comments (`//`) and trailing commas break the build** — even though wrangler itself accepts both.
+
+Rules:
+
+- The working config has **no comments and no trailing commas**.
+- Copy the committed template and fill in the values: `cp wrangler.example.jsonc wrangler.jsonc`, then edit it. **Do not add comments while editing.**
+- `wrangler.example.jsonc` is plain JSON (despite the `.jsonc` suffix) for exactly this reason. Keep it that way.
+- The check looks for `wrangler.json` first, then `wrangler.jsonc`. If neither exists the check passes with a "Node-only deploy" note — that is fine for a Node/Docker deploy.
 
 ## Database backend: D1 (default) or Postgres via Hyperdrive
 
@@ -31,7 +52,7 @@ The skill is designed to be run **any number of times**. A repeat invocation aut
 
 1. **Cloudflare authorization** — skipped if `wrangler whoami` already shows authenticated.
 2. **Final deploy confirmation** — always asked; deploy is irreversible.
-3. **(Optional) Admin credentials** — only asked on first deploy when no `super_admin` exists yet. User picks one of: `email password` (agent creates the account directly so user can log in immediately), `email` (promote an existing user — requires prior sign-up via web), or `skip` (assign later with `/deploy-cloudflare --admin-email=X --admin-password=Y` or `--admin=X`).
+3. **(Optional) Admin credentials** — only asked on first deploy when no `super_admin` exists yet. User picks one of: `email + password` (agent creates the account directly so user can log in immediately), `email` (promote an existing user — requires prior sign-up via web), or `skip` (assign later with `/deploy-cloudflare --admin-email=X --admin-password=Y` or `--admin=X`).
 
 Every other step (D1 create, schema migrations, RBAC seed, secrets, URL fixup) is automatic AND idempotent. So **"再发布一下" / "ship again"** = run `/deploy-cloudflare` again.
 
@@ -55,9 +76,10 @@ Narrate auto-picked resource names BEFORE acting so the user can interject with 
 
 1. **Never auto-run the final deploy.** The production push is irreversible — always confirm. The Phase 7 redeploy to fix a baked URL is part of the same confirmed deploy event and needs no re-confirmation.
 2. **Never echo secret values.** Generate with `openssl`; pipe values from env files directly into `wrangler secret put` (`grep ... | cut -d= -f2- | wrangler ...`). Never `cat` an env file into the conversation.
-3. **Always run the deploy through `pnpm run cf:deploy`.** It sources `.env.production` into the shell BEFORE the build. This matters because `src/lib/env.ts` `loadEnvFiles()` resolves `.env.local > .env.{NODE_ENV} > .env` and never overwrites existing `process.env` — shell-sourced prod values win over any localhost URL lingering in `.env.local`/`.env.development`, so the right `VITE_APP_URL` gets baked into the bundle (better-auth `trustedOrigins`, payment callbacks, canonicals).
+3. **Always run the deploy through `pnpm run cf:deploy`.** It sources `.env.production` into the shell BEFORE the build. This matters because `src/lib/env.ts` `loadEnvFiles()` resolves `.env.local > .env.{NODE_ENV} > .env` and never overwrites existing `process.env` — shell-sourced prod values win over any localhost URL lingering in `.env.local`/`.env.development`, so the right `VITE_APP_URL` gets baked into the bundle (better-auth `trustedOrigins`, payment callbacks, canonicals). The `precf:deploy` hook additionally blocks the deploy when `AUTH_SECRET` / `CONFIG_ENCRYPTION_KEY` are missing.
 4. **Admin password handling (Phase 9.A):** the user types the password into chat once; pass it to `init-rbac.ts --admin-password=...` and never echo it back — not in narration, commits, or env files. It's stored hashed (better-auth/crypto). Remind them to rotate it after first login.
 5. **Don't hand-edit `.output/server/wrangler.json`** — it's generated. All config belongs in the root `wrangler.jsonc`, which nitro merges at build time.
+6. **Never put comments or trailing commas in `wrangler.jsonc`.** The nitro preset parses it with `JSON.parse`; `pnpm cf:build` fails with a confusing error if it can't. `scripts/check-wrangler-config.mjs` catches this before the build.
 
 ## Phase 0: Preflight
 
@@ -69,10 +91,11 @@ pnpm -v
 npx wrangler --version
 test -f wrangler.jsonc || cp wrangler.example.jsonc wrangler.jsonc   # materialize working copy (gitignored)
 grep -q '"cf:deploy"' package.json && echo deploy script OK
+grep -q '"check:deploy-env"' package.json && echo deploy-env gate OK
 git status --short
 ```
 
-`wrangler.example.jsonc` is the committed template; `wrangler.jsonc` is the gitignored working copy holding the real D1 `database_id` and production URL (same pattern as `schema.ts`). If the example or the `cf:deploy` script is missing, this clone predates the Cloudflare wiring — pull the latest template (`/sync-upstream`).
+`wrangler.example.jsonc` is the committed template (Worker `saas-template`, D1 `saas-template-db`, plain JSON, no comments). `wrangler.jsonc` is the gitignored working copy holding the real D1 `database_id` and production URL. Fill in the values without adding comments — see "The wrangler config must be plain JSON" above. Never commit `wrangler.jsonc`.
 
 ### 0.2 Wrangler login (Interruption #1)
 
@@ -114,9 +137,11 @@ Run all checks in parallel; every later phase reads these results.
 
 **Postgres backend** (`wrangler.jsonc` has a `hyperdrive` binding): skip the D1 commands below (`d1 list` / `d1 migrations list` / `d1 execute`) — instead check the Hyperdrive id is real (`npx wrangler hyperdrive list`), and probe RBAC/admin via `pnpm rbac:init` later (it's a no-op when seeded).
 
+The working config is plain JSON, so it parses directly — no comment stripping needed:
+
 ```bash
-WORKER=$(node -e "const fs=require('fs');const s=fs.readFileSync('wrangler.jsonc','utf8').replace(/\/\/.*$/gm,'');console.log(JSON.parse(s).name)")
-DB_NAME=$(node -e "const fs=require('fs');const s=fs.readFileSync('wrangler.jsonc','utf8').replace(/\/\/.*$/gm,'');console.log(JSON.parse(s).d1_databases[0].database_name)")
+WORKER=$(node -e "const fs=require('fs');console.log(JSON.parse(fs.readFileSync('wrangler.jsonc','utf8')).name)")
+DB_NAME=$(node -e "const fs=require('fs');console.log(JSON.parse(fs.readFileSync('wrangler.jsonc','utf8')).d1_databases[0].database_name)")
 
 npx wrangler d1 list 2>&1 | grep -w "$DB_NAME"                                   # D1 created?
 grep -q 'REPLACE_WITH_OUTPUT_OF_WRANGLER_D1_CREATE' wrangler.jsonc && echo "database_id: placeholder"  # real UUID?
@@ -134,6 +159,8 @@ ADMIN_COUNT=$(npx wrangler d1 execute "$DB_NAME" --remote --command="SELECT COUN
 test -f .env.production && grep "^VITE_APP_URL=" .env.production | cut -d= -f2-
 ```
 
+Expected values for a fresh clone: `WORKER=saas-template`, `DB_NAME=saas-template-db`. If the working copy names something else, keep it (the user may have renamed) — but never rename a database that already holds data without saying so.
+
 Narrate the detection table (one line each: D1 / wrangler.jsonc / prior deploy / migrations N÷M / RBAC / secrets names / admin / run mode), then branch:
 
 - **First-time** if ANY core resource missing (no D1, placeholder `database_id`, or no prior deployment) → Phase 3.
@@ -147,7 +174,7 @@ Narrate the detection table (one line each: D1 / wrangler.jsonc / prior deploy /
 
 > First-time Cloudflare setup. I'll do all of this in one shot — interject only if you want different names.
 >
-> **Resources to create:** Worker `<name from wrangler.jsonc>`, D1 `<database_name>`
+> **Resources to create:** Worker `saas-template`, D1 `saas-template-db`
 > **Then:** push schema → seed RBAC → set secrets (AUTH_SECRET, CONFIG_ENCRYPTION_KEY, never shown) → ask for production URL → deploy (with confirmation) → fix baked URL if needed → optional admin setup.
 >
 > Reply `ok` or `rename worker=X db=Y`.
@@ -155,14 +182,14 @@ Narrate the detection table (one line each: D1 / wrangler.jsonc / prior deploy /
 ### 3.2 Create D1 database (auto)
 
 ```bash
-npx wrangler d1 create "$DB_NAME"
+npx wrangler d1 create saas-template-db
 ```
 
-Capture the `database_id` UUID from stdout. Narrate: "D1 created: `<name>` (id: `<id>`)".
+Capture the `database_id` UUID from stdout. Narrate: "D1 created: `saas-template-db` (id: `<id>`)".
 
 ### 3.3 Populate `wrangler.jsonc` (auto)
 
-Edit the working copy `wrangler.jsonc` (materialized from `wrangler.example.jsonc` in Phase 0.1): replace `REPLACE_WITH_OUTPUT_OF_WRANGLER_D1_CREATE` with the real UUID (and apply any renames). Confirm `vars.DATABASE_PROVIDER` is `"d1"` and `migrations_dir` is `"drizzle"`. Never commit `wrangler.jsonc` — it's gitignored on purpose.
+Edit the working copy `wrangler.jsonc` (materialized from `wrangler.example.jsonc` in Phase 0.1): replace `REPLACE_WITH_OUTPUT_OF_WRANGLER_D1_CREATE` with the real UUID (and apply any renames). Confirm `vars.DATABASE_PROVIDER` is `"d1"` and `migrations_dir` is `"drizzle"`. Keep the file plain JSON — no comments, no trailing commas. Never commit `wrangler.jsonc` — it's gitignored on purpose.
 
 ## Phase 3-PG: First-time setup — Postgres + Hyperdrive variant
 
@@ -176,7 +203,7 @@ Ask the user for their Postgres connection string if it's not already in `.env.d
 
 ```bash
 # pipe, don't paste into argv history where avoidable; name defaults to the worker name
-npx wrangler hyperdrive create <worker-name> --connection-string="$DATABASE_URL" --caching-disabled=true
+npx wrangler hyperdrive create saas-template --connection-string="$DATABASE_URL" --caching-disabled=true
 ```
 
 `--caching-disabled=true` is recommended: Hyperdrive's query cache can serve reads up to 60 s stale (order status, credit balance, admin settings) — for a SaaS, correctness beats the cache. Connection pooling, the part that matters for latency, stays on.
@@ -195,6 +222,8 @@ Edit `wrangler.jsonc`:
 - REMOVE the `d1_databases` block
 - ADD: `"hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<id from step 2>" }]`
 - Keep the pinned `compatibility_date` from the example (add one if an older working copy lacks it)
+
+Keep the file plain JSON — no comments, no trailing commas, because the nitro preset parses it with `JSON.parse`.
 
 Do NOT put `DATABASE_URL` in `vars` (vars are public). It isn't needed at runtime: the code recognizes the HYPERDRIVE binding as a configured database (`hasDatabaseConfigured()` in `src/core/db/runtime.ts`, used by both the drivers and the settings loader) and reads the connection string from it. `DATABASE_URL` is only needed as a **secret** fallback if the user insists on running without Hyperdrive (discouraged): `grep "^DATABASE_URL=" .env.development | cut -d= -f2- | npx wrangler secret put DATABASE_URL`.
 
@@ -273,9 +302,11 @@ openssl rand -base64 32 | npx wrangler secret put AUTH_SECRET
 # or: grep "^AUTH_SECRET=" .env.development | cut -d= -f2- | npx wrangler secret put AUTH_SECRET
 ```
 
+`pnpm check:deploy-env` refuses to deploy when `AUTH_SECRET` is missing or still equals the development placeholder `development-secret-change-in-production`.
+
 ### 5.2 CONFIG_ENCRYPTION_KEY (recommended)
 
-Admin-settings secrets are stored in the D1 `config` table — encrypt them at rest. Same pattern: pipe from env file if present, else `openssl rand -base64 32 | npx wrangler secret put CONFIG_ENCRYPTION_KEY`. **Once set, keep it stable** — rotating orphans already-encrypted values.
+Admin-settings secrets are stored in the D1 `config` table — encrypt them at rest. Same pattern: pipe from env file if present, else `openssl rand -base64 32 | npx wrangler secret put CONFIG_ENCRYPTION_KEY`. **Once set, keep it stable** — rotating orphans already-encrypted values. `pnpm check:deploy-env` requires it to be present and at least 32 characters.
 
 ### 5.3 Other secrets
 
@@ -288,12 +319,12 @@ Provider credentials (Stripe/Resend/R2/AI/OAuth) normally live in admin → Sett
 Otherwise prompt:
 
 > 生产 URL 用哪个?
-> 1. **默认 workers.dev**(`https://<worker>.<your-subdomain>.workers.dev`,首次部署后才知道确切子域,我会先用占位符再修正)
+> 1. **默认 workers.dev**(`https://saas-template.YOUR-SUBDOMAIN.workers.dev`,首次部署后才知道确切子域,我会先用占位符再修正)
 > 2. **自有域名**(粘贴,如 `app.example.com` — 该域名或其父 zone 必须已在你的 Cloudflare 账号里)
 
 ### On default
 
-Create/update `.env.production`(gitignored): `VITE_APP_URL=https://<worker>.workers.dev`(占位)、`VITE_APP_NAME=<from dev env>`. **Also** set the same under `wrangler.jsonc` `vars` — at runtime (nodejs_compat) Workers vars land in `process.env`, which `src/config/index.ts` falls back to when the baked `import.meta.env` value is absent; without it better-auth `trustedOrigins` breaks (403 Invalid origin). Do NOT add `routes`.
+Create/update `.env.production`(gitignored): `VITE_APP_URL=https://saas-template.YOUR-SUBDOMAIN.workers.dev`(占位)、`VITE_APP_NAME=<from dev env>`. **Also** set the same under `wrangler.jsonc` `vars` — at runtime (nodejs_compat) Workers vars land in `process.env`, which `src/config/index.ts` falls back to when the baked `import.meta.env` value is absent; without it better-auth `trustedOrigins` breaks (403 Invalid origin). Do NOT add `routes`.
 
 ### On custom domain
 
@@ -318,9 +349,11 @@ On `yes`:
 pnpm run cf:deploy
 ```
 
-(`cf:deploy` = source `.env.production` → `NITRO_PRESET=cloudflare_module vite build` → `wrangler deploy`. Wrangler picks up the generated config via the `.wrangler/deploy/config.json` redirect.)
+(`cf:deploy` = `precf:deploy` hook → `pnpm check:deploy-env` → source `.env.production` → `pnpm cf:build` (which itself runs `precf:build` → db-setup + `check-wrangler-config`) → `wrangler deploy`. Wrangler picks up the generated config via the `.wrangler/deploy/config.json` redirect.)
 
-Capture the deployed URL from wrangler's output (`https://<worker>.<subdomain>.workers.dev`).
+If `check:deploy-env` fails, fix the missing/placeholder secret and re-run — do not bypass the gate.
+
+Capture the deployed URL from wrangler's output (`https://saas-template.<subdomain>.workers.dev`).
 
 ## Phase 7: Fix baked URL and redeploy (auto, no confirmation)
 
@@ -352,7 +385,7 @@ Then report success with the live URL. Any 500 → one-shot `npx wrangler tail` 
 
 **Skip prompt if:** `ADMIN_COUNT > 0` and no `--admin*` flag.
 
-Flag modes: `--admin-email=X --admin-password=Y` → 9.A create; `--admin=X` → 9.B promote. Otherwise prompt the three options (create with password ⚠️ visible in chat once / promote existing — sign up at `<URL>/sign-up` first / skip).
+Flag modes: `--admin-email=X --admin-password=Y` → 9.A create; `--admin=X` → 9.B promote. Otherwise prompt the three options (create with a password ⚠️ visible in chat once / promote existing — sign up at `<URL>/sign-up` first / skip).
 
 ### 9.A Create account directly
 
@@ -387,6 +420,32 @@ WHERE u.email = '$EMAIL' AND r.name = 'super_admin'"
 
 Just the `INSERT OR IGNORE ... SELECT` + verify from above. 0 rows → user hasn't signed up yet; ask them to sign up at `<URL>/sign-up` first or switch to 9.A.
 
+## Node (Docker) deployment
+
+The Node path is the alternative to Workers — a plain Node server in a container. It shares the same secrets gate.
+
+**Run the deploy gate before building the image:**
+
+```bash
+pnpm check:deploy-env
+```
+
+It reads `AUTH_SECRET` and `CONFIG_ENCRYPTION_KEY` from the process env first, then from `.env.production`, then `.env`. It fails when `AUTH_SECRET` is missing or still the development placeholder, or when `CONFIG_ENCRYPTION_KEY` is missing or shorter than 32 characters. Fix the env files and re-run — never build an image with placeholder secrets baked in.
+
+Then build and run:
+
+```bash
+docker build -t saas-template --build-arg DATABASE_PROVIDER=sqlite .
+docker run --rm -p 3000:3000 --env-file .env.production saas-template
+```
+
+Notes:
+
+- `DATABASE_PROVIDER` is a build arg (`sqlite` | `postgresql` | `mysql`) — `scripts/db-setup.mjs` stamps the matching schema dialect into `src/config/db/schema.ts` during the image build.
+- `.env.production` must exist before the build: Vite inlines `VITE_*` values into the client bundle at build time. `.dockerignore` keeps `.env.production` (and only that one) out of the ignore list; `.env`, `.env.local` and `.env.development` are ignored.
+- The image runs `node .output/server/index.mjs` on port 3000.
+- For the Worker path, the same gate runs automatically as the `precf:deploy` hook — no extra step needed there.
+
 ## Force flags
 
 | Flag | Effect |
@@ -402,6 +461,8 @@ Just the `INSERT OR IGNORE ... SELECT` + verify from above. 0 rows → user hasn
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
+| `pnpm cf:build` fails with "is not valid JSON" / "comments and trailing commas break it" | `wrangler.jsonc` has a `//` comment or a trailing comma — nitro parses it with `JSON.parse` | Remove comments and trailing commas, or re-copy `wrangler.example.jsonc` and re-fill the values |
+| `Refusing to deploy: AUTH_SECRET is missing` (or `CONFIG_ENCRYPTION_KEY ...`) | `precf:deploy` → `pnpm check:deploy-env` found no usable secret | Set `AUTH_SECRET` and a ≥32-char `CONFIG_ENCRYPTION_KEY` in `.env.production` / `.env` or the shell env, then re-run |
 | `D1 binding "DB" not found` at runtime | `wrangler.jsonc` `d1_databases` placeholder id, or server entry didn't stash the env | Phase 3.3; check `src/server.ts` `ensureCloudflareEnv` |
 | 500 on every page | AUTH_SECRET unset/placeholder, or `vars.DATABASE_PROVIDER` ≠ `d1` | Phase 5.1 / 3.3 |
 | Sign-in 403 `Invalid origin` from a browser (curl works) | localhost URL baked into the bundle — `.env.local`/`.env.development` beat `.env.production` because `loadEnvFiles` doesn't overwrite existing keys and prefers `.env.local` | Deploy via `pnpm run cf:deploy` (sources `.env.production` first), ensure `wrangler.jsonc` `vars.VITE_APP_URL` is set; verify with `grep -o 'https://[^"]*' .output/server/_ssr/*.mjs \| head` |
@@ -425,6 +486,8 @@ Just the `INSERT OR IGNORE ... SELECT` + verify from above. 0 rows → user hasn
 
 - Run the final deploy without an explicit `yes` (Phase 7's redeploy belongs to the confirmed event)
 - Echo secret values (generate with openssl, pipe from env files, print names only)
+- Bypass `pnpm check:deploy-env` (it gates both `pnpm cf:deploy` and the Docker image build)
 - Write secrets into `wrangler.jsonc` `vars` (vars are public)
 - Hand-edit generated files (`.output/**`, `.wrangler/**`)
+- Put comments or trailing commas in `wrangler.jsonc`
 - Make the user copy-paste routine wrangler/openssl/db commands — those are agent-executed
