@@ -21,13 +21,13 @@ data
 drizzle
 
 # vcs / editors / tooling
+# Agent tooling (skills, MCP configs) is not needed at runtime.
 .git
 .github
 .vscode
 .idea
 .cursor
 .claude
-# bundled into the build by src/routes/api/admin/agent/skill.ts
 .agents
 .codex
 .vercel
@@ -36,6 +36,8 @@ wrangler.jsonc
 wrangler.example.jsonc
 
 # docs & misc
+# content/ is NOT ignored: the documentation markdown is read at build time
+# (import.meta.glob over content/docs) and has to reach the builder.
 docs
 README.md
 LICENSE

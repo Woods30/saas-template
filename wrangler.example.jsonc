@@ -5,7 +5,7 @@
 // the generated .output/server/wrangler.json; deploy with `pnpm cf:deploy`.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "application",
+  "name": "saas-template",
   // Pin it: left unset, nitro fills in the build machine's local date, and
   // when local time is a day ahead of UTC the deploy fails with
   // "Can't set compatibility date in the future".
@@ -19,15 +19,15 @@
     // Server-side runtime fallbacks for the build-time VITE_* values — keep in
     // sync with .env.production (better-auth trustedOrigins, payment callbacks).
     "VITE_APP_URL": "https://<worker>.<your-subdomain>.workers.dev",
-    "VITE_APP_NAME": "My App",
+    "VITE_APP_NAME": "SaaS Template",
     // Extra Plausible script hosts, comma-separated. Optional:
-    // plausible.io and stats.cadcraft.org are already trusted by the template.
+    // plausible.io and stats.example.com are already trusted by the template.
     // "PLAUSIBLE_SCRIPT_HOSTS": "stats.example.com",
   },
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "application-db",
+      "database_name": "saas-template-db",
       "database_id": "REPLACE_WITH_OUTPUT_OF_WRANGLER_D1_CREATE",
       "migrations_dir": "drizzle",
     },

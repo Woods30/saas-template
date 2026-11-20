@@ -2,9 +2,10 @@ FROM node:22-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
-# Pin pnpm to v10 — v11 makes ignored-build-scripts fatal even when
-# `pnpm.onlyBuiltDependencies` is set in package.json, breaking CI install.
-RUN apk add --no-cache libc6-compat && npm install -g pnpm@10
+# Pin pnpm to the version in package.json (packageManager) — a different major
+# can make ignored-build-scripts fatal even when `pnpm.onlyBuiltDependencies`
+# is set in package.json, breaking the install.
+RUN apk add --no-cache libc6-compat && npm install -g pnpm@12.4.2
 
 WORKDIR /app
 
