@@ -1,10 +1,11 @@
 <!--
 Vendored from https://github.com/leonxlnx/taste-skill (MIT License, (c) 2026 Leonxlnx).
 
-ShipAny adaptation notes — these OVERRIDE the sections below where they conflict:
-- IGNORE Section 2 (design-system map), Section 3 (Next.js/RSC architecture), and
-  Appendix A (install commands). This template mandates TanStack Start + shadcn/ui
-  (Base Nova) + Tailwind 4 oklch tokens in src/styles/globals.css. Never install
+Template adaptation notes — these OVERRIDE the sections below where they conflict:
+- IGNORE Section 2 (design-system map) and Appendix A (install commands). This
+  template mandates TanStack Start (no React Server Components, no `"use
+  client"` directives) + shadcn/ui (Base Nova) + Tailwind 4 oklch tokens in
+  src/styles/globals.css. Never install
   Material/Carbon/Fluent/Radix Themes/Bootstrap here.
 - Icons: keep lucide-react (already the template standard); style them deliberately
   instead of swapping libraries.
@@ -110,7 +111,7 @@ Once you have the design read (Section 0) and dials (Section 1), pick the right 
 | US public-sector / trust-first | `uswds` | Same |
 | Fast local-business / agency MVP | Bootstrap 5.3 | Boring, fast, works |
 | Modern accessible React foundation | `@radix-ui/themes` | Primitives + polished theme |
-| Modern SaaS where you own the components | shadcn/ui (`npx shadcn@latest add ...`) | You own the code, easy to customise; never ship default state |
+| Modern SaaS where you own the components | shadcn/ui (`npx shadcn add ...`) | You own the code, easy to customise; never ship default state |
 | Tailwind-based modern SaaS / AI marketing | Tailwind v4 utilities + `dark:` variant | Default for indie + small team builds |
 
 **Honesty rule:** if the brief reads as one of the systems above, install and use the **official** package. Do not recreate its CSS by hand. Do not import a system's tokens but then override 90% of them.
@@ -138,13 +139,12 @@ For these directions, there is **no single official package**. Build with native
 Unless the design read picks a real design system (Section 2.A), these are the defaults:
 
 ### 3.A Stack
-* **Framework:** React or Next.js. Default to Server Components (RSC).
-  * **RSC SAFETY:** Global state works ONLY in Client Components. In Next.js, wrap providers in a `"use client"` component.
-  * **INTERACTIVITY ISOLATION:** Any component using Motion, scroll listeners, or pointer physics MUST be an isolated leaf with `'use client'` at the top. Server Components render static layouts only.
-* **Styling:** **Tailwind v4** (default). Tailwind v3 only if the existing project demands it.
-  * For v4: do NOT use `tailwindcss` plugin in `postcss.config.js`. Use `@tailwindcss/postcss` or the Vite plugin.
+* **Framework:** TanStack Start (React 19). Every component is a regular React component — there are no React Server Components and no `"use client"` directive. Server work belongs in route `loader`s, `createServerFn`, or API server routes (`src/routes/api/**`), never inside a component.
+  * **INTERACTIVITY ISOLATION:** Any component using Motion, scroll listeners, or pointer physics MUST be an isolated leaf component with a cleanup in its `useEffect`, so it unmounts cleanly.
+* **Styling:** **Tailwind v4** (already wired through `@tailwindcss/vite` in `vite.config.ts`). Tailwind v3 only if the existing project demands it.
+  * For v4: do NOT add a `tailwindcss` plugin in `postcss.config.js`. The Vite plugin is already in place.
 * **Animation:** **Motion** (the library formerly known as Framer Motion). Import from `motion/react` (`import { motion } from "motion/react"`). The `framer-motion` package still works as a legacy alias - prefer `motion/react` in new code.
-* **Fonts:** Always use `next/font` (Next.js) or self-host with `@font-face` + `font-display: swap`. Never link Google Fonts via `<link>` in production.
+* **Fonts:** Self-host with `@fontsource` / `@fontsource-variable` packages and import them in `src/routes/__root.tsx`. Never add a Google Fonts `<link>` in production (the one CJK serif fallback link in the repo is the only exception).
 
 ### 3.B State
 * Local `useState` / `useReducer` for isolated UI.
@@ -152,11 +152,10 @@ Unless the design read picks a real design system (Section 2.A), these are the d
 * **NEVER** use `useState` to track continuous values driven by user input (mouse position, scroll progress, pointer physics, magnetic hover). Use Motion's `useMotionValue` / `useTransform` / `useScroll`. `useState` re-renders the React tree on every change and collapses on mobile.
 
 ### 3.C Icons
-* **Allowed libraries (priority order):** `@phosphor-icons/react`, `hugeicons-react`, `@radix-ui/react-icons`, `@tabler/icons-react`.
-* **Discouraged:** `lucide-react`. Acceptable only when the user explicitly asks for it or the project already depends on it.
-* **NEVER hand-roll SVG icons.** If a glyph is missing, install a second library or compose from primitives - do not draw icon paths from scratch.
-* **One family per project.** Do not mix Phosphor with Lucide in the same component tree.
-* **Standardize `strokeWidth` globally** (e.g. `1.5` or `2.0`).
+* **Standard:** `lucide-react` — already a dependency and the convention across `src/components/` and `src/blocks/`. Use it; do not add a second icon library to the project.
+* **NEVER hand-roll SVG icons.** If a glyph is missing, pick a different lucide icon or compose from primitives - do not draw icon paths from scratch.
+* **One family per project.** Do not mix icon libraries in the same component tree.
+* **Standardize `strokeWidth` globally** (lucide defaults to 2; pass an explicit `strokeWidth` when you need a hairline).
 
 ### 3.D Emoji Policy
 Discouraged by default in code, markup, and visible text. Replace symbols with icon-library glyphs. **Override:** allow emojis only when the user explicitly asks for a playful / chat-style / social-native vibe - and even then use them sparingly with intent.
@@ -359,7 +358,7 @@ The page has ONE theme. Sections do not invert.
 * If the page is dark mode, ALL sections are dark mode. No light-mode-warm-paper section sandwiched between dark sections (or vice versa). The user must not feel they walked into a different website mid-scroll.
 * The exception: if the brief explicitly calls for a "Color Block Story" or "Theme Switch on Scroll" device AND that is a deliberate composition (one full theme switch with a strong transition, not random alternation), it is allowed once per page.
 * Default behaviour: pick light, dark, or auto (`prefers-color-scheme`) at the page level and lock it. Section-level background tints within the same theme family are fine (`bg-zinc-950` next to `bg-zinc-900`); flipping to `bg-amber-50` in the middle of a `bg-zinc-950` page is broken.
-* When using a design system with built-in theming (Radix Themes, shadcn/ui with `<Theme>`), set the theme ONCE in `layout.tsx` or the page root. Do not let individual sections override.
+* When using a design system with built-in theming (shadcn/ui with `next-themes`), set the theme ONCE in `src/routes/__root.tsx` or the page root. Do not let individual sections override.
 
 ---
 
@@ -549,7 +548,7 @@ Use this for: feature lists, testimonial grids, logo walls, anything that just n
 * Respect `prefers-color-scheme: dark`. Default to system preference unless the brand insists on one mode.
 
 ### 6.D Core Web Vitals Targets
-* **LCP** < 2.5s. Hero image must be `next/image priority` or preloaded.
+* **LCP** < 2.5s. Hero image must be preloaded (or carry explicit `width`/`height` so space is reserved). This project serves plain `<img>` from `public/`.
 * **INP** < 200ms. Heavy work off main thread.
 * **CLS** < 0.1. Reserve space for images, fonts, embeds.
 * Run Lighthouse before declaring a page done.
@@ -634,7 +633,7 @@ Avoid these signatures unless the brief explicitly asks for them.
 * **NO filler verbs.** "Elevate", "Seamless", "Unleash", "Next-Gen", "Revolutionize" → concrete verbs only.
 
 ### 9.E External Resources & Components
-* **NO hand-rolled SVG icons.** Use Phosphor / HugeIcons / Radix / Tabler. Lucide on explicit request only.
+* **NO hand-rolled SVG icons.** Use `lucide-react` (the template standard). Never draw icon paths by hand.
 * **Hand-rolled decorative SVGs strongly discouraged** as default (see Section 4.8).
 * **NO div-based fake screenshots.** Never build a fake product UI out of `<div>` rectangles to simulate a screenshot. Use real images, generated images, or skip the preview.
 * **NO broken Unsplash links.** Use `https://picsum.photos/seed/{descriptive-string}/{w}/{h}`, or generated photo placeholders, or actual assets.
@@ -854,7 +853,7 @@ The Reference Vocabulary (Section 10) names patterns. The Block Library implemen
 
 ### 12.A File Location
 ```
-skills/taste-skill/blocks/
+.claude/skills/design-theme/blocks/
   hero/
     asymmetric-split.md
     editorial-manifesto.md
@@ -885,7 +884,7 @@ dial_compatibility:
   density: [2, 5]
 when_to_use: "Landing pages with one strong asset and one strong message. Default hero for SaaS, agency, premium consumer."
 not_for: "Editorial / manifesto launches where the message IS the design."
-stack: ["react", "next", "tailwind", "motion"]
+stack: ["react", "tanstack-start", "tailwind", "motion"]
 ---
 ```
 
@@ -984,8 +983,8 @@ Run this matrix before outputting code. This is the last filter.
 - [ ] **`useEffect` animations** have strict cleanup functions?
 - [ ] **Empty / loading / error** states provided?
 - [ ] **Cards omitted** in favor of spacing where possible?
-- [ ] **Icons** from an allowed library only (Phosphor / HugeIcons / Radix / Tabler), no hand-rolled SVG paths?
-- [ ] **Motion** isolated in client-leaf components with `'use client'` at the top, memoized?
+- [ ] **Icons** from `lucide-react` (the template standard), no hand-rolled SVG paths?
+- [ ] **Motion** isolated in leaf components with a cleanup in `useEffect`, memoized?
 - [ ] **No AI Tells** from Section 9 (Inter as default, AI-purple, three-equal cards, Jane Doe, Acme, "Quietly in use at")?
 - [ ] **Core Web Vitals** plausibly hit (LCP < 2.5s, INP < 200ms, CLS < 0.1)?
 - [ ] **One design system** per project (no Material + shadcn mixed)?
@@ -1002,41 +1001,40 @@ The sections below are vendored reference content. They give the agent real inst
 
 ```bash
 # Material Web (Material 3)
-npm install @material/web
+pnpm add @material/web
 
 # Fluent UI React (v9)
-npm install @fluentui/react-components
+pnpm add @fluentui/react-components
 
 # Fluent UI Web Components (framework-free)
-npm install @fluentui/web-components @fluentui/tokens
+pnpm add @fluentui/web-components @fluentui/tokens
 
 # IBM Carbon
-npm install @carbon/react @carbon/styles
+pnpm add @carbon/react @carbon/styles
 
 # Radix Themes
-npm install @radix-ui/themes
+pnpm add @radix-ui/themes
 
-# shadcn/ui (open code, owned components)
-npx shadcn@latest init
-npx shadcn@latest add button card badge separator input
+# shadcn/ui (open code, owned components) - components.json already exists here
+npx shadcn add button card badge separator input
 
 # Primer CSS (GitHub product/devtool UI)
-npm install --save @primer/css
+pnpm add @primer/css
 
 # Primer Brand (GitHub marketing UI)
-npm install @primer/react-brand
+pnpm add @primer/react-brand
 
 # GOV.UK Frontend
-npm install govuk-frontend
+pnpm add govuk-frontend
 
 # USWDS (US Web Design System)
-npm install uswds
+pnpm add uswds
 
 # Atlassian Design System (Atlaskit)
-yarn add @atlaskit/css-reset @atlaskit/tokens @atlaskit/button @atlaskit/badge @atlaskit/section-message @atlaskit/card
+pnpm add @atlaskit/css-reset @atlaskit/tokens @atlaskit/button @atlaskit/badge @atlaskit/section-message @atlaskit/card
 
 # Bootstrap 5.3
-npm install bootstrap
+pnpm add bootstrap
 
 # Shopify Polaris Web Components (Shopify apps only)
 # Add this to your app HTML head:

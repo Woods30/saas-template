@@ -16,11 +16,11 @@ From "$ARGUMENTS", figure out:
 - **Route slug:** e.g., `refund-policy`, `cookies`, `about`, `faq`
 - **Content specifics:** any details the user mentioned (e.g., "30-day refund window", "we use Google Analytics cookies")
 
-## Step 2: Create the MDX Content Files
+## Step 2: Create the MDX Content File
 
-Create one MDX file per locale at `src/content/pages/<slug>.en.mdx` and `src/content/pages/<slug>.zh.mdx`. Each file exports a `meta` object (title/description for the page `head`) and then the Markdown body.
+Create one MDX file at `src/content/pages/<slug>.en.mdx`. This project is English-only (`project.inlang/settings.json` enables just `en`), so one file per page. Each file exports a `meta` object (title/description for the page `head`) and then the Markdown body.
 
-These files are rendered by per-slug route files (via an eager `import.meta.glob` in `(pages)/-static-page.tsx`) inside the `(pages)` route group, which automatically provides:
+This file is rendered by a per-slug route file (via an eager `import.meta.glob` in `(pages)/-static-page.tsx`) inside the `(pages)` route group, which automatically provides:
 - Back link to homepage
 - `prose` typography styling (element styles from `src/components/mdx-components.tsx`)
 - Clean centered layout (max-w-3xl)
@@ -72,7 +72,7 @@ The factory in `(pages)/-static-page.tsx` handles the MDX lookup, `head()` metad
 Write professional, complete content in Markdown. Guidelines:
 
 - **Markdown body + a `meta` export** — the layout handles typography and chrome; only the `meta` export is required boilerplate
-- **Write both locales** — `.en.mdx` and `.zh.mdx`
+- **One file** — `.en.mdx` only; this project is English-only
 - **Be thorough** — cover all standard sections for that page type
 - **Use standard Markdown** — `#` for headings, `-` for lists, `*text*` for emphasis
 - **Keep it generic enough** to work for any SaaS but specific enough to be useful
@@ -94,13 +94,13 @@ Run `pnpm build` to verify.
 
 Tell the user:
 - Page URL: `/<slug>`
-- File locations: `src/content/pages/<slug>.en.mdx` and `src/content/pages/<slug>.zh.mdx`
+- File location: `src/content/pages/<slug>.en.mdx`
 - Route file: `src/routes/(pages)/<slug>.tsx`
 - Suggest adding a link in the landing page footer
 
 ## Rules
 
-1. **MDX content files** — both `.en.mdx` and `.zh.mdx` in `src/content/pages/`
+1. **MDX content file** — `.en.mdx` in `src/content/pages/`
 2. **Create the route file** — `(pages)/<slug>.tsx` via `staticPageRouteOptions`, or the page won't resolve
 3. **Markdown body + `meta` export** — the layout wraps everything; element styling lives in `src/components/mdx-components.tsx`
 4. **`(pages)` route group** — shared layout with back link + prose typography

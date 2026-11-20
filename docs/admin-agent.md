@@ -1,6 +1,6 @@
 # Agent administration
 
-The existing admin REST routes, remote MCP server, local MCP bridge, and bundled skill use one operation contract in `src/lib/admin-operations.ts`.
+The admin REST routes, the remote MCP server, the local MCP bridge and the standalone client share one operation contract: `src/lib/admin-operations.ts`. An agent never talks to the database — it goes through the same permission-checked operations the admin panel uses.
 
 **Identity model.** Each agent is a service account: a `user` row with `type = 'api'`. It has no password or OAuth link (its email is on the reserved `.invalid` TLD), can't sign in, and is excluded from user lists and analytics. Its permissions are exactly the RBAC roles assigned to it — the same roles defined under Admin → Roles. Its credentials are `apikey` rows with `type = 'admin'` (`sa_admin_…`): hash-only (never stored recoverably, shown once), optionally expiring, and revocable. Admin keys never authenticate the product API, product `sk_` keys (`type = 'user'`) never authenticate admin routes, and an admin-type key on a human account is rejected.
 
@@ -62,7 +62,7 @@ Write example after resolving the exact user:
 
 Direct REST writes use the `Idempotency-Key` header instead. Agent-key writes require it; existing browser writes may omit it. API responses retain `{ code, message, data? }`; failures also use HTTP 400/401/403/409/500 as appropriate. Responses include `X-Request-Id`. The capability contract restricts pagination to 100 per page and validates write parameters before execution.
 
-Coverage follows the current backend: users and balances/details, and each user's activity timeline (`users_timeline`); order listing, local updates and registered provider refund operations; subscription listing; credit history and adjustments; database post/category CRUD; invite codes; role/permission management; tickets and replies; settings, custom settings, and provider tests; registered analytics operations. Source-bundled MDX editing and arbitrary SQL are not admin API operations. `orders_update` only edits local metadata; the separately permissioned `orders_refund` operation (`admin.payments.refund`), when registered, refunds real money and may cancel the subscription as part of that refund. Credential administration is a separate control plane.
+**The operation list is the source of truth.** `GET /api/admin/agent/operations` returns exactly what the agent may call, with descriptions and JSON schemas; `src/lib/admin-operations.ts` defines it. It currently covers users and balances/details, each user's activity timeline (`users_timeline`), order listing, local order updates and registered provider refund operations, subscription listing, credit history and adjustments, database post/category CRUD, invite codes, role/permission management, tickets and replies, settings, custom settings and provider tests, IndexNow ownership, and registered operations and analytics operations. Source-bundled MDX editing and arbitrary SQL are not admin API operations. `orders_update` only edits local metadata; the separately permissioned `orders_refund` operation (`admin.payments.refund`), when registered, refunds real money and may cancel the subscription as part of that refund. Credential administration is a separate control plane.
 
 ## Scheduled reports
 
@@ -118,27 +118,27 @@ Each tool accepts:
 
 Read tools require only `input` (use `{}` when no filters are needed). Failures set MCP `isError`; the API envelope is returned as structured content.
 
-## Skill and standalone CLI
+## Standalone client
 
-Download the `site-admin` skill from your deployed site. Both files are public and contain no secrets: `/api/admin/agent/skill?file=SKILL.md` and `/api/admin/agent/skill?file=admin-client.mjs`. Save them as `<skill-dir>/site-admin/SKILL.md` and `<skill-dir>/site-admin/scripts/admin-client.mjs` in your agent's skill library. The Skill tab on `/admin/agent` provides a ready-to-paste setup prompt. Store the key in the private project store or pass it through `SITE_ADMIN_TOKEN`. The client needs Node 20+ and no dependencies:
+The client is a single dependency-free file that ships with the repository: `scripts/admin-client.mjs`. Copy it next to your agent's other tooling (or point at it in place) — it needs Node 20+ and nothing else. It talks to the same admin API and never prints a key.
 
 ```sh
-node <skill-dir>/site-admin/scripts/admin-client.mjs list
-node <skill-dir>/site-admin/scripts/admin-client.mjs openapi
-node <skill-dir>/site-admin/scripts/admin-client.mjs call users_list /tmp/input.json
+node scripts/admin-client.mjs list
+node scripts/admin-client.mjs openapi
+node scripts/admin-client.mjs call users_list /tmp/input.json
 ```
 
 **Several sites.** The client keeps named projects (URL + admin key) in `~/.site-admin/projects.json` (mode 0600; `SITE_ADMIN_CONFIG` overrides the path). Keys are read from stdin and verified against the site before saving, and are never printed (`projects` masks them):
 
 ```sh
-printf '%s' "$KEY" | node <skill-dir>/site-admin/scripts/admin-client.mjs add myshop https://myshop.example
-node <skill-dir>/site-admin/scripts/admin-client.mjs projects
-node <skill-dir>/site-admin/scripts/admin-client.mjs --project myshop call analytics_report /tmp/input.json
-node <skill-dir>/site-admin/scripts/admin-client.mjs use myshop      # default project
-node <skill-dir>/site-admin/scripts/admin-client.mjs remove myshop
+printf '%s' "$KEY" | node scripts/admin-client.mjs add myshop https://myshop.example
+node scripts/admin-client.mjs projects
+node scripts/admin-client.mjs --project myshop call analytics_report /tmp/input.json
+node scripts/admin-client.mjs use myshop      # default project
+node scripts/admin-client.mjs remove myshop
 ```
 
-Resolution order: `--project`, `SITE_ADMIN_PROJECT`, the `SITE_ADMIN_URL`/`SITE_ADMIN_TOKEN` pair, then the default (or only) project. The Skill prompt on each site's `/admin/agent` page names the project after the site, so pasting it on several sites builds up the list; MCP snippets likewise use a per-site server name.
+Resolution order: `--project`, `SITE_ADMIN_PROJECT`, the `SITE_ADMIN_URL`/`SITE_ADMIN_TOKEN` pair, then the default (or only) project. When several projects are configured, name the project with `--project` on every call; the admin panel's setup prompt names the project after the site, so pasting it on several sites builds up the list, and MCP snippets likewise use a per-site server name.
 
 Use JSON files or stdin (`-`) for inputs; do not put secrets in command arguments. The client refuses credential-bearing redirects and non-HTTPS remote URLs (localhost HTTP is allowed).
 
@@ -156,7 +156,7 @@ Add a schema/permission/description/path in `src/lib/admin-operations.ts`, imple
 
 ```sh
 pnpm test:admin
-pnpm exec tsc --noEmit
+pnpm typecheck
 pnpm build
 ```
 

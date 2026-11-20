@@ -108,7 +108,7 @@ Ask the user for their admin email and password. If they don't provide one, just
 
 ### 0.5 Update translations
 
-Translations are flat, dot-keyed JSON in `messages/en.json` and `messages/zh.json` (one file per locale). Update **both**:
+Translations are flat, dot-keyed JSON in `messages/en.json` (this project is English-only — `project.inlang/settings.json` enables only `en`). Update the file:
 - Set `common.metadata.title` and `common.metadata.description` to the app name and description.
 
 Decide which modules to keep based on user's features. Default: keep all. Only remove if the user explicitly doesn't need something.
@@ -130,7 +130,7 @@ placeholder files (no code change needed):
 
 1. **Letter** = first character of the app name, uppercased (e.g. `Acme` → `A`). For a
    CJK-only name, use the first character as-is, or the initial of its English name if one exists.
-2. **Color** = the theme's primary color (read `--primary` from `src/app/globals.css`); fall
+2. **Color** = the theme's primary color (read `--primary` from `src/styles/globals.css`); fall
    back to `#0a0a0a` background + `#ffffff` letter. Ensure the letter contrasts the background.
 3. Write `public/logo.svg` and `public/favicon.svg` from this template (swap the letter,
    `fill`, and text color; favicon uses a larger `font-size` so the glyph reads at 16px):
@@ -202,7 +202,7 @@ Then continue to Phase 3 (Dashboard Pages) and beyond.
 
 **Mode C — Generated from scratch:**
 
-The repo ships with a default landing page composed of demo blocks in `src/blocks/` (`header`, `hero`, `features`, `pricing`, `footer`). **Rewrite those blocks with the user's content; keep the primitives in `src/components/`.**
+The repo ships with a default landing page composed of demo blocks in `src/blocks/` (`hero-section`, `features-section`, `pricing-section`, `faq-section`, `blog-section`, `cta-section`). **Rewrite those blocks with the user's content; keep the primitives in `src/components/`.**
 
 Workflow:
 
@@ -212,29 +212,28 @@ Workflow:
    - `components/pricing-table.tsx` → `PricingTable` (takes `groups`)
    - `components/ui/*` — shadcn primitives (Button, Card, Accordion, etc.)
 
-2. **Rewrite the blocks** — each block reads i18n (`m['landing....']()` from `@/paraglide/messages.js`) and passes content to a primitive. Keep this file-per-section pattern:
-   - `blocks/header.tsx` — wraps `SiteHeader`
-   - `blocks/hero.tsx` — large heading, subtext, 1-2 CTAs, optional hero image
-   - `blocks/features.tsx` — 3-6 feature cards (user's brief)
-   - `blocks/how-it-works.tsx` — add if applicable (3-step flow)
-   - `blocks/pricing.tsx` — wraps `PricingTable` with tier config
-   - `blocks/faq.tsx` — add if applicable (use shadcn Accordion)
-   - `blocks/cta.tsx` — final CTA section
-   - `blocks/footer.tsx` — wraps `SiteFooter`. **Keep `SiteFooter` from `components/site-footer.tsx`** — it already mounts the `BuiltWithShipAny` badge (links to `https://shipany.ai/?utm_source=<app_hostname>` (hostname only, e.g. `yourdomain.com`)) in the bottom bar. If you replace `SiteFooter` with a custom footer, you MUST still render `<BuiltWithShipAny />` from `@/components/built-with-shipany` somewhere in it. Never strip the attribution.
+2. **Rewrite the blocks** — each block reads i18n (`m['landing....']()` from `@/paraglide/messages.js`) and passes content to a primitive. Keep this file-per-section pattern (one file per section, `<name>-section.tsx`):
+   - `blocks/hero-section.tsx` — large heading, subtext, 1-2 CTAs, optional hero image
+   - `blocks/features-section.tsx` — feature cards (user's brief)
+   - `blocks/pricing-section.tsx` — wraps `PricingTable` with tier config
+   - `blocks/faq-section.tsx` — FAQ (use shadcn Accordion)
+   - `blocks/blog-section.tsx` — latest posts (reads `@/content/posts/server`)
+   - `blocks/cta-section.tsx` — final CTA section
+   - Add more if applicable (e.g. `how-it-works-section.tsx` — 3-step flow)
+   - The page header/footer are **components, not blocks**: `SiteHeader` / `SiteFooter` from `src/components/`. Keep them as they are — they carry no vendor branding, so there is no attribution badge to preserve.
 
 3. **Rewrite `index.tsx`** — pure composition, ~15 lines (the route's `component`). Example:
    ```tsx
-   <Header />
-   <Hero />
-   <Features />
-   <HowItWorks />
-   <Pricing />
-   <FAQ />
-   <CTA />
-   <Footer />
+   <SiteHeader />
+   <HeroSection />
+   <FeaturesSection />
+   <PricingSection />
+   <FaqSection />
+   <CtaSection />
+   <SiteFooter />
    ```
 
-4. **Rewrite the `landing.*` keys in `messages/en.json` and `messages/zh.json`** — the block translations (flat dot-keyed, e.g. `"landing.hero.headline"`).
+4. **Rewrite the `landing.*` keys in `messages/en.json`** — the block translations (flat dot-keyed, e.g. `"landing.hero.headline"`).
 
 5. **Generate visuals via `/generate-image`** — a landing page made of plain text and shadcn cards looks generic. For each block that benefits from imagery, generate one image and reference it from the block:
 
@@ -273,9 +272,9 @@ Based on the user's features, create dashboard pages:
 
 ### 3.4 Legal Pages
 
-Legal pages are MDX content files in `src/content/pages/`, rendered by per-slug route files in `(pages)/` (shared `-static-page.tsx` factory):
-- Privacy Policy already exists at `src/content/pages/privacy-policy.{en,zh}.mdx` — update content for the product
-- Terms of Service at `src/content/pages/terms-of-service.{en,zh}.mdx` — update content
+Legal pages are MDX content files in `src/content/pages/`, rendered by per-slug route files in `(pages)/` (shared `-static-page.tsx` factory). This project is English-only, so one `.en.mdx` file per page:
+- Privacy Policy already exists at `src/content/pages/privacy-policy.en.mdx` — update content for the product
+- Terms of Service at `src/content/pages/terms-of-service.en.mdx` — update content
 - Add more if needed (e.g., refund policy) using `/new-static-page` pattern — add the MDX file plus a thin route file `src/routes/(pages)/<slug>.tsx` via `staticPageRouteOptions`
 
 ### 3.5 Module Wiring
@@ -309,19 +308,19 @@ Connect landing page elements to modules:
 
 ## Git Remotes
 
-This project starts as a clone of the ShipAny Next template — rewire the remotes
-before handing off:
+This project is the `saas-template` starter. Before handing the result over,
+point `origin` at the user's own repository:
 
-1. **Wire the template as `upstream`** (enables `/sync-upstream` for future
-   template updates — local changes win on conflict):
+1. **Point `origin` at the user's repo.** Check where it points:
    ```bash
-   git remote get-url upstream 2>/dev/null \
-     || git remote add upstream git@github.com:shipany-ai/shipany-tanstack.git
+   git remote -v
    ```
-2. **Point `origin` at the user's own repository.** If `origin` still points at
-   `shipany-ai/shipany-tanstack`, ask the user for their new repo URL and run
-   `git remote set-url origin <their-repo-url>`. If they haven't created one
-   yet, include the command in the completion report for them to run later.
+   If `origin` still points at the template repository, ask the user for their
+   new repo URL and run `git remote set-url origin <their-repo-url>`. If they
+   haven't created one yet, include the command in the completion report for
+   them to run later.
+2. **No upstream remote.** This template is not synced from an upstream
+   repository — do not add an `upstream` remote.
 
 ---
 
@@ -336,13 +335,15 @@ Report:
 - Modules kept/removed/wired
 - Assets downloaded (count)
 - Build status
-- Git remotes: origin (user's repo) + upstream (template); `/sync-upstream`
-  pulls future template updates, keeping their changes on conflict
+- Git remote: `origin` → the user's own repository
 - Remaining TODOs for the user:
   - `git remote set-url origin <url>` if not done yet
   - API keys to configure (Stripe, Resend, etc.)
   - Content to customize
   - `pnpm dev` to start iterating
+  - Deploy with `/deploy-cloudflare` when ready — it provisions the Worker
+    `saas-template` and the D1 database `saas-template-db` from
+    `wrangler.example.jsonc` (rename both for your project)
 
 ---
 
@@ -359,7 +360,7 @@ Report:
 9. **Dashboard pages fetch via TanStack Query + `@/lib/api-client`** — no raw `fetch`, don't import server-only modules (`@/modules/*`, `@/core/db`) in components; use `m['...']()` from `@/paraglide/messages.js` for i18n.
 10. **`pnpm build` must pass** at every checkpoint.
 11. **shadcn/ui v4 (Base Nova)** — no `asChild` prop. Use `className={cn(buttonVariants())}` on Link.
-12. **i18n** — all user-facing text uses `m['ns.key']()` from `@/paraglide/messages.js`. Add each new key to **both** `messages/en.json` and `messages/zh.json` (flat dot-keyed; no per-namespace files, no path registration).
+12. **i18n** — all user-facing text uses `m['ns.key']()` from `@/paraglide/messages.js`. Add each new key to `messages/en.json` (flat dot-keyed; no per-namespace files, no path registration). This project is English-only — do not create a second locale catalog.
 13. **Legal pages** — MDX content in `src/content/pages/`, rendered by per-slug route files in `(pages)/` via the `-static-page.tsx` factory. Layout is shared.
 14. **Static pages** — use `/new-static-page` skill for additional content pages.
 15. **For complex landing pages** (Mode A/B with 8+ sections), use worktree agents to build sections in parallel.

@@ -1,135 +1,158 @@
 # Application — Agent Instructions
 
-This is a **headless SaaS engine** — pre-wired business logic (payments, credits, subscriptions, auth, RBAC) with minimal UI. Users build their product pages on top of it.
+This repository is a **SaaS application template**: a headless backend (auth, RBAC, orders, payments, credits, subscriptions, storage, email, AI) plus a thin UI layer, shipped with demo content you are expected to replace. Every statement below describes what is actually in this repository — if one of them stops matching the code, fix the code or fix this file, but never leave both stale.
 
 ## Product copy
 
-Use the configured application name for branding. Do not add upstream vendor
-branding, promotional badges, or template demonstration articles to product
-copy. Keep the original license and compatibility identifiers intact.
+Use the configured application name for branding (`VITE_APP_NAME`, overridable in Admin → Settings → General → App Info). Do not add vendor branding, promotional badges, or template demonstration articles to product copy.
 
 ## Language policy
 
-This project is English-only. `project.inlang/settings.json` enables only `en`.
-Keep all product copy in `messages/en.json` and content in `*.en.mdx`.
-Do not recreate Chinese catalogs, Chinese pages, or language-switching UI.
-Legacy `/zh` links redirect to the corresponding English URL. Generic skill
-examples mentioning multiple locales do not override this project policy.
+English only. `project.inlang/settings.json` declares `locales: ["en"]` and `baseLocale: "en"`, and `tests/english-only.test.ts` asserts that exactly one locale is enabled and that messages resolve.
+
+- **Routes have no locale prefix.** `src/router.tsx` de-localizes incoming URLs and re-localizes outgoing ones; `vite.config.ts` keeps every English URL prefix-free (API paths are never prefixed either).
+- **There is no `/zh` route and no `/zh` redirect.** Do not add one. A stale locale cookie does not change the language.
+- The language switcher (`src/components/locale-selector.tsx`) renders nothing while only one locale is enabled, so the header and footer show no language control.
+- Product copy lives in `messages/en.json` (flat dot-keyed JSON, ~1.5k keys). Static MDX pages are named `<slug>.en.mdx` under `src/content/pages/`.
+- **The documentation module keeps the locale dimension on purpose** — see "Documentation site" below. Adding a language later means adding the locale to `project.inlang/settings.json`, a `messages/<locale>.json` catalog, and translated doc files (`guide.zh.md`). No loader change is needed.
 
 ## Tech Stack
 
-- **Framework:** TanStack Start (RC, Vite 8 + nitro, React 19, TypeScript strict). File-based routing under `src/routes/`. No React Server Components, no `"use client"` directives — all components are regular React; loaders and server functions handle server-side work.
-- **UI:** shadcn/ui v4 (Base Nova style, Tailwind CSS 4, oklch colors)
-- **Data fetching:** TanStack Query (react-query) v5 over a typed `@/lib/api-client` — no raw `fetch` in components.
-- **Forms:** TanStack Form v1 + zod v4 validation, via the `TextField` helper in `@/components/form-field`.
-- **Tables:** `@/components/data-table` (backed by `@tanstack/react-table`, manual pagination).
+- **Framework:** TanStack Start (Vite 8 + nitro, React 19, TypeScript strict). File-based routing under `src/routes/`. No React Server Components and no `"use client"` directives — all components are regular React; loaders and server functions do the server-side work.
+- **UI:** shadcn/ui v4 (Base Nova style, Tailwind CSS 4, oklch colors) — primitives in `src/components/ui/`
+- **Data fetching:** TanStack Query v5 over the typed `@/lib/api-client` — no raw `fetch` in components.
+- **Forms:** TanStack Form v1 + zod v4, via the `TextField` helper in `@/components/form-field`.
+- **Tables:** `@/components/data-table` (TanStack Table, manual pagination).
 - **i18n:** Paraglide JS (`@inlang/paraglide-js` 2.x) — compiled message functions, flat dot-keyed JSON.
-- **Auth:** better-auth with Drizzle adapter
-- **Database:** Drizzle ORM — supports PostgreSQL, MySQL, SQLite, Turso, Cloudflare D1
-- **All code is self-contained** — no external packages for business logic. Payment, email, storage, AI, auth, and utils are inlined in `src/core/` and `src/lib/`.
+- **Auth:** better-auth with the Drizzle adapter.
+- **Database:** Drizzle ORM — SQLite (default), PostgreSQL, MySQL, Turso and Cloudflare D1.
+- **All code is self-contained** — no external packages for business logic. Payment, email, storage, AI, auth and utils are inlined in `src/core/` and `src/lib/`.
 
 ## Commands
 
 - `pnpm dev` — Vite dev server (port 3000)
-- `pnpm build` — Vite production build (always verify after changes)
-- `pnpm start` — Run the production server (`node .output/server/index.mjs`)
-- `pnpm db:setup` — Copy schema template based on `DATABASE_PROVIDER` (run once after clone)
-- `pnpm db:push` — Push schema to database (development — direct sync, may lose data)
-- `pnpm db:generate` — Generate SQL migration files (production — safe, reviewable)
-- `pnpm db:migrate` — Run pending migrations
+- `pnpm build` — production build (always verify after changes)
+- `pnpm start` — run the production server (`node .output/server/index.mjs`)
+- `pnpm test` — the whole test suite (`node --import tsx --test tests/*.test.ts`); `pretest` compiles the Paraglide messages first
+- `pnpm typecheck` — `tsc --noEmit`; `pretypecheck` compiles messages and regenerates the route tree
+- `pnpm db:setup` — copy the schema template matching `DATABASE_PROVIDER` (also runs as `prebuild` and `postinstall`)
+- `pnpm db:push` — push the schema to the database (development — direct sync, may lose data)
+- `pnpm db:generate` — generate SQL migration files in `/drizzle/` (production — safe, reviewable)
+- `pnpm db:migrate` — run pending migrations
 - `pnpm db:studio` — Drizzle Studio GUI
+- `pnpm rbac:init` — create roles, permissions and (optionally) the first admin user
+- `pnpm rbac:assign` — assign a role to a user
+- `pnpm admin:token` — manage agent accounts and admin API keys (see `docs/admin-agent.md`)
+- `pnpm admin:mcp` — stdio MCP bridge for the admin API
+- `pnpm cf:build` / `pnpm cf:deploy` — Cloudflare Workers build and deploy
+- `pnpm check:deploy-env` — refuse to deploy without a real `AUTH_SECRET` and `CONFIG_ENCRYPTION_KEY`
+- `pnpm format` / `pnpm format:check` — Prettier
 
 ### First-time setup
 
 ```bash
-pnpm install              # install dependencies (postinstall auto-copies sqlite schema)
-cp .env.example .env.development   # then set DATABASE_PROVIDER, DATABASE_URL, AUTH_SECRET, etc.
-pnpm db:setup             # copy the matching schema template (if not sqlite)
+pnpm install              # install dependencies (postinstall stamps out schema.ts)
+cp .env.example .env.development   # then set AUTH_SECRET (and DATABASE_* if not sqlite)
+pnpm db:setup             # copy the matching schema template (postinstall already did this)
 pnpm db:push              # create tables
-pnpm dev                  # start dev server
+pnpm rbac:init --admin-email=admin@example.com --admin-password=...
+pnpm dev                  # start the dev server
 ```
 
-**Env files:** copy `.env.example` → `.env.development` for local dev (gitignored). The `db:*`
-loader (`scripts/with-env.ts`) and Vite (`loadEnvFiles()` called from `vite.config.ts`) both
-resolve `.env.{NODE_ENV}` before `.env.local`/`.env`, so `.env.development` is the canonical local
-file and server-side `process.env` is populated from it. `.env.example` is the committed template —
-keep it in sync when adding a new env var to `src/config/index.ts`.
+**Five variables are enough to boot.** `VITE_APP_URL`, `VITE_APP_NAME`, `DATABASE_PROVIDER`, `DATABASE_URL`, `AUTH_SECRET`. Everything else (payment providers, OAuth, email, storage, AI, analytics) is configured in Admin → Settings and stored in the database. See "Environment variables" below.
+
+**Env files:** copy `.env.example` → `.env.development` for local dev (gitignored). `scripts/with-env.ts` (used by the `db:*` and `rbac:*` scripts) and Vite's `loadEnvFiles()` (called from `vite.config.ts`) both resolve `.env.{NODE_ENV}.local` → `.env.{NODE_ENV}` → `.env.local` → `.env`, so `.env.development` is the canonical local file and server-side `process.env` is populated from it. `.env.example` is the committed template — keep it in sync when you add a variable to `src/config/index.ts`.
 
 ### Schema change workflow
 
+The schema has three committed dialect templates — `src/config/db/schema.sqlite.ts`, `schema.postgres.ts`, `schema.mysql.ts` — and one gitignored working copy, `src/config/db/schema.ts`, which `scripts/db-setup.mjs` copies from the template matching `DATABASE_PROVIDER` (sqlite/turso/d1 → sqlite, postgres/postgresql → postgres, mysql → mysql).
+
 **Development** (fast iteration, ok to lose data):
 
-1. Edit `src/config/db/schema.ts`
+1. Edit the template in `src/config/db/schema.<dialect>.ts` (and `schema.ts`, or re-run `pnpm db:setup`)
 2. `pnpm db:push`
 
 **Production** (safe, reversible):
 
-1. Edit `src/config/db/schema.ts`
+1. Edit the template in `src/config/db/schema.<dialect>.ts`
 2. `pnpm db:generate` — creates migration SQL in `/drizzle/`
 3. Review the generated SQL — check for destructive operations (DROP COLUMN, etc.)
-4. `pnpm db:migrate` — apply to database
+4. `pnpm db:migrate` — apply to the database
 
-**Rule:** Agent should use `db:push` during development. For production deployments, always use `db:generate` + `db:migrate` and ask the user to review the migration before applying.
+**Rule:** agents use `db:push` during development. For production deployments, always use `db:generate` + `db:migrate` and ask the user to review the migration before applying. Change the template, not only the working copy — the working copy is regenerated by `pnpm db:setup` and by every build.
 
 ## Architecture
 
 ```
 src/
 ├── core/                        # Infrastructure — every project uses this
-│   ├── db/                      # Multi-DB (PostgreSQL, MySQL, SQLite, D1)
-│   ├── auth/                    # better-auth (server + client) + RBAC
+│   ├── db/                      # Multi-DB (SQLite, PostgreSQL, MySQL, D1) + atomic()
+│   ├── auth/                    # better-auth (server + client) + RBAC matching
 │   ├── i18n/                    # navigation.tsx (locale-aware Link/router) + dynamic.ts (tDynamic)
-│   ├── payment/                 # Payment providers (Stripe, PayPal, Creem)
-│   ├── email/                   # Email providers (Resend)
-│   ├── storage/                 # Storage providers (S3, R2)
-│   └── ai/                     # AI providers (Replicate, Gemini, Fal, Kie)
+│   ├── payment/                 # Payment providers (Stripe, Creem, PayPal, Alipay, WeChat)
+│   ├── email/                   # Email providers (Resend, Cloudflare)
+│   ├── storage/                 # Storage providers (S3, R2, local private fallback)
+│   ├── notify/                  # Bot channels (Telegram, Feishu, WeCom, webhook)
+│   └── ai/                      # AI providers (Replicate, Gemini, Fal, Kie)
 │
 ├── modules/                     # Business logic — independently removable
 │   ├── payment/service.ts       # Checkout, webhook, order + subscription + credit atomicity
 │   ├── subscriptions/service.ts # Subscription lifecycle (CRUD, status transitions)
 │   ├── credits/service.ts       # FIFO consumption, expiration, revocation, auto-grant
+│   ├── manual-payments/         # Offline transfer orders, accounts, receipts, review
+│   ├── docs/service.ts          # Documentation content loader (glob-backed)
 │   ├── apikeys/service.ts       # API key CRUD + validation
 │   ├── rbac/service.ts          # Role/permission checks, wildcard matching
-│   ├── config/service.ts        # DB key-value config with 1h cache
+│   ├── config/service.ts        # DB key-value config, masking, encryption
 │   ├── ai-tasks/service.ts      # AI task tracking with credit deduction/revocation
 │   ├── notify/service.ts        # Bot notifications (paid orders) + client-safe templates.ts
 │   ├── guest-posts/service.ts   # Paid guest posts: pay → review → publish (refund on reject)
-│   └── events/service.ts        # Product events (recordEvent) shown in the admin user timeline
+│   ├── posts/, taxonomy/        # Blog posts and categories
+│   ├── events/service.ts        # Product events (recordEvent) shown in the admin user timeline
+│   ├── admin-access/            # Agent accounts and admin API keys
+│   ├── operations/, analytics/  # First-party traffic and revenue reporting
+│   ├── storage/, tickets/, invite-codes/, indexnow/
 │
 ├── config/
 │   ├── index.ts                 # All env vars (app, db, auth, stripe, resend, storage, ai, locale)
-│   ├── db/schema.ts             # All table definitions (21 built-in + custom tables)
-│   └── locale/index.ts          # localeNames map for the language-switcher UI (locales live in project.inlang)
+│   ├── pricing.ts               # Authoritative pricing catalog (price, credits, plan, CNY price)
+│   ├── appearance.ts            # Theme, font, size, sidebar defaults + the appearance setting keys
+│   ├── user-features.ts         # Which user-center pages exist by default
+│   ├── events.ts                # Known product-event kinds
+│   └── db/schema.<dialect>.ts   # Table definitions (templates); schema.ts is the working copy
 │
 ├── messages/en.json        # Translation source — flat dot-keyed (e.g. "landing.hero.headline")
 ├── project.inlang/settings.json # Inlang project config (locales, baseLocale, plugins)
-├── paraglide/  (src/paraglide/) # Generated message fns + runtime — gitignored, rebuilt by the vite plugin
+├── src/paraglide/          # Generated message fns + runtime — gitignored, rebuilt by the vite plugin
 │
 ├── server.ts                    # Nitro entry — wraps the handler in paraglideMiddleware (locale via AsyncLocalStorage)
 ├── router.tsx                   # getRouter — creates the router instance + rewrite (deLocalizeUrl/localizeUrl)
 ├── routeTree.gen.ts             # Generated route tree (do not edit by hand)
-├── routes/                      # File-based routes (pages + API) — locale-free paths; URL prefix handled by rewrite
-│   ├── __root.tsx               # HTML shell: QueryClientProvider, fonts, ThemeProvider, Toaster, Analytics, hreflang, notFound
+├── routes/                      # File-based routes (pages + API) — locale-free paths
+│   ├── __root.tsx               # HTML shell: QueryClientProvider, fonts, ThemeProvider, Toaster, Analytics, notFound
 │   ├── index.tsx                # Homepage
-│   ├── pricing.tsx              # e.g. createFileRoute('/pricing') — no locale segment
-│   ├── (auth)/                  # Sign-in, sign-up (route group)
+│   ├── pricing.tsx              # createFileRoute('/pricing') — no locale segment
+│   ├── (auth)/                  # Sign-in, sign-up, password reset, invite redeem, auth callback
 │   ├── (pages)/                 # MDX static pages: <slug>.tsx routes + -static-page.tsx factory
+│   ├── docs/                    # Documentation site routes (/docs and /docs/$slug)
+│   ├── blog/                    # Blog index and post pages
 │   ├── settings/                # User dashboard pages (route.tsx = layout + nav)
 │   ├── admin/                   # Admin panel pages (route.tsx = layout + nav)
 │   └── api/                     # Server routes — REST endpoints
 │
 ├── content/pages/               # MDX content for static pages (<slug>.en.mdx)
-├── hooks/                       # Shared react-query hooks (use-public-config, use-user-permissions, use-mobile)
+├── content/docs/                # Documentation markdown — ships empty
+├── hooks/                       # Shared react-query hooks
 ├── blocks/                      # Zero-config page sections: read i18n, wire data into components
-│                                # e.g. hero, features, pricing-section, header, footer
 ├── components/                  # Reusable UI: all content via props, no i18n reads
-│   │                            # e.g. site-header, site-footer, pricing, app-sidebar
+│   │                            # e.g. site-header, site-footer, pricing-table, app-sidebar
 │   ├── data-table.tsx           # Paginated table (TanStack Table, manual pagination, `loading` prop)
 │   ├── form-field.tsx           # TextField — TanStack Form field wired to a labeled Input
 │   ├── mdx-components.tsx        # MDX element styling (mdxComponents for MDXProvider)
+│   ├── docs/                    # Documentation site components
 │   └── ui/                      # shadcn/ui primitives (add via `npx shadcn add`)
 ├── styles/globals.css           # Theme tokens (oklch CSS variables)
-└── lib/                         # Utilities (api-client, query-client, hash, resp, cookie, cache, rate-limit, time, env, cn)
+└── lib/                         # Utilities (api-client, query-client, hash, resp, cookie, cache, rate-limit, time, env, crypto, cn)
 ```
 
 Key entry files:
@@ -137,8 +160,8 @@ Key entry files:
 - `vite.config.ts` — plugins: mdx → tailwindcss → **paraglideVitePlugin** (outdir `./src/paraglide`, `strategy: ['url','baseLocale']`, English-only `urlPatterns`) → tanstackStart → viteReact → nitro. Calls `loadEnvFiles()` so server-side `process.env` is populated from `.env.{NODE_ENV}`.
 - `src/server.ts` — Nitro fetch entry; wraps the request in `paraglideMiddleware` so `getLocale()` resolves server-side.
 - `src/router.tsx` — exports `getRouter`; its `rewrite` runs Paraglide `deLocalizeUrl`/`localizeUrl` so routes and URLs stay locale-free for English.
-- `src/routes/__root.tsx` — HTML shell (`QueryClientProvider` + `ReactQueryDevtools` in dev, fonts via `@fontsource` + a Google Fonts `<link>` for Noto Serif SC, `ThemeProvider`/`Toaster`/`GoogleOneTap`/`Analytics`, hreflang `<link>`s, `notFoundComponent`).
-- `src/routeTree.gen.ts` — generated; never edit by hand.
+- `src/routes/__root.tsx` — HTML shell (`QueryClientProvider` + `ReactQueryDevtools` in dev, fonts via `@fontsource`, `ThemeProvider`/`Toaster`/`GoogleOneTap`/`Analytics`, `notFoundComponent`). Its loader also resolves the appearance, cookie-consent, analytics and `docs_enabled` switches.
+- `src/routeTree.gen.ts` — generated; never edit by hand (`pnpm route:generate`).
 
 ## Module System
 
@@ -161,7 +184,7 @@ API routes are thin server-route wrappers — they check auth, parse params, cal
 - Modules depend on `core/`, `config/`, `lib/`, and `drizzle-orm` — never on other modules' internals
 - Exception: `payment/service.ts` calls `credits/` and `subscriptions/` because payment success triggers credit granting and subscription creation. This is the ONE allowed cross-module dependency.
 - `ai-tasks/service.ts` calls `credits/` for consumption/revocation. This is the second.
-- `payment/service.ts` also calls `notify/` to push a bot message (Telegram/Feishu/WeCom, configured in the admin Notify tab) after a paid order commits. Channel senders live in `@/core/notify`.
+- `payment/service.ts` also calls `notify/` to push a bot message (Telegram/Feishu/WeCom/webhook, configured in Admin → Settings → Notify) after a paid order commits. Channel senders live in `@/core/notify`.
 - `payment/service.ts` calls `guest-posts/` (`planGuestPostFulfillment`, `planGuestPostRefund`) so a paid guest post order publishes its article, and a refund takes it down, in the same atomic write. This is the third.
 - All other modules are fully independent.
 
@@ -171,7 +194,7 @@ API routes are thin server-route wrappers — they check auth, parse params, cal
 
 i18n is powered by **Paraglide JS** (`@inlang/paraglide-js`). Messages are compiled into tree-shakeable functions — there is no provider, no `useTranslations` hook, no `useLocale`.
 
-**Message source:** flat dot-keyed JSON in `messages/en.json` (~675 keys). The key prefix is the old namespace, e.g. `"landing.hero.headline"`, `"common.nav.profile"`, `"admin.users.credits_granted"`. The Inlang project config lives at `project.inlang/settings.json`. The compiler output `src/paraglide/` is **gitignored** and regenerated by the vite plugin on each build/dev.
+**Message source:** flat dot-keyed JSON in `messages/en.json`. The key prefix is the old namespace, e.g. `"landing.hero.headline"`, `"common.nav.profile"`, `"admin.users.credits_granted"`. The Inlang project config lives at `project.inlang/settings.json`. The compiler output `src/paraglide/` is **gitignored** and regenerated by the vite plugin on each build/dev — run `pnpm paraglide:compile` before running `tsc` or the tests on a fresh clone.
 
 **Components (any component — they're all regular React):**
 
@@ -187,13 +210,13 @@ export function MyButton() {
 - Explicit locale (e.g. in a loader): `m['landing.pricing.title']({}, { locale })`
 - Runtime-built keys (tab labels, keyed lists): `tDynamic(key)` from `@/core/i18n/dynamic`. Prefer static `m['ns.key']()` whenever the key is known — dynamic access opts the bundle out of tree-shaking.
 
-**Adding a translation:** add the key to `messages/en.json`, then call `m['the.key']()`. No per-namespace folders, no `localeMessagesPaths` registration — `src/config/locale/index.ts` now only exports `localeNames` for the switcher UI.
+**Adding a translation:** add the key to `messages/en.json`, then call `m['the.key']()`. No per-namespace folders, no `localeMessagesPaths` registration — `src/config/locale/index.ts` only exports `localeNames` for the switcher UI.
 
 **Locale runtime:** `import { getLocale, setLocale, localizeHref, localizeUrl, locales, baseLocale } from '@/paraglide/runtime.js'`. `getLocale()` works in components and in loaders (server-side via the `paraglideMiddleware` AsyncLocalStorage, client-side after hydration).
 
-**Locale selection:** only `en` is supported. Language selectors are hidden and stale locale cookies do not change the language.
+**Locale selection:** only `en` is supported. `localizedPath('/pricing', 'unknown')` falls back to the base locale.
 
-**Locale-aware links:** Use `Link` from `@/core/i18n/navigation` instead of a raw anchor for pages. Internal hrefs stay **locale-free** (`href="/pricing"`); the router rewrite localizes the output URL (English has no prefix). `useRouter`/`usePathname` come from the same module.
+**Locale-aware links:** use `Link` from `@/core/i18n/navigation` instead of a raw anchor for pages. Internal hrefs stay **locale-free** (`href="/pricing"`); the router rewrite localizes the output URL (English has no prefix). `useRouter`/`usePathname` come from the same module.
 
 ### Pages & route metadata
 
@@ -284,7 +307,7 @@ const mutation = useMutation({
 });
 ```
 
-Shared hooks live in `src/hooks/` — `usePublicConfig()` (`use-public-config.ts`) and `useUserPermissions()` (`use-user-permissions.ts`). Pass `listQuery.isFetching` to `<DataTable loading={...} />`.
+Shared hooks live in `src/hooks/` — `usePublicConfig()` (`use-public-config.ts`), `useUserPermissions()` (`use-user-permissions.ts`), `useUserFeatures()` (`use-user-features.ts`), `useAppearance()` (`use-appearance.ts`), `useConfirm()` (`use-confirm.tsx`). Pass `listQuery.isFetching` to `<DataTable loading={...} />`.
 
 ### Forms (TanStack Form + zod)
 
@@ -373,7 +396,7 @@ export const Route = createFileRoute('/api/<feature>')({
 });
 ```
 
-Dynamic params: `$provider.ts` → `params.provider`. Catch-all: `$.ts`. better-auth mounts at `src/routes/api/auth/$.ts` via `auth.handler(request)`. `respData`/`respErr`/`respPage` are unchanged, from `@/lib/resp`.
+Dynamic params: `$provider.ts` → `params.provider`. Catch-all: `$.ts`. better-auth mounts at `src/routes/api/auth/$.ts` via `auth.handler(request)`. `respData`/`respErr`/`respPage` come from `@/lib/resp`.
 
 ### Database queries
 
@@ -391,12 +414,7 @@ const rows = await db()
 
 ### Atomic writes (money, credits, anything multi-statement)
 
-**Never use `db().transaction()` for writes that must succeed together.** D1 has
-no interactive transactions, and on D1 `transaction()` just runs the callback
-statement by statement. A failure halfway leaves partial data, such as a paid
-order with no credits. Use `atomic()` from `@/core/db/atomic` instead. It runs
-the steps as one `batch()` on D1/SQLite/Turso and as a real transaction on
-Postgres/MySQL:
+**Never use `db().transaction()` for writes that must succeed together.** D1 has no interactive transactions, and on D1 `transaction()` just runs the callback statement by statement. A failure halfway leaves partial data, such as a paid order with no credits. Use `atomic()` from `@/core/db/atomic` instead. It runs the steps as one `batch()` on D1/SQLite/Turso and as a real transaction on Postgres/MySQL:
 
 ```ts
 import { atomic, AtomicGuardError, guard } from '@/core/db/atomic';
@@ -422,117 +440,77 @@ try {
 }
 ```
 
-- Guards see the earlier steps' writes. Use them as preconditions (claim a
-  row before updating it) or postconditions (`remaining_credits >= 0` after a
-  relative decrement).
-- Prefer relative updates (``sql`${col} - ${n}` ``) plus a guard over writing
-  values computed from a stale read.
-- Credits: `planConsume()` / `planDeductForRefund()` return steps you can
-  bundle into your own `atomic()` call (see `ai-tasks/service.ts`).
-- D1 limits: at most **100 bound parameters per statement**, so chunk large
-  `inArray` lists (≤ 90) and multi-row inserts. Keep a batch to a modest number
-  of statements.
-- Test on the D1 path: `pnpm test:atomic` (SQLite batch),
-  `pnpm test:atomic:d1` (real local D1 via wrangler), and
-  `ATOMIC_PG_URL=… pnpm test:atomic:pg` (Postgres transaction).
+- Guards see the earlier steps' writes. Use them as preconditions (claim a row before updating it) or postconditions (`remaining_credits >= 0` after a relative decrement).
+- Prefer relative updates (`sql\`${col} - ${n}\``) plus a guard over writing values computed from a stale read.
+- Credits: `planConsume()` / `planDeductForRefund()` return steps you can bundle into your own `atomic()` call (see `ai-tasks/service.ts`).
+- D1 accepts at most 100 bound parameters per statement, so chunk large `inArray` lists and multi-row inserts. Keep a batch to a modest number of statements.
+- Test the D1 path: `pnpm test:atomic` (SQLite batch), `pnpm test:atomic:d1` (real local D1 via wrangler), and `pnpm test:atomic:pg` (Postgres transaction, needs `ATOMIC_PG_URL`).
+
+### Manual payments (offline transfer)
+
+A second way to pay, for products sold outside a payment provider: the buyer transfers the money to a collection account, uploads a receipt, and an operator verifies it. It is **off by default** and **only for one-time products**.
+
+- The switch is `manual_payments_enabled` (default `false`) in Admin → Settings → Payment → Manual payments; `manual_payments_sla_hours` (default `24`) records the expected verification time.
+- `POST /api/payment/checkout` branches on `payment_provider === 'manual_payments'` (or a default provider set to it) and calls `createManualOrder()` instead of `PaymentManager`. It returns an **in-site** payment page URL, not an external checkout URL.
+- `createManualOrder()` refuses anything that is not a one-time catalog product with a CNY price (`INVALID_OFFER`), refuses when the module is disabled (`MODULE_DISABLED`), and refuses when no collection account is enabled (`NO_MANUAL_PAYMENT_ACCOUNT`). **Subscriptions are never sold this way** — a subscription product is rejected before an order is created.
+- The order amount is the catalog's CNY price plus a 1–99 fen fingerprint, so two live orders on the same account are distinguishable by amount alone. The `(accountId, payableAmount)` partial unique index is the arbiter; when all 99 fingerprints are taken the request fails with `AMOUNT_POOL_EXHAUSTED`.
+- Receipts are stored under a private prefix and are only readable through `GET /api/payment/manual/receipt/<orderNo>` (owner or admin). `StorageProvider` grew an optional `getObject()` for that; the local fallback writes to `data/uploads/`, not `public/`.
+- Operators work at `/admin/manual-payments`: manage collection accounts (with a QR image) and review submitted receipts (confirm, reject with a reason, mark refunded). Settlement reuses the normal payment path, so credits, idempotency and the audit trail behave exactly like a provider checkout.
+- One-time products only means the module never creates a subscription and never renews one. Refunds roll back credits and close the order.
+
+### Documentation site
+
+The docs are an optional module: **off by default**, with an **empty** `content/docs/`.
+
+- The switch is `docs_enabled` (default `false`) in Admin → Settings → General → Documentation. While it is off, `/docs` and `/docs/$slug` throw `notFound()` and the header/footer show no Docs entry.
+- Content is markdown under `content/docs/**/*.md`, bundled at build time with `import.meta.glob('/content/docs/**/*.md', { eager: true, query: '?raw', import: 'default' })` — no database, no `content-collections` step.
+- **The locale dimension is kept even though only English ships.** File naming: `guide.md` is the base-locale document, `guide.zh.md` is a translation of the same page, `guide.v2.md` is a dotted name that is not a locale tag. A locale is the dot-segment right before `.md` when it looks like a language tag (`^[a-z]{2,3}(-[A-Za-z0-9]+)?$`). A missing translation falls back to the base locale.
+- The pure logic (slug, frontmatter, neighbors, search, headings) lives in `src/modules/docs/paths.ts` and is unit-tested with `node --test`; the glob-backed loader is `src/modules/docs/service.ts` (it cannot be imported under plain node, because `import.meta.glob` does not exist there).
+- Frontmatter fields: `title` (required), `description`, `order`, `group`, `updated`.
+- Add a language later by adding the locale to `project.inlang/settings.json`, a `messages/<locale>.json` catalog and `*.zh.md` files — no loader change needed.
 
 ### Guest posts (paid articles)
 
-Off until an admin turns on Settings → Users → Guest Posts. Outside authors
-write at `/settings/guest-posts` and pay to submit; an admin reviews at
-`/admin/guest-posts` and approves (publishes to `/blog`), requests changes
-(the author resubmits free) or rejects, which refunds the order. `/guest-post` is the public pitch page. Packages and prices
-live in `src/config/pricing.ts` (like the main plans): edit the
-`kind: 'guest_post'` entries, or add one in the same shape.
+Off until an admin turns on Settings → Users → Guest Posts. Outside authors write at `/settings/guest-posts` and pay to submit; an admin reviews at `/admin/guest-posts` and approves (publishes to `/blog`), requests changes (the author resubmits free) or rejects, which refunds the order. `/guest-post` is the public pitch page. Packages and prices live in `src/config/pricing.ts` (like the main plans): edit the `kind: 'guest_post'` entries, or add one in the same shape.
 
-- The article is a `post` row with `type = 'guest'`, kept `draft` until
-  approved; `guest_post` tracks the submission. Its checkout orders carry
-  `order.reference = 'guest_post:<id>'`: settlement reads it to submit the
-  paid draft, and a refund of that order rejects the submission (or takes a
-  published one down) in the same atomic write.
-  The generic posts admin/API refuses `guest` posts.
-- `order.reference` is the generic hook for any product tied to a specific
-  record (`<kind>:<id>`): pass `reference` to `createCheckout()`, then
-  fulfill from `existingOrder.reference` in `settleCheckoutOrder`.
-- Packages are `pricingCatalog` entries with `kind: 'guest_post'` (price and
-  `maxLinks`). They're sold only by `/api/guest-posts/$id/checkout`; the
-  generic checkout refuses them.
-- Rejecting refunds, so it has its own permission (`admin.guest-posts.reject`)
-  that seeds never grant through a wildcard. No admin action marks one paid. Every
-  external link in a guest post renders `rel="sponsored nofollow"` and the
-  page shows a Sponsored label. Keep both: search engines require them for
-  paid links.
-- On the published page, its external links also get
-  `utm_source=<site host>&utm_medium=guest_post` (render time only; links
-  the author already tagged with any `utm_` parameter are left alone).
-- Authors pick the slug (`normalizeSlug`: 3–80 chars of `a-z0-9-`); an empty
-  one comes from the title. `?preview=1` on `/blog/<slug>` shows an unpublished
-  post to its author and to admins only (noindex).
-- Word/link limits are counted by `src/lib/guest-post-rules.ts`, shared by the
-  server and the editor so a submit that would fail never saves.
-- A paid submit or a resubmit calls `notifyGuestPostSubmitted` (bot message,
-  `notify_guest_post_enabled`, on by default). No emails: authors read the
-  review result on their list page. Keep it that way unless the project adds
-  a mail flow for everything.
+- The article is a `post` row with `type = 'guest'`, kept `draft` until approved; `guest_post` tracks the submission. Its checkout orders carry `order.reference = 'guest_post:<id>'`: settlement reads it to submit the paid draft, and a refund of that order rejects the submission (or takes a published one down) in the same atomic write. The generic posts admin/API refuses `guest` posts.
+- `order.reference` is the generic hook for any product tied to a specific record (`<kind>:<id>`): pass `reference` to `createCheckout()`, then fulfill from `existingOrder.reference` in `settleCheckoutOrder`.
+- Packages are `pricingCatalog` entries with `kind: 'guest_post'` (price and `maxLinks`). They're sold only by `/api/guest-posts/$id/checkout`; the generic checkout refuses them.
+- Rejecting refunds, so it has its own permission (`admin.guest-posts.reject`) that seeds never grant through a wildcard. No admin action marks one paid. Every external link in a guest post renders `rel="sponsored nofollow"` and the page shows a Sponsored label. Keep both: search engines require them for paid links.
+- On the published page, its external links also get `utm_source=<site host>&utm_medium=guest_post` (render time only; links the author already tagged with any `utm_` parameter are left alone).
+- Authors pick the slug (`normalizeSlug`: 3–80 chars of `a-z0-9-`); an empty one comes from the title. `?preview=1` on `/blog/<slug>` shows an unpublished post to its author and to admins only (noindex).
+- Word/link limits are counted by `src/lib/guest-post-rules.ts`, shared by the server and the editor so a submit that would fail never saves.
+- A paid submit or a resubmit calls `notifyGuestPostSubmitted` (bot message, `notify_guest_post_enabled`, on by default). No emails: authors read the review result on their list page. Keep it that way unless the project adds a mail flow for everything.
 
 ### User-center feature switches
 
-Optional user pages (credits, billing, payments, API keys, tickets) are
-switched at Settings → Users → User Features. Defaults live in
-`src/config/user-features.ts` (`USER_FEATURES`; API keys off).
+Optional user pages (credits, billing, payments, API keys, tickets) are switched at Settings → Users → User Features. Defaults live in `src/config/user-features.ts` (`USER_FEATURES`; API keys off).
 
 - Nav entries and widgets: `useUserFeatures()` from `@/hooks/use-user-features`.
-- Pages: wrap the component in `<FeatureGate feature="...">`
-  (`src/routes/settings/-feature-gate.tsx`); it redirects to `/settings`.
-- API routes that must refuse while off:
-  `await userFeatureEnabled('<name>_enabled')` from `@/server/user-features`.
-- A new switch: add it to `USER_FEATURES`, a field in
-  `modules/config/settings.ts` (`tab: 'user'`), and expose it from
-  `/api/config/public`.
-- Confirmations use `useConfirm()` (`@/hooks/use-confirm`), not
-  `window.confirm`.
+- Pages: wrap the component in `<FeatureGate feature="...">` (`src/routes/settings/-feature-gate.tsx`); it redirects to `/settings`.
+- API routes that must refuse while off: `await userFeatureEnabled('<name>_enabled')` from `@/server/user-features`.
+- A new switch: add it to `USER_FEATURES`, a field in `modules/config/settings.ts` (`tab: 'user'`), and expose it from `/api/config/public`.
+- Confirmations use `useConfirm()` (`@/hooks/use-confirm`), not `window.confirm`.
 
 ### Product events (admin user timeline)
 
-The admin user detail page shows a timeline of everything a user did. Orders,
-subscriptions, credits, AI tasks and tickets appear automatically. For
-anything else:
+The admin user detail page shows a timeline of everything a user did. Orders, subscriptions, credits, AI tasks and tickets appear automatically. For anything else:
 
-- **Nothing records it yet** (paywall hit, plan picked, risk flag): register
-  the kind in `src/config/events.ts`, then record it.
-  - Server: `await recordEvent({ userId, kind, detail })` from
-    `@/modules/events/service`. It never throws. Call it from the API route,
-    not from another module's service, because modules don't import each
-    other.
-  - Browser: `track(kind, detail)` from `@/lib/track`, only for kinds marked
-    `client: true`. Never mark money, risk or permission events `client`,
-    because anyone can send those.
-  - `detail` is flat: at most 10 keys of short strings, numbers or booleans.
-    Never put secrets or personal data in it.
-- **Already a row in your own table**: add a source to
-  `src/server/admin/timeline-sources.ts` instead of recording it twice.
-- Label each kind with `admin.user_detail.timeline_<kind>` in
-  `messages/en.json`.
+- **Nothing records it yet** (paywall hit, plan picked, risk flag): register the kind in `src/config/events.ts`, then record it.
+  - Server: `await recordEvent({ userId, kind, detail })` from `@/modules/events/service`. It never throws. Call it from the API route, not from another module's service, because modules don't import each other.
+  - Browser: `track(kind, detail)` from `@/lib/track`, only for kinds marked `client: true`. Never mark money, risk or permission events `client`, because anyone can send those.
+  - `detail` is flat: at most 10 keys of short strings, numbers or booleans. Never put secrets or personal data in it.
+- **Already a row in your own table**: add a source to `src/server/admin/timeline-sources.ts` instead of recording it twice.
+- Label each kind with `admin.user_detail.timeline_<kind>` in `messages/en.json`.
 
 ### Appearance (theme, font, size, sidebar)
 
-The site's look comes from code by default: the `:root`/`.dark` palette and
-fonts in `src/styles/globals.css`, `DEFAULT_APPEARANCE` (sidebar variant and
-collapse) and `DEFAULT_COLOR_MODE` (light/dark) in `src/config/appearance.ts`.
-Restyle a project there.
+The site's look comes from code by default: the `:root`/`.dark` palette and fonts in `src/styles/globals.css`, `DEFAULT_APPEARANCE` (sidebar variant and collapse) and `DEFAULT_COLOR_MODE` (light/dark) in `src/config/appearance.ts`. Restyle a project there.
 
-An admin can turn on **Settings → General → Appearance**
-(`appearance_enabled`, off by default). Then the presets in
-`src/config/appearance.ts` take over: built-in color themes (the
-`[data-theme='<id>']` blocks in `globals.css`, applied on `<html>`), font,
-font size, sidebar layout and light/dark. Optionally, users may pick their own
-theme color from the user menu. Values are resolved in the root loader and
-read with `useAppearance()` from `@/hooks/use-appearance`.
+An admin can turn on **Settings → General → Appearance** (`appearance_enabled`, off by default). Then the presets in `src/config/appearance.ts` take over: built-in color themes (the `[data-theme='<id>']` blocks in `globals.css`, applied on `<html>`), font, font size, sidebar layout and light/dark. Optionally, users may pick their own theme color from the user menu. Values are resolved in the root loader and read with `useAppearance()` from `@/hooks/use-appearance`.
 
-- Text inside the dashboard sidebar uses `sidebar-foreground` tokens, never
-  `foreground`/`muted-foreground`, so it stays readable on colored sidebars.
-- Don't hard-code `ThemeProvider` props or `AppSidebar` `variant` /
-  `collapsible`. They carry the admin's settings.
+- Text inside the dashboard sidebar uses `sidebar-foreground` tokens, never `foreground`/`muted-foreground`, so it stays readable on colored sidebars.
+- Don't hard-code `ThemeProvider` props or `AppSidebar` `variant` / `collapsible`. They carry the admin's settings.
 
 ### shadcn/ui v4 (Base Nova)
 
@@ -542,7 +520,7 @@ read with `useAppearance()` from `@/hooks/use-appearance`.
 
 ### Blocks vs Components
 
-- **`src/blocks/`** — zero-config page sections. Read i18n (`m['...']()` from `@/paraglide/messages.js`), build the content config, and pass it to a component. Drop into pages as `<Hero />`, `<Pricing />`, `<Header />`, `<Footer />` with no props.
+- **`src/blocks/`** — zero-config page sections. Read i18n (`m['...']()` from `@/paraglide/messages.js`), build the content config, and pass it to a component. Marketing sections are named `<name>-section.tsx` and export `<Name>Section` (`HeroSection`, `FeaturesSection`, `PricingSection`, `FaqSection`, `CtaSection`, `BlogSection`).
 - **`src/components/`** — reusable UI. All content arrives via props; no i18n reads inside. Covers shadcn primitives (`components/ui/`), marketing shells (`SiteHeader`, `SiteFooter`), authenticated-app shells (`AppSidebar`, `AppLayout`), and pure primitives like `PricingTable`.
 - **Rule:** a file reads translations → block. A file takes all content via props → component.
 - **Pattern:** pages consume only blocks. Blocks read i18n and configure components. Components render — they don't know the app's content.
@@ -550,13 +528,13 @@ read with `useAppearance()` from `@/hooks/use-appearance`.
 
 ### Template Philosophy: Blocks Are Disposable, Components Are Durable
 
-This repo ships with a default landing page (`blocks/header`, `hero`, `features`, `pricing`, `footer`) so a fresh clone has something to render. **That content is demo material — it's expected to be rewritten for any real project.**
+This repo ships with a default landing page (hero, features, pricing, FAQ, blog, CTA sections) so a fresh clone has something to render. **That content is demo material — it's expected to be rewritten for any real project.**
 
 When starting a new project:
 
 1. **Keep** `src/components/*` and `src/components/ui/*` — they're the durable primitives (`PricingTable`, `SiteHeader`, `SiteFooter`, `AppSidebar`, shadcn UI). These are the chassis.
 2. **Rewrite** `src/blocks/*` — delete the demo blocks, write new ones that wire the user's real content and i18n into the primitives. Or compose fresh sections directly.
-3. **Rewrite** `src/routes/index.tsx` — it's ~17 lines of pure composition. Recompose from the new blocks.
+3. **Rewrite** `src/routes/index.tsx` — it's a thin composition. Recompose from the new blocks.
 4. **Rewrite** the `landing.*` keys in `messages/en.json` — the translations that feed the blocks.
 
 The `/quick-start` and `/clone-website` skills automate this workflow.
@@ -565,98 +543,102 @@ The split is not cosmetic — it's **what survives a rebrand**. Primitives survi
 
 ## Adding a New Feature
 
-1. **Need new DB tables?** Add to `src/config/db/schema.ts` (under the "Custom tables" section), run `pnpm db:push`
+1. **Need new DB tables?** Add to `src/config/db/schema.<dialect>.ts` (and the working `schema.ts`), run `pnpm db:push`
 2. **Create module service:** `src/modules/<feature>/service.ts` — pure business logic (unchanged)
 3. **Create API server route:** `src/routes/api/<feature>.ts` — `createFileRoute(...)` with `server.handlers`, calling the service (unchanged)
 4. **Create page:** `src/routes/settings/<feature>.tsx` (or `admin/<feature>.tsx`) — `useQuery` + `@/lib/api-client` to fetch from the API
 5. **Add translations:** add `settings.<feature>.*` (or `admin.<feature>.*`) keys to `messages/en.json`
-6. **Add nav entry:** Update the nav array in the layout `src/routes/settings/route.tsx` (or `admin/route.tsx`)
+6. **Add nav entry:** update the nav array in the layout `src/routes/settings/route.tsx` (or `admin/route.tsx`)
 7. **Need a static page?** Add an MDX file at `src/content/pages/<slug>.en.mdx` plus a thin route file `src/routes/(pages)/<slug>.tsx` using `staticPageRouteOptions('<slug>')` from `(pages)/-static-page.tsx`
 
-Or use skills: `/new-module`, `/new-page`, `/new-static-page`
+Or use skills: `/new-module`, `/new-page`, `/new-static-page`.
+
+## Configuration Model
+
+Three layers, and only three:
+
+1. **env** — the boot variables plus server runtime parameters, normalized in `src/config/index.ts` (`envConfigs`).
+2. **Admin settings** — fields declared in `src/modules/config/settings.ts`, values stored in the `config` table. Database values win over env values of the same name.
+3. **Code catalogs** — `src/config/pricing.ts` (price, credits, plan, CNY price), `src/config/user-features.ts` (user-center defaults), `src/config/appearance.ts` (theme defaults), `src/config/events.ts` (event kinds).
+
+Do not add a fourth layer: no `website.ts`-style aggregate config, no brand/feature switches spread over code, env and the database at once.
+
+### Config security baseline
+
+Three gates, all covered by `tests/config-security.test.ts`:
+
+1. **Public allowlist.** `GET /api/config/public` walks a hand-written list (`PUBLIC_CONFIG_KEYS` in `src/modules/config/public-keys.ts`) and `filterPublicConfigs` re-checks every key against `PROTECTED_CONFIG_KEYS` and `isSecretConfigKey()`; matches are dropped. Anything outside the list — including custom config — is never sent to the browser.
+2. **Masked admin values.** `GET /api/admin/config` returns `getAdminConfigs()`: protected keys (`auth_secret`, `database_*`) are removed entirely, other secrets are masked with `••••••••` (long values keep their last 4 characters). A masked value sent back is treated as "unchanged" and skipped.
+3. **Encryption at rest.** Secret settings are encrypted with AES-256-GCM before they are stored, using `CONFIG_ENCRYPTION_KEY` (SHA-256 of the key is used as the AES key). The stored format is `enc:v1:<base64(iv | authTag | ciphertext)>`; plaintext rows still decrypt, and a wrong or missing key makes the value unreadable rather than leaking it.
+
+Additional rules:
+
+- `assertEndpointSecretsResupplied` makes an endpoint change (OpenAI, Anthropic, R2, Telegram, notify webhook) require the matching secret to be re-entered, so a saved key can't be re-pointed at someone else's server.
+- `CONFIG_ENCRYPTION_KEY` unset means secrets are stored as plaintext. Local development may leave it empty; **a production deploy must set it** — `pnpm check:deploy-env` refuses to continue without it (and without a non-placeholder `AUTH_SECRET`). It runs automatically before `pnpm cf:deploy`.
+- **Boundary:** encryption protects the "database only" scenario (a leaked backup, a SQL-injection dump). The key lives in the env of the same machine, so it does not protect against a compromised application server. Say this honestly — do not oversell it.
 
 ## Security & Integrity Rules for New Features
 
-These come from real findings. Follow them for every feature that touches
-money, credits, permissions, secrets, or user input:
+These come from real findings. Follow them for every feature that touches money, credits, permissions, secrets, or user input:
 
 1. **Money and credits**
-   - Never trust a price, amount, credits or plan from the request; look them
-     up in the server catalog (`src/config/pricing.ts`).
-   - Charge each provider in its own currency, and never reuse a USD amount as
-     CNY.
-   - Every write that grants or takes away value goes through `atomic()` with
-     a claim guard, so retries and concurrent webhooks act exactly once.
-   - Back the claim with a database unique key (e.g. `grant_<orderNo>`) so
-     that a status edit can't make it run twice.
-   - Money states (`paid`, `refunding`, `refunded`) change only through the
-     payment flows. Admin edit endpoints must not set them or move an order
-     out of them.
+   - Never trust a price, amount, credits or plan from the request; look them up in the server catalog (`src/config/pricing.ts`).
+   - Charge each provider in its own currency, and never reuse a USD amount as CNY.
+   - Every write that grants or takes away value goes through `atomic()` with a claim guard, so retries and concurrent webhooks act exactly once.
+   - Back the claim with a database unique key (e.g. `grant_<orderNo>`) so that a status edit can't make it run twice.
+   - Money states (`paid`, `refunding`, `refunded`) change only through the payment flows. Admin edit endpoints must not set them or move an order out of them.
 2. **Webhooks and callbacks**
-   - A valid signature only proves the provider sent the message. Also check
-     that it is for **this** merchant/app (`app_id`, `mchid`, account) and that
-     the amount and currency match the order before settling.
+   - A valid signature only proves the provider sent the message. Also check that it is for **this** merchant/app (`app_id`, `mchid`, account) and that the amount and currency match the order before settling.
    - Make every handler idempotent.
 3. **Permissions**
    - Every new admin operation gets its own permission code.
-   - Actions that move money or grant privileges (refunds, credits, roles,
-     settings) get a **dedicated** code that is listed explicitly in seeds,
-     never reached through a wildcard such as `admin.payments.*`.
-   - Code that assigns roles or permissions must reject anything beyond the
-     caller's own permissions (`beyondCeiling` in `src/server/admin/ceiling.ts`).
+   - Actions that move money or grant privileges (refunds, credits, roles, settings) get a **dedicated** code that is listed explicitly in seeds, never reached through a wildcard such as `admin.payments.*`.
+   - Code that assigns roles or permissions must reject anything beyond the caller's own permissions (`beyondCeiling` in `src/server/admin/ceiling.ts`).
 4. **Secrets**
-   - Store secrets through `saveConfigs` (encrypted at rest) and return them
-     only masked.
-   - If a setting is a URL that a saved secret gets sent to, add it to
-     `ENDPOINT_SECRETS` in `src/modules/config/service.ts`. Changing the URL
-     then requires re-entering the secret.
+   - Store secrets through `saveConfigs` (encrypted at rest) and return them only masked.
+   - If a setting is a URL that a saved secret gets sent to, add it to `ENDPOINT_SECRETS` in `src/modules/config/service.ts`. Changing the URL then requires re-entering the secret.
    - Never log or echo keys. Agent keys are hash-only and shown once.
 5. **Abuse limits**
-   - Rate-limit with `enforceMinIntervalRateLimit`: by IP before auth, then
-     again with `extraKey: session.user.id` after auth. Never key on cookies.
-   - Uploads: allow-list MIME types (no SVG), and cap file count, per-file size
-     and total size.
-   - A setting that becomes a `<script src>` or other executable URL needs a
-     host allow-list taken from deployment env, not from settings. "https"
-     alone is not trust.
+   - Rate-limit with `enforceMinIntervalRateLimit`: by IP before auth, then again with `extraKey: session.user.id` after auth. Never key on cookies.
+   - Uploads: allow-list MIME types (no SVG), and cap file count, per-file size and total size.
+   - A setting that becomes a `<script src>` or other executable URL needs a host allow-list taken from deployment env, not from settings. "https" alone is not trust.
 6. **Accounts**
-   - Don't auto-link or auto-verify identities. Keep better-auth's
-     `requireLocalEmailVerified`.
-   - Agent and service accounts are `user.type = 'api'`. Exclude them from user
-     lists and analytics.
+   - Don't auto-link or auto-verify identities. Keep better-auth's `requireLocalEmailVerified`.
+   - Agent and service accounts are `user.type = 'api'`. Exclude them from user lists and analytics.
 7. **Tests**
-   - Add a test under `tests/` for any change to money, credits or permissions,
-     including the concurrent case.
+   - Add a test under `tests/` for any change to money, credits or permissions, including the concurrent case.
 
-When a change requires existing projects to act (schema, env, permission
-codes, renamed exports, user-visible behavior), add an entry to
-`UPGRADING.md` in the same change.
+## Testing
+
+- Tests use the **Node built-in test runner** (`node:test` + `node:assert/strict`), executed through `tsx`: `pnpm test` runs `node --import tsx --test tests/*.test.ts`.
+- `pretest` runs `pnpm paraglide:compile`, so the generated `src/paraglide/` messages exist before the suite starts. On a fresh clone, run `pnpm install` first (it compiles nothing) and then `pnpm test` — the `pretest` hook covers it.
+- The tests create their own temporary SQLite database and push the schema themselves; no external service is needed.
+- `src/paraglide/` and `src/routeTree.gen.ts` are gitignored. `pnpm typecheck` regenerates the route tree via `pretypecheck`; `pnpm build` regenerates the Paraglide output via the Vite plugin.
+- Focus areas today: admin agent API, atomic writes, config security, credits guards, docs loader, English-only policy, guest posts, IndexNow, initial role, manual payments (schema, config, orders, receipts, settlement, admin), operations, payment guards and idempotency, refunds, user events and the user timeline.
+- CI (`.github/workflows/ci.yaml`, on push and PR to `main`) runs on Node 22 with the pnpm version pinned in `package.json`: `pnpm install --frozen-lockfile` → `pnpm paraglide:compile` → `pnpm typecheck` → `pnpm test` → `pnpm build`. `.github/workflows/docker-build.yaml` builds the Docker image.
 
 ## Agent Skills
 
-Project skills live in `.claude/skills/` (canonical) with cross-agent symlinks
-at `.agents/skills`, `.codex/skills`, and `.cursor/skills` — all four resolve to
-the same files (SKILL.md open standard, agentskills.io). If your agent runtime
-doesn't auto-discover skills, read `.claude/skills/<name>/SKILL.md` and follow
-it when the task matches:
+Project skills live in `.claude/skills/` (canonical) with cross-agent symlinks at `.agents/skills`, `.codex/skills`, and `.cursor/skills` — all four resolve to the same files (SKILL.md open standard, agentskills.io). If your agent runtime doesn't auto-discover skills, read `.claude/skills/<name>/SKILL.md` and follow it when the task matches:
 
-| Skill               | When to use                                                                                                                         |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `quick-start`       | Build a complete SaaS project from a brief/reference URL                                                                            |
-| `clone-website`     | Clone/rebuild an existing website pixel-perfect                                                                                     |
-| `new-module`        | New backend service + API following the module pattern                                                                              |
-| `new-page`          | New dashboard page with API wiring + nav entry                                                                                      |
-| `new-static-page`   | Static MDX page (legal, about, etc.)                                                                                                |
-| `generate-image`    | AI-generate a decorative image for a page/block                                                                                     |
-| `security-scan`     | **Before every git commit** — secrets, vulns, ignore gaps                                                                           |
-| `launch-audit`      | Whole-project sweep on one axis — responsive, light/dark theme, SEO, performance (Lighthouse), or security; run `all` before deploy |
-| `sync-upstream`     | Pull latest template updates; local changes win on conflict                                                                         |
-| `deploy-cloudflare` | Deploy to Cloudflare Workers (D1 or Postgres+Hyperdrive + secrets + schema, idempotent)                                             |
+| Skill               | When to use                                                                             |
+| ------------------- | --------------------------------------------------------------------------------------- |
+| `quick-start`       | Build a complete SaaS project from a brief/reference URL                                |
+| `clone-website`     | Clone/rebuild an existing website pixel-perfect                                         |
+| `new-module`        | New backend service + API following the module pattern                                  |
+| `new-page`          | New dashboard page with API wiring + nav entry                                          |
+| `new-static-page`   | Static MDX page (legal, about, etc.)                                                    |
+| `design-theme`      | Change colors, fonts and theme presets                                                  |
+| `generate-image`    | AI-generate a decorative image for a page/block                                         |
+| `security-scan`     | **Before every git commit** — secrets, vulns, ignore gaps                               |
+| `deploy-cloudflare` | Deploy to Cloudflare Workers (D1 or Postgres+Hyperdrive + secrets + schema, idempotent) |
 
 **Database backends on Cloudflare Workers** (chosen by `wrangler.jsonc` `vars.DATABASE_PROVIDER`):
 
 - **D1** (`d1`, default) — zero external infra; binding `DB` in `d1_databases`
-- **Postgres via Hyperdrive** (`postgresql`) — binding `HYPERDRIVE` in `hyperdrive`; `src/core/db/postgres.ts` reads `connectionString` from the Workers env stashed on `globalThis.__CF_ENV__` by `src/server.ts`. `vite.config.ts` reads `vars.DATABASE_PROVIDER` at build time and keeps the matching driver in the Worker bundle (the others are stubbed). Schema/RBAC/admin scripts talk to the real Postgres directly (`DATABASE_URL`), never through Hyperdrive. Setup: `npx wrangler hyperdrive create <name> --connection-string="postgres://..."`, then fill the binding in `wrangler.jsonc` (template comments show the exact shape).
+- **Postgres via Hyperdrive** (`postgresql`) — binding `HYPERDRIVE` in `hyperdrive`; `src/core/db/postgres.ts` reads `connectionString` from the Workers env stashed on `globalThis.__CF_ENV__` by `src/server.ts`. `vite.config.ts` reads `vars.DATABASE_PROVIDER` at build time and keeps the matching driver in the Worker bundle (the others are stubbed). Schema/RBAC/admin scripts talk to the real Postgres directly (`DATABASE_URL`), never through Hyperdrive. Setup: `npx wrangler hyperdrive create <name> --connection-string="postgres://..."`, then fill the binding in `wrangler.jsonc` (the committed template `wrangler.example.jsonc` shows the exact shape).
+
+`wrangler.jsonc` is **not committed** — it is gitignored. Copy `wrangler.example.jsonc` and fill in the real resource IDs.
 
 ## Inlined Modules (src/core/ and src/lib/)
 
@@ -664,76 +646,80 @@ All functionality is self-contained — no external packages needed.
 
 | Location                  | Key Exports                                                                                   |
 | ------------------------- | --------------------------------------------------------------------------------------------- |
-| `@/core/payment`          | `PaymentManager`, `StripeProvider`, `PayPalProvider`, `CreemProvider`                         |
-| `@/core/email`            | `EmailManager`, `ResendProvider`                                                              |
-| `@/core/storage`          | `StorageManager`, `S3Provider`, `R2Provider`                                                  |
-| `@/core/ai`               | `AIManager`, `ReplicateProvider`, `GeminiProvider`, `FalProvider`, `KieProvider`              |
-| `@/core/auth/rbac`        | `matchPermission`, `matchAnyPermission`, `ROLES`                                              |
+| `@/core/payment`          | `PaymentManager`, `paymentManager`, providers: Stripe, Creem, PayPal, Alipay, WeChat          |
+| `@/core/email`            | `EmailManager`, `emailManager`, providers: Resend, Cloudflare                                 |
+| `@/core/storage`          | `StorageManager`, `storageManager`, providers: S3, R2, local private fallback                 |
+| `@/core/ai`               | `AIManager`, `aiManager`, providers: Replicate, Gemini, Fal, Kie                              |
+| `@/core/notify`           | `sendTelegram`, `sendFeishu`, `sendWecom`, `sendWebhook`, `sendToChannels`                    |
+| `@/core/auth/rbac`        | `matchPermission`, `matchAnyPermission`, `matchAllPermissions`, `ROLES`                       |
 | `@/core/db`               | `db()` singleton, `createDb` (multi-dialect)                                                  |
+| `@/core/db/atomic`        | `atomic`, `guard`, `AtomicGuardError`                                                         |
 | `@/lib/hash`              | `getUuid`, `getSnowId`, `getUniSeq`, `getNonceStr`, `md5`                                     |
-| `@/lib/resp`              | `respData`, `respOk`, `respErr`                                                               |
+| `@/lib/resp`              | `respData`, `respOk`, `respErr`, `respPage`                                                   |
 | `@/lib/cookie`            | `getCookie`, `setCookie`, `getCookieFromCtx`                                                  |
 | `@/lib/rate-limit`        | `enforceMinIntervalRateLimit`                                                                 |
 | `@/lib/cache`             | `cacheGet`, `cacheSet`, `cacheRemove`                                                         |
-| `@/lib/time`              | `getTimestamp`, `getIsoTimestr`                                                               |
+| `@/lib/crypto`            | `encryptSecret`, `decryptSecret`, `isEncryptedSecret`                                         |
+| `@/lib/time`              | `getTimestamp`, `getIsoTimestr`, `formatDateTime`                                             |
 | `@/lib/api-client`        | `apiGet`, `apiPost`, `apiPut`, `apiPatch`, `apiDelete`, `pageQuery`, `PageResult`, `ApiError` |
 | `@/lib/query-client`      | `getQueryClient`, `makeQueryClient`                                                           |
+| `@/lib/locale-path`       | `localizedPath` (locale-free path for server-built URLs)                                      |
+| `@/lib/redirect`          | `safeInternalPath`, `resolveAfterAuthUrl`, `isAppProtocolUrl`                                 |
 | `@/paraglide/messages.js` | `m` — compiled message functions (`m['ns.key']()`)                                            |
 | `@/paraglide/runtime.js`  | `getLocale`, `setLocale`, `localizeHref`, `localizeUrl`, `locales`, `baseLocale`              |
 | `@/core/i18n/navigation`  | `Link`, `useRouter`, `usePathname` (locale-aware)                                             |
 | `@/core/i18n/dynamic`     | `tDynamic` (runtime-built message keys)                                                       |
 
-## Database Schema (21 tables)
+## Database Schema
 
-**`schema.ts` is gitignored** — it's the user's working copy generated from a template.
+**`src/config/db/schema.ts` is gitignored** — it is the working copy generated from a template. Three dialect templates are committed to git:
 
-Three dialect templates are committed to git:
-
-- `src/config/db/schema.sqlite.ts` — SQLite (default)
+- `src/config/db/schema.sqlite.ts` — SQLite (default; also used by Turso and D1)
 - `src/config/db/schema.postgres.ts` — PostgreSQL
 - `src/config/db/schema.mysql.ts` — MySQL
 
-**Setup:** Copy the matching template into `schema.ts`, set `DATABASE_PROVIDER` in `.env.local`, run `pnpm db:push`. `drizzle.config.ts` reads the dialect automatically.
+**Setup:** `pnpm db:setup` copies the template matching `DATABASE_PROVIDER` into `schema.ts`; `drizzle.config.ts` reads the dialect automatically. `postinstall` and `prebuild` run the same script, so a fresh clone and every build already have a matching working copy.
 
-Each template exports **strong types** for all tables (`User`, `NewUser`, `Order`, `NewOrder`, etc.) via `$inferSelect` / `$inferInsert`. Use these in service functions instead of `any`.
+Each template exports **strong types** for all tables (`User`, `NewUser`, `Order`, `NewOrder`, …) via `$inferSelect` / `$inferInsert`. Use these in service functions instead of `any`.
 
 **Auth:** user, session, account, verification
-**Business:** order, subscription, credit, apikey
+**Business:** order, subscription, credit, apikey, inviteCode, userInvite
 **RBAC:** role, permission, rolePermission, userRole
-**Content:** post, taxonomy, config
+**Content:** post, taxonomy, config, guestPost
 **AI:** aiTask, chat, chatMessage
 **Support:** ticket, ticketMessage
+**Manual payments:** manualPaymentAccount, manualPaymentDetail
+**Admin & reporting:** adminExecution, userEvent, analyticsVisitor, operationsExperiment
 
 ## Environment Variables
 
 Public, client-visible vars use the `VITE_` prefix (read via `import.meta.env` on the client). Secrets stay on `process.env` (server-only). `src/config/index.ts` exposes both isomorphically via `envConfigs`.
 
+**Five variables boot the app:**
+
 ```env
-# Required (public — VITE_ prefix, client-visible)
 VITE_APP_URL=http://localhost:3000
 VITE_APP_NAME=My App
-DATABASE_PROVIDER=sqlite
+DATABASE_PROVIDER=sqlite        # sqlite | postgres | mysql | turso | d1
 DATABASE_URL=file:data/local.db
-AUTH_SECRET=generate-with-openssl-rand-base64-32
-
-# App (optional, public)
-VITE_APP_DESCRIPTION=
-VITE_APP_LOGO=
-VITE_DEFAULT_LOCALE=en
-
-# Recommended: encrypt admin-settings secrets (AES-256-GCM) in the config table.
-# Unset = plaintext storage. Once set, keep it stable — rotating or removing it
-# orphans already-encrypted values (they fall back to env values).
-CONFIG_ENCRYPTION_KEY=
+AUTH_SECRET=<openssl rand -base64 32>
 ```
 
-**Provider credentials live in the admin panel, not env.** Payments (Stripe/
-Creem/PayPal/Alipay/WeChat), OAuth (Google/GitHub/One-Tap), email (Resend),
-storage (R2), AI (Replicate/Gemini/Fal), and analytics are configured at
-`/admin/settings` and stored in the `config` table (encrypted when
-`CONFIG_ENCRYPTION_KEY` is set). Resolution is `{ ...envConfigs, ...dbConfigs }`
-— same-named env vars still work as fallbacks, but database values win.
-Keep `.env.example` minimal; don't add provider keys to it.
+**Commonly set, but optional:**
+
+```env
+VITE_APP_DESCRIPTION=
+VITE_APP_LOGO=/logo.svg
+VITE_DEFAULT_LOCALE=en
+VITE_DOCS_ENABLED=false          # alternative to the admin switch
+CONFIG_ENCRYPTION_KEY=           # encrypts admin-settings secrets (AES-256-GCM)
+AUTH_TRUSTED_ORIGINS=            # extra origins allowed to call the auth API
+AUTH_URL=                        # defaults to VITE_APP_URL
+MANUAL_PAYMENTS_ENABLED=false   # alternative to the admin switch
+MANUAL_PAYMENTS_SLA_HOURS=24
+```
+
+**Provider credentials live in the admin panel, not env.** Payments (Stripe/Creem/PayPal/Alipay/WeChat), OAuth (Google/GitHub/One-Tap), email (Resend), storage (R2/S3), AI (Replicate/Gemini/Fal/Kie), analytics, and the notify channels are configured at `/admin/settings` and stored in the `config` table (encrypted when `CONFIG_ENCRYPTION_KEY` is set). Resolution is `{ ...envConfigs, ...dbConfigs }` — same-named env vars still work as fallbacks, but database values win. Keep `.env.example` minimal; don't add provider keys to it.
 
 ## Critical Rules
 
@@ -747,7 +733,8 @@ Keep `.env.example` minimal; don't add provider keys to it.
 8. **Return `respData`/`respErr`** from API routes
 9. **Run the `security-scan` skill before every `git commit`** — it checks for leaked secrets, injection/XSS/logic vulnerabilities in the diff, and `.gitignore`/`.dockerignore` gaps. HIGH findings block the commit.
 10. **Multi-statement writes use `atomic()`, never `db().transaction()`.** The latter is not atomic on D1. See "Atomic writes".
-11. **Upgrading a project from newer template code?** Follow `UPGRADING.md`. **Changing the template in a way existing projects must act on?** Add an entry there.
+11. **Prices live in code, not in the admin.** `src/config/pricing.ts` is the source of truth; changing a price means editing the file and redeploying. The admin UI cannot change prices.
+12. **Never add a locale prefix or a `/zh` redirect.** English-only is enforced by `tests/english-only.test.ts`.
 
 ## Cloud Sandbox Notes (Cloud sandbox / e2b)
 
@@ -772,6 +759,6 @@ domain: `https://<port>-<sandboxId>.e2b.app`.
   (`playwright` CLI on PATH, browsers at `$PLAYWRIGHT_BROWSERS_PATH`). The
   clone-website skill's extraction phase should use it via Node scripts or
   `playwright screenshot` — no MCP browser tools exist here.
-- After ANY change to `src/config/db/schema.ts`, immediately run
-  `pnpm db:push` to sync the database — never leave the schema and the
-  database out of sync, and don't wait for the user to ask.
+- After ANY change to a schema template in `src/config/db/`, immediately run
+  `pnpm db:setup` and `pnpm db:push` to sync the database — never leave the
+  schema and the database out of sync, and don't wait for the user to ask.

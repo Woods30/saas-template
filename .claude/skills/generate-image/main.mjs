@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // generate-image — Pollinations.ai backend (free, no API key).
 // Reads JSON args from stdin, writes a PNG into public/imgs/generated/,
-// prints JSON with both the on-disk path and the Next.js public URL.
+// prints JSON with both the on-disk path and the public URL.
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -64,7 +64,7 @@ try {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120_000);
   const res = await fetch(url, {
-    headers: { "User-Agent": "shipany/0.1" },
+    headers: { "User-Agent": "saas-template/0.1" },
     signal: controller.signal,
   });
   clearTimeout(timer);

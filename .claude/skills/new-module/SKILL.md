@@ -1,25 +1,25 @@
 ---
 name: new-module
-description: "Create a new business module with service layer and API routes following the ShipAny module pattern. Use when the user needs new backend functionality — a new service, a new data model, a new API. Triggers on: 'add a module for...', 'I need backend for...', 'create a service for...'"
+description: "Create a new business module with service layer and API routes following this repo's module pattern. Use when the user needs new backend functionality — a new service, a new data model, a new API. Triggers on: 'add a module for...', 'I need backend for...', 'create a service for...'"
 argument-hint: "<module name and what it does>"
 user-invocable: true
 ---
 
 # New Module — $ARGUMENTS
 
-Create a new module following the ShipAny module pattern.
+Create a new module following this repo's module pattern.
 
 ## Step 1: Analyze Requirements
 
 From "$ARGUMENTS", determine:
 - **Module name** (lowercase, e.g., `projects`, `notifications`, `webhooks`)
-- **What data it manages** — check if the existing 19 tables in `schema.ts` cover it, or if new tables are needed
+- **What data it manages** — check if the tables in `src/config/db/schema.ts` cover it, or if new tables are needed
 - **CRUD operations** needed (create, list, get, update, delete)
 - **Business logic** beyond CRUD (validation, side effects, cross-service calls)
 
 ## Step 2: Check Schema
 
-The existing schema has 19 tables. Check if any can be reused:
+The schema ships the auth, business, RBAC, content, AI and support tables. Check if any can be reused:
 - `post` + `taxonomy` — generic content system (can store any content type via `type` field)
 - `config` — key-value settings
 - `credit` — any point/balance system
@@ -182,7 +182,7 @@ Tell the user:
 If the module needs to interact with existing modules:
 
 **Need credits?** Call `consume`/`grant` from `@/modules/credits/service`
-**Need payment?** Don't — let the payment module call your module. Add a hook in `payment/service.ts` handleCheckoutSuccess.
+**Need payment?** Don't — let the payment module call your module. Add the hook inside `settleCheckoutOrder()` in `src/modules/payment/service.ts`, where the paid order is settled (see how `guest-posts` hooks in).
 **Need auth check?** Done at the API route level, not in the service.
 **Need permission check?** Call `hasPermission` from `@/modules/rbac/service` in the API route.
 
@@ -213,8 +213,6 @@ feature's important moments show up too:
      ```
   4. `detail` is flat: up to 10 keys, strings ≤ 200 chars, numbers or
      booleans. No secrets, emails or other personal data.
-- **Label** every new kind: `admin.user_detail.timeline_<kind>` in both
-  `messages/en.json` and `messages/zh.json`.
+- **Label** every new kind: `admin.user_detail.timeline_<kind>` in `messages/en.json`.
 - Agents read the same data with the `users_timeline` admin operation.
-- Adding the first event to an existing project needs the `user_event` table
-  (UPGRADING.md, 2026-10-12).
+- Adding the first event to an existing project needs the `user_event` table — it is part of the schema templates (`src/config/db/schema.sqlite.ts` and friends), so `pnpm db:push` creates it.

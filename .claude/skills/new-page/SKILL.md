@@ -88,7 +88,7 @@ For **paginated** lists, use `pageQuery` + `PageResult<T>` + `placeholderData: k
 
 Check if the page needs components not yet added. If so:
 ```bash
-npx shadcn@latest add table dialog badge
+npx shadcn add table dialog badge
 ```
 
 **Remember:** shadcn v4 (Base Nova) does NOT support `asChild`. For Link-as-Button:
@@ -98,10 +98,11 @@ npx shadcn@latest add table dialog badge
 
 ## Step 5: Add Translation Keys
 
-Add translation keys (flat, dot-joined) to **both** locale files:
+Add translation keys (flat, dot-joined) to `messages/en.json`:
 1. Add `settings.<feature>.*` keys to `messages/en.json`
-2. Add the same keys with Chinese values to `messages/zh.json`
-3. Reference them with `m["settings.<feature>.xxx"]()` from `@/paraglide/messages.js` in the component
+2. Reference them with `m["settings.<feature>.xxx"]()` from `@/paraglide/messages.js` in the component
+
+This project is English-only (`project.inlang/settings.json` enables just `en`) — do not create a second locale catalog.
 
 ## Step 6: Add Navigation Entry
 
@@ -124,7 +125,7 @@ If the page has an empty state, a hero header, or a section that would feel spar
 - **Empty state** (no data yet): `flat_design` illustration, 600×400, slug like `empty-projects`. Reference it from the empty-state placeholder.
 - **Page hero** (above the table/grid): wide background image, 1280×400 or 1600×500, slug like `<feature>-hero`.
 
-The skill saves to `public/imgs/generated/` and returns a `/imgs/generated/<file>.png` URL ready for `<Image src=...>`. Always include `"no text"` in the prompt — Pollinations otherwise bakes garbled fake captions into the image. Skip image generation entirely for pages that are purely tabular or form-driven.
+The skill saves to `public/imgs/generated/` and returns a `/imgs/generated/<file>.png` URL ready for `<img src=...>`. Always include `"no text"` in the prompt — Pollinations otherwise bakes garbled fake captions into the image. Skip image generation entirely for pages that are purely tabular or form-driven.
 
 ## Step 8: Verify
 
@@ -135,7 +136,7 @@ Run `pnpm build` to verify the page compiles.
 - **Fetch with TanStack Query + `@/lib/api-client`** (`apiGet`/`apiPost`/…) — no raw `fetch`, and don't import server-only modules (`@/modules/*`, `@/core/db`) in components.
 - **Route paths are locale-free** — `createFileRoute("/settings/<feature>")`, no `{-$locale}` segment.
 - **Page layout is inherited** from `AppLayout` via the `settings/route.tsx` layout — sidebar, header, auth guard are automatic.
-- **Use `m["...key"]()`** from `@/paraglide/messages.js` for all user-facing text (add keys to both `messages/en.json` and `messages/zh.json`).
+- **Use `m["...key"]()`** from `@/paraglide/messages.js` for all user-facing text (add keys to `messages/en.json`).
 - **Use `Link` from `@/core/i18n/navigation`** — locale-aware navigation.
 - **Use semantic Tailwind classes** — `bg-card`, `text-muted-foreground`, `border-border`, not raw colors.
 - **Import icons from `lucide-react`** — `import { SomeIcon } from "lucide-react"`.

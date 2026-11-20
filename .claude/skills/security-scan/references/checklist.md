@@ -86,7 +86,7 @@ For any code that builds LLM prompts (`src/core/ai/`, AI task handlers):
 - API responses returning whole db rows (`select().from(table)`) where the row contains
   secrets/PII — password hashes, tokens, emails of other users, encrypted config values.
 - Server-only env vars referenced in client components or passed via props into
-  `"use client"` files. Only `NEXT_PUBLIC_*` may reach the client.
+  client components. Only `VITE_`-prefixed vars may reach the client.
 - Error handlers returning raw error/stack to the response body.
 - Logging of credentials, tokens, or full request bodies.
 - Admin-masked secrets: verify masked values aren't round-tripped back into storage.

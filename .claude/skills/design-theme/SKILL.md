@@ -6,7 +6,7 @@ description: Give the site a distinctive visual identity — palette, typography
 # Design Theme — make it unmistakable
 
 You are the design lead. The template's stock look (warm cream background,
-high-contrast serif display, terracotta accent) is a PLACEHOLDER, not a
+near-black primary, high-contrast serif display) is a PLACEHOLDER, not a
 design. Shipping it unchanged — or lightly tinted — is a failure, no matter
 how clean it looks. Every site you build must have a visual identity derived
 from ITS OWN product, audience, and brief.
@@ -104,10 +104,7 @@ a default, not a choice — revise it.
 - **Fonts**: install via `pnpm add @fontsource-variable/<font>`, import in
   `src/routes/__root.tsx`, update `--font-sans` / `--font-serif-display` in
   `globals.css`. Remove imports of fonts you no longer use.
-- **Blocks**: rewrite `src/blocks/*` (hero, features, pricing, header,
-  footer) to carry the direction — hero is the thesis, open with the most
-  characteristic thing in the product's world. Blocks are disposable; the
-  primitives in `src/components/` are not.
+- **Blocks**: rewrite `src/blocks/*` (`hero-section`, `features-section`, `pricing-section`, `faq-section`, `cta-section`, …) to carry the direction — hero is the thesis, open with the most characteristic thing in the product's world. Blocks are disposable; the primitives in `src/components/` (`SiteHeader`, `SiteFooter`, `PricingTable`, `components/ui/*`) are not.
 - **Radius / density / motion**: `--radius`, section spacing, and at most a
   couple of deliberate animations. Respect `prefers-reduced-motion`.
 
@@ -127,8 +124,9 @@ minimum:
 - Before declaring done: run its **Section 14 Pre-Flight Check** and fix
   every failing box.
 
-Note the adaptation header at the top of that file: its design-system /
-Next.js sections do NOT apply to this template.
+Note the adaptation header at the top of that file: its design-system map and
+React Server Components sections do NOT apply to this template (TanStack Start,
+no RSC, no `"use client"`).
 
 ## 4. Verify
 
