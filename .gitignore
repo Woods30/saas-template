@@ -70,3 +70,6 @@ package-lock.json
 
 # Superpowers SDD workspace (scratch, per-plan)
 .superpowers/
+
+# Browser automation scratch (screenshots, page snapshots)
+.playwright-mcp/
