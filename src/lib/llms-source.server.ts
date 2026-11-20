@@ -1,9 +1,8 @@
 import { allBlogs, allChangelogs, allDocs, allLegals } from 'content-collections'
 import { type WebsiteConfig, websiteConfig } from '@/config/website'
 import { contentSlug } from '@/lib/content-locale'
-import { DOCS_INDEX_SLUG } from '@/lib/docs'
-import { docsPublicPath } from '@/lib/docs-path'
 import type { LlmsContentSource, LlmsEntry } from '@/lib/llms'
+import { DOCS_INDEX_SLUG, docsPublicPath } from '@/modules/docs/service'
 
 /**
  * llms 文件的默认内容来源：读构建期生成的 Content Collections 清单。

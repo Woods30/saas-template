@@ -1,7 +1,9 @@
+import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { chromium, request } from '@playwright/test'
+import { buildRbacSeedSql } from '../scripts/db-seed'
 
 /**
  * 仅 Playwright 的 server 入口安装传输层 mock，不修改产品源码。
@@ -16,6 +18,7 @@ async function startTestServer() {
   if (existsSync('.dev.vars')) {
     throw new Error('E2E server 不读取 .dev.vars；请移除该本地覆盖后使用 synthetic 邮件配置')
   }
+  resetLocalManualPaymentFixtures()
   let captured = 0
   const messages = new Map<string, string>()
   const mail = createServer(async (req, res) => {
@@ -41,11 +44,11 @@ async function startTestServer() {
   const mailURL = `http://127.0.0.1:${address.port}`
   Object.assign(process.env, {
     CLOUDFLARE_INCLUDE_PROCESS_ENV: 'true',
-    RESEND_API_KEY: 're_e2e_synthetic_never_send',
-    MAIL_FROM: 'e2e@example.invalid',
     BETTER_AUTH_URL: base.origin,
     VITE_BASE_URL: base.origin,
   })
+  seedRbacCatalog()
+  seedE2eSettings()
   const sdkPath = fileURLToPath(import.meta.resolve('resend'))
   const transportModule = '\0e2e:resend-transport'
   let installed = false
@@ -139,11 +142,113 @@ const WARMUP_PATHS = [
   '/zh/auth/login',
   '/zh/auth/register',
   '/docs/getting-started',
-  '/zh/dashboard/profile',
-  '/zh/dashboard/sessions',
+  '/zh/settings/profile',
+  '/zh/settings/sessions',
   '/zh/pricing',
-  '/zh/dashboard/billing',
+  '/zh/settings/billing',
 ]
+
+/**
+ * 清理本地 D1 里会影响 E2E 结账环境的残留行。
+ *
+ * 核销详情占尾数池（每账户活跃金额唯一），残留行会让本轮撞
+ * `AMOUNT_POOL_EXHAUSTED`。先删详情再删订单：详情的外键指向 `orders`，
+ * 反序删除会触发外键约束。只删 `provider='manual_payments'` 的订单，
+ * 其它来源（在线结账）的订单不在这里动。
+ * 配置行由 {@link seedE2eSettings} 逐字段覆盖，不在这里删。
+ */
+function resetLocalManualPaymentFixtures(): void {
+  try {
+    wranglerD1([
+      'DELETE FROM manual_payment_details',
+      "DELETE FROM orders WHERE provider = 'manual_payments'",
+    ])
+  } catch {
+    // 表不存在（未跑迁移）等情形不算致命，后续用例会给出真正的原因。
+  }
+}
+
+/** 在仓库根执行一条本地 D1 SQL。 */
+function wranglerD1(statements: string[]): void {
+  execFileSync('wrangler', ['d1', 'execute', 'DB', '--local', '--command', statements.join('; ')], {
+    stdio: 'pipe',
+  })
+}
+
+/**
+ * E2E 依赖的站点配置。
+ *
+ * 配置只从数据库读（见 ADR-0010），环境变量不再能打开模块或切换结账链路，
+ * 所以这里直接写 `settings` 表。只写 E2E 与出厂值不同的字段，其余沿用注册表
+ * 默认值。
+ *
+ * 二维码是站内静态占位图——用例断言 `<img>` 存在与地址，不扫内容；真实收款码
+ * 永远不进仓库。
+ */
+const E2E_SETTINGS: ReadonlyArray<readonly [key: string, value: unknown]> = [
+  ['modules.docs', true],
+  ['modules.manualPayments', true],
+  ['payment.checkoutMode', 'manual_payments'],
+  [
+    'manualPayments.accounts',
+    [
+      {
+        id: 'alipay-e2e',
+        channel: 'alipay',
+        displayName: 'E2E 收款账户',
+        currency: 'cny',
+        qrImageUrl: '/app-icon-512.png',
+      },
+    ],
+  ],
+  ['mail.provider', 'resend'],
+  ['mail.from', 'e2e@example.invalid'],
+  ['resend.apiKey', 're_e2e_synthetic_never_send'],
+  // 社交登录可见性：GitHub 需要方法开关与两个凭据齐全才注册（见
+  // `socialProviderOptions`）。E2E 只断言按钮出现，不会真的跳转 GitHub。
+  ['auth.githubEnabled', true],
+  ['github.clientId', 'e2e-github-client-id'],
+  ['github.clientSecret', 'e2e-github-client-secret'],
+  /**
+   * 本地 D1 跨运行保留：旧版本把出厂值当 `true` 时可能留下这一行。E2E 断言的是
+   * 「默认关闭」的注册路径，所以显式钉住，避免被持久化库里的旧值影响。
+   */
+  ['auth.requireEmailVerification', false],
+]
+
+/**
+ * 保证内置 RBAC 角色 / 权限点存在。
+ *
+ * `pnpm db:seed` 会写它们，但 E2E 直接起 vite dev、不跑 seed。`editor` 菜单过滤
+ * 用例需要 `user_roles → role_editor` 的外键目标存在，所以这里复用 `db-seed` 的
+ * 同一份定义（`ON CONFLICT DO NOTHING`，重复执行无副作用）。
+ */
+function seedRbacCatalog(): void {
+  try {
+    wranglerD1([buildRbacSeedSql(false, 'sqlite')])
+  } catch {
+    // 表不存在（未跑迁移）时交给用例暴露真正原因。
+  }
+}
+
+/** 把 {@link E2E_SETTINGS} 覆盖进本地 D1。 */
+function seedE2eSettings(): void {
+  try {
+    wranglerD1(
+      E2E_SETTINGS.map(
+        ([key, value]) =>
+          `INSERT INTO settings (key, value, updated_at) VALUES ('${key}', '${JSON.stringify(
+            value,
+          ).replace(
+            /'/g,
+            "''",
+          )}', strftime('%s','now')) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      ),
+    )
+  } catch {
+    // 与 reset 同理：表不存在时交给用例暴露真正原因。
+  }
+}
 
 export default async function globalSetup() {
   const base = process.env.E2E_BASE_URL ?? 'http://localhost:3000'
@@ -151,6 +256,8 @@ export default async function globalSetup() {
   if (!['localhost', '127.0.0.1'].includes(new URL(base).hostname)) {
     throw new Error('E2E fixture 仅允许本地 server')
   }
+
+  resetLocalManualPaymentFixtures()
   const ctx = await request.newContext({ baseURL: base })
   let ready = false
   for (let i = 0; i < 90; i++) {

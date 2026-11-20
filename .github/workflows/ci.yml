@@ -53,6 +53,7 @@ jobs:
       - run: pnpm run content:build
       - run: pnpm run typecheck
       - run: pnpm run lint
+      - run: pnpm run check:boundaries
       - run: pnpm run test -- --coverage
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -105,8 +106,15 @@ jobs:
           printf '\nRESEND_API_KEY=re_e2e_synthetic_never_send\nMAIL_FROM=e2e@example.invalid\n' >> .env
       # CI 的 D1 是全新空库，不建表则 `sign-up` 报 no such table: users，走会话的
       # 用例整片超时。
+      # 迁移不入库，`pnpm db:setup` 会按 DATABASE_PROVIDER 生成 schema 生成物与
+      # 首份基线迁移，`db:migrate:local` 再把它应用到本地 D1。
       - name: Apply D1 migrations
-        run: pnpm run db:migrate:local
+        run: pnpm run db:setup && pnpm run db:migrate:local
+      # `e2e/global-setup.ts` → `scripts/db-seed.ts` → `core/config/registry.ts`
+      # 静态导入 `@/locale/paraglide/messages.js`。该目录是 gitignore 的生成物，
+      # 本 job 不像 lint/test job 那样会先跑 `test`，缺了它 server 起不来。
+      - name: Compile locales
+        run: pnpm run locale:compile
       - name: Start server
         run: pnpm exec tsx e2e/global-setup.ts &
         env:

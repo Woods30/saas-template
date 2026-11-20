@@ -1,108 +1,105 @@
 ---
-title: Environment Variables
-description: Public and server env vars
+title: Environment variables
+description: Startup requirements, seed values and production configuration
 locale: en
 order: 4
 group: config
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
-Environment variables come in two layers, each validated by its own Zod schema. Business code
-must **not** read `process.env` or `import.meta.env` directly — always go through these two
-modules.
+Environment variables now cover **startup requirements only**. Credentials for payment, mail,
+notifications and analytics live in the database configuration; env is read once by
+`pnpm db:seed` as initial values and ignored at runtime — see
+[Site configuration](./configuration) and `docs/adr/0010-settings-in-database.md`.
 
-| File | Contents |
+Application code must **not** read `process.env` / `import.meta.env` directly; go through
+`src/core/env/public.ts` and `src/core/env/server.ts`.
+
+| File | Content |
 |---|---|
-| `src/env/public.ts` | `VITE_` prefix, inlined into the client bundle at build time |
-| `src/env/server.ts` | Server secrets, read only at Workers runtime |
+| `src/core/env/public.ts` | Public values inlined into the client bundle; now only `VITE_BASE_URL` |
+| `src/core/env/server.ts` | `ServerEnv` (startup requirements) + `ManagedEnv` (credential shape derived from DB config) |
 
-**A `VITE_` variable ends up in the browser.** It is baked into the client JS at build time and
-anyone who opens the page can read it. A secret must never carry the `VITE_` prefix:
-`pnpm check:client-bundle` scans the text assets in `dist/client` and fails on a server field
-(it requires `pnpm build` first).
+**`VITE_` values are visible in the browser.** They are inlined into client JS at build time,
+so any visitor can read them. Secrets must never carry the `VITE_` prefix:
+`pnpm check:client-bundle` scans `dist/client` text output and fails when it finds server-only
+fields (run `pnpm build` first).
 
-## Public variables
+## Startup requirements
 
-| Variable | Default | Purpose |
+| Variable | Constraint | Purpose |
 |---|---|---|
-| `VITE_BASE_URL` | `http://localhost:3000` | Site root URL for canonical tags, OG, and the sitemap |
-| `VITE_PAYMENT_PROVIDER` | — | Payment channel: `stripe` or `creem`; empty keeps the configured default |
-| `VITE_MODULES` | — | Comma-separated module allowlist, overriding the module switches in config |
-| `VITE_FEATURES` | — | Comma-separated feature allowlist, overriding `features` in config |
-| `VITE_DOCS_AS_HOME` | — | `true` makes the root path open the docs home directly |
-| `VITE_GA_ID` | — | Google Analytics `G-…` ID |
-| `VITE_PLAUSIBLE_DOMAIN` | — | Plausible site domain |
-| `VITE_UMAMI_WEBSITE_ID` / `VITE_UMAMI_ID` | — | Umami site ID; set either one |
-| `VITE_UMAMI_SCRIPT_URL` | — | Umami script URL; must be a credential-free HTTPS URL |
-| `VITE_CLARITY_PROJECT_ID` / `VITE_CLARITY_ID` | — | Microsoft Clarity project ID; set either one |
-| `VITE_TURNSTILE_SITE_KEY` | — | Turnstile site key (the public half) |
-
-`VITE_MODULES` / `VITE_FEATURES` are allowlists: once you set one, only the listed modules or
-features stay on and everything else is off; leave both unset and the defaults in
-`src/config/website.ts` apply.
-
-## Server variables
-
-All optional. A missing variable means the provider is not registered rather than falling back
-to a placeholder — **an unconfigured feature stays off instead of pretending to work**.
-
-| Variable | Constraint | Used by |
-|---|---|---|
-| `BETTER_AUTH_SECRET` | ≥ 32 chars | Auth, **required in production** |
-| `BETTER_AUTH_URL` | URL | Absolute callback URL; inferred from the request origin when empty |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Must be paired | Google sign-in |
-| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | — | Payment (Stripe) |
-| `CREEM_API_KEY` / `CREEM_WEBHOOK_SECRET` | — | Payment (Creem) |
-| `CREEM_PRODUCTS` | Comma-separated `reference=prod_xxx` | Creem product ID mapping |
-| `CREEM_DEBUG` | `true` / `false` | `true` targets the Creem sandbox API |
-| `RESEND_API_KEY` | — | Email (Resend) |
-| `MAIL_FROM` | Valid address, no display name | Sender address |
-| `RESEND_AUDIENCE_ID` | — | Newsletter (Resend) |
-| `BEEHIIV_API_KEY` / `BEEHIIV_PUBLICATION_ID` | — | Newsletter (Beehiiv) |
-| `BEEHIIV_SEND_WELCOME_EMAIL` | `true` / `false` | Whether new subscribers get a welcome email |
-| `DISCORD_WEBHOOK_URL` | Must start with `https://discord.com/api/webhooks/` | Notifications (Discord) |
-| `FEISHU_WEBHOOK_URL` | Must start with `https://open.feishu.cn/open-apis/bot/v2/hook/` | Notifications (Feishu) |
-| `TURNSTILE_SECRET_KEY` | — | Turnstile server-side verification |
+| `VITE_BASE_URL` | URL | Site root for canonical, OG and sitemap; must be HTTPS in production |
+| `BETTER_AUTH_SECRET` | ≥ 32 chars | Auth; **required in production** |
+| `BETTER_AUTH_URL` | URL | Absolute base for auth callbacks; inferred from the request origin when unset |
+| `CONFIG_ENCRYPTION_KEY` | ≥ 16 chars | Passphrase for encrypted settings; without it the admin refuses to save groups containing secrets |
+| `DATABASE_PROVIDER` | `sqlite` / `d1` / `postgres` | Runtime connection and which schema is generated at build time |
+| `DATABASE_URL` | connection string | Required for `postgres` |
+| `SQLITE_DATABASE_URL` | file path | Local SQLite file |
 | `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN` | — | Deploy and resource API |
-| `ADMIN_EMAILS` | Comma-separated | Recipient allowlist for `/api/email` |
+| `ADMIN_EMAILS` | comma-separated | Recipient allowlist for `/api/email` |
 | `NODE_ENV` | `development` / `production` / `test` | Defaults to `development` |
 
-Empty strings normalize to unset, so a blank line in `.env` is the same as omitting it.
+Empty strings are normalised to "unset"; leaving a value blank in `.env` is the same as not
+setting it.
 
-Workers resource bindings (`DB` / `CACHE` / `BUCKET` / `EMAIL`) do not go through the env
-schema; they are declared in `wrangler.jsonc`.
+Keep `CONFIG_ENCRYPTION_KEY` separate from the database. If it is lost, every ciphertext in
+`settings` becomes undecryptable and the fields must be re-entered. When moving databases,
+don't rotate the passphrase at the same time.
 
-## Local file and production file
+Workers resource bindings (`DB` / `CACHE` / `BUCKET` / `EMAIL`) are not part of the env schema;
+they are declared in `wrangler.jsonc`.
 
-Local development values go in `.env` (copied from `.env.example`), production values go in
+## Seed values
+
+`.env.example` also lists fields with an `envKey` (`RESEND_API_KEY`, `STRIPE_SECRET_KEY`,
+`VITE_GA_ID`, …). They are **read once by `pnpm db:seed`** and copied into `settings`; after
+that the database is authoritative:
+
+```bash
+cp .env.example .env   # fill in credentials
+pnpm db:setup
+pnpm db:seed           # write to the database; later edits go through the admin
+```
+
+Blank values keep the registry defaults. To overwrite existing values again, run
+`pnpm db:seed --force`.
+
+## Local and production files
+
+Local development values go in `.env` (copied from `.env.example`); production values go in
 `.env.production`:
 
 ```bash
 cp .env.example .env.production
 ```
 
-When `.env.production` **exists**, `pnpm check:env:prod` uses it and does not fall back to `.env`
-— otherwise a wrong production value would be masked by a valid local one. `vite build` loads
-both files and prefers `.env.production` for the same key. Both files are git-ignored and must
-not be committed. Priority (high → low): process env → `.env.production` → `.env`, so CI needs
-no such file — put the values in the workflow `env:` block instead.
+When `.env.production` **exists**, `pnpm check:env:prod` reads it and does not fall back to
+`.env` — otherwise a broken production config would be masked by valid local values. It only
+checks startup requirements; service credentials live in the database and cannot be verified
+statically. `vite build` loads both files with `.env.production` taking precedence. Both files
+are git-ignored and must never be committed. Precedence (high → low): process env →
+`.env.production` → `.env`, so CI does not need the file and can use workflow `env:` blocks.
 
-## Configuring production
+## Production
 
-Two routes, neither of which goes through a file in the repo:
+Two entry points, neither of which uses repository files:
 
-- **GitHub Environment.** Put Secrets and Variables in the repository's Settings → Environments →
-  `production`. `deploy.yml` reads them on a published Release or a manual trigger, and uploads
-  only the whitelisted runtime fields to the Worker. When you enable a new service, add its
-  fields to the workflow's `env:` block and to the upload allowlist — otherwise configuring them
-  has no effect.
-- **Manual deploys.** Set the runtime secrets on the Worker first:
+- **GitHub Environment.** Put Secrets and Variables under Settings → Environments →
+  `production`. `deploy.yml` reads them on release or manual dispatch and uploads only the
+  allowlisted runtime fields to the Worker. When you add a new startup requirement, add it to
+  the workflow `env:` block and the upload allowlist as well.
+- **Manual deploy.** Set runtime secrets on the Worker:
 
   ```bash
   printf '%s' "<your-secret>" | pnpm exec wrangler secret put BETTER_AUTH_SECRET
   ```
 
-  A build-time variable (`VITE_*`) only takes effect after a **rebuild and redeploy**; a runtime
-  secret takes effect immediately.
+  Build-time values (`VITE_*`) require a rebuild and redeploy; runtime secrets take effect
+  immediately.
 
-Once it is configured, continue with [Deploy to Cloudflare](./cloudflare).
+Business credentials (Stripe / Resend / GA, …) are entered in the admin **Settings** page
+after deployment, or written to the remote database by running `pnpm db:seed` locally with the
+right env.
+
+Next: [Deploy to Cloudflare](./cloudflare).

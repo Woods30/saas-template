@@ -4,7 +4,7 @@ description: What the mail module does, the two addresses, and picking a provide
 locale: en
 order: 16
 group: email
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 The mail module gives the site three ways to send email: verification and welcome messages,
@@ -15,27 +15,32 @@ There are two providers — **Resend** or **Cloudflare Email** — each with its
 
 | Decision | Where | What it does |
 |---|---|---|
-| Sending address | `MAIL_FROM` | The sender of verification, password reset, and welcome emails |
-| Support inbox | `mail.supportEmail` | Where contact form messages go; also the footer's `mailto:` link |
-| Switch | `mail.enabled` | When off, mail APIs return 404 `MODULE_DISABLED` |
+| Sending address | Admin → Mail → Sender | The sender of verification, password reset, and welcome emails |
+| Support inbox | Admin → Mail → Support address | Where contact form messages go; also the footer's `mailto:` link |
+| Switch | Admin → Modules → Mail | When off, mail APIs return 404 `MODULE_DISABLED` |
 
 The first two are **independent**: setting one never fills in the other, and you can pick
-different addresses for them. `MAIL_FROM` must be a plain email address
+different addresses for them. The sender must be a plain email address
 (`noreply@<your-domain.com>`); `Brand <noreply@...>` is rejected.
+
+These values live in the database and take effect as soon as the admin saves. Same-named
+variables in `.env` are only initial values for `pnpm db:seed`.
 
 ## Picking a provider
 
 | Provider | Required config | Setup page |
 |---|---|---|
-| `resend` | `RESEND_API_KEY` + `MAIL_FROM` | [Resend](./email-resend) |
-| `cloudflare` | `MAIL_FROM` (or `CLOUDFLARE_EMAIL_SENDER`) + the `EMAIL` binding | [Cloudflare Email](./email-cloudflare) |
+| `resend` | Resend API key + sender address | [Resend](./email-resend) |
+| `cloudflare` | Sender address (or the Cloudflare Email sender) + the `EMAIL` binding | [Cloudflare Email](./email-cloudflare) |
 
 ## What you get once it is on
 
-- **Auth email**: with `auth.requireEmailVerification` at `true` (the default), sign-up sends a
+- **Auth email**: with `auth.requireEmailVerification` at `true`, sign-up sends a
   verification email, successful verification sends the welcome email, and password reset sends
-  the reset link. When mail is not fully configured, `auth` is flagged as a conflict and
-  `/api/auth/*` returns 503 — verification is **never** silently turned off.
+  the reset link. The flag defaults to `false`, in which case neither sign-up nor sign-in
+  sends a verification email; password reset is unaffected. When verification is enabled but mail
+  is not fully configured, `auth` is flagged as a conflict and `/api/auth/*` returns 503 —
+  verification is **never** silently turned off.
 - **Contact form**: with `contact.enabled` at `true`, submissions are sent to
   `mail.supportEmail`. It depends on the mail module being fully configured; otherwise
   `/api/contact` returns 503 rather than telling the visitor the message was delivered.
@@ -44,14 +49,14 @@ different addresses for them. `MAIL_FROM` must be a plain email address
 
 ## Verify
 
-`pnpm run check:env` lists what is missing for each enabled module; mail diagnostics show up
-under `mail`.
+The admin overview reports missing configuration for each enabled module (same diagnosis as
+`getServiceStatuses`); mail diagnostics show up under `mail`.
 
 ```bash
 pnpm email:dev
 ```
 
-Previews the templates in `src/mail/templates/` on port 3001, with hot reload.
+Previews the templates in `src/core/email/templates/` on port 3001, with hot reload.
 
 ## Notes
 

@@ -1,7 +1,11 @@
 import { z } from 'zod'
-import type { PublicEnv } from '@/env/public'
-import type { ServerEnv } from '@/env/server'
-import { productConfigErrors, resolvePriceReference } from './products'
+import type { RuntimeEnv } from '@/core/env/server'
+import {
+  manualPaymentConfigErrors,
+  productConfigErrors,
+  resolveManualPaymentPrice,
+  resolvePriceReference,
+} from './products'
 import type { ServiceModule, WebsiteConfig } from './website'
 
 /**
@@ -13,7 +17,12 @@ import type { ServiceModule, WebsiteConfig } from './website'
 export type ConfigIssue = {
   key: string
   reason: string
-  location: 'src/config/website.ts' | 'src/config/products.ts' | 'env' | 'Cloudflare binding'
+  location:
+    | 'src/config/website.ts'
+    | 'src/config/products.ts'
+    | 'env'
+    | '数据库配置'
+    | 'Cloudflare binding'
   manual?: boolean
   /** 配置矛盾（字段存在但取值互斥），而非字段缺失。仅影响诊断文案的分组标签。 */
   conflict?: boolean
@@ -29,7 +38,7 @@ export type ServiceStatus = {
  *
  * 不回退 `example.com`，缺失即返回 `undefined`，对应 provider 因此不注册。
  */
-export function getMailFrom(config: WebsiteConfig, env: ServerEnv): string | undefined {
+export function getMailFrom(config: WebsiteConfig, env: RuntimeEnv): string | undefined {
   return (
     env.MAIL_FROM ??
     (config.mail.provider === 'cloudflare' ? env.CLOUDFLARE_EMAIL_SENDER : undefined)
@@ -54,11 +63,10 @@ function isRootOrProtocolRelativePath(value: string): boolean {
 
 export function getServiceStatuses(input: {
   config: WebsiteConfig
-  publicEnv: PublicEnv
-  serverEnv: ServerEnv
+  serverEnv: RuntimeEnv
   bindings?: { email: boolean }
 }): Record<ServiceModule, ServiceStatus> {
-  const { config, publicEnv: pub, serverEnv: env, bindings } = input
+  const { config, serverEnv: env, bindings } = input
   // 受控断言：每个 ServiceModule 键都会被 `check` 赋值后才返回。
   const result = {} as Record<ServiceModule, ServiceStatus>
   const check = (
@@ -85,7 +93,11 @@ export function getServiceStatuses(input: {
           ? 'incomplete'
           : 'configured',
       // manual 核对项仅用于部署提示，不参与 completeness 判定。
-      issues: config[name].enabled ? [...issues, ...conflictIssues, ...manualIssues] : [],
+      // 冲突项在模块关闭时仍要列出：例如「要求邮箱验证但邮件模块关闭」是配置矛盾，
+      // 不是「未启用」能掩盖的正常状态；此时 state 仍为 disabled，不影响完整性判定。
+      issues: config[name].enabled
+        ? [...issues, ...conflictIssues, ...manualIssues]
+        : [...conflictIssues],
     }
   }
 
@@ -101,19 +113,37 @@ export function getServiceStatuses(input: {
         ]
       : []
 
-  check(
-    'mail',
-    config.mail.provider === 'resend'
-      ? [
-          ['RESEND_API_KEY', !!env.RESEND_API_KEY, 'env'],
-          ['MAIL_FROM', !!env.MAIL_FROM, 'env'],
-        ]
-      : [
-          ['MAIL_FROM / CLOUDFLARE_EMAIL_SENDER', !!getMailFrom(config, env), 'env'],
+  // 邮件配置的判定只写一份：需求清单与「认证要求验证」的矛盾诊断共用同一结果。
+  // 必须包含 `mail.enabled`：邮件模块关闭时 `sendAuthEmail` 同样不会发信。
+  const mailRequirements: Array<[string, boolean, ConfigIssue['location']]> = [
+    ['mail.enabled', config.mail.enabled, 'src/config/website.ts'],
+    ...(config.mail.provider === 'resend'
+      ? ([
+          ['RESEND_API_KEY', !!env.RESEND_API_KEY, '数据库配置'],
+          ['MAIL_FROM', !!env.MAIL_FROM, '数据库配置'],
+        ] satisfies Array<[string, boolean, ConfigIssue['location']]>)
+      : ([
+          ['MAIL_FROM / CLOUDFLARE_EMAIL_SENDER', !!getMailFrom(config, env), '数据库配置'],
           ['EMAIL', bindings?.email !== false, 'Cloudflare binding'],
-        ],
-    mailManual,
-  )
+        ] satisfies Array<[string, boolean, ConfigIssue['location']]>)),
+  ]
+  const mailConfigured = mailRequirements.every(([, valid]) => valid)
+
+  // 要求邮箱验证却发不出验证邮件是死锁：新用户注册后永远无法完成验证。
+  const authMailConflict: ConfigIssue[] =
+    config.auth.requireEmailVerification && !mailConfigured
+      ? [
+          {
+            key: 'mail.enabled',
+            location: 'src/config/website.ts',
+            conflict: true,
+            reason:
+              '要求邮箱验证但邮件未配置完整，新用户将永远无法登录；请补齐邮件配置，或显式设置 auth.requireEmailVerification: false',
+          },
+        ]
+      : []
+
+  check('mail', mailRequirements, mailManual, authMailConflict)
 
   check('contact', [
     ['mail.enabled', result.mail.state === 'configured', 'src/config/website.ts'],
@@ -128,12 +158,12 @@ export function getServiceStatuses(input: {
     'newsletter',
     config.newsletter.provider === 'resend'
       ? [
-          ['RESEND_API_KEY', !!env.RESEND_API_KEY, 'env'],
-          ['RESEND_AUDIENCE_ID', !!env.RESEND_AUDIENCE_ID, 'env'],
+          ['RESEND_API_KEY', !!env.RESEND_API_KEY, '数据库配置'],
+          ['RESEND_AUDIENCE_ID', !!env.RESEND_AUDIENCE_ID, '数据库配置'],
         ]
       : [
-          ['BEEHIIV_API_KEY', !!env.BEEHIIV_API_KEY, 'env'],
-          ['BEEHIIV_PUBLICATION_ID', !!env.BEEHIIV_PUBLICATION_ID, 'env'],
+          ['BEEHIIV_API_KEY', !!env.BEEHIIV_API_KEY, '数据库配置'],
+          ['BEEHIIV_PUBLICATION_ID', !!env.BEEHIIV_PUBLICATION_ID, '数据库配置'],
         ],
   )
 
@@ -141,18 +171,18 @@ export function getServiceStatuses(input: {
   const paymentEnvChecks: Array<[string, boolean, ConfigIssue['location'], string?]> =
     config.payment.provider === 'creem'
       ? [
-          ['CREEM_API_KEY', !!env.CREEM_API_KEY, 'env'],
-          ['CREEM_WEBHOOK_SECRET', !!env.CREEM_WEBHOOK_SECRET, 'env'],
+          ['CREEM_API_KEY', !!env.CREEM_API_KEY, '数据库配置'],
+          ['CREEM_WEBHOOK_SECRET', !!env.CREEM_WEBHOOK_SECRET, '数据库配置'],
           [
             'CREEM_PRODUCTS',
             !!env.CREEM_PRODUCTS,
-            'env',
+            '数据库配置',
             'Creem 的商品 ID 映射（reference=prod_xxx）',
           ],
         ]
       : [
-          ['STRIPE_SECRET_KEY', !!env.STRIPE_SECRET_KEY, 'env'],
-          ['STRIPE_WEBHOOK_SECRET', !!env.STRIPE_WEBHOOK_SECRET, 'env'],
+          ['STRIPE_SECRET_KEY', !!env.STRIPE_SECRET_KEY, '数据库配置'],
+          ['STRIPE_WEBHOOK_SECRET', !!env.STRIPE_WEBHOOK_SECRET, '数据库配置'],
         ]
 
   check(
@@ -176,55 +206,95 @@ export function getServiceStatuses(input: {
     validateProductConfig(),
   )
 
+  // 核销型支付（manual payments）：没有托管渠道，价格与收款账户都得在本地配齐。
+  const manualPaymentAccounts = config.manualPayments.accounts
+  const manualPaymentAccountIds = new Set<string>()
+  const manualPaymentAccountDuplicates: ConfigIssue[] = []
+  for (const account of manualPaymentAccounts) {
+    if (manualPaymentAccountIds.has(account.id)) {
+      manualPaymentAccountDuplicates.push({
+        key: 'manualPayments.accounts',
+        location: 'src/config/website.ts',
+        conflict: true,
+        reason: `收款账户 ID ${account.id} 重复，账户解析会取到不确定的那一个`,
+      })
+    }
+    manualPaymentAccountIds.add(account.id)
+  }
+  const manualPaymentQrIssues: ConfigIssue[] = manualPaymentAccounts
+    .filter(
+      (account) =>
+        !isRootOrProtocolRelativePath(account.qrImageUrl) && !isSafeHttpsUrl(account.qrImageUrl),
+    )
+    .map((account) => ({
+      key: 'manualPayments.accounts',
+      location: 'src/config/website.ts',
+      conflict: true,
+      reason: `收款账户 ${account.id} 的收款码地址必须是站内根路径或无凭据的 HTTPS 地址`,
+    }))
+
+  check(
+    'manualPayments',
+    [
+      [
+        'manualPayments.products',
+        resolveManualPaymentPrice(config.landingOffer.productId, config.landingOffer.offerId) !==
+          undefined,
+        'src/config/products.ts',
+        '首页要卖的商品没有核销型本地标价（收款码链路收不了单）',
+      ],
+      [
+        'manualPayments.accounts',
+        manualPaymentAccounts.length > 0,
+        'src/config/website.ts',
+        '没有可用的收款账户，用户付款后无处可付',
+      ],
+    ],
+    [],
+    [
+      ...manualPaymentAccountDuplicates,
+      ...manualPaymentQrIssues,
+      ...manualPaymentConfigErrors().map((error) => ({
+        key: `manualPayments.products.${error}`,
+        location: 'src/config/products.ts' as const,
+        conflict: true,
+        reason: '核销型标价的金额、币种或周期不合法，请检查商品配置',
+      })),
+    ],
+  )
+
   // 只校验当前选中 provider 对应的 webhook：配了 Discord 却选 feishu 仍是 incomplete。
   const notificationWebhookKey =
     config.notification.provider === 'discord' ? 'DISCORD_WEBHOOK_URL' : 'FEISHU_WEBHOOK_URL'
-  check('notification', [[notificationWebhookKey, !!env[notificationWebhookKey], 'env']])
+  check('notification', [[notificationWebhookKey, !!env[notificationWebhookKey], '数据库配置']])
 
+  // 分析渠道的公开标识与开关都在配置表里：缺 ID 的渠道不会注入脚本。
+  const analyticsConfig = config.analytics.config
   const analytics: Array<[string, boolean, ConfigIssue['location']]> = [
-    ['analytics.providers', config.analytics.providers.length > 0, 'src/config/website.ts'],
+    ['analytics.providers', config.analytics.providers.length > 0, '数据库配置'],
   ]
   for (const provider of config.analytics.providers) {
-    if (provider === 'ga') analytics.push(['VITE_GA_ID', !!pub.VITE_GA_ID, 'env'])
-    if (provider === 'plausible')
-      analytics.push(['VITE_PLAUSIBLE_DOMAIN', !!pub.VITE_PLAUSIBLE_DOMAIN, 'env'])
-    if (provider === 'umami')
+    if (provider === 'ga') {
+      analytics.push(['analytics.gaId', !!analyticsConfig.gaId, '数据库配置'])
+    }
+    if (provider === 'plausible') {
+      analytics.push(['analytics.plausibleDomain', !!analyticsConfig.plausibleDomain, '数据库配置'])
+    }
+    if (provider === 'umami') {
       analytics.push(
-        [
-          'VITE_UMAMI_WEBSITE_ID / VITE_UMAMI_ID',
-          !!(pub.VITE_UMAMI_WEBSITE_ID ?? pub.VITE_UMAMI_ID),
-          'env',
-        ],
-        ['VITE_UMAMI_SCRIPT_URL', !!pub.VITE_UMAMI_SCRIPT_URL, 'env'],
+        ['analytics.umamiWebsiteId', !!analyticsConfig.umamiWebsiteId, '数据库配置'],
+        ['analytics.umamiScriptUrl', !!analyticsConfig.umamiScriptUrl, '数据库配置'],
       )
-    if (provider === 'clarity')
+    }
+    if (provider === 'clarity') {
       analytics.push([
-        'VITE_CLARITY_PROJECT_ID / VITE_CLARITY_ID',
-        !!(pub.VITE_CLARITY_PROJECT_ID ?? pub.VITE_CLARITY_ID),
-        'env',
+        'analytics.clarityProjectId',
+        !!analyticsConfig.clarityProjectId,
+        '数据库配置',
       ])
+    }
   }
   check('analytics', analytics)
-
-  // auth 没有运行期必需的 env：secret 缺失时 better-auth 退回开发期密钥，
-  // 生产环境由 `validateProdServerEnv` 在部署前校验。
-  // 唯一的死锁组合是「要求邮箱验证却发不出验证邮件」，故单列一条配置矛盾诊断。
-  check(
-    'auth',
-    [],
-    [],
-    config.auth.requireEmailVerification && result.mail.state !== 'configured'
-      ? [
-          {
-            key: 'mail.enabled',
-            location: 'src/config/website.ts',
-            conflict: true,
-            reason:
-              '要求邮箱验证但邮件未配置完整，新用户将永远无法登录；请补齐邮件配置，或显式设置 auth.requireEmailVerification: false',
-          },
-        ]
-      : [],
-  )
 
   return result
 }

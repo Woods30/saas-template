@@ -5,7 +5,7 @@ import {
   normalizeCreemEvent,
   parseCreemProducts,
   verifyCreemSignature,
-} from '@/payment/provider/creem'
+} from '@/core/payment/provider/creem'
 
 /**
  * Creem 适配器：业务层只消费归一化后的 `PaymentEvent` / `ProviderSubscription`，
@@ -123,6 +123,25 @@ describe('事件归一化', () => {
       status: 'paid',
     })
     expect(event.subscription).toBeUndefined()
+  })
+
+  it('checkout.completed 回填 checkoutId，业务层才能把付款归回订单', () => {
+    const event = normalizeCreemEvent(
+      {
+        id: 'evt_checkout',
+        eventType: 'checkout.completed',
+        created_at: 1728734327412,
+        object: {
+          id: 'ch_checkout_1',
+          metadata: { userId: 'user_1' },
+          product: { id: 'prod_life', billing_type: 'one_time' },
+          order: { id: 'ord_1', amount: 9900, currency: 'USD', type: 'one_time' },
+        },
+      },
+      referenceOf,
+    )
+
+    expect(event.checkoutId).toBe('ch_checkout_1')
   })
 
   it('checkout.completed 的订阅同时归一化订阅快照', () => {

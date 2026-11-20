@@ -3,6 +3,21 @@ import { type LinkOptions, linkOptions } from '@tanstack/react-router'
 import type { Locale } from '@/lib/locale'
 import type { SiteModule, WebsiteConfig } from './website'
 
+/**
+ * 受保护区域的菜单文案。
+ *
+ * 侧栏标签与页面标题绝大多数情况一致，因此 `label` 可省略、回落到 `title`；
+ * 少数页面两处措辞不同（侧栏求短、标题求完整）时才单独给 `label`。
+ */
+export interface NavCopy {
+  title: () => string
+  label?: () => string
+}
+
+export function navLabel(item: NavCopy): string {
+  return item.label?.() ?? item.title()
+}
+
 export type PublicTarget =
   | 'home'
   | 'docs'
@@ -51,8 +66,6 @@ export function getPublicLinkOptions(target: PublicTarget, locale: Locale, hash?
 
 export type MenuVisibility = {
   module?: SiteModule
-  // 功能开关与服务模块是两套：后者有 `.enabled`，前者本身就是布尔值。
-  feature?: keyof WebsiteConfig['features']
   /** 静态营销页开关（`pages.*`）：没有服务模块，但可以按站点定位关闭。 */
   page?: keyof WebsiteConfig['pages']
   authenticated?: boolean
@@ -92,7 +105,7 @@ export type MenuLinkItem = Common &
       | {
           kind: 'internal'
           // 不用 `getPublicLinkOptions` 的返回类型：那是公共导航的封闭联合，
-          // `/dashboard/*` 等站内链接不在其中。
+          // `/settings/*` 等站内链接不在其中。
           options: LinkOptions
         }
       | { kind: 'external'; href: string; newTab: boolean }
@@ -108,7 +121,6 @@ export function filterMenuItems(items: readonly MenuItem[], ctx: MenuContext): M
   for (const item of items) {
     const rule = item.visibility
     if (rule?.module && !ctx.config[rule.module].enabled) continue
-    if (rule?.feature && !ctx.config.features[rule.feature]) continue
     if (rule?.page && !ctx.config.pages[rule.page]) continue
     if (rule?.authenticated !== undefined && rule.authenticated !== ctx.authenticated) continue
     if (rule?.roles && (!ctx.authenticated || !ctx.role || !rule.roles.includes(ctx.role))) continue

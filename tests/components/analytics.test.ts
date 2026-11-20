@@ -112,9 +112,19 @@ describe('Analytics providers', () => {
   })
 })
 
-// initAnalytics：启用过滤、publicEnv 来源与 Umami 脚本 URL。
+// initAnalytics：启用过滤、标识来源与 Umami 脚本 URL。
+//
+// 标识随页面从数据库配置下发（`analytics.config`），不再读 `publicEnv`。
 describe('initAnalytics', () => {
   const injected: HTMLScriptElement[] = []
+
+  type AnalyticsConfig = {
+    gaId?: string
+    plausibleDomain?: string
+    umamiWebsiteId?: string
+    umamiScriptUrl?: string
+    clarityProjectId?: string
+  }
 
   beforeEach(() => {
     vi.resetModules()
@@ -129,17 +139,18 @@ describe('initAnalytics', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.doUnmock('@/config/website')
-    vi.doUnmock('@/env/public')
     vi.resetModules()
     vi.stubEnv('PROD', false)
   })
 
-  function mockConfig(analytics: { enabled: boolean; providers: string[] }) {
-    vi.doMock('@/config/website', () => ({ websiteConfig: { analytics } }))
-  }
-
-  function mockPublicEnv(env: Record<string, unknown>) {
-    vi.doMock('@/env/public', () => ({ publicEnv: env }))
+  function mockConfig(analytics: {
+    enabled: boolean
+    providers: string[]
+    config?: AnalyticsConfig
+  }) {
+    vi.doMock('@/config/website', () => ({
+      websiteConfig: { analytics: { config: {}, ...analytics } },
+    }))
   }
 
   /** jsdom 的 `document.readyState` 恒为 `complete`，需显式覆盖才能测「load 尚未触发」分支。 */
@@ -149,8 +160,7 @@ describe('initAnalytics', () => {
 
   it('analytics 关闭时不注册也不注入脚本', async () => {
     vi.stubEnv('PROD', true)
-    mockConfig({ enabled: false, providers: ['ga'] })
-    mockPublicEnv({ VITE_GA_ID: 'G-XXX' })
+    mockConfig({ enabled: false, providers: ['ga'], config: { gaId: 'G-XXX' } })
     const { initAnalytics } = await import('@/lib/analytics')
     initAnalytics()
     expect(injected).toHaveLength(0)
@@ -158,8 +168,7 @@ describe('initAnalytics', () => {
 
   it('选中 GA 且配置 ID 时在页面 load 之后才注入 gtag 脚本', async () => {
     vi.stubEnv('PROD', true)
-    mockConfig({ enabled: true, providers: ['ga'] })
-    mockPublicEnv({ VITE_GA_ID: 'G-XXX' })
+    mockConfig({ enabled: true, providers: ['ga'], config: { gaId: 'G-XXX' } })
     // 模拟脚本执行时页面尚未 load 完（浏览器在 hydration 阶段就是这个状态）。
     setReadyState('interactive')
     const { initAnalytics } = await import('@/lib/analytics')
@@ -174,8 +183,7 @@ describe('initAnalytics', () => {
 
   it('load 事件已过时立即注入脚本', async () => {
     vi.stubEnv('PROD', true)
-    mockConfig({ enabled: true, providers: ['ga'] })
-    mockPublicEnv({ VITE_GA_ID: 'G-XXX' })
+    mockConfig({ enabled: true, providers: ['ga'], config: { gaId: 'G-XXX' } })
     setReadyState('complete')
     const { initAnalytics } = await import('@/lib/analytics')
     initAnalytics()
@@ -183,10 +191,13 @@ describe('initAnalytics', () => {
     expect(injected[0]?.src).toBe('https://www.googletagmanager.com/gtag/js?id=G-XXX')
   })
 
-  it('未选中 GA 时即使有 VITE_GA_ID 也不注入', async () => {
+  it('未选中 GA 时即使配置了 ID 也不注入', async () => {
     vi.stubEnv('PROD', true)
-    mockConfig({ enabled: true, providers: ['plausible'] })
-    mockPublicEnv({ VITE_GA_ID: 'G-XXX', VITE_PLAUSIBLE_DOMAIN: 'jerbix.dev' })
+    mockConfig({
+      enabled: true,
+      providers: ['plausible'],
+      config: { gaId: 'G-XXX', plausibleDomain: 'jerbix.dev' },
+    })
     const { initAnalytics } = await import('@/lib/analytics')
     initAnalytics()
     const srcs = injected.map((s) => s.src)
@@ -196,8 +207,7 @@ describe('initAnalytics', () => {
 
   it('选中 Umami 但缺脚本 URL 时不注入', async () => {
     vi.stubEnv('PROD', true)
-    mockConfig({ enabled: true, providers: ['umami'] })
-    mockPublicEnv({ VITE_UMAMI_WEBSITE_ID: 'site-1' })
+    mockConfig({ enabled: true, providers: ['umami'], config: { umamiWebsiteId: 'site-1' } })
     const { initAnalytics } = await import('@/lib/analytics')
     initAnalytics()
     expect(injected).toHaveLength(0)
@@ -205,10 +215,13 @@ describe('initAnalytics', () => {
 
   it('选中 Umami 且脚本 URL 存在时注入该 URL', async () => {
     vi.stubEnv('PROD', true)
-    mockConfig({ enabled: true, providers: ['umami'] })
-    mockPublicEnv({
-      VITE_UMAMI_WEBSITE_ID: 'site-1',
-      VITE_UMAMI_SCRIPT_URL: 'https://stats.jerbix.dev/script.js',
+    mockConfig({
+      enabled: true,
+      providers: ['umami'],
+      config: {
+        umamiWebsiteId: 'site-1',
+        umamiScriptUrl: 'https://stats.jerbix.dev/script.js',
+      },
     })
     const { initAnalytics } = await import('@/lib/analytics')
     initAnalytics()
@@ -218,13 +231,16 @@ describe('initAnalytics', () => {
 
   it('开发环境不注入任何脚本（避免污染真实账号数据）', async () => {
     vi.stubEnv('PROD', false)
-    mockConfig({ enabled: true, providers: ['ga', 'plausible', 'umami', 'clarity'] })
-    mockPublicEnv({
-      VITE_GA_ID: 'G-XXX',
-      VITE_PLAUSIBLE_DOMAIN: 'jerbix.dev',
-      VITE_UMAMI_WEBSITE_ID: 'site-1',
-      VITE_UMAMI_SCRIPT_URL: 'https://stats.jerbix.dev/script.js',
-      VITE_CLARITY_PROJECT_ID: 'clarity-1',
+    mockConfig({
+      enabled: true,
+      providers: ['ga', 'plausible', 'umami', 'clarity'],
+      config: {
+        gaId: 'G-XXX',
+        plausibleDomain: 'jerbix.dev',
+        umamiWebsiteId: 'site-1',
+        umamiScriptUrl: 'https://stats.jerbix.dev/script.js',
+        clarityProjectId: 'clarity-1',
+      },
     })
     const { initAnalytics } = await import('@/lib/analytics')
     initAnalytics()
@@ -235,8 +251,7 @@ describe('initAnalytics', () => {
     vi.stubEnv('PROD', true)
     // dataLayer 是 window 全局队列，resetModules 不会清它，必须先清空。
     ;(window as unknown as { dataLayer: unknown[] }).dataLayer = []
-    mockConfig({ enabled: true, providers: ['ga'] })
-    mockPublicEnv({ VITE_GA_ID: 'G-CONFIG' })
+    mockConfig({ enabled: true, providers: ['ga'], config: { gaId: 'G-CONFIG' } })
     const { initAnalytics } = await import('@/lib/analytics')
     initAnalytics()
     // 断言落在 dataLayer 条目上，这才是与 gtag.js 的真实契约。
@@ -253,8 +268,11 @@ describe('initAnalytics', () => {
 
   it('非浏览器环境下调用不永久占用初始化标记', async () => {
     vi.stubEnv('PROD', true)
-    mockConfig({ enabled: true, providers: ['plausible'] })
-    mockPublicEnv({ VITE_PLAUSIBLE_DOMAIN: 'jerbix.dev' })
+    mockConfig({
+      enabled: true,
+      providers: ['plausible'],
+      config: { plausibleDomain: 'jerbix.dev' },
+    })
     const { initAnalytics } = await import('@/lib/analytics')
     // 第一次调用在没有 window 的环境（模拟 SSR）。
     const originalWindow = globalThis.window
@@ -269,13 +287,20 @@ describe('initAnalytics', () => {
 
   it('模块关闭时调用不永久占用初始化标记', async () => {
     vi.stubEnv('PROD', true)
-    mockConfig({ enabled: false, providers: ['plausible'] })
-    mockPublicEnv({ VITE_PLAUSIBLE_DOMAIN: 'jerbix.dev' })
+    mockConfig({
+      enabled: false,
+      providers: ['plausible'],
+      config: { plausibleDomain: 'jerbix.dev' },
+    })
     const { initAnalytics } = await import('@/lib/analytics')
     initAnalytics()
     expect(injected).toHaveLength(0)
     // 配置随后生效，再次调用必须成功。
-    mockConfig({ enabled: true, providers: ['plausible'] })
+    mockConfig({
+      enabled: true,
+      providers: ['plausible'],
+      config: { plausibleDomain: 'jerbix.dev' },
+    })
     vi.resetModules()
     const reimported = await import('@/lib/analytics')
     // 这里只验证关闭路径没有把标记写死。

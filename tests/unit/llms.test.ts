@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { llmsConfig } from '@/config/llms'
 import { createWebsiteConfig } from '@/config/website'
-import { parsePublicEnv } from '@/env/public'
+import { parsePublicEnv } from '@/core/env/public'
 import { type LlmsContentSource, renderLlmsFull, renderLlmsIndex } from '@/lib/llms'
 import { defaultLlmsSource, toBlogEntries } from '@/lib/llms-source.server'
 

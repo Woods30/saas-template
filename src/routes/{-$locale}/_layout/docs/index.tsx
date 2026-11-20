@@ -1,19 +1,19 @@
 import { createFileRoute, notFound, redirect } from '@tanstack/react-router'
 import { DocArticle } from '@/components/docs/DocArticle'
 import { websiteConfig } from '@/config/website'
+import { getRequestLocale } from '@/lib/locale'
+import { seo } from '@/lib/seo'
 import {
   DOCS_INDEX_SLUG,
   docNeighbors,
   docsForLocale,
   docsLanding,
+  docsPublicPath,
   extractHeadings,
   findDocBySlug,
   formatUpdatedDate,
   splitNextSteps,
-} from '@/lib/docs'
-import { docsPublicPath } from '@/lib/docs-path'
-import { getRequestLocale } from '@/lib/locale'
-import { seo } from '@/lib/seo'
+} from '@/modules/docs/service'
 
 /**
  * 文档首页：渲染 `index.md` / `index.zh.md`（slug 恒为 `index`）。

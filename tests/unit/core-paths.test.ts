@@ -11,11 +11,11 @@ import { CORE_PATHS, isCorePath } from '../../scripts/core-paths'
  */
 describe('isCorePath', () => {
   it('认证 / 支付 / env / 门禁 / 数据库 / server / api 路由属于核心区', () => {
-    expect(isCorePath('src/auth/auth.ts')).toBe(true)
-    expect(isCorePath('src/payment/index.ts')).toBe(true)
-    expect(isCorePath('src/env/server.ts')).toBe(true)
+    expect(isCorePath('src/core/auth/auth.ts')).toBe(true)
+    expect(isCorePath('src/core/payment/index.ts')).toBe(true)
+    expect(isCorePath('src/core/env/server.ts')).toBe(true)
     expect(isCorePath('src/lib/module-access.ts')).toBe(true)
-    expect(isCorePath('src/db/schema.ts')).toBe(true)
+    expect(isCorePath('src/core/db/schema.ts')).toBe(true)
     expect(isCorePath('src/server.ts')).toBe(true)
     expect(isCorePath('src/routes/api/contact/index.ts')).toBe(true)
     expect(isCorePath('src/config/website.ts')).toBe(true)
@@ -24,7 +24,7 @@ describe('isCorePath', () => {
   })
 
   it('营销组件 / 样式 / 文案不属于核心区', () => {
-    expect(isCorePath('src/components/sections/hero/Hero.tsx')).toBe(false)
+    expect(isCorePath('src/blocks/hero.tsx')).toBe(false)
     expect(isCorePath('src/styles/globals.css')).toBe(false)
     expect(isCorePath('messages/zh.json')).toBe(false)
     expect(isCorePath('content/docs/project-structure.zh.md')).toBe(false)

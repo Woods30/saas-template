@@ -27,7 +27,7 @@ describe('BrandLogo', () => {
 
   it('字标末尾的强调段用品牌紫，其余用墨色', () => {
     const original = websiteConfig.metadata
-    // 强调段是站名的最后一段：各品牌的强调段不同（`pnpm run init` 之后就没了），
+    // 强调段是站名的最后一段：各品牌的强调段不同（改过品牌就没了），
     // 所以这里自己摆一个站名与强调段，而不是依赖出厂值。
     websiteConfig.metadata = { ...original, name: 'Acme', logoAccent: 'e' }
     try {

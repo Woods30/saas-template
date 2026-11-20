@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { Cta } from '@/blocks/cta'
+import { Hero } from '@/blocks/hero'
 import { ContactForm } from '@/components/contact/ContactForm'
-import { Cta, Hero } from '@/components/sections'
 import { getRequestLocale } from '@/lib/locale'
 import { assertPageEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'

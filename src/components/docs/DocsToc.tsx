@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { DocHeading } from '@/lib/docs'
 import { m } from '@/locale/paraglide/messages.js'
+import type { DocHeading } from '@/modules/docs/service'
 
 /**
  * 右侧「本页目录」：h2 / h3 锚点，纯 `#id` 链接不经过路由，id 与 `Mdx` 的

@@ -72,7 +72,7 @@ export function ExampleForm() {
 2. **提交按钮在水合前必须禁用。** `SubmitButton` 内部用 `useHydrated` 实现这道防线：
    React 接管前的点击会退化成原生 GET 提交，把字段写进 URL、浏览器历史与 `Referer`。
    `pending` 用 `form.Subscribe` 的 `isSubmitting`，不要另开 `useState` 管提交态。
-3. **校验文案由 schema 工厂注入。** `src/auth/validation.ts` 的工厂**接收文案参数**
+3. **校验文案由 schema 工厂注入。** `src/core/auth/validation.ts` 的工厂**接收文案参数**
    （`AuthFormMessages`）而不是自己调 `m.*()`：校验逻辑因此不依赖 Paraglide 运行时、
    可脱离组件单测；页面用 `authFormMessages()` 求值，错误消息自然跟随语言。
 

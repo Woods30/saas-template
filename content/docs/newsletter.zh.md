@@ -9,32 +9,26 @@ updated: 2026-11-03
 
 订阅模块把访客邮箱收进一个名单，名单存在第三方服务（Resend Audiences 或 Beehiiv），本站只负责
 收单与查状态。开启后有两处入口：营销页的订阅框（`NewsletterCta` 组件）与个人中心的「通知偏好」
-开关（`/dashboard/notifications`）。
+开关（`/settings/notifications`）。
 
 ## 步骤
 
-1. **选 provider 并开启。** 在 `src/config/website.ts`：
+1. **选渠道并开启。** 打开后台「系统设置 → 模块」，打开「邮件订阅」；再到「邮件 → 订阅」选
+   渠道：`resend` 或 `beehiiv`。
 
-   ```ts
-   newsletter: { enabled: true, provider: 'resend' },
-   ```
+2. **填凭据。** 同一页填写：
 
-   provider 二选一：`resend` 或 `beehiiv`。
-
-2. **填环境变量。**
-
-   | provider | 必要变量 | 从哪来 |
+   | provider | 必要字段 | 从哪来 |
    |---|---|---|
-   | `resend` | `RESEND_API_KEY` + `RESEND_AUDIENCE_ID` | 都取自 Resend 后台 |
-   | `beehiiv` | `BEEHIIV_API_KEY` + `BEEHIIV_PUBLICATION_ID` | 都取自 Beehiiv 后台 |
+   | `resend` | Resend API key + Audience ID | 都取自 Resend 后台 |
+   | `beehiiv` | Beehiiv API key + Publication ID | 都取自 Beehiiv 后台 |
 
-   `BEEHIIV_SEND_WELCOME_EMAIL` 控制 Beehiiv 是否给新订阅者发欢迎邮件，取 `true` / `false`，
-   默认 `false`。这些变量**不加 `VITE_` 前缀**。
+   Beehiiv 分组里还有「发送欢迎邮件」开关，默认关闭。密钥加密入库、不回显明文，
+   保存即生效。
 
-3. **部署。** 生产环境把变量交给 Worker（`pnpm exec wrangler secret put <NAME>`）；用 Release
-   自动部署时在 GitHub **Settings → Environments → production** 配同名 Secret。注意
-   `RESEND_AUDIENCE_ID` 与 `BEEHIIV_*` **不在**部署工作流的运行时上传白名单里，启用前要自己往
-   `.github/workflows/deploy.yml` 的 `env` 与上传白名单里补上。
+   也可以先把对应值写进 `.env`，再跑 `pnpm db:seed` 一并写入数据库。
+
+3. **不需要额外部署。** 配置存在数据库，改完保存就生效。
 
 ## 接口
 
@@ -49,7 +43,7 @@ updated: 2026-11-03
 
 ## 验证
 
-`pnpm run check:env` 里 `newsletter` 一项不再报缺配置即可。然后在页面上提交一次订阅，去第三方
+后台「系统设置」保存后，服务状态里 `newsletter` 一项不再报缺配置即可。然后在页面上提交一次订阅，去第三方
 后台确认名单里多了这个邮箱。
 
 ## 注意事项

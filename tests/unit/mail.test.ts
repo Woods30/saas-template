@@ -20,13 +20,13 @@ vi.mock('@react-email/render', () => ({
 }))
 
 // 被测模块，必须在 mock 之后导入。
-import { getMailProvider, sendMail } from '@/mail'
-import { CloudflareEmailProvider } from '@/mail/provider/cloudflare'
+import { getMailProvider, sendMail } from '@/core/email'
+import { CloudflareEmailProvider } from '@/core/email/provider/cloudflare'
 
 // Subject 文案本地化。
 describe('Subject localization', () => {
   it('verifyEmail has zh/en subjects', async () => {
-    const { renderTemplate } = await import('@/mail/render')
+    const { renderTemplate } = await import('@/core/email/render')
     const zhResult = await renderTemplate({
       to: 'test@example.com',
       template: 'verifyEmail',
@@ -45,7 +45,7 @@ describe('Subject localization', () => {
   })
 
   it('forgotPassword has zh/en subjects', async () => {
-    const { renderTemplate } = await import('@/mail/render')
+    const { renderTemplate } = await import('@/core/email/render')
     const zhResult = await renderTemplate({
       to: 'test@example.com',
       template: 'forgotPassword',
@@ -64,7 +64,7 @@ describe('Subject localization', () => {
   })
 
   it('contactMessage has zh/en subjects', async () => {
-    const { renderTemplate } = await import('@/mail/render')
+    const { renderTemplate } = await import('@/core/email/render')
     const zhResult = await renderTemplate({
       to: 'test@example.com',
       template: 'contactMessage',
@@ -96,7 +96,7 @@ describe('Subject localization', () => {
 // renderTemplate 产出 HTML。
 describe('renderTemplate', () => {
   it('returns html string', async () => {
-    const { renderTemplate } = await import('@/mail/render')
+    const { renderTemplate } = await import('@/core/email/render')
     const result = await renderTemplate({
       to: 'test@example.com',
       template: 'verifyEmail',

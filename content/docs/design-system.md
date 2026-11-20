@@ -88,7 +88,7 @@ color context; `box-shadow` treats it as an unknown value and you get `box-shado
 3. Declare new tokens in **both** `:root` and `@theme inline`; declaring only one leaves a
    value empty in one theme.
 4. Sync four places: `ui.themeColor` in `src/config/website.ts`, `public/manifest.json`,
-   `EMAIL_THEME` in `src/mail/components/EmailLayout.tsx`, and the examples in
+   `EMAIL_THEME` in `src/core/email/components/EmailLayout.tsx`, and the examples in
    `content/docs/configuration*.md`.
 5. Run `pnpm test` — `theme-colors.test.ts` and `theme-tokens.test.ts` guard against drift.
 

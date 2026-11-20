@@ -8,20 +8,6 @@ const contentCollectionsAlias = fileURLToPath(
   new URL('./.content-collections/generated/index.js', import.meta.url),
 )
 
-/**
- * 测试场景固定值：模块与能力开关**不从 `website.ts` 的出厂值走**。
- *
- * `pnpm run init` 会改写出厂值（模块默认全关、品牌换成使用者自己的），测试若依赖
- * 出厂值，初始化后就会集体变红。模板仓自己的套件必须在「模板的出厂值」与
- * 「使用者 init 之后的出厂值」下都绿，所以场景固定在这里，由 env 覆盖。
- *
- * 名单是白名单语义：不在名单里的模块与能力一律关闭。
- */
-export const testScenarioEnv = {
-  VITE_MODULES: 'docs,blog,changelog,mail,payment,analytics,auth',
-  VITE_FEATURES: 'enableI18n,enableApiKeys,enableAdmin',
-}
-
 export default defineConfig({
   test: {
     // 两组 project 合并：unit（node，内联）与 components（jsdom，引用独立配置文件）。
@@ -36,7 +22,7 @@ export default defineConfig({
           environment: 'node',
           globals: false,
           // 邮件模板的 actionUrl 白名单从站点 base URL 派生，夹具统一用 example.com。
-          env: { VITE_BASE_URL: 'https://example.com', ...testScenarioEnv },
+          env: { VITE_BASE_URL: 'https://example.com' },
           setupFiles: ['tests/setup.ts'],
           include: ['tests/unit/**/*.test.ts', 'tests/unit/**/*.test.tsx'],
           // 默认 5s 在并行高负载下偶发超时（实测全量曾 14 failed，重跑全绿），调高消除 flakiness。

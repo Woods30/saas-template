@@ -14,14 +14,10 @@ updated: 2026-11-03
 
 ## 步骤
 
-1. **打开认证模块。**
+1. **打开认证模块。** 打开后台「系统设置 → 模块」，打开「认证」；在同一 tab 里决定是否要求
+   邮箱验证（默认关闭：注册即登录，不发验证邮件，也不依赖邮件服务）。
 
-   ```ts
-   // src/config/website.ts
-   auth: { enabled: true, requireEmailVerification: true },
-   ```
-
-   `auth.enabled` 同时门禁页面与 API：关闭时 `/{locale}/auth/*` 与 `/api/auth/*` 一起 404。
+   模块开关同时门禁页面与 API：关闭时 `/{locale}/auth/*` 与 `/api/auth/*` 一起 404。
 
 2. **配好生产必填的两个变量。**
 
@@ -33,12 +29,12 @@ updated: 2026-11-03
    `BETTER_AUTH_SECRET` 用 `openssl rand -base64 32` 生成，按[部署到 Cloudflare](./cloudflare)
    里的方式上传为运行时 secret。
 
-3. **（可选）接入 Google 登录。** 需要两个服务端变量，缺一不可：
+3. **（可选）接入 Google 登录。** 在后台「系统设置 → 认证」的 Google 分组填两个值，缺一不可：
 
-   | 变量 | 说明 |
+   | 字段 | 说明 |
    |---|---|
-   | `GOOGLE_CLIENT_ID` | Google Cloud Console 里 OAuth 客户端的 ID |
-   | `GOOGLE_CLIENT_SECRET` | 同一个客户端的 secret |
+   | Client ID | Google Cloud Console 里 OAuth 客户端的 ID |
+   | Client secret | 同一个客户端的 secret（加密入库） |
 
    两个都配齐，登录页才出现 Google 按钮；只配 ID 时按钮不显示，也不会留下一个必然失败的
    入口。在 Google Cloud Console 的 OAuth 客户端里登记回调地址：
@@ -50,19 +46,23 @@ updated: 2026-11-03
 
    本地开发另加 `http://localhost:3000` 与 `http://localhost:3000/api/auth/callback/google`。
 
-4. **（可选）开启邮箱验证。** `requireEmailVerification: true` 要求新用户先验证邮箱才能登录，
-   它依赖邮件模块：按[邮件](./email)配好 provider 与 `MAIL_FROM` 后，注册与登录才会真的发信。
+4. **（可选）开启邮箱验证。** 在后台「系统设置 → 认证」打开「注册后必须验证邮箱」后，新用户
+   必须先验证邮箱才能登录，注册时才会发送验证邮件。它依赖邮件模块：按[邮件](./email)配好
+   provider 与 `MAIL_FROM`，否则验证信发不出去，认证 API 返回 503。
 
 ## 验证
 
-- 本地 `pnpm dev` 后打开 `/{locale}/auth/register` 注册一个账号，应收到验证邮件。
+- 本地 `pnpm dev` 后打开 `/{locale}/auth/register` 注册一个账号：默认直接登录；开启邮箱验证后
+  应先收到验证邮件。
 - 线上 `curl -s https://<your-domain>/api/auth/get-session` 返回 200 且 `session` 为 `null`，
   说明认证 API 正常。
-- `pnpm run check:env:prod` 通过，说明生产变量与已启用模块的配置齐备。
+- `pnpm run check:env:prod` 通过（启动变量合法）。业务凭据在数据库里，到后台概览确认已启用模块
+  都显示 `configured`。
 
 ## 注意事项
 
-- `requireEmailVerification` 是安全控制，不是邮件开关：它不随 `mail.enabled` 关闭而自动放开。
-  要求验证而邮件未配齐时，认证 API 返回 503，不会降级成免验证登录。
+- `requireEmailVerification` 同时决定「是否发验证邮件」：关闭时注册、登录都不发验证信。
+  它也是安全控制，不是邮件开关：开启后不随 `mail.enabled` 关闭而自动放开，邮件未配齐时
+  认证 API 返回 503，不会降级成免验证登录。
 - Google 登录不受邮箱验证拦截——Google 返回已验证的邮箱，只有邮箱密码路径受这条约束。
 - 密钥类环境变量一律不加 `VITE_` 前缀，否则会打进客户端 bundle。

@@ -1,18 +1,16 @@
 import { useForm } from '@tanstack/react-form'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
-import { authClient } from '@/auth/client'
-import { createForgotSchema } from '@/auth/validation'
 import { AuthFormField } from '@/components/auth/AuthFormField'
 import { AuthLayout } from '@/components/auth/AuthLayout'
 import { authFormMessages } from '@/components/auth/formMessages'
 import { SubmitButton } from '@/components/auth/SubmitButton'
+import { authClient } from '@/core/auth/client'
+import { createForgotSchema } from '@/core/auth/validation'
 import { getRequestLocale } from '@/lib/locale'
-import { assertPageEnabled } from '@/lib/module-access'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/auth/forgot-password')({
-  beforeLoad: () => assertPageEnabled('auth'),
   component: ForgotPasswordPage,
 })
 

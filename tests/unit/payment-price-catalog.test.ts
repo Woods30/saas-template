@@ -28,8 +28,8 @@ import {
   formatUsdAmount,
   isOneTimePriceValid,
   LANDING_PRICE_CURRENCY,
-} from '@/payment/price-catalog'
-import { getPriceCatalog } from '@/payment/price-catalog.server'
+} from '@/core/payment/price-catalog'
+import { getPriceCatalog } from '@/core/payment/price-catalog.server'
 
 /**
  * 价格目录：价格的**唯一事实源**是 Stripe，代码里不再存第二份金额。

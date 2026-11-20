@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   signOutAndRedirect: vi.fn(),
 }))
 
-vi.mock('@/auth/client', () => ({
+vi.mock('@/core/auth/client', () => ({
   authClient: {
     useSession: (...args: unknown[]) => mocks.useSession(...args),
     signOut: (...args: unknown[]) => mocks.signOut(...args),
@@ -22,7 +22,7 @@ vi.mock('@/auth/client', () => ({
   signOut: (...args: unknown[]) => mocks.signOut(...args),
 }))
 
-vi.mock('@/auth/sign-out', () => ({
+vi.mock('@/core/auth/sign-out', () => ({
   signOutAndRedirect: (...args: unknown[]) => mocks.signOutAndRedirect(...args),
 }))
 
@@ -111,6 +111,26 @@ describe('UserMenu', () => {
     // 跳转由公共函数负责，组件不应自己动 location。
     expect(assign).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
+  })
+
+  it('管理员展开菜单后显示「管理后台」入口，普通用户不显示', async () => {
+    mocks.useSession.mockReturnValue({
+      data: { user: { email: 'admin@example.com', name: 'AdminUser', role: 'admin' } },
+      isPending: false,
+    })
+    const { unmount } = render(<UserMenu />)
+    screen.getByRole('button', { name: 'AdminUser' }).click()
+    await waitFor(() => expect(screen.getByText('管理后台')).toBeInTheDocument())
+    unmount()
+
+    mocks.useSession.mockReturnValue({
+      data: { user: { email: 'user@example.com', name: 'NormalUser', role: 'user' } },
+      isPending: false,
+    })
+    render(<UserMenu />)
+    screen.getByRole('button', { name: 'NormalUser' }).click()
+    await waitFor(() => expect(screen.getByText('个人中心')).toBeInTheDocument())
+    expect(screen.queryByText('管理后台')).toBeNull()
   })
 })
 

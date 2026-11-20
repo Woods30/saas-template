@@ -1,4 +1,4 @@
-import { createCacheKey } from '@/cache'
+import { createCacheKey } from '@/core/cache'
 import { getServerContext } from '@/lib/server-context'
 
 /**

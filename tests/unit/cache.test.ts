@@ -20,8 +20,8 @@ vi.mock('@/lib/server-context', () => ({
 }))
 
 // 在 vi.mock 之后导入。
-import { createCacheKey, deleteCache, deleteCacheByPrefix, getOrSetCache } from '@/cache'
-import { CACHE_TTL } from '@/cache/constants'
+import { createCacheKey, deleteCache, deleteCacheByPrefix, getOrSetCache } from '@/core/cache'
+import { CACHE_TTL } from '@/core/cache/constants'
 
 describe('createCacheKey', () => {
   it('连接 parts 为字符串', () => {

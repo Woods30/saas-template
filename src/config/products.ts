@@ -1,5 +1,6 @@
 import { m } from '@/locale/paraglide/messages.js'
-import type { PricingInterval, ProductDefinition } from '@/types/pricing'
+import type { ManualPaymentPrice } from '@/types/manual-payments'
+import type { OfferCreditGrant, PricingInterval, ProductDefinition } from '@/types/pricing'
 
 /**
  * 套餐只定义一次；prices 的值是当前服务商的销售引用。
@@ -23,6 +24,11 @@ export function getProducts(): ProductDefinition[] {
       features: [m.pricing_pro_feature_1(), m.pricing_pro_feature_2(), m.pricing_pro_feature_3()],
       recommended: true,
       prices: { monthly: 'pro_monthly', yearly: 'pro_yearly' },
+      // 每期成功付款发放一次；有效期覆盖一个计费周期再留一点余量。
+      credits: {
+        monthly: { amount: 1000, durationDays: 31 },
+        yearly: { amount: 12_000, durationDays: 366 },
+      },
     },
     {
       id: 'lifetime',
@@ -30,16 +36,24 @@ export function getProducts(): ProductDefinition[] {
       description: m.pricing_lifetime_description(),
       features: [m.pricing_lifetime_feature_1(), m.pricing_lifetime_feature_2()],
       prices: { once: 'lifetime' },
+      // 买断不按周期续费，积分不过期。
+      credits: { once: { amount: 20_000 } },
     },
     {
       id: 'template',
-      // 显示名：模板出厂是默认品牌，`pnpm run init` 会换成你自己的。
+      // 显示名：模板出厂是默认品牌，换成你自己的。
       name: 'Jerbix',
       description: m.home_pricing_description(),
       features: [m.home_pricing_source(), m.home_pricing_support(), m.home_pricing_updates()],
       // 价格引用：Stripe 下换成一次性价格的 lookup_key；Creem 下用 CREEM_PRODUCTS 映射。
       // 金额只存在于支付渠道，代码里不存第二份。
       prices: { once: 'one_time' },
+      // 核销型链路的本地标价（单位：分）。这条链路不接支付渠道，没有价格目录
+      // 可用，金额只存在这一处——展示与结算读同一份，不另存第二份。
+      manualPaymentPrices: {
+        once: { amount: 18_000, currency: 'cny', kind: 'one_time' },
+      },
+      credits: { once: { amount: 10_000 } },
     },
   ]
 }
@@ -68,6 +82,33 @@ export function findOfferByReference(
   return undefined
 }
 
+/**
+ * 取某个商品某种付费方式的积分发放配置。
+ *
+ * 数量必须是正整数，有效期（若声明）也必须是正整数；非法配置返回 `undefined`，
+ * 不让坏配置在支付事件里发错积分。
+ */
+export function resolveOfferCredits(
+  productId: string,
+  offerId: string,
+): OfferCreditGrant | undefined {
+  const credits = findProduct(productId)?.credits
+  if (!credits || !Object.hasOwn(credits, offerId)) return undefined
+  const grant = credits[offerId]
+  if (!grant) return undefined
+  return isValidCreditGrant(grant) ? grant : undefined
+}
+
+function isValidCreditGrant(grant: OfferCreditGrant): boolean {
+  if (!Number.isInteger(grant.amount) || grant.amount <= 0) return false
+  if (
+    grant.durationDays !== undefined &&
+    (!Number.isInteger(grant.durationDays) || grant.durationDays <= 0)
+  )
+    return false
+  return true
+}
+
 export function productConfigErrors(products = getProducts()): string[] {
   const errors: string[] = []
   const ids = new Set<string>()
@@ -79,6 +120,87 @@ export function productConfigErrors(products = getProducts()): string[] {
       if (!offer.trim() || !reference.trim()) errors.push(`emptyPrice.${product.id}.${offer}`)
       if (refs.has(reference)) errors.push(`duplicatePrice.${reference}`)
       refs.add(reference)
+    }
+    for (const [offer, grant] of Object.entries(product.credits ?? {})) {
+      const key = `${product.id}.${offer}`
+      // 积分配置必须挂在可售的付费方式上，否则永远不会被执行。
+      if (!Object.hasOwn(product.prices, offer)) errors.push(`creditWithoutPrice.${key}`)
+      if (!Number.isInteger(grant.amount) || grant.amount <= 0)
+        errors.push(`invalidCreditAmount.${key}`)
+      if (
+        grant.durationDays !== undefined &&
+        (!Number.isInteger(grant.durationDays) || grant.durationDays <= 0)
+      )
+        errors.push(`invalidCreditDuration.${key}`)
+    }
+  }
+  return errors
+}
+
+/**
+ * 核销型价格是否合法。
+ *
+ * 规则：金额是正整数分、币种固定人民币、一次性价格不声明周期、
+ * 订阅价格声明周期与正的周期数。
+ */
+function isValidManualPaymentPrice(price: ManualPaymentPrice): boolean {
+  if (!Number.isInteger(price.amount) || price.amount <= 0) return false
+  if (price.currency !== 'cny') return false
+  if (price.kind === 'one_time')
+    return price.interval === undefined && price.intervalCount === undefined
+  if (price.kind === 'subscription') {
+    return (
+      (price.interval === 'month' || price.interval === 'year') &&
+      Number.isInteger(price.intervalCount) &&
+      (price.intervalCount ?? 0) > 0
+    )
+  }
+  return false
+}
+
+/**
+ * 取某个商品某个付费方式在核销型链路下的本地价格。
+ *
+ * 金额只存在 `manualPaymentPrices` 这一处，单位是分；非法配置返回 `undefined`，
+ * 不让坏金额流进下单链路。
+ */
+export function resolveManualPaymentPrice(
+  productId: string,
+  offerId: string,
+): ManualPaymentPrice | undefined {
+  const prices = getProducts().find((product) => product.id === productId)?.manualPaymentPrices
+  if (!prices || !Object.hasOwn(prices, offerId)) return undefined
+  const price = prices[offerId]
+  if (!price) return undefined
+  return isValidManualPaymentPrice(price) ? price : undefined
+}
+
+/**
+ * 校验核销型价格配置。
+ *
+ * 错误键格式与 `productConfigErrors` 一致：`前缀.商品.付费方式`，
+ * 例如 `invalidManualPaymentAmount.template.once`。
+ */
+export function manualPaymentConfigErrors(products = getProducts()): string[] {
+  const errors: string[] = []
+  for (const product of products) {
+    for (const [offer, price] of Object.entries(product.manualPaymentPrices ?? {})) {
+      const key = `${product.id}.${offer}`
+      if (!Number.isInteger(price.amount) || price.amount <= 0)
+        errors.push(`invalidManualPaymentAmount.${key}`)
+      if (price.currency !== 'cny') errors.push(`invalidManualPaymentCurrency.${key}`)
+      if (price.kind === 'one_time') {
+        if (price.interval !== undefined) errors.push(`invalidManualPaymentInterval.${key}`)
+        if (price.intervalCount !== undefined)
+          errors.push(`invalidManualPaymentIntervalCount.${key}`)
+      } else if (price.kind === 'subscription') {
+        if (price.interval !== 'month' && price.interval !== 'year')
+          errors.push(`invalidManualPaymentInterval.${key}`)
+        if (!Number.isInteger(price.intervalCount) || (price.intervalCount ?? 0) <= 0)
+          errors.push(`invalidManualPaymentIntervalCount.${key}`)
+      } else {
+        errors.push(`invalidManualPaymentKind.${key}`)
+      }
     }
   }
   return errors

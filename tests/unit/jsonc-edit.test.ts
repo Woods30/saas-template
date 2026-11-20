@@ -26,7 +26,7 @@ const SAMPLE = `{
       "binding": "DB",
       "database_name": "saas-template-db",
       "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "./src/db/migrations"
+      "migrations_dir": "./src/core/db/migrations"
     }
   ],
   "kv_namespaces": [{ "binding": "CACHE", "id": "00000000000000000000000000000000" }]
@@ -58,7 +58,7 @@ describe('setJsoncValue', () => {
     expect(result).toContain('"name": "acme"')
     expect(result).toContain('// Worker 名决定线上地址')
     expect(result).toContain('/* 自定义 server entry：注入语言上下文与 CSP nonce。 */')
-    expect(result).toContain('"migrations_dir": "./src/db/migrations"')
+    expect(result).toContain('"migrations_dir": "./src/core/db/migrations"')
   })
 
   it('替换嵌套值', () => {

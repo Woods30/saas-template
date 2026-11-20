@@ -233,7 +233,7 @@ describe('seo()', () => {
 
   it('noindex: true 追加 robots 指令', async () => {
     const { seoModule } = await loadModules(CUSTOM_BASE_URL)
-    const head = seoModule.seo('/dashboard/profile', { title: '个人资料', noindex: true })
+    const head = seoModule.seo('/settings/profile', { title: '个人资料', noindex: true })
     expect(head.meta).toContainEqual({ name: 'robots', content: 'noindex' })
 
     const open = seoModule.seo('/pricing', { title: '价格' })
@@ -275,7 +275,7 @@ describe('websiteConfig', () => {
   it('只承载语言无关值：名称与图片路径', async () => {
     const { website } = await loadModules(CUSTOM_BASE_URL)
     const { metadata } = website.websiteConfig
-    // 品牌名取配置里的值，不写死：改名（`pnpm run init`）之后这里仍然成立。
+    // 品牌名取配置里的值，不写死：改过品牌之后这里仍然成立。
     expect(metadata.name).toBe(m.site_name({}, { locale: 'zh' }))
     expect(metadata.images.ogImage).toBe('/logo.png')
   })
@@ -287,14 +287,10 @@ describe('websiteConfig', () => {
     expect('description' in metadata).toBe(false)
   })
 
-  it('features 为显式布尔开关，能力清单固定', async () => {
+  it('不再暴露 features 能力开关层', async () => {
     const { website } = await loadModules(CUSTOM_BASE_URL)
-    const { features } = website.websiteConfig
-    // 能力开关的默认值是部署场景的决定（`pnpm run init` 之后全关），
-    // 这里只钉住「清单固定 + 取值都是布尔」。
-    expect(Object.keys(features).sort()).toEqual(
-      ['enableAIGateway', 'enableAdmin', 'enableApiKeys', 'enableFileUpload', 'enableI18n'].sort(),
-    )
-    expect(Object.values(features).every((value) => typeof value === 'boolean')).toBe(true)
+    // 能力开关已拆散：认证方法进 `auth.*Enabled`，用户中心能力进 `userFeatures.*`，
+    // 管理台入口改由 RBAC 权限点决定。
+    expect('features' in website.websiteConfig).toBe(false)
   })
 })

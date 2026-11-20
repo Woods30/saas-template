@@ -2,6 +2,7 @@ import { createFileRoute, notFound } from '@tanstack/react-router'
 import { allBlogs } from 'content-collections'
 import { JsonLd } from '@/components/JsonLd'
 import { Mdx } from '@/components/mdx/Mdx'
+import { formatUtcDate } from '@/lib/datetime'
 import { articleJsonLd } from '@/lib/json-ld'
 import { assertPageEnabled } from '@/lib/module-access'
 import { seo } from '@/lib/seo'
@@ -45,7 +46,7 @@ function BlogPost() {
         })}
       />
       <main className="mx-auto max-w-3xl px-6 py-10">
-        <p className="text-sm text-muted-foreground">{new Date(post.date).toLocaleDateString()}</p>
+        <p className="text-sm text-muted-foreground">{formatUtcDate(post.date, getLocale())}</p>
         <h1 className="mt-2 text-4xl font-bold">{post.title}</h1>
         <p className="mt-2 text-lg text-muted-foreground">{post.description}</p>
         <hr className="my-6 border-border" />

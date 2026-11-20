@@ -82,18 +82,14 @@ KV、把资源 ID 回填 `wrangler.jsonc`，然后**先应用远程 D1 迁移**�
 | Variable | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 账号 ID |
 | Variable | `VITE_BASE_URL` | 生产站点完整 origin，不带路径 |
 | Secret | `BETTER_AUTH_SECRET` | 至少 32 字符；已有站点沿用原值以免会话失效 |
+| Secret | `CONFIG_ENCRYPTION_KEY` | 配置密钥的加密口令（≥ 16 字符）；缺失时后台存不了密钥 |
 | Variable | `BETTER_AUTH_URL` | 可选，缺省取 `VITE_BASE_URL` |
-| Variable | `MAIL_FROM` | 发件地址，不带显示名与尖括号 |
-| Secret | `RESEND_API_KEY` | 用 Resend 发信时必填 |
-| Secret | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | 用 Stripe 收款时必填 |
-| Variable / Secret | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 用 Google 登录时必填 |
-| Variable / Secret | `VITE_TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | 用 Turnstile 时必填 |
-| Secret | `DISCORD_WEBHOOK_URL` | 用 Discord 通知时必填 |
 | Variable | `ADMIN_EMAILS` | 管理员邮箱列表 |
 | Variable | `DEPLOY_SKIP_CUSTOM_DOMAIN` | 设为 `true` 时只发到 `workers.dev`，不绑自定义域名 |
 
-工作流只上传白名单里的运行时字段（上面标为 Secret 的那些）。启用别的服务时要同步往工作流的
-`env` 与运行时上传白名单里加对应字段，否则 GitHub 里配了也不会生效。
+工作流只上传白名单里的运行时字段。**业务凭据（Resend / Stripe / Creem / GA / Discord 等）不在
+这里**：它们部署后在后台「系统设置」里填写（加密入库），或用带 env 的 `pnpm db:seed` 写进
+远端库。首部署后到后台把支付、邮件配好，站点才算完整可用。
 
 ## 构建期变量与运行时 secret
 
@@ -106,11 +102,13 @@ KV、把资源 ID 回填 `wrangler.jsonc`，然后**先应用远程 D1 迁移**�
 `BETTER_AUTH_SECRET` 两处都出现但用途不同：`.env.production` 那份只为让生产校验通过，
 运行时读的是 Worker secret，**两者必须是同一个值**。
 
+业务凭据是第三种：部署后写入数据库，改完保存即生效，既不用重建也不用改 secret。
+
 ## 验证
 
 `pnpm run check:env:prod` 是生产环境变量校验（deploy 的前置），`pnpm run check:client-bundle`
-在构建后扫描客户端 bundle 是否泄露服务端字段。线上再确认 `/` 与 `/pricing` 返回 200；开了
-auth 模块的话 `/api/auth/get-session` 也要正常响应。
+在构建后扫描客户端 bundle 是否泄露服务端字段。线上再确认 `/` 与 `/pricing` 返回 200，且 `/api/auth/get-session`
+正常响应（认证模块默认开启）。
 
 ## 注意事项
 

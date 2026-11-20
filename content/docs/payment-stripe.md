@@ -4,7 +4,7 @@ description: Stripe products, checkout, and webhook setup
 locale: en
 order: 14
 group: payment
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 Amounts, subscriptions, and the payment page all live on Stripe's side; the site only declares
@@ -16,19 +16,13 @@ plans and keeps a `lookup_key`.
    one-time purchase needs a one-time price. **Give every price a `lookup_key`** whose value
    matches the right-hand side of `prices` in `src/config/products.ts` (`pro_monthly`,
    `pro_yearly`, and so on).
-2. Fill in the environment variables:
-
-   ```dotenv
-   VITE_PAYMENT_PROVIDER=stripe
-   STRIPE_SECRET_KEY=sk_xxx
-   STRIPE_WEBHOOK_SECRET=whsec_xxx
-   ```
-
-3. Deploy: `pnpm run deploy`.
-4. In Stripe Dashboard → Developers → Webhooks, add the endpoint
-   `<your-site-domain>/api/webhooks/stripe` and put its signing secret into
-   `STRIPE_WEBHOOK_SECRET`.
-5. Tick the events listed below on that endpoint.
+2. In admin **Settings → Payment**, pick the `stripe` provider and enter the secret key and the
+   webhook secret in the Stripe group. Both are encrypted at rest and shown masked; saving takes
+   effect immediately.
+3. In Stripe Dashboard → Developers → Webhooks, add the endpoint
+   `<your-site-domain>/api/webhooks/stripe` and put its signing secret back into the webhook
+   secret field in the admin.
+4. Tick the events listed below on that endpoint.
 
 ## Required events
 
@@ -55,10 +49,16 @@ an invalid signature, and 500 when processing fails — Stripe retries the latte
 
 - Payment: the buy button in the home page's `#pricing` section → the server creates a Checkout
   Session → the browser goes to Stripe's hosted payment page → a completed payment returns to
-  `/dashboard/billing`.
+  `/settings/billing`.
 - Management: the "Manage subscription" button on the billing page → Stripe Customer Portal, where
-  renewal cancellation, payment methods, and invoices live. Whether the portal offers plan
+  payment methods and invoices live. Whether the portal offers plan
   switching is decided by your Stripe dashboard configuration.
+- Cancellation: the in-app "Cancel subscription" button calls
+  `subscriptions.update(id, { cancel_at_period_end: true })`, so it **takes effect at period
+  end** and the current period stays usable.
+- Refunds: the admin **Payments** page (`/admin/payments`) refunds Stripe rows by PaymentIntent
+  (`refunds.create({ payment_intent })` with an idempotency key); `charge.refunded` reconciles
+  the row afterwards.
 
 ## Price catalog and price changes
 
@@ -71,6 +71,6 @@ Changing a price needs no code change: create a new price in the Stripe dashboar
 
 ## Verify
 
-- `pnpm run check:env` passes, so the provider and credentials are in place.
+- After saving in the admin, `payment` reports `configured` in the service status.
 - The Webhooks page in Stripe Dashboard shows deliveries to your endpoint (`200` means the
   signature verified).

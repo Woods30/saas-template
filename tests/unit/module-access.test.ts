@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   deliverContactNotification: vi.fn().mockResolvedValue(undefined),
   getPaymentProvider: vi.fn(),
   sendMail: vi.fn().mockResolvedValue({ ok: true }),
-  createDb: vi.fn(),
+  createDbFromEnv: vi.fn(),
   getServerContext: vi.fn(),
 }))
 
@@ -18,30 +18,30 @@ vi.mock('@/lib/rate-limit', () => ({
   checkRateLimit: (...args: unknown[]) => mocks.checkRateLimit(...args),
 }))
 
-vi.mock('@/auth/auth', () => ({
+vi.mock('@/core/auth/auth', () => ({
   getAuth: (...args: unknown[]) => mocks.getAuth(...args),
 }))
 
-vi.mock('@/newsletter', () => ({
+vi.mock('@/modules/newsletter/service', () => ({
   checkRateLimit: (...args: unknown[]) => mocks.newsletterCheckRateLimit(...args),
   subscribe: (...args: unknown[]) => mocks.subscribe(...args),
   unsubscribe: (...args: unknown[]) => mocks.unsubscribe(...args),
 }))
 
-vi.mock('@/contact/notifications', () => ({
+vi.mock('@/modules/contact/service', () => ({
   deliverContactNotification: (...args: unknown[]) => mocks.deliverContactNotification(...args),
 }))
 
-vi.mock('@/payment', () => ({
+vi.mock('@/core/payment', () => ({
   getPaymentProvider: (...args: unknown[]) => mocks.getPaymentProvider(...args),
 }))
 
-vi.mock('@/mail', () => ({
+vi.mock('@/core/email', () => ({
   sendMail: (...args: unknown[]) => mocks.sendMail(...args),
 }))
 
-vi.mock('@/db', () => ({
-  createDb: (...args: unknown[]) => mocks.createDb(...args),
+vi.mock('@/core/db', () => ({
+  createDbFromEnv: (...args: unknown[]) => mocks.createDbFromEnv(...args),
   // Webhook 路由读 `schema.webhookEvents.id` 作为幂等冲突目标。
   schema: { webhookEvents: { id: { name: 'webhook_events.id' } } },
 }))
@@ -53,22 +53,21 @@ vi.mock('@/lib/server-context', () => ({
 
 // auth 页面的 `beforeLoad` 会调 server function `fetchAuthProviderAvailability`，测试环境
 // 缺 TanStack Start 请求上下文会抛无关错误、遮住门禁断言，故替换为固定值。
-vi.mock('@/auth/providers', () => ({
-  getAuthProviderAvailability: () => ({ google: false }),
-  fetchAuthProviderAvailability: async () => ({ google: false }),
+vi.mock('@/core/auth/providers', () => ({
+  getAuthProviderAvailability: () => ({ email: true, google: false, github: false }),
+  fetchAuthProviderAvailability: async () => ({ email: true, google: false, github: false }),
 }))
 
 import { notFound } from '@tanstack/react-router'
 import { createWebsiteConfig, type WebsiteConfig } from '@/config/website'
-import { type PublicEnv, parsePublicEnv } from '@/env/public'
-import type { ServerEnv } from '@/env/server'
-import { parseServerEnv } from '@/env/server'
+import { type PublicEnv, parsePublicEnv } from '@/core/env/public'
+import { parseServerEnv, type RuntimeEnv } from '@/core/env/server'
 import { assertPageEnabled, assertStaticPageEnabled } from '@/lib/module-access'
 import { getModuleUnavailableResponse } from '@/lib/module-access.server'
 import { getSitemapPaths, renderSitemapXml } from '@/routes/sitemap[.]xml'
 
 const publicEnv: PublicEnv = parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' })
-const emptyEnv: ServerEnv = parseServerEnv({})
+const emptyEnv: RuntimeEnv = parseServerEnv({})
 
 /** 合法 supportEmail 字面量。 */
 const SUPPORT_EMAIL = ['support', 'jerbix.dev'].join('@')
@@ -76,7 +75,7 @@ const SUPPORT_EMAIL = ['support', 'jerbix.dev'].join('@')
 /**
  * 完整默认配置（docs/blog/changelog/auth 开，服务关）。
  *
- * 开关逐项写死：各仓的默认开关不同（官网不提供文档站，`pnpm run init` 之后全关），
+ * 开关逐项写死：各仓的默认开关不同（官网不提供文档站，可全关），
  * 依赖默认值会让这里的断言随部署场景静默失效。
  */
 function makeConfig(overrides: Partial<WebsiteConfig> = {}): WebsiteConfig {
@@ -95,33 +94,23 @@ function makeConfig(overrides: Partial<WebsiteConfig> = {}): WebsiteConfig {
     payment: { ...base.payment, enabled: true },
     notification: { ...base.notification, enabled: false },
     analytics: { ...base.analytics, enabled: true },
-    auth: { ...base.auth, enabled: true },
     ...overrides,
   }
 }
 
-const creds: ServerEnv = parseServerEnv({
+// 服务凭据现在来自数据库配置，测试里按运行期形状直接给出。
+const creds: RuntimeEnv = {
+  ...parseServerEnv({}),
   RESEND_API_KEY: 're_test',
   MAIL_FROM: 'noreply@jerbix.dev',
   RESEND_AUDIENCE_ID: 'audience_1',
   STRIPE_SECRET_KEY: 'sk_test',
   STRIPE_WEBHOOK_SECRET: 'whsec_test',
-})
+}
 
 function expectNotFound(fn: () => unknown): void {
   try {
     fn()
-  } catch (error) {
-    expect((error as { isNotFound?: boolean }).isNotFound).toBe(true)
-    return
-  }
-  throw new Error('期望抛出 notFound()，但未抛出')
-}
-
-/** 同 {@link expectNotFound}，但接受 async 的 `beforeLoad`。 */
-async function expectNotFoundAsync(fn: () => unknown): Promise<void> {
-  try {
-    await fn()
   } catch (error) {
     expect((error as { isNotFound?: boolean }).isNotFound).toBe(true)
     return
@@ -165,7 +154,7 @@ describe('assertPageEnabled', () => {
       assertPageEnabled(
         'payment',
         makeConfig({
-          payment: { enabled: false, provider: 'stripe' },
+          payment: { enabled: false, provider: 'stripe', checkoutMode: 'provider' },
         }),
       ),
     )
@@ -175,16 +164,6 @@ describe('assertPageEnabled', () => {
     expect(() => assertPageEnabled('docs', makeConfig())).not.toThrow()
     expect(() => assertPageEnabled('blog', makeConfig())).not.toThrow()
     expect(() => assertPageEnabled('changelog', makeConfig())).not.toThrow()
-  })
-
-  it('auth 默认开启时不抛，关闭时抛 notFound', () => {
-    expect(() => assertPageEnabled('auth', makeConfig())).not.toThrow()
-    expectNotFound(() =>
-      assertPageEnabled(
-        'auth',
-        makeConfig({ auth: { enabled: false, requireEmailVerification: true } }),
-      ),
-    )
   })
 
   it('抛出的错误是 notFound 标记', () => {
@@ -205,7 +184,6 @@ describe('getModuleUnavailableResponse', () => {
   it('模块关闭返回 404 MODULE_DISABLED', async () => {
     const res = getModuleUnavailableResponse('newsletter', {
       config: makeConfig(),
-      publicEnv,
       serverEnv: creds,
     })
     expect(res?.status).toBe(404)
@@ -215,7 +193,6 @@ describe('getModuleUnavailableResponse', () => {
   it('已启用但配置不完整返回 503 SERVICE_UNAVAILABLE', async () => {
     const res = getModuleUnavailableResponse('newsletter', {
       config: makeConfig({ newsletter: { enabled: true, provider: 'resend' } }),
-      publicEnv,
       serverEnv: emptyEnv,
     })
     expect(res?.status).toBe(503)
@@ -228,7 +205,6 @@ describe('getModuleUnavailableResponse', () => {
         contact: { enabled: true },
         mail: { enabled: true, provider: 'resend', supportEmail: SUPPORT_EMAIL },
       }),
-      publicEnv,
       serverEnv: emptyEnv,
     })
     expect(res?.status).toBe(503)
@@ -238,7 +214,6 @@ describe('getModuleUnavailableResponse', () => {
     expect(
       getModuleUnavailableResponse('newsletter', {
         config: makeConfig({ newsletter: { enabled: true, provider: 'resend' } }),
-        publicEnv,
         serverEnv: creds,
       }),
     ).toBeUndefined()
@@ -250,7 +225,6 @@ describe('getModuleUnavailableResponse', () => {
         config: makeConfig({
           mail: { enabled: true, provider: 'resend', supportEmail: SUPPORT_EMAIL },
         }),
-        publicEnv,
         serverEnv: creds,
       }),
     ).toBeUndefined()
@@ -261,9 +235,8 @@ describe('getModuleUnavailableResponse', () => {
     // 门禁判的是 Stripe 凭据齐不齐。
     const res = getModuleUnavailableResponse('payment', {
       config: makeConfig({
-        payment: { enabled: true, provider: 'stripe' },
+        payment: { enabled: true, provider: 'stripe', checkoutMode: 'provider' },
       }),
-      publicEnv,
       serverEnv: parseServerEnv({}),
     })
     expect(res?.status).toBe(503)
@@ -273,9 +246,8 @@ describe('getModuleUnavailableResponse', () => {
     expect(
       getModuleUnavailableResponse('payment', {
         config: makeConfig({
-          payment: { enabled: true, provider: 'stripe' },
+          payment: { enabled: true, provider: 'stripe', checkoutMode: 'provider' },
         }),
-        publicEnv,
         serverEnv: creds,
       }),
     ).toBeUndefined()
@@ -315,6 +287,7 @@ describe('getSitemapPaths', () => {
       payment: {
         enabled: true,
         provider: 'stripe',
+        checkoutMode: 'provider',
       },
       contact: { enabled: true },
     })
@@ -541,30 +514,11 @@ describe('页面路由门禁接线', () => {
     expect(() => beforeLoad()).not.toThrow()
   })
 
-  it('auth 页面默认开启时 beforeLoad 不抛 notFound', async () => {
+  it('认证页面 beforeLoad 不再依赖模块开关（不抛 notFound）', async () => {
     const modules = await importAuthRoutes()
     for (const beforeLoad of modules) {
-      // `beforeLoad` 可能同步也可能异步（login / register 另取社交登录可见性），统一 await。
+      // `beforeLoad` 可能同步也可能异步（login / register 另取登录方式可见性），统一 await。
       await expect(Promise.resolve().then(beforeLoad)).resolves.not.toThrow()
-    }
-  })
-
-  it('auth 关闭时每个 auth 页面 beforeLoad 都抛 notFound', async () => {
-    // 必须重新导入：`vi.resetModules()` 后路由持有新模块实例，改旧实例字段不生效。
-    for (const path of [
-      '@/routes/{-$locale}/auth/login',
-      '@/routes/{-$locale}/auth/register',
-      '@/routes/{-$locale}/auth/forgot-password',
-      '@/routes/{-$locale}/auth/reset-password',
-      '@/routes/{-$locale}/auth/verify-email',
-      '@/routes/{-$locale}/auth/error',
-    ]) {
-      const { Route } = (await importRouteWithConfig(
-        { auth: { ...makeConfig().auth, enabled: false } },
-        {},
-        path,
-      )) as { Route: { options: { beforeLoad: () => unknown } } }
-      await expectNotFoundAsync(Route.options.beforeLoad)
     }
   })
 })
@@ -590,7 +544,8 @@ async function importRouteWithConfig(
   vi.resetModules()
   vi.doMock('@/config/website', async () => {
     const actual = await vi.importActual<typeof import('@/config/website')>('@/config/website')
-    const { parsePublicEnv } = await vi.importActual<typeof import('@/env/public')>('@/env/public')
+    const { parsePublicEnv } =
+      await vi.importActual<typeof import('@/core/env/public')>('@/core/env/public')
     const base = actual.createWebsiteConfig(parsePublicEnv({ VITE_BASE_URL: 'https://jerbix.dev' }))
     return { ...actual, websiteConfig: { ...base, ...overrides } }
   })
@@ -686,7 +641,7 @@ describe('API handler 门禁（默认服务全关）', () => {
     const res = await handler({ request })
     expect(res.status).toBe(404)
     expect(mocks.getAuth).not.toHaveBeenCalled()
-    expect(mocks.createDb).not.toHaveBeenCalled()
+    expect(mocks.createDbFromEnv).not.toHaveBeenCalled()
   })
 
   it('email POST 返回 404，且不调用 auth / 不读取 body', async () => {
@@ -706,25 +661,6 @@ describe('API handler 门禁（默认服务全关）', () => {
     expect(read).not.toHaveBeenCalled()
     expect(mocks.getAuth).not.toHaveBeenCalled()
     expect(mocks.sendMail).not.toHaveBeenCalled()
-  })
-
-  it('auth 关闭时 /api/auth/* 返回 404，且不调用 getAuth', async () => {
-    const mod = (await importRouteWithConfig(
-      { auth: { enabled: false, requireEmailVerification: true } },
-      {},
-      '@/routes/api/auth/$',
-    )) as { Route: unknown }
-    const handler = getHandler(mod.Route, 'POST')
-    const request = new Request('https://jerbix.dev/api/auth/sign-in/email', {
-      method: 'POST',
-      body: '{}',
-    })
-    const read = vi.spyOn(request, 'json')
-    const res = await handler({ request })
-    expect(res.status).toBe(404)
-    expect(await res.json()).toEqual({ error: 'MODULE_DISABLED' })
-    expect(read).not.toHaveBeenCalled()
-    expect(mocks.getAuth).not.toHaveBeenCalled()
   })
 })
 
@@ -848,7 +784,7 @@ describe('Stripe Webhook 不受 payment.enabled 门禁影响', () => {
       onConflictDoNothing,
       onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
     })
-    mocks.createDb.mockReturnValue({ insert, update, select, delete: vi.fn() })
+    mocks.createDbFromEnv.mockReturnValue({ insert, update, select, delete: vi.fn() })
 
     const { Route } = await import('@/routes/api/webhooks/stripe')
     const handler = getHandler(Route, 'POST')

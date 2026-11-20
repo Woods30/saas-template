@@ -26,26 +26,17 @@ Resend 是第三方事务邮件服务。本站用它发验证邮件、欢迎信�
 2. **创建 API key。** 在 [Resend API Keys](https://resend.com/api-keys) 建一个带**发信权限**的 key，
    复制保存（只显示一次）。
 
-3. **填环境变量。** `RESEND_API_KEY` 是服务端 secret，`MAIL_FROM` 是发件地址：
+3. **在后台填写。** 打开「系统设置 → 邮件」：
 
-   ```bash
-   RESEND_API_KEY=<your-resend-api-key>
-   MAIL_FROM=noreply@<your-domain.com>
-   ```
+   - 渠道选 `resend`；
+   - 在 Resend 分组填 API key（加密入库，不回显明文）；
+   - 在邮件分组填发件地址（如 `noreply@<your-domain.com>`）。
 
-   `MAIL_FROM` 必须是**纯邮箱地址**，写进代码前用 `z.email()` 校验，`Brand <noreply@...>` 这种带
-   显示名的写法会被拒绝。两个变量都**不加 `VITE_` 前缀**。
+   保存即生效，不用重新部署。发件地址必须是**纯邮箱地址**，`Brand <noreply@...>` 这种带显示名的
+   写法会被拒绝。
 
-4. **部署。** 生产环境把这两个值交给 Worker：
-
-   ```bash
-   pnpm exec wrangler secret put RESEND_API_KEY
-   pnpm exec wrangler secret put MAIL_FROM
-   ```
-
-   用 Release 自动部署时，在 GitHub **Settings → Environments → production** 里配 Secret
-   `RESEND_API_KEY` 与 Variable `MAIL_FROM`（同名 Secret 也兼容，Variable 优先）。两者都已在部署
-   工作流的运行时上传白名单里。
+   也可以先在 `.env` 里写 `RESEND_API_KEY` 与 `MAIL_FROM`，再跑 `pnpm db:seed` 一并写入
+   ——它们只在 seed 时读取一次。
 
 ## DMARC
 
@@ -60,24 +51,20 @@ v=DMARC1; p=none; rua=mailto:<your-support-email>
 
 ## 验证
 
-```bash
-pnpm run check:env
-```
-
-`mail` 一项不再报缺配置即可。随后本地起服务、触发一次注册或联系表单，确认 Resend 后台
+后台「系统设置」保存后，服务状态里 `mail` 一项不再报缺配置即可。随后本地起服务、触发一次注册或联系表单，确认 Resend 后台
 "Sent" 列表里出现该邮件——配置齐备只代表校验通过，域名验证与实际投递仍要在 Resend 确认。
 
 ```bash
 pnpm email:dev
 ```
 
-在 3001 端口预览 `src/mail/templates/` 下的四个模板（验证、重置密码、联系消息、欢迎），
+在 3001 端口预览 `src/core/email/templates/` 下的四个模板（验证、重置密码、联系消息、欢迎），
 改模板即时热更新。
 
 ## 注意事项
 
 - 同一域名若还开着 Cloudflare Email Routing 收信，两侧记录名不同可以共存，但**根域只能有一条
   SPF 记录**。
-- 改了 `MAIL_FROM` 就要重新部署才生效（它是运行时 secret）。
+- 改发件地址在后台保存即生效，不需要重新部署。
 
 配置好后可以接着做 [邮件总览](./email)里的联系表单，或 [邮件订阅](./newsletter)。

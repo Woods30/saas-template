@@ -4,11 +4,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { websiteConfig } from '@/config/website'
 
 const email = vi.hoisted(() => ({ send: vi.fn().mockResolvedValue({ ok: true }) }))
-vi.mock('@/auth/emails', () => ({ sendAuthEmailForRequest: email.send }))
+vi.mock('@/core/auth/emails', () => ({ sendAuthEmailForRequest: email.send }))
 
-import { getAuth } from '@/auth/auth'
-import { authClient } from '@/auth/client'
-import { schema } from '@/db'
+import { getAuth } from '@/core/auth/auth'
+import { authClient } from '@/core/auth/client'
+import { schema } from '@/core/db'
 
 /**
  * better-auth 数据库接线回归：`drizzleAdapter` 必须作为顶层 `database:` 传入。
@@ -36,10 +36,10 @@ function env() {
 /** 仅替换 D1 传输；SQL、迁移和 Drizzle adapter 均走真实实现。 */
 function memoryD1() {
   const sqlite = new DatabaseSync(':memory:')
-  for (const name of readdirSync('src/db/migrations')
+  for (const name of readdirSync('src/core/db/migrations/sqlite')
     .filter((name) => name.endsWith('.sql'))
     .sort()) {
-    sqlite.exec(readFileSync(`src/db/migrations/${name}`, 'utf8'))
+    sqlite.exec(readFileSync(`src/core/db/migrations/sqlite/${name}`, 'utf8'))
   }
   function prepare(query: string) {
     const statement = sqlite.prepare(query)
@@ -67,7 +67,10 @@ describe('邮箱验证完整流程', () => {
   it('注册不创建会话，未验证登录被拒绝，邮件验证后建立会话并保留购买目标', async () => {
     const { sqlite, binding } = memoryD1()
     email.send.mockClear()
-    const auth = getAuth({ ...env(), DB: binding })
+    // 默认关闭验证；本用例覆盖显式开启后的完整链路。
+    const previous = websiteConfig.auth.requireEmailVerification
+    websiteConfig.auth.requireEmailVerification = true
+    const auth = await getAuth({ ...env(), DB: binding })
     const callbackURL = '/zh/auth/verify-email?redirect=%2Fzh%2F%23pricing'
     const credentials = { email: 'buyer@example.com', password: 'StrongPassword123!' }
     const post = (path: string, body: object) =>
@@ -110,31 +113,62 @@ describe('邮箱验证完整流程', () => {
       expect(login.status).toBe(200)
       expect(login.headers.get('set-cookie')).toContain('session_token=')
     } finally {
+      websiteConfig.auth.requireEmailVerification = previous
+      sqlite.close()
+    }
+  })
+
+  it('默认关闭验证：注册直接建立会话，不发验证邮件，登录不受限', async () => {
+    const { sqlite, binding } = memoryD1()
+    email.send.mockClear()
+    const auth = await getAuth({ ...env(), DB: binding })
+    const credentials = { email: 'buyer@example.com', password: 'StrongPassword123!' }
+    const post = (path: string, body: object) =>
+      auth.handler(
+        new Request(`http://localhost:3000/api/auth/${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
+          body: JSON.stringify(body),
+        }),
+      )
+    try {
+      const signup = await post('sign-up/email', { ...credentials, name: 'Buyer' })
+      expect(signup.status).toBe(200)
+      expect(signup.headers.get('set-cookie')).toContain('session_token=')
+      expect(sqlite.prepare('SELECT count(*) AS count FROM sessions').get()?.count).toBe(1)
+      expect(sqlite.prepare('SELECT email_verified FROM users').get()?.email_verified).toBe(0)
+      // 关键回归：注册不该在「没要求验证」时发验证邮件。
+      expect(email.send.mock.calls.map(([input]) => input.kind)).toEqual([])
+
+      const login = await post('sign-in/email', credentials)
+      expect(login.status).toBe(200)
+      expect(login.headers.get('set-cookie')).toContain('session_token=')
+    } finally {
       sqlite.close()
     }
   })
 })
 
 describe('better-auth 实例复用', () => {
-  it('同一 D1 binding 复用同一实例，避免每次请求重建', () => {
+  it('同一 D1 binding 复用同一实例，避免每次请求重建', async () => {
     const sharedDb = fakeD1()
-    const first = getAuth({ ...env(), DB: sharedDb })
-    const second = getAuth({ ...env(), DB: sharedDb })
+    const first = await getAuth({ ...env(), DB: sharedDb })
+    const second = await getAuth({ ...env(), DB: sharedDb })
     // 每个请求都会新建 normalizedEnv 对象，但 D1 binding 在 isolate 内稳定；
     // 按 binding 缓存才能命中，否则每次 server function 都要重建实例（实测数百毫秒）。
     expect(second).toBe(first)
   })
 
-  it('不同 D1 binding 不复用实例', () => {
-    const a = getAuth({ ...env(), DB: fakeD1() })
-    const b = getAuth({ ...env(), DB: fakeD1() })
+  it('不同 D1 binding 不复用实例', async () => {
+    const a = await getAuth({ ...env(), DB: fakeD1() })
+    const b = await getAuth({ ...env(), DB: fakeD1() })
     expect(b).not.toBe(a)
   })
 })
 
 describe('会话 cookie 缓存', () => {
   it('已开启且缓存窗口不超过 30 秒', async () => {
-    const ctx = await getAuth(env()).$context
+    const ctx = await (await getAuth(env())).$context
     const cookieCache = ctx.options.session?.cookieCache
     expect(cookieCache?.enabled).toBe(true)
     // 缓存 cookie 是签名 JWT，跨设备撤销不会让它立刻失效；
@@ -144,20 +178,52 @@ describe('会话 cookie 缓存', () => {
 })
 
 describe('邮箱验证接线', () => {
-  it('注册和未验证登录均发验证邮件，验证后自动登录', async () => {
-    const auth = getAuth(env())
-    const ctx = await auth.$context
-    expect(ctx.options.emailAndPassword?.requireEmailVerification).toBe(true)
-    expect(ctx.options.emailVerification?.sendOnSignUp).toBe(true)
-    expect(ctx.options.emailVerification?.sendOnSignIn).toBe(true)
-    expect(ctx.options.emailVerification?.autoSignInAfterVerification).toBe(true)
+  it('默认不要求验证，也不发验证邮件', async () => {
+    const ctx = await (await getAuth(env())).$context
+    expect(ctx.options.emailAndPassword?.requireEmailVerification).toBe(false)
+    expect(ctx.options.emailVerification?.sendOnSignUp).toBe(false)
+    expect(ctx.options.emailVerification?.sendOnSignIn).toBe(false)
   })
+
+  it('开启验证后注册和未验证登录均发验证邮件，验证后自动登录', async () => {
+    const previous = websiteConfig.auth.requireEmailVerification
+    websiteConfig.auth.requireEmailVerification = true
+    try {
+      const auth = await getAuth(env())
+      const ctx = await auth.$context
+      expect(ctx.options.emailAndPassword?.requireEmailVerification).toBe(true)
+      expect(ctx.options.emailVerification?.sendOnSignUp).toBe(true)
+      expect(ctx.options.emailVerification?.sendOnSignIn).toBe(true)
+      expect(ctx.options.emailVerification?.autoSignInAfterVerification).toBe(true)
+    } finally {
+      websiteConfig.auth.requireEmailVerification = previous
+    }
+  })
+
+  it('验证关闭时手动重发验证邮件也不发信', async () => {
+    const ctx = await (await getAuth(env())).$context
+    email.send.mockClear()
+    const user = {
+      id: 'u1',
+      name: 'Buyer',
+      email: 'buyer@example.com',
+      emailVerified: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    await ctx.options.emailVerification?.sendVerificationEmail?.(
+      { user, url: 'http://localhost:3000/api/auth/verify-email?token=test', token: 'test' },
+      new Request('http://localhost:3000/api/auth/send-verification-email'),
+    )
+    expect(email.send).not.toHaveBeenCalled()
+  })
+
   it('欢迎邮件只在邮箱验证后发送', async () => {
     const previous = websiteConfig.mail.enabled
     websiteConfig.mail.enabled = true
     email.send.mockClear()
     try {
-      const ctx = await getAuth(env()).$context
+      const ctx = await (await getAuth(env())).$context
       const hook = ctx.options.emailVerification?.afterEmailVerification
       expect(hook).toBeTypeOf('function')
       const user = {
@@ -174,7 +240,8 @@ describe('邮箱验证接线', () => {
         expect.any(Request),
         expect.any(Object),
       )
-      expect('databaseHooks' in ctx.options).toBe(false)
+      // 归因钩子已注册；它只合并 create 数据，不影响邮件验证接线。
+      expect(ctx.options.databaseHooks?.user?.create?.before).toBeTypeOf('function')
     } finally {
       websiteConfig.mail.enabled = previous
     }
@@ -183,7 +250,7 @@ describe('邮箱验证接线', () => {
 
 describe('getAuth 数据库接线', () => {
   it('使用 drizzle 适配器，而非回退到内存适配器', async () => {
-    const auth = getAuth(env())
+    const auth = await getAuth(env())
     const ctx = await auth.$context
     expect(ctx.adapter.id).toBe('drizzle')
   })
@@ -195,7 +262,7 @@ describe('getAuth 数据库接线', () => {
 
 describe('auth 插件注册', () => {
   it('服务端注册 admin 插件（/api/auth/admin/* 端点由它提供）', async () => {
-    const auth = getAuth(env())
+    const auth = await getAuth(env())
     const ctx = await auth.$context
     const ids = (ctx.options.plugins ?? []).map((plugin) => plugin.id)
     expect(ids).toContain('admin')

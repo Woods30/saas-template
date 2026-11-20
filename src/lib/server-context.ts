@@ -6,24 +6,22 @@
  * 每个请求相互隔离。
  */
 import { AsyncLocalStorage } from 'node:async_hooks'
-import type { KVCacheProvider } from '@/cache/provider/kv'
-import type { ServerEnv } from '@/env/server'
+import type { KVCacheProvider } from '@/core/cache/provider/kv'
+import type { MailProvider } from '@/core/email/types'
+import type { RuntimeEnv } from '@/core/env/server'
+import type { NotificationChannel, NotificationProvider } from '@/core/notify/service'
+import type { PaymentProviderName } from '@/core/payment'
+import type { PaymentProvider } from '@/core/payment/types'
+import type { R2StorageProvider } from '@/core/storage/provider/r2'
 import { defaultTheme, type Theme } from '@/lib/theme'
-import type { MailProvider } from '@/mail/types'
-import type { NewsletterProviderName } from '@/newsletter'
-import type { NewsletterProvider } from '@/newsletter/types'
-import type { NotificationChannel } from '@/notification'
-import type { NotificationProvider } from '@/notification/types'
-import type { PaymentProviderName } from '@/payment'
-import type { PaymentProvider } from '@/payment/types'
-import type { R2StorageProvider } from '@/storage/provider/r2'
+import type { NewsletterProvider, NewsletterProviderName } from '@/modules/newsletter/service'
 
 interface ServerContext {
   /**
    * 每请求归一化 env：同时具备已校验的字符串字段与原始资源 binding
    * （DB / CACHE / BUCKET / EMAIL）。
    */
-  env: Env & ServerEnv
+  env: Env & RuntimeEnv
   cacheProvider: KVCacheProvider
   storageProvider: R2StorageProvider
   mailProviderRegistry?: Record<string, (() => MailProvider) | undefined>
@@ -49,7 +47,7 @@ export function getServerContext(): ServerContext {
   if (!ctx) {
     // 客户端调用或不在 ALS context 中（典型于测试环境）：调用方需自行防御。
     return {
-      env: undefined as unknown as Env & ServerEnv,
+      env: undefined as unknown as Env & RuntimeEnv,
       cacheProvider: undefined as unknown as KVCacheProvider,
       storageProvider: undefined as unknown as R2StorageProvider,
       newsletterProviderRegistry: undefined,

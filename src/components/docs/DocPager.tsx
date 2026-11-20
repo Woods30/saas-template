@@ -1,8 +1,8 @@
 import { IconArrowLeft, IconArrowRight } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
-import { DOCS_INDEX_SLUG, type DocNeighbor } from '@/lib/docs'
 import type { Locale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
+import { DOCS_INDEX_SLUG, type DocNeighbor } from '@/modules/docs/service'
 
 /**
  * 文档底部的上一篇 / 下一篇。顺序沿 `order` 全局推进、不在组边界停住。

@@ -31,7 +31,7 @@ vi.mock('@/lib/server-context', () => ({
 }))
 
 // Mock cache。
-vi.mock('@/cache', () => ({
+vi.mock('@/core/cache', () => ({
   createCacheKey: (prefix: string, ...parts: string[]) => `${prefix}:${parts.join(':')}`,
   deleteCache: vi.fn().mockResolvedValue(undefined),
   getOrSetCache: vi
@@ -62,7 +62,7 @@ vi.mock('resend', () => ({
 }))
 
 // 被测模块，必须在 mock 之后导入。
-import { parseServerEnv } from '@/env/server'
+import { parseServerEnv, type RuntimeEnv } from '@/core/env/server'
 import {
   BeehiivNewsletterProvider,
   buildNewsletterProviderRegistry,
@@ -71,8 +71,13 @@ import {
   ResendNewsletterProvider,
   subscribe,
   unsubscribe,
-} from '@/newsletter'
+} from '@/modules/newsletter/service'
 import { Route as NewsletterRoute } from '@/routes/api/newsletter/$'
+
+/** 运行期 env：启动参数 + 数据库配置（测试里直接给出后者的键）。 */
+function makeEnv(extra: Partial<RuntimeEnv> = {}): RuntimeEnv {
+  return { ...parseServerEnv({}), ...extra }
+}
 
 // ResendNewsletterProvider。
 describe('ResendNewsletterProvider', () => {
@@ -210,13 +215,13 @@ describe('BeehiivNewsletterProvider', () => {
 // buildNewsletterProviderRegistry。
 describe('buildNewsletterProviderRegistry', () => {
   it('returns undefined for resend when env is missing', () => {
-    const registry = buildNewsletterProviderRegistry(parseServerEnv({}))
+    const registry = buildNewsletterProviderRegistry(makeEnv({}))
     expect(registry.resend).toBeUndefined()
   })
 
   it('returns factory for resend when env has keys', () => {
     const registry = buildNewsletterProviderRegistry(
-      parseServerEnv({
+      makeEnv({
         RESEND_API_KEY: 'key-1',
         RESEND_AUDIENCE_ID: 'audience-1',
       }),
@@ -229,13 +234,13 @@ describe('buildNewsletterProviderRegistry', () => {
   })
 
   it('returns undefined for beehiiv when env is missing', () => {
-    const registry = buildNewsletterProviderRegistry(parseServerEnv({}))
+    const registry = buildNewsletterProviderRegistry(makeEnv({}))
     expect(registry.beehiiv).toBeUndefined()
   })
 
   it('returns factory for beehiiv when env has keys', () => {
     const registry = buildNewsletterProviderRegistry(
-      parseServerEnv({
+      makeEnv({
         BEEHIIV_API_KEY: 'key-1',
         BEEHIIV_PUBLICATION_ID: 'pub-1',
       }),
@@ -249,7 +254,7 @@ describe('buildNewsletterProviderRegistry', () => {
 
   it('beehiiv factory receives sendWelcomeEmail: false by default', () => {
     const registry = buildNewsletterProviderRegistry(
-      parseServerEnv({
+      makeEnv({
         BEEHIIV_API_KEY: 'key-1',
         BEEHIIV_PUBLICATION_ID: 'pub-1',
       }),
@@ -273,7 +278,7 @@ describe('buildNewsletterProviderRegistry', () => {
 
   it('beehiiv factory receives sendWelcomeEmail: true when env is "true"', () => {
     const registry = buildNewsletterProviderRegistry(
-      parseServerEnv({
+      makeEnv({
         BEEHIIV_API_KEY: 'key-1',
         BEEHIIV_PUBLICATION_ID: 'pub-1',
         BEEHIIV_SEND_WELCOME_EMAIL: 'true',
@@ -318,7 +323,7 @@ describe('subscribe / unsubscribe / checkStatus', () => {
     expect(result).toBe(true)
     expect(mockProvider.subscribe).toHaveBeenCalledWith({ email: 'test@example.com' })
 
-    const { deleteCache } = await import('@/cache')
+    const { deleteCache } = await import('@/core/cache')
     expect(deleteCache).toHaveBeenCalledWith('newsletter:status:test@example.com')
   })
 
@@ -333,7 +338,7 @@ describe('subscribe / unsubscribe / checkStatus', () => {
     expect(result).toBe(true)
     expect(mockProvider.unsubscribe).toHaveBeenCalledWith({ email: 'test@example.com' })
 
-    const { deleteCache } = await import('@/cache')
+    const { deleteCache } = await import('@/core/cache')
     expect(deleteCache).toHaveBeenCalledWith('newsletter:status:test@example.com')
   })
 
@@ -344,7 +349,7 @@ describe('subscribe / unsubscribe / checkStatus', () => {
     }
     mockNewsletterProviderRegistry.resend = () => mockProvider as never
 
-    const { getOrSetCache } = await import('@/cache')
+    const { getOrSetCache } = await import('@/core/cache')
     vi.mocked(getOrSetCache).mockResolvedValueOnce(true)
 
     const result = await checkStatus('resend', { email: 'test@example.com' })

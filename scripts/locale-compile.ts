@@ -67,9 +67,21 @@ if (process.argv[1]?.endsWith('locale-compile.ts')) {
   if (!force && isCompileUpToDate()) {
     console.log('locale:compile 跳过（产物已是最新）')
   } else {
-    execFileSync('pnpm', ['exec', 'paraglide-js', 'compile', '--project', './project.inlang'], {
-      stdio: 'inherit',
-    })
+    execFileSync(
+      'pnpm',
+      [
+        'exec',
+        'paraglide-js',
+        'compile',
+        '--project',
+        './project.inlang',
+        '--outdir',
+        './src/locale/paraglide',
+      ],
+      {
+        stdio: 'inherit',
+      },
+    )
     touchStamp()
   }
 }

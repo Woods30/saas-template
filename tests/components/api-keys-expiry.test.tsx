@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocale } from '@/locale/paraglide/runtime.js'
-import { Route as ApiKeysRoute } from '@/routes/{-$locale}/_layout/dashboard/api-keys'
+import { Route as ApiKeysRoute } from '@/routes/{-$locale}/_layout/settings/api-keys'
 
 /**
  * API 密钥创建弹窗的有效期选择：默认 30 天；`expiresIn` 以秒传参（单位错了密钥会
@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   delete: vi.fn(),
 }))
 
-vi.mock('@/auth/client', () => ({
+vi.mock('@/core/auth/client', () => ({
   authClient: {
     apiKey: {
       create: (...args: unknown[]) => mocks.create(...args),
@@ -24,6 +24,12 @@ vi.mock('@/auth/client', () => ({
     },
   },
 }))
+
+// 页面在增删后走 `router.invalidate()` 重新取数；组件单独渲染没有 Router 上下文。
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return { ...actual, useRouter: () => ({ invalidate: vi.fn() }) }
+})
 
 const SECONDS_PER_DAY = 86_400
 
@@ -36,6 +42,8 @@ const ApiKeysPage = ApiKeysRoute.options.component as unknown as () => React.JSX
  */
 function stubLoaderData(keys: unknown[] = []) {
   vi.spyOn(ApiKeysRoute, 'useLoaderData').mockReturnValue({ ok: true, keys } as never)
+  vi.spyOn(ApiKeysRoute, 'useSearch').mockReturnValue({} as never)
+  vi.spyOn(ApiKeysRoute, 'useNavigate').mockReturnValue(vi.fn() as never)
 }
 
 /** 渲染页面并打开创建弹窗，返回有效期下拉。 */

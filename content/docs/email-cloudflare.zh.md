@@ -40,24 +40,19 @@ Cloudflare Email 走你 Cloudflare 账号内的邮件路由发信，不依赖第
    模板里这段是注释掉的，示例值 `REPLACE_ME` 不是合法投递地址，启用前要换成真实地址。
    `destination_address` 限定这个 binding 只能发往哪个已验证地址；不限定就填实际要发的地址。
 
-4. **填发件地址。** `MAIL_FROM` 优先，缺失时才回退到 `CLOUDFLARE_EMAIL_SENDER`：
+4. **在后台切换渠道并填发件地址。** 打开「系统设置 → 邮件」：
+
+   - 渠道选 `cloudflare`；
+   - 发件地址填在邮件分组（如 `noreply@<your-domain.com>`）；留空时回退到
+     Cloudflare Email 分组里的发送方地址。
+
+   发件地址必须是纯邮箱地址，不接受带显示名的写法。保存即生效。
+
+   也可以先在 `.env` 里写 `MAIL_FROM` / `CLOUDFLARE_EMAIL_SENDER`，再跑 `pnpm db:seed`。
+
+5. **部署。** `EMAIL` binding 的改动要重新部署：
 
    ```bash
-   MAIL_FROM=noreply@<your-domain.com>
-   ```
-
-   两个变量都**不加 `VITE_` 前缀**。`MAIL_FROM` 必须是纯邮箱地址，不接受带显示名的写法。
-
-5. **切换 provider 并部署。** 在 `src/config/website.ts` 里：
-
-   ```ts
-   mail: { enabled: true, provider: 'cloudflare', supportEmail: '<your-support-email>' },
-   ```
-
-   然后把运行时 secret 交给 Worker 并部署：
-
-   ```bash
-   pnpm exec wrangler secret put MAIL_FROM
    pnpm deploy
    ```
 
@@ -68,22 +63,18 @@ Cloudflare Email 走你 Cloudflare 账号内的邮件路由发信，不依赖第
 
 ## 验证
 
-```bash
-pnpm run check:env
-```
-
-`mail` 一项不再报缺配置即可；绑定是否存在由 `pnpm check` 列为部署核对项。随后触发一次注册或
-联系表单，确认邮件真的送达。
+后台「系统设置」保存后，`mail` 一项不再报缺配置即可；绑定是否存在由 `pnpm check` 列为部署核对项。
+随后触发一次注册或联系表单，确认邮件真的送达。
 
 ```bash
 pnpm email:dev
 ```
 
-在 3001 端口预览 `src/mail/templates/` 下的模板。
+在 3001 端口预览 `src/core/email/templates/` 下的模板。
 
 ## 注意事项
 
 - Cloudflare Email binding **只能发往已验证的收件地址**，部署前先核对账号的收件限制。
-- `MAIL_FROM` 与 `CLOUDFLARE_EMAIL_SENDER` 只在 `provider` 为 `cloudflare` 时才会被回退使用。
+- 发件地址留空时，`CLOUDFLARE_EMAIL_SENDER` 才会作为回退；两者都只在 `provider` 为 `cloudflare` 时使用。
 
 配置好后可以接着做 [邮件总览](./email)里的联系表单，或 [邮件订阅](./newsletter)。

@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { NewsletterCta } from '@/components/sections/NewsletterCta'
+import { NewsletterCta } from '@/blocks/newsletter-cta'
 import { toast } from '@/components/ui/toast'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 

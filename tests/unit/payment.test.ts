@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { StripePaymentProvider } from '@/payment/provider/stripe'
+import { CreemPaymentProvider } from '@/core/payment/provider/creem'
+import { StripePaymentProvider } from '@/core/payment/provider/stripe'
 
 const api = vi.hoisted(() => ({
   checkout: vi.fn(),
@@ -8,6 +9,8 @@ const api = vi.hoisted(() => ({
   verify: vi.fn(),
   invoicePayments: vi.fn(),
   subscription: vi.fn(),
+  updateSubscription: vi.fn(),
+  refund: vi.fn(),
 }))
 vi.mock('stripe', () => ({
   default: class {
@@ -17,7 +20,8 @@ vi.mock('stripe', () => ({
     billingPortal = { sessions: { create: api.portal } }
     webhooks = { constructEventAsync: api.verify }
     invoicePayments = { list: api.invoicePayments }
-    subscriptions = { retrieve: api.subscription }
+    subscriptions = { retrieve: api.subscription, update: api.updateSubscription }
+    refunds = { create: api.refund }
   },
 }))
 beforeEach(() => vi.clearAllMocks())
@@ -161,5 +165,58 @@ describe('Stripe 托管支付', () => {
     await expect(
       new StripePaymentProvider('test', 'hook').parseWebhookEvent('raw', 'bad'),
     ).rejects.toThrow('invalid signature')
+  })
+  it('取消订阅设期末生效，不做立即终止', async () => {
+    api.updateSubscription.mockResolvedValue({
+      id: 'sub1',
+      metadata: { userId: 'u1' },
+      status: 'active',
+      cancel_at_period_end: true,
+      items: {
+        data: [{ current_period_end: 2000, price: { id: 'p1', lookup_key: 'pro_monthly' } }],
+      },
+    })
+    const result = await new StripePaymentProvider('test', 'hook').cancelSubscription('sub1')
+    expect(api.updateSubscription).toHaveBeenCalledWith('sub1', { cancel_at_period_end: true })
+    expect(result).toEqual({ status: 'active', cancelAtPeriodEnd: true, currentPeriodEnd: 2000 })
+  })
+  it('退款按 PaymentIntent 发起，全额时省略金额', async () => {
+    api.refund.mockResolvedValue({ id: 're_1', status: 'succeeded' })
+    const provider = new StripePaymentProvider('test', 'hook')
+    const result = await provider.refundPayment({ paymentIntentId: 'pi_1' })
+    expect(api.refund.mock.calls[0]?.[0]).toEqual({ payment_intent: 'pi_1' })
+    expect(result).toEqual({ status: 'succeeded' })
+  })
+})
+
+describe('Creem 订阅操作', () => {
+  it('取消订阅用 scheduled 模式，退款用交易号', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init })
+      if (url.endsWith('/cancel')) return new Response(JSON.stringify({ ok: true }))
+      if (url.endsWith('/v1/refunds')) return new Response(JSON.stringify({ status: 'succeeded' }))
+      return new Response(
+        JSON.stringify({
+          id: 'sub_1',
+          status: 'scheduled_cancel',
+          product: { id: 'prod_1', billing_type: 'recurring', billing_period: 'every-month' },
+          current_period_end_date: '2026-12-01T00:00:00.000Z',
+        }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = new CreemPaymentProvider('key', 'secret', { pro_monthly: 'prod_1' })
+
+    const cancel = await provider.cancelSubscription('sub_1')
+    expect(calls[0]?.url).toContain('/v1/subscriptions/sub_1/cancel')
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ mode: 'scheduled' })
+    expect(cancel).toMatchObject({ status: 'active', cancelAtPeriodEnd: true })
+
+    const refund = await provider.refundPayment({ transactionId: 'tran_1' })
+    expect(calls.at(-1)?.url).toContain('/v1/refunds')
+    expect(JSON.parse(String(calls.at(-1)?.init?.body))).toEqual({ transaction_id: 'tran_1' })
+    expect(refund).toEqual({ status: 'succeeded' })
+    vi.unstubAllGlobals()
   })
 })

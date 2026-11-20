@@ -10,7 +10,7 @@ import { join } from 'node:path'
 
 const TARGET = 'dist/client'
 
-/** 会被打包进客户端、需要拦截的服务端字段名（与 `src/env/server.ts` 同步）。 */
+/** 会被打包进客户端、需要拦截的服务端字段名（与 `src/core/env/server.ts` 同步）。 */
 const FORBIDDEN_KEYS = [
   'BETTER_AUTH_SECRET',
   'STRIPE_SECRET_KEY',

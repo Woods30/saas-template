@@ -11,7 +11,7 @@ import {
 } from '@/config/navigation'
 import { getSocialLinks, isSafeSocialUrl } from '@/config/social-config'
 import { createWebsiteConfig, type WebsiteConfig } from '@/config/website'
-import { parsePublicEnv } from '@/env/public'
+import { parsePublicEnv } from '@/core/env/public'
 import type { Locale } from '@/lib/locale'
 import { getLocale, overwriteGetLocale } from '@/locale/paraglide/runtime.js'
 
@@ -24,7 +24,7 @@ afterEach(() => {
 /**
  * 模板场景的完整配置（docs/blog/changelog 开，contact 关）。
  *
- * 开关逐项写死：各仓的默认开关不同（官网不提供文档站，`pnpm run init` 之后全关），
+ * 开关逐项写死：各仓的默认开关不同（官网不提供文档站，可全关），
  * 依赖默认值会让这里的断言随部署场景静默失效。
  */
 function createConfig(): WebsiteConfig {
@@ -384,32 +384,18 @@ describe('菜单过滤', () => {
     ).toEqual(ids)
   })
 
-  // 功能开关没有 `.enabled` 字段，必须走 `ctx.config.features[flag]`。
-  it('features 开关关闭时隐藏菜单项，开启时保留', () => {
-    const items = [homeLink('keys', { feature: 'enableApiKeys' })]
-    const off = createConfig()
-    off.features.enableApiKeys = false
-    const on = createConfig()
-    on.features.enableApiKeys = true
-    expect(filterMenuItems(items, { config: off, authenticated: true })).toEqual([])
-    expect(filterMenuItems(items, { config: on, authenticated: true })).toEqual(items)
-  })
+  // 管理入口只按角色过滤；能不能进管理台由路由 / 服务端的权限点门禁决定，
+  // 导航层不再有第二个开关（`features.enableAdmin` 已移除）。
+  it('管理入口按角色约束：角色不符即隐藏', () => {
+    const items = [homeLink('admin', { roles: ['admin'] })]
 
-  // 管理入口需 role 与 feature 同时满足。
-  it('role 与 feature 联合约束：任一不满足即隐藏', () => {
-    const items = [homeLink('admin', { roles: ['admin'], feature: 'enableAdmin' })]
-    const on = createConfig()
-    on.features.enableAdmin = true
-    const off = createConfig()
-    off.features.enableAdmin = false
-
-    expect(filterMenuItems(items, { config: on, authenticated: true, role: 'admin' })).toEqual(
-      items,
-    )
-    // 角色不符。
-    expect(filterMenuItems(items, { config: on, authenticated: true, role: 'user' })).toEqual([])
-    // flag 关闭。
-    expect(filterMenuItems(items, { config: off, authenticated: true, role: 'admin' })).toEqual([])
+    expect(
+      filterMenuItems(items, { config: createConfig(), authenticated: true, role: 'admin' }),
+    ).toEqual(items)
+    expect(
+      filterMenuItems(items, { config: createConfig(), authenticated: true, role: 'user' }),
+    ).toEqual([])
+    expect(filterMenuItems(items, { config: createConfig(), authenticated: false })).toEqual([])
   })
 })
 

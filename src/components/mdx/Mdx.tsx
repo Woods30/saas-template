@@ -17,8 +17,8 @@ import {
   TableRow,
   Table as UITable,
 } from '@/components/ui/table'
-import { headingId } from '@/lib/docs'
 import { m } from '@/locale/paraglide/messages.js'
+import { headingId } from '@/modules/docs/service'
 import '@/styles/mdx.css'
 
 /**

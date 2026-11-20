@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet } from '@tanstack/react-router'
-import { MarketingLayout } from '@/components/marketing/MarketingLayout'
+import { MarketingLayout } from '@/blocks/marketing-layout'
 
 export const Route = createFileRoute('/{-$locale}/_layout/marketing')({
   component: () => (

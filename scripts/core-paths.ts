@@ -2,12 +2,12 @@
  * 核心区清单：「全量回归 + e2e」的判定依据，本地与 CI 共用，不得两处各写一份。
  */
 export const CORE_PATHS: readonly string[] = [
-  'src/auth/',
-  'src/payment/',
-  'src/env/',
+  'src/core/auth/',
+  'src/core/payment/',
+  'src/core/env/',
   'src/lib/module-access.ts',
   'src/lib/module-access.server.ts',
-  'src/db/',
+  'src/core/db/',
   'src/server.ts',
   'src/routes/api/',
   'src/config/website.ts',

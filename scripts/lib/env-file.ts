@@ -1,6 +1,6 @@
 /**
  * `.env` 读取与合并的共享实现，供 `scripts/check-env*.ts` 复用，保证三个脚本规则一致。
- * 空串归一由 `src/env/normalize.ts` 处理，此处不重复实现。
+ * 空串归一由 `src/core/env/normalize.ts` 处理，此处不重复实现。
  */
 import { randomBytes } from 'node:crypto'
 import {

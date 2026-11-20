@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FileInfo, UploadOptions, UploadResult } from '@/storage'
+import type { FileInfo, UploadOptions, UploadResult } from '@/core/storage'
 
 // 直接 mock R2StorageProvider，比 mock R2Bucket 更简单。
 const mockUploadFile =
@@ -26,7 +26,7 @@ const mockListUserFiles =
     }>
   >()
 
-vi.mock('@/storage/provider/r2', () => ({
+vi.mock('@/core/storage/provider/r2', () => ({
   R2StorageProvider: vi.fn().mockImplementation(() => ({
     uploadFile: mockUploadFile,
     deleteFile: mockDeleteFile,
@@ -55,7 +55,7 @@ vi.mock('@/lib/server-context', () => ({
 }))
 
 // 必须在 vi.mock 之后导入。
-import { deleteFile, downloadFile, getFileInfo, listUserFiles, uploadFile } from '@/storage'
+import { deleteFile, downloadFile, getFileInfo, listUserFiles, uploadFile } from '@/core/storage'
 
 describe('storage types', () => {
   it('exports UploadOptions 接口', () => {

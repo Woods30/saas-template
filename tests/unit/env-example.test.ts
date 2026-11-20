@@ -38,7 +38,10 @@ function envExampleKeys(): string[] {
 
 /** 两层 env schema 里声明的变量名。 */
 function schemaKeys(): string[] {
-  const source = [readRepoFile('src/env/public.ts'), readRepoFile('src/env/server.ts')].join('\n')
+  const source = [
+    readRepoFile('src/core/env/public.ts'),
+    readRepoFile('src/core/env/server.ts'),
+  ].join('\n')
   return [...source.matchAll(/^\s{2}([A-Z][A-Z0-9_]*):\s*z\b/gm)].map((match) => match[1] as string)
 }
 

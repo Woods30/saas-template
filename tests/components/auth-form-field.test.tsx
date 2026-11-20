@@ -2,8 +2,8 @@ import { useForm } from '@tanstack/react-form'
 import { fireEvent, render, screen } from '@testing-library/react'
 import type React from 'react'
 import { describe, expect, it } from 'vitest'
-import { createLoginSchema } from '@/auth/validation'
 import { AuthFormField } from '@/components/auth/AuthFormField'
+import { createLoginSchema } from '@/core/auth/validation'
 
 /** TanStack Form 与 shadcn `Field` 的薄适配层：只接线 `field.state`，不自建输入控件。 */
 const msg = {

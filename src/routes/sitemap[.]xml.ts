@@ -3,9 +3,8 @@ import { allBlogs, allDocs } from 'content-collections'
 import type { WebsiteConfig } from '@/config/website'
 import { websiteConfig } from '@/config/website'
 import { contentSlug } from '@/lib/content-locale'
-import { DOCS_INDEX_SLUG } from '@/lib/docs'
-import { docsPublicPath } from '@/lib/docs-path'
 import { LOCALES, type Locale, parseLocale } from '@/lib/locale'
+import { DOCS_INDEX_SLUG, docsPublicPath } from '@/modules/docs/service'
 
 /** 单条 sitemap 记录：绝对 loc、同页其他语言的 alternate 链接、内容更新时间。 */
 export interface SitemapEntry {

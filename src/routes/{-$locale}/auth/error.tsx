@@ -1,10 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { AuthLayout } from '@/components/auth/AuthLayout'
-import { assertPageEnabled } from '@/lib/module-access'
 import { m } from '@/locale/paraglide/messages.js'
 
 export const Route = createFileRoute('/{-$locale}/auth/error')({
-  beforeLoad: () => assertPageEnabled('auth'),
   component: AuthErrorPage,
 })
 

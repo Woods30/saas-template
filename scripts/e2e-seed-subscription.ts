@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { parseEnv } from 'node:util'
 import { resolvePriceReference } from '../src/config/products'
+import { roleIdOf } from '../src/core/auth/rbac'
 
 /**
  * 为 E2E 写入一条「已订阅」记录：E2E 不能真打 Stripe，故直接写本地 D1。
@@ -101,7 +102,7 @@ export function findUserIdByEmail(email: string, persistTo?: string): string | n
 }
 
 /** 单引号转义：SQL 字符串字面量里 `'` 写成两个。 */
-function escapeSql(value: string): string {
+export function escapeSql(value: string): string {
   return value.split("'").join("''")
 }
 
@@ -111,10 +112,35 @@ export function buildUserSeedSql(user: {
   email: string
   name: string
   passwordHash: string
+  /**
+   * 角色；管理台用例需要 `'admin'`。不传则按数据库默认值 `'user'`。
+   *
+   * `'editor'` 走 RBAC 绑定：写一行 `user_roles` → `role_editor`，并把 `users.role`
+   * 同步成 `'admin'`。这不是特例，而是 `assignRolesToUser` 的同步标记——持有任意
+   * `admin.*` 权限的用户，`users.role` 都会被写成 `'admin'`。
+   */
+  role?: 'user' | 'admin' | 'editor'
 }): string {
   const quote = (value: string) => `'${escapeSql(value)}'`
-  return `INSERT INTO users (id, email, name, email_verified) VALUES (${quote(user.id)}, ${quote(user.email)}, ${quote(user.name)}, 1);
-INSERT INTO accounts (id, user_id, account_id, provider_id, password) VALUES (${quote(`account_${user.id}`)}, ${quote(user.id)}, ${quote(user.id)}, 'credential', ${quote(user.passwordHash)});`
+  const columns = ['id', 'email', 'name', 'email_verified']
+  const values = [quote(user.id), quote(user.email), quote(user.name), '1']
+  // 角色只在显式给出时写入：直接塞 `'user'` 会覆盖数据库默认值，也让用例看不出
+  // 「这个账号本来是不是管理员」。
+  if (user.role) {
+    columns.push('role')
+    values.push(quote(user.role === 'editor' ? 'admin' : user.role))
+  }
+  const statements = [
+    `INSERT INTO users (${columns.join(', ')}) VALUES (${values.join(', ')});`,
+    `INSERT INTO accounts (id, user_id, account_id, provider_id, password) VALUES (${quote(`account_${user.id}`)}, ${quote(user.id)}, ${quote(user.id)}, 'credential', ${quote(user.passwordHash)});`,
+  ]
+  if (user.role === 'editor') {
+    // 角色行由 `e2e/global-setup.ts` 用 `buildRbacSeedSql` 保证存在。
+    statements.push(
+      `INSERT INTO user_roles (id, user_id, role_id) VALUES (${quote(`userrole_${user.id}`)}, ${quote(user.id)}, ${quote(roleIdOf('editor'))});`,
+    )
+  }
+  return statements.join('\n')
 }
 
 /**
@@ -140,7 +166,11 @@ export function executeLocalD1(sql: string, persistTo = process.env.E2E_D1_PERSI
     } catch (error) {
       // wrangler 把 D1 的错误 JSON 写到 **stdout**，stderr 往往是空的。
       const output = `${String((error as { stderr?: unknown }).stderr ?? '')}\n${String((error as { stdout?: unknown }).stdout ?? '')}`
-      if (attempt === 3 || !isRetryableD1Error(output)) throw error
+      if (attempt === 3 || !isRetryableD1Error(output)) {
+        // `execFileSync` 的 message 只有命令行，D1 的真实报错在 stdout/stderr 里；
+        // 不带出来时 Playwright 只能显示「Command failed」，无法判断该不该重试。
+        throw new Error(`${(error as Error).message}\n${output}`, { cause: error })
+      }
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, (attempt + 1) * 300)
     }
   }
@@ -150,6 +180,8 @@ export async function seedVerifiedUser(input: {
   email: string
   name: string
   password: string
+  /** 角色；管理台用例需要 `'admin'`，菜单过滤用例需要 `'editor'`。 */
+  role?: 'user' | 'admin' | 'editor'
 }): Promise<void> {
   const { hashPassword } = await import('better-auth/crypto')
   executeLocalD1(

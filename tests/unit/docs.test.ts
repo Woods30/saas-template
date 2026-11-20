@@ -12,7 +12,7 @@ import {
   searchDocs,
   setServerSidebarGetter,
   splitNextSteps,
-} from '@/lib/docs'
+} from '@/modules/docs/service'
 
 /**
  * 文档侧边栏分组与右侧 TOC 提取。分组由 frontmatter 的 `group` 声明，

@@ -31,8 +31,8 @@ vi.mock('resend', () => ({
 
 // 必须在 mock 之后导入。
 import { ZodError } from 'zod'
+import { allowedHostSuffixes, renderTemplate } from '@/core/email/render'
 import * as urls from '@/lib/urls'
-import { allowedHostSuffixes, renderTemplate } from '@/mail/render'
 
 // 与路由的 contactMessageContextSchema 同形；因 `$` 文件名与 Bundler 解析不兼容，无法直接导入。
 const contactMessageContextSchema = z
@@ -318,7 +318,7 @@ describe('Sensitive data redaction in provider errors', () => {
     // 禁止真实网络请求；确认多行错误经过 provider 处理。
     const mockFetch = vi.fn().mockRejectedValue(new Error('测试禁止真实网络请求'))
     vi.stubGlobal('fetch', mockFetch)
-    const { ResendMailProvider } = await import('@/mail/provider/resend')
+    const { ResendMailProvider } = await import('@/core/email/provider/resend')
     mockResendSend.mockReset()
     mockResendSend.mockResolvedValue({
       data: null,

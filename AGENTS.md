@@ -7,12 +7,12 @@
 ## 项目定位
 
 `saas-template`（示例品牌 **Jerbix**）是一个构建在 **Cloudflare Workers** 上的
-**TanStack Start** SaaS 起步模板。目标流程：`git clone` → `pnpm run init`
-（或手动改 `src/config/website.ts`）→ 部署。
+**TanStack Start** SaaS 起步模板。目标流程：`git clone` → `pnpm install` →
+`pnpm db:setup` → `pnpm db:seed` → 部署；品牌与 SEO 在后台「系统设置」页改，不发版。
 
 技术栈：TanStack Start / Router / Query、React 19、TypeScript strict、Tailwind CSS v4、
 shadcn/ui（Base UI 基座 / Tabler 图标）、Paraglide JS（zh / en）、Zod、
-Drizzle ORM + D1、Vitest + Playwright。
+Drizzle ORM（多方言：SQLite / D1 / PostgreSQL）、Vitest + Playwright。
 
 ## 版本与发布
 
@@ -44,7 +44,10 @@ Drizzle ORM + D1、Vitest + Playwright。
 | `pnpm check:env` / `pnpm check:env:prod` | 开发 / 生产环境变量校验 |
 | `pnpm check:client-bundle` | 检查客户端 bundle 不含服务端 secret |
 | `pnpm deploy` | 生产 env 校验 → 构建 → bundle 检查 → `wrangler deploy` |
+| `pnpm db:setup` | 按 `DATABASE_PROVIDER` 生成 schema 生成物与首份基线迁移 |
 | `pnpm db:generate` / `pnpm db:migrate:local` | Drizzle 迁移 |
+| `pnpm db:seed` | 写入种子数据（配置默认值等） |
+| `pnpm db:cleanup:settings` | 清理已从注册表移除的孤儿配置键（`features.*` / `modules.auth`） |
 | `pnpm content:build` | 生成 `.content-collections/`（构建前置） |
 
 > `pnpm test` 会先跑 `locale:compile`，在非交互环境可能被提问卡住。CI 里用
@@ -56,20 +59,44 @@ Drizzle ORM + D1、Vitest + Playwright。
 src/
 ├── routes/          文件路由（`{-$locale}` 是可选的 locale 前缀；文件名里的字面点写成
 │                    `[.]`，否则点会被当成路径分隔符——`llms.zh[.]txt.ts` 会变成 `/llms/zh.txt`）
-├── config/          站点配置：website.ts（总开关）、products.ts（产品与价格锚点）、llms.ts（AI 索引文案）、navigation.ts 等
+├── config/          站点配置：website.ts（总开关）、products.ts（产品与价格锚点）、llms.ts（AI 索引文案）、navigation.ts；routes.ts 是受保护区域路径的唯一来源
+├── blocks/          页面区块与营销装配（Hero / Pricing / LandingPage / Header / Footer…）：
+│                    kebab-case 文件名、PascalCase 具名导出、**不设 barrel**
 ├── components/
-│   ├── sections/    可复用内容区块（Hero / Features / Pricing…），单文件含类型
-│   ├── marketing/   页面级装配（LandingPage / MarketingLayout / Navbar / Footer）
 │   ├── docs/        文档站布局与侧边栏
-│   ├── dashboard/   工作台骨架
+│   ├── dashboard/   管理台与个人中心共用的外壳（侧栏 / 面包屑 / 统一标题）
+│   ├── data-table/  列表页共享表格（列定义 + 工具栏 + 空态 + 分页 + 列显隐）
 │   ├── layout/      跨页面布局件（Logo / 语言切换 / 用户菜单）
 │   └── ui/          shadcn 上游原件，不本地修改
-├── auth/ cache/ contact/ mail/ newsletter/ notification/ payment/ storage/
-│                    服务模块：每个目录一个 provider 注册表 + 抽象接口
-├── db/              Drizzle schema 与迁移
-├── env/             两层 env 校验（public / server），读 env 的唯一出口
+├── core/            基础设施：模块可依赖，反向不可
+│   ├── ai/            AI Provider 轻量网关（Fal / Replicate / Mock）
+│   ├── auth/          better-auth 接线、会话、RBAC 纯函数与插件
+│   ├── cache/         缓存契约 + KV 实现
+│   ├── config/        站点配置：分组形状、合并规则、读写与缓存
+│   ├── db/            Drizzle schema（两份手写 + 生成物）、连接、事务
+│   ├── email/         邮件契约 + Resend / Cloudflare / SMTP
+│   ├── env/           两层 env 校验（public / server），读 env 的唯一出口
+│   ├── notify/        通知渠道（Discord / 飞书）
+│   ├── payment/       支付契约 + Stripe / Creem
+│   └── storage/       对象存储契约 + R2 / S3
+├── modules/         业务能力：只能依赖 core 与自身，唯一公开入口为 service.ts
+│   ├── ai-tasks/      AI 生成任务记录、预扣积分与失败自动退回（revoke）
+│   ├── apikeys/       产品 API Key 业务校验与用量记账
+│   ├── audit/         后台写操作与关键事件审计日志
+│   ├── changelog/     更新日志数据库 CMS
+│   ├── contact/       联系表单
+│   ├── credits/       积分余额账本（FIFO、过期、退款回滚与反扣）
+│   ├── docs/          文件型文档站（默认关闭）
+│   ├── invite-codes/  邀请码创建与积分兑换
+│   ├── manual-payments/ 人工核销：订单与核销详情成对、收款账户、后台核验
+│   ├── newsletter/    订阅邮件
+│   ├── posts/         文章数据库 CMS
+│   ├── rbac/          角色与权限点矩阵
+│   ├── subscriptions/ 结账、资金事实（payments）与计费契约（subscriptions）、退款、后台查询
+│   ├── taxonomy/      分类与标签
+│   └── tickets/       客服工单
 ├── lib/             纯逻辑：locale、seo、llms、module-access、rate-limit…
-├── locale/          Paraglide 生成物 + middleware
+├── locale/          Paraglide 生成物 + middleware（生成物不手改）
 └── styles/          globals.css（设计 token）、mdx.css
 
 content/             文档 / 博客 / 更新日志 / 法务（Markdown，`.zh.md` 为中文）
@@ -86,7 +113,7 @@ scripts/             构建与校验脚本
 违反以下任一条即为缺陷：
 
 1. **env 两层模型**：业务代码不得直接读 `process.env` / `import.meta.env`，一律经
-   `src/env/public.ts`、`src/env/server.ts`。
+   `src/core/env/public.ts`、`src/core/env/server.ts`。
 2. **`VITE_` 前缀 = 公开**：构建时进入客户端 bundle，任何人可见，**不得**存放 secret。
 3. **服务端 secret** 只经 Workers binding 读取，绝不能设成 `VITE_` 前缀。
 4. **消息键配对**：新增消息键必须在所有 locale 文件中同时存在，改完跑 `pnpm locale:sort`。
@@ -101,9 +128,35 @@ scripts/             构建与校验脚本
 10. **llms 文件由配置生成**：`/llms*.txt` 的内容来自 `src/config/llms.ts` 与 `content/`，
     不手写正文、不硬编码链接——链接按语言前缀拼装。
 11. **价格只存一份**：金额的事实源是所选支付渠道的价格目录
-    （`src/payment/price-catalog.server.ts`）。首页展示、`llms.txt` 与结账收款读**同一份**
+    （`src/core/payment/price-catalog.server.ts`）。首页展示、`llms.txt` 与结账收款读**同一份**
     目录；代码与配置里**不得**再存第二份金额——两份金额必然漂移，漂移后结账会被判为
     价格不可用。改价只需在渠道后台（Stripe / Creem）操作。
+12. **三层依赖方向**：`core` 不得依赖 `modules` 或 `routes`；`modules` 不得依赖 `routes`。
+    由 `scripts/check-boundaries.ts` 强制，`pnpm check` 与 CI 都会跑。理由与取舍见
+    `docs/adr/0008-core-modules-routes-layering.md`。
+13. **模块只暴露 `service.ts`**：跨模块与路由一律 `@/modules/<id>/service`；模块根路径
+    （`@/modules/<id>`）与模块内部文件都不算入口，需要对外的东西从 `service.ts` 导出。
+14. **provider 与 schema 方言必须一致**：`DATABASE_PROVIDER` 决定连什么库，也决定生成
+    哪份 schema。改完必须重新 `pnpm db:setup`；运行期不一致会直接抛错（见 ADR-0009）。
+15. **迁移不入库**：库结构的事实源是手写 schema，迁移在本地生成后手工 apply。
+    `src/core/db/schema.ts` 与 `src/core/db/migrations/` 都是生成物，不提交。
+16. **配置进库，字段只在注册表声明**：全站读 `websiteConfig` 拿到的永远是当前生效配置
+    （注册表默认值 + 数据库里逐字段的覆盖值）。业务凭据也进库，但以 AES-GCM 加密存储
+    （`enc:v1:`），缺 `CONFIG_ENCRYPTION_KEY` 时拒绝保存含密钥的组。env 只留启动必需项，
+    `pnpm db:seed` 时作为初值。见 ADR-0010。
+17. **订单与付款分离，归因只写一次**：`orders` 只记购买意图与结账尝试（`created` → `open` →
+    `completed` / `expired` / `canceled` / `failed`），`payments` 只记已确认的资金事实。用户
+    申报、结账跳转、失败支付都**不得**直接生成 `payments` 行或授予权益；人工核销必须经管理员
+    核验后才由结算流程写 `payments`。订阅续费只写 `payments` 与 `subscriptions`，不写 `orders`。
+    首次触达归因（UTM / referrer / country）在注册时写入 `users` 一次，之后不覆盖。见 ADR-0012。
+18. **系统设置九分栏、单栏保存**：后台「系统设置」按 9 个 tab 组织（基础与外观 / 用户 /
+    内容 / 认证与安全 / 支付 / 邮件 / 分析 / 通知 / 自定义），每个 tab 顶部只有一个保存按钮，
+    提交该 tab 的全部分组（收起的分组也算），分组折叠只影响视图。配置字段只在注册表声明。
+    `features.*` 与 `modules.auth` 已移除：认证由三个登录方法开关控制，保存时至少保留一个。
+    管理台入口要求任意 `admin.*` 权限（`hasAdminAccess`，不是 `matchPermission('admin.*')`），
+    侧栏再按每项的 `permission` 逐项过滤；用户中心的 `userFeatures.*` 只决定入口显隐，模块
+    开关决定能力是否存在。自定义配置（`custom.*`）不进入公开配置，仅服务端可读。老库升级后
+    跑一次 `pnpm db:cleanup:settings` 清掉 `features.*` 与 `modules.auth`。见 ADR-0013。
 
 ## 工作方式
 
@@ -112,12 +165,13 @@ scripts/             构建与校验脚本
 - **先找现成组件**，没有才手写。新增 shadcn 组件用
   `pnpm dlx shadcn@latest add <component> -y`。
 - **行为修改先写失败测试**；结构整理与行为修改分开提交。
-- **测试不依赖出厂配置**：模块开关、能力开关与品牌名都是配置项，`pnpm run init` 会把它们
-  改写成使用者自己的值。断言要么显式摆出自己要的配置（`makeConfig({ blog: { enabled: true } })`），
-  要么取相对值（`websiteConfig.metadata.name`、`m.site_name(...)`），不写死出厂值与品牌字面量 ——
-  写死的话，初始化之后的项目跑 `pnpm test` 会集体变红。组件测试读的是全局 `websiteConfig`，
-  它的场景由 `vitest.config.ts` 的 `testScenarioEnv` 固定（`VITE_MODULES` / `VITE_FEATURES` 覆盖），
-  与 `website.ts` 的出厂值无关。
+- **测试不依赖出厂配置**：模块开关、能力开关与品牌名都是配置项，使用者会把它们改成自己的
+  值（数据库里的生效配置或注册表声明的出厂值）。断言要么显式摆出自己要的配置
+  （`makeConfig({ blog: { enabled: true } })`），要么取相对值（`websiteConfig.metadata.name`、
+  `m.site_name(...)`），不写死出厂值与品牌字面量 —— 写死的话，改过配置的项目跑 `pnpm test`
+  会集体变红。组件测试读全局 `websiteConfig`，需要特定开关的用例在文件内自行 `vi.doMock`。
+- **配置只从注册表来**：新增配置项改 `src/core/config/registry.ts` 与文案，不在页面、脚本或
+  env schema 里另写一份；env 只作 `db:seed` 的初值，运行期不读。
 - 提交前 `pnpm check` 与 `pnpm test` 必须全绿。提交消息写清改了什么、为什么。
 - **文档语言为中文**；技术名词、命令、代码标识符保留英文；中文与半角英数之间加空格。
 

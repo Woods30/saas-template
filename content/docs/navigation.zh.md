@@ -56,7 +56,6 @@ updated: 2026-11-03
 | 字段 | 语义 |
 |---|---|
 | `module` | 模块开关，如 `{ module: 'payment' }` |
-| `feature` | 功能开关，如 `{ feature: 'enableApiKeys' }` |
 | `page` | 静态页开关，如 `{ page: 'waitlist' }` |
 | `authenticated` | 是否要求已登录 |
 | `roles` | 角色白名单，如 `{ roles: ['admin'] }` |

@@ -4,7 +4,7 @@ description: Creem 商品映射、沙箱联调与 webhook 接入
 locale: zh
 order: 15
 group: payment
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 Creem 是 Merchant of Record：以自己名义收款、处理税费与退款，站点拿到的是净额。订阅与一次性付款都支持。
@@ -12,21 +12,19 @@ Creem 是 Merchant of Record：以自己名义收款、处理税费与退款，�
 ## 步骤
 
 1. 在 Creem 后台建商品：订阅用 recurring 商品（按月 / 按年各建一个），买断用 one-time 商品。
-2. 填环境变量：
+2. 在后台「系统设置 → 支付」里选渠道 `creem`，并在 Creem 分组填 API key、Webhook secret 与商品映射：
 
-   ```dotenv
-   VITE_PAYMENT_PROVIDER=creem
-   CREEM_API_KEY=creem_xxx
-   CREEM_WEBHOOK_SECRET=whsec_xxx
-   CREEM_PRODUCTS=pro_monthly=prod_xxx,pro_yearly=prod_yyy,lifetime=prod_zzz
+   ```text
+   pro_monthly=prod_xxx,pro_yearly=prod_yyy,lifetime=prod_zzz
    ```
 
-   `CREEM_PRODUCTS` 左边是 `src/config/products.ts` 里 `prices` 的右侧引用，右边是 Creem 的商品 ID（`prod_*`），逗号分隔。同一个引用只能映射一个商品 ID。
+   左边是 `src/config/products.ts` 里 `prices` 的右侧引用，右边是 Creem 的商品 ID（`prod_*`），
+   逗号分隔。同一个引用只能映射一个商品 ID。密钥加密入库，保存即生效。
 
-3. 部署：`pnpm run deploy`。
-4. 在 Creem 后台添加 webhook 端点 `<站点域名>/api/webhooks/creem`，签名密钥即 `CREEM_WEBHOOK_SECRET`，并订阅下面这些事件。
+3. 在 Creem 后台添加 webhook 端点 `<站点域名>/api/webhooks/creem`，签名密钥填回后台的
+   Webhook secret 字段，并订阅下面这些事件。
 
-端点只在当前 provider 是 Creem 时才响应：站点选的是别的渠道时该地址返回 404，Creem 会停止重试。
+端点只在当前渠道是 Creem 时才响应：站点选的是别的渠道时该地址返回 404，Creem 会停止重试。
 
 ## 事件
 
@@ -51,11 +49,12 @@ Creem 是 Merchant of Record：以自己名义收款、处理税费与退款，�
 | 取消回跳 | 没有 `cancel_url`，取消只能回 Creem 自己的页面 | 有 `cancel_url`，回到发起购买的页面 |
 | 金额 | 税前价，结账页会加税，展示价与实付可能不同 | 展示价即实付 |
 | 订阅状态 | `expired` 记为 `past_due`（仍可恢复），未知状态记为 `incomplete`，暂不授予权益 | 状态直接取自 Stripe |
-| 退款 | 站内没有退款入口，退款在 Creem 后台发起 | 站内没有退款入口，退款在 Stripe 后台发起，`charge.refunded` 会回传 |
+| 取消 | `POST /v1/subscriptions/{id}/cancel`，`mode: scheduled` 期末生效 | `cancel_at_period_end: true` |
+| 退款 | 后台「付款」页（`/admin/payments`）可退，`POST /v1/refunds` 按交易号，**只支持全额** | 后台「付款」页（`/admin/payments`）可退，按 PaymentIntent，支持部分退款 |
 
 已有的订阅不会随渠道切换迁移：换渠道等于换收款主体，存量要自己处理。
 
 ## 验证
 
-- `pnpm run check:env` 通过，说明 provider、凭据与商品映射都齐了。
+- 后台保存后，服务状态里 `payment` 一项显示 `configured`。
 - Creem 后台的 webhook 记录里能看到本站发起的投递（返回 `200` 即签名校验通过）。

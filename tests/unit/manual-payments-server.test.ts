@@ -1,0 +1,665 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { join, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { describe, expect, it, vi } from 'vitest'
+import { listAllOrders } from '@/modules/manual-payments/orders'
+import { adminListOrders, adminReviewOrder } from '@/modules/manual-payments/server'
+import {
+  ADMIN_ORDER_STATUSES,
+  createOrderSchema,
+  DEFAULT_ADMIN_ORDER_STATUS,
+  enforceRateLimit,
+  errorResponse,
+  errorStatus,
+  failureResponse,
+  guardManualPaymentRequest,
+  isValidAccountQrImageKey,
+  MANUAL_PAYMENT_RATE_LIMITS,
+  type ManualPaymentGuardDeps,
+  manualPaymentAccountSchema,
+  rateLimitAction,
+  resolveAdminOrderQuery,
+  reviewOrderSchema,
+} from '@/modules/manual-payments/server-logic'
+import { reviewOrder } from '@/modules/manual-payments/settlement'
+import { ManualPaymentError } from '@/modules/manual-payments/types'
+import { createTestDatabase } from '../helpers/database'
+
+const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
+
+/** 正则里要按字面量匹配的模块路径。 */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * server 层的纯逻辑：门禁顺序、错误映射、限流键与参数校验。
+ *
+ * 不断言 server function 本身 —— 它依赖请求上下文（会话、env、KV），而且
+ * `createServerFn` 的实现由 vite 插件改写，单元测试里调用它不会走到 handler。
+ * 仓库里既有的做法也是把可测逻辑抽到独立模块去测（见
+ * `src/modules/subscriptions/admin-query.ts`）。
+ */
+
+/** 造一份门禁依赖，并记录调用顺序。 */
+function makeDeps(overrides: Partial<ManualPaymentGuardDeps> = {}): {
+  deps: ManualPaymentGuardDeps
+  calls: string[]
+} {
+  const calls: string[] = []
+  const deps: ManualPaymentGuardDeps = {
+    ip: overrides.ip ?? '1.2.3.4',
+    module: () => {
+      calls.push('module')
+      return overrides.module ? overrides.module() : undefined
+    },
+    session: async () => {
+      calls.push('session')
+      if (overrides.session) return overrides.session()
+      return { userId: 'u1', role: 'user' }
+    },
+    permissions: async (userId) => {
+      calls.push('permissions')
+      if (overrides.permissions) return overrides.permissions(userId)
+      return ['*']
+    },
+    rateLimit: async (opts) => {
+      calls.push('rateLimit')
+      if (overrides.rateLimit) return overrides.rateLimit(opts)
+      return true
+    },
+  }
+  return { deps, calls }
+}
+
+describe('错误码 → HTTP 状态', () => {
+  it('不存在的订单与关闭的模块都是 404，不泄漏资源是否存在', () => {
+    expect(errorStatus('ORDER_NOT_FOUND')).toBe(404)
+    expect(errorStatus('MODULE_DISABLED')).toBe(404)
+  })
+
+  it('配置不全与存储不可用是 503', () => {
+    expect(errorStatus('SERVICE_UNAVAILABLE')).toBe(503)
+    expect(errorStatus('STORAGE_UNAVAILABLE')).toBe(503)
+  })
+
+  it('状态冲突类错误是 409', () => {
+    expect(errorStatus('INVALID_ORDER_STATE')).toBe(409)
+    expect(errorStatus('SETTLEMENT_IN_PROGRESS')).toBe(409)
+    expect(errorStatus('AMOUNT_POOL_EXHAUSTED')).toBe(409)
+    expect(errorStatus('SUBSCRIPTION_SLOT_TAKEN')).toBe(409)
+  })
+
+  it('参数不合法类是 400（含两个不在原始码表里的新码）', () => {
+    expect(errorStatus('INVALID_OFFER')).toBe(400)
+    expect(errorStatus('AMOUNT_MISMATCH')).toBe(400)
+    expect(errorStatus('INVALID_PAYER_NOTE')).toBe(400)
+    expect(errorStatus('INVALID_REVIEW_NOTE')).toBe(400)
+    expect(errorStatus('NO_MANUAL_PAYMENT_ACCOUNT')).toBe(400)
+    expect(errorStatus('INVALID_INPUT')).toBe(400)
+  })
+
+  it('订单过期是 410', () => {
+    expect(errorStatus('ORDER_EXPIRED')).toBe(410)
+  })
+
+  it('未登录 401、无权限 403、被限流 429', () => {
+    expect(errorStatus('UNAUTHENTICATED')).toBe(401)
+    expect(errorStatus('FORBIDDEN')).toBe(403)
+    expect(errorStatus('RATE_LIMITED')).toBe(429)
+  })
+
+  it('响应体只回稳定错误码，不回显内部细节', async () => {
+    const response = errorResponse('ORDER_NOT_FOUND')
+    expect(response.status).toBe(404)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    await expect(response.json()).resolves.toEqual({ error: 'ORDER_NOT_FOUND' })
+  })
+})
+
+describe('异常 → 错误响应', () => {
+  it('领域错误按自带的状态码翻译', async () => {
+    const response = failureResponse(new ManualPaymentError('ORDER_EXPIRED', '订单已过期'))
+    expect(response.status).toBe(410)
+    await expect(response.json()).resolves.toEqual({ error: 'ORDER_EXPIRED' })
+  })
+
+  it('参数不合法统一 400', async () => {
+    let thrown: unknown
+    try {
+      createOrderSchema.parse({})
+    } catch (error) {
+      thrown = error
+    }
+    const response = failureResponse(thrown)
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'INVALID_INPUT' })
+  })
+
+  it('其余异常按 500 处理，不回显内部细节', async () => {
+    const response = failureResponse(new Error('boom'))
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toEqual({ error: 'INTERNAL_ERROR' })
+  })
+})
+
+describe('门禁顺序', () => {
+  it('模块关闭时 404，且不再查会话', async () => {
+    const { deps, calls } = makeDeps({
+      module: () => errorResponse('MODULE_DISABLED'),
+    })
+    const result = await guardManualPaymentRequest(deps, { limit: 'create-order' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.response.status).toBe(404)
+    // 模块都没开，就不该再查会话、也不该再查限流。
+    expect(calls).toEqual(['module'])
+  })
+
+  it('配置不全时 503', async () => {
+    const { deps } = makeDeps({ module: () => errorResponse('SERVICE_UNAVAILABLE') })
+    const result = await guardManualPaymentRequest(deps)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.response.status).toBe(503)
+  })
+
+  it('未登录时 401', async () => {
+    const { deps, calls } = makeDeps({ session: async () => null })
+    const result = await guardManualPaymentRequest(deps)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.response.status).toBe(401)
+    expect(calls).toEqual(['module', 'session'])
+  })
+
+  it('普通用户调用管理员接口返回 403', async () => {
+    const { deps } = makeDeps({ session: async () => ({ userId: 'u1', role: 'user' }) })
+    const result = await guardManualPaymentRequest(deps, { requireAdmin: true })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.response.status).toBe(403)
+  })
+
+  it('管理员放行', async () => {
+    const { deps } = makeDeps({ session: async () => ({ userId: 'a1', role: 'admin' }) })
+    const result = await guardManualPaymentRequest(deps, { requireAdmin: true })
+    expect(result.ok).toBe(true)
+  })
+
+  it('被限流时 429', async () => {
+    const { deps } = makeDeps({ rateLimit: async () => false })
+    const result = await guardManualPaymentRequest(deps, { limit: 'create-order' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.response.status).toBe(429)
+  })
+
+  it('顺序固定：模块 → 会话 → 角色 → 限流', async () => {
+    const { deps, calls } = makeDeps({
+      session: async () => ({ userId: 'a1', role: 'admin' }),
+    })
+    const result = await guardManualPaymentRequest(deps, {
+      requireAdmin: true,
+      limit: 'review-order',
+    })
+    expect(result.ok).toBe(true)
+    expect(calls).toEqual(['module', 'session', 'rateLimit'])
+  })
+
+  it('角色只认服务端会话：客户端伪造的角色不作数', async () => {
+    // 门禁的入参里根本没有 role —— 角色只能来自 session。
+    const { deps } = makeDeps({ session: async () => ({ userId: 'u1', role: 'user' }) })
+    const result = await guardManualPaymentRequest(deps, { requireAdmin: true })
+    expect(result.ok).toBe(false)
+  })
+})
+
+describe('权限点门禁', () => {
+  it('没有 admin.orders.read 权限的管理员拿到 403', async () => {
+    // 角色是 admin，但 RBAC 权限点里没有订单读取权限：管理台接口以权限点为准。
+    const { deps } = makeDeps({
+      session: async () => ({ userId: 'a1', role: 'admin' }),
+      permissions: async () => ['admin.content.read', 'admin.content.write'],
+    })
+    const result = await guardManualPaymentRequest(deps, {
+      requiredPermission: 'admin.orders.read',
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.response.status).toBe(403)
+      await expect(result.response.json()).resolves.toEqual({ error: 'FORBIDDEN' })
+    }
+  })
+
+  it('editor 只有内容权限时不能读取核销队列', async () => {
+    const { deps } = makeDeps({
+      session: async () => ({ userId: 'e1', role: 'editor' }),
+      permissions: async () => [
+        'admin.content.read',
+        'admin.content.write',
+        'admin.tickets.read',
+        'admin.tickets.write',
+      ],
+    })
+    const result = await guardManualPaymentRequest(deps, {
+      requiredPermission: 'admin.orders.read',
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.response.status).toBe(403)
+  })
+
+  it('持有对应权限点或通配权限时放行', async () => {
+    const held = await guardManualPaymentRequest(
+      makeDeps({ permissions: async () => ['admin.orders.read'] }).deps,
+      { requiredPermission: 'admin.orders.read' },
+    )
+    expect(held.ok).toBe(true)
+
+    const wildcard = await guardManualPaymentRequest(
+      makeDeps({ permissions: async () => ['*'] }).deps,
+      { requiredPermission: 'admin.orders.write' },
+    )
+    expect(wildcard.ok).toBe(true)
+  })
+
+  it('权限检查在限流之前：未授权请求不消耗限流额度', async () => {
+    const { deps, calls } = makeDeps({
+      session: async () => ({ userId: 'a1', role: 'admin' }),
+      permissions: async () => [],
+    })
+    const result = await guardManualPaymentRequest(deps, {
+      requiredPermission: 'admin.orders.write',
+      limit: 'review-order',
+    })
+    expect(result.ok).toBe(false)
+    expect(calls).toEqual(['module', 'session', 'permissions'])
+  })
+})
+
+describe('管理员动作 wrapper 的权限门禁', () => {
+  /** 管理员动作依赖：权限解析可注入，`db` 在被误触时抛错（无权限不该碰库）。 */
+  function adminActionDeps(permissions: (userId: string) => Promise<readonly string[]>) {
+    const { deps } = makeDeps({
+      session: async () => ({ userId: 'a1', role: 'admin' }),
+      permissions,
+    })
+    return {
+      guard: deps,
+      db: async (): Promise<never> => {
+        throw new Error('无权限时不应触碰数据库')
+      },
+    }
+  }
+
+  it('adminListOrders 无权限时返回 403 Response，而不是空列表', async () => {
+    const result = await adminListOrders(
+      adminActionDeps(async () => []),
+      {},
+    )
+    expect(result).toBeInstanceOf(Response)
+    if (result instanceof Response) {
+      expect(result.status).toBe(403)
+      await expect(result.json()).resolves.toEqual({ error: 'FORBIDDEN' })
+    }
+  })
+
+  it('adminReviewOrder 无权限时返回 403 Response，而不是静默 no-op', async () => {
+    const result = await adminReviewOrder(
+      adminActionDeps(async () => []),
+      {
+        orderId: 'o1',
+        action: 'approve',
+        observedAmount: 1,
+      },
+    )
+    expect(result).toBeInstanceOf(Response)
+    if (result instanceof Response) expect(result.status).toBe(403)
+  })
+
+  it('权限解析抛错时按无权限处理：403，而不是 500', async () => {
+    const result = await adminListOrders(
+      adminActionDeps(async () => {
+        throw new Error('rbac 不可用')
+      }),
+      {},
+    )
+    expect(result).toBeInstanceOf(Response)
+    if (result instanceof Response) expect(result.status).toBe(403)
+  })
+})
+
+describe('管理员核销队列读取', () => {
+  /** 一张待核验订单：两行（购买意图 + 核销详情），外加下单账号。 */
+  function seedPendingOrder() {
+    const { sqlite, db } = createTestDatabase()
+    sqlite.exec(
+      "INSERT INTO users(id,name,email,created_at,updated_at) VALUES ('u1','User','u1@example.com',1,1),('admin','Admin','admin@example.com',1,1)",
+    )
+    sqlite
+      .prepare(
+        `INSERT INTO orders(id,order_no,user_id,provider,mode,product_id,offer_id,status,created_at,updated_at)
+         VALUES ('order-1','ord_20260101000000_abcd1234','u1','manual_payments','payment','pro','monthly','open',100,100)`,
+      )
+      .run()
+    sqlite
+      .prepare(
+        `INSERT INTO manual_payment_details(order_id,user_id,account_id,channel,base_amount,fingerprint,payable_amount,currency,status,submitted_at,expires_at,created_at,updated_at)
+         VALUES ('order-1','u1','acct-main','alipay',18000,42,18042,'cny','pending_verification',100,9999999999,100,100)`,
+      )
+      .run()
+    return { sqlite, db }
+  }
+
+  it('管理员列表返回 orderNo 与买家邮箱', async () => {
+    const { db } = seedPendingOrder()
+    const page = await listAllOrders(db, {
+      status: 'pending_verification',
+      limit: 20,
+      offset: 0,
+    })
+    expect(page.total).toBe(1)
+    expect(page.rows).toHaveLength(1)
+    expect(page.rows[0]?.orderNo).toBe('ord_20260101000000_abcd1234')
+    expect(page.rows[0]?.email).toBe('u1@example.com')
+    expect(page.rows[0]?.payableAmount).toBe(18042)
+    expect(page.rows[0]?.status).toBe('pending_verification')
+  })
+
+  it('核验通过后订单状态为 settled 且 payments.order_id 指向订单', async () => {
+    const { sqlite, db } = seedPendingOrder()
+    const reviewed = await reviewOrder(db, {
+      orderId: 'order-1',
+      reviewerId: 'admin',
+      action: 'approve',
+      observedAmount: 18042,
+    })
+    expect(reviewed.status).toBe('settled')
+
+    // 核销详情是状态机的真源；`orders.status` 只跟随终态。
+    const detail = sqlite
+      .prepare('SELECT status FROM manual_payment_details WHERE order_id = ?')
+      .get('order-1') as { status: string }
+    expect(detail.status).toBe('settled')
+    const order = sqlite.prepare('SELECT status FROM orders WHERE id = ?').get('order-1') as {
+      status: string
+    }
+    expect(order.status).toBe('completed')
+
+    // 资金事实必须指回购买意图。
+    const payments = sqlite.prepare('SELECT order_id, amount, status FROM payments').all() as {
+      order_id: string | null
+      amount: number
+      status: string
+    }[]
+    expect(payments).toHaveLength(1)
+    expect(payments[0]?.order_id).toBe('order-1')
+    expect(payments[0]?.amount).toBe(18042)
+    expect(payments[0]?.status).toBe('paid')
+  })
+})
+
+describe('限流', () => {
+  it('各动作的限额与窗口彼此独立', () => {
+    const actions = Object.entries(MANUAL_PAYMENT_RATE_LIMITS)
+    expect(MANUAL_PAYMENT_RATE_LIMITS['create-order']).toEqual({ limit: 5, windowSeconds: 900 })
+    expect(MANUAL_PAYMENT_RATE_LIMITS['submit-order']).toEqual({ limit: 10, windowSeconds: 60 })
+    expect(MANUAL_PAYMENT_RATE_LIMITS['poll-order']).toEqual({ limit: 60, windowSeconds: 60 })
+    expect(MANUAL_PAYMENT_RATE_LIMITS['upload-receipt']).toEqual({ limit: 5, windowSeconds: 900 })
+    expect(MANUAL_PAYMENT_RATE_LIMITS['review-order']).toEqual({ limit: 30, windowSeconds: 60 })
+    // 不同动作的键必须不同，否则共享同一桶。
+    expect(new Set(actions.map(([action]) => action)).size).toBe(actions.length)
+  })
+
+  it('限流键带上账号 ID：限流工具只有 ip+action 维度', () => {
+    expect(rateLimitAction('create-order', 'user-1')).toBe('manual_payments:create-order:user-1')
+    expect(rateLimitAction('create-order', 'user-2')).not.toBe(
+      rateLimitAction('create-order', 'user-1'),
+    )
+    expect(rateLimitAction('poll-order')).toBe('manual_payments:poll-order')
+  })
+
+  it('放行时返回 undefined，被限流时返回 429', async () => {
+    const allowed = vi.fn().mockResolvedValue(true)
+    expect(
+      await enforceRateLimit(allowed, { ip: '1.2.3.4', action: 'create-order', userId: 'u1' }),
+    ).toBeUndefined()
+    expect(allowed).toHaveBeenCalledWith({
+      ip: '1.2.3.4',
+      action: 'manual_payments:create-order:u1',
+      limit: 5,
+      windowSeconds: 900,
+    })
+
+    const blocked = vi.fn().mockResolvedValue(false)
+    const response = await enforceRateLimit(blocked, {
+      ip: '1.2.3.4',
+      action: 'submit-order',
+      userId: 'u1',
+    })
+    expect(response?.status).toBe(429)
+  })
+})
+
+describe('参数校验', () => {
+  it('创建订单必须给出商品与付费方式', () => {
+    expect(createOrderSchema.safeParse({ productId: 'template', offerId: 'once' }).success).toBe(
+      true,
+    )
+    expect(createOrderSchema.safeParse({ productId: 'template' }).success).toBe(false)
+  })
+
+  it('核验动作只能是三种，金额必须是正整数', () => {
+    expect(
+      reviewOrderSchema.safeParse({ orderId: 'o1', action: 'approve', observedAmount: 18001 })
+        .success,
+    ).toBe(true)
+    expect(reviewOrderSchema.safeParse({ orderId: 'o1', action: 'nope' }).success).toBe(false)
+    expect(
+      reviewOrderSchema.safeParse({ orderId: 'o1', action: 'approve', observedAmount: 0 }).success,
+    ).toBe(false)
+    expect(
+      reviewOrderSchema.safeParse({ orderId: 'o1', action: 'approve', observedAmount: 1.5 })
+        .success,
+    ).toBe(false)
+  })
+})
+
+describe('收款账户的入参校验', () => {
+  it('账户 ID 不能带路径片段', () => {
+    expect(
+      manualPaymentAccountSchema.safeParse({ accountId: 'acct-main', displayName: '支付宝' })
+        .success,
+    ).toBe(true)
+    expect(
+      manualPaymentAccountSchema.safeParse({ accountId: '../secrets', displayName: '支付宝' })
+        .success,
+    ).toBe(false)
+    expect(
+      manualPaymentAccountSchema.safeParse({ accountId: 'acct/main', displayName: '支付宝' })
+        .success,
+    ).toBe(false)
+  })
+
+  it('收款码 key 必须由服务端派生：只认本账户自己的 key', () => {
+    // 不给 key（清空收款码）合法。
+    expect(isValidAccountQrImageKey('acct-main', null)).toBe(true)
+    expect(isValidAccountQrImageKey('acct-main', undefined)).toBe(true)
+    // 本账户自己的 key 合法。
+    expect(isValidAccountQrImageKey('acct-main', 'manual-payment-qrcodes/acct-main.png')).toBe(true)
+    // 别人的收款码、凭证目录、任意路径都不放行。
+    expect(isValidAccountQrImageKey('acct-main', 'manual-payment-qrcodes/acct-other.png')).toBe(
+      false,
+    )
+    expect(isValidAccountQrImageKey('acct-main', 'manual-payment-receipts/o1.png')).toBe(false)
+    expect(isValidAccountQrImageKey('acct-main', 'secrets.png')).toBe(false)
+  })
+})
+
+describe('管理员订单列表查询', () => {
+  it('默认筛选待核验，默认 20 条', () => {
+    expect(resolveAdminOrderQuery({})).toEqual({
+      status: DEFAULT_ADMIN_ORDER_STATUS,
+      limit: 20,
+      offset: 0,
+    })
+  })
+
+  it('limit 越界直接拒绝，而不是静默夹取', () => {
+    // 夹取会让调用方以为「就是要 20 条」，从而掩盖调用方的 bug。
+    expect(() => resolveAdminOrderQuery({ limit: 101 })).toThrow()
+    expect(() => resolveAdminOrderQuery({ limit: 0 })).toThrow()
+    expect(resolveAdminOrderQuery({ limit: 50 }).limit).toBe(50)
+    expect(resolveAdminOrderQuery({ limit: 100 }).limit).toBe(100)
+  })
+
+  it('可以显式指定状态，也可以要全部历史', () => {
+    expect(resolveAdminOrderQuery({ status: 'settled' }).status).toBe('settled')
+    expect(resolveAdminOrderQuery({ status: 'all' }).status).toBe('all')
+  })
+
+  it('筛选状态覆盖订单的全部状态', () => {
+    for (const status of ADMIN_ORDER_STATUSES) {
+      expect(resolveAdminOrderQuery({ status }).status).toBe(status)
+    }
+  })
+})
+
+describe('页面路由的服务端导入边界', () => {
+  /**
+   * 回归守卫：页面路由静态导入服务端模块，会把 `node:async_hooks` 之类的
+   * 服务端依赖打进浏览器 bundle，运行时直接抛「Module has been externalized」，
+   * 整站水合失败 —— 表现是所有页面都白屏，而不是某一个页面报错。
+   *
+   * 页面要服务端事实（如「有没有对象存储绑定」）时，走 server function 返回，
+   * 不在页面里 import 服务端模块。`src/routes/api/**` 是服务端路由，不受此限。
+   */
+  const SERVER_ONLY_MODULES = [
+    '@/lib/server-context',
+    '@/lib/module-access.server',
+    '@/lib/rate-limit',
+    '@/core/storage',
+    '@/core/auth/auth',
+    '@/core/email',
+    '@/core/notify/service',
+    '@/core/cache',
+  ]
+
+  it('页面路由不静态导入服务端专用模块', () => {
+    const routesDir = join(repoRoot, 'src/routes')
+    const offenders: string[] = []
+    for (const file of readdirSync(routesDir, { recursive: true, encoding: 'utf8' })) {
+      if (!/\.(ts|tsx)$/.test(file)) continue
+      const relativePath = join('src/routes', file)
+      // API 路由是服务端路由，本来就在服务端跑。
+      if (relativePath.includes(`${sep}api${sep}`)) continue
+      const source = readFileSync(join(routesDir, file), 'utf8')
+      for (const modulePath of SERVER_ONLY_MODULES) {
+        // 只看静态 import：`import type` 编译期擦除，函数内 `await import()` 是惰性加载。
+        const pattern = new RegExp(
+          `^\\s*import\\s+(?!type\\b)[^\\n]*from\\s+['"]${escapeRegExp(modulePath)}['"]`,
+          'm',
+        )
+        if (pattern.test(source)) offenders.push(`${relativePath} → ${modulePath}`)
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+})
+
+/**
+ * 收款码 / 付款凭证端点的授权边界。
+ *
+ * 这两个路由原先按 `session.user.role === 'admin'` 授权，现改为权限点：
+ * 上传要 `admin.orders.write`（只读的 editor / viewer 不能改收款码，否则可以把
+ * 客户的钱导去别处），读取给 `admin.orders.read` 或订单所有者。
+ */
+describe('收款码端点按权限点授权', () => {
+  async function importQrcodeRoute(options: {
+    permissions: string[]
+    ownsOrder?: boolean
+    account?: { accountId: string; channel: string; displayName: string; currency: string } | null
+  }) {
+    vi.resetModules()
+    vi.doMock('@/lib/module-access.server', () => ({
+      getModuleUnavailableResponse: () => undefined,
+    }))
+    vi.doMock('@/lib/server-context', () => ({ getServerContext: () => ({ env: { BUCKET: {} } }) }))
+    vi.doMock('@/lib/rate-limit', () => ({ checkRateLimit: async () => true }))
+    vi.doMock('@/core/auth/auth', () => ({
+      getAuth: async () => ({
+        api: { getSession: async () => ({ user: { id: 'u_1', role: 'admin' } }) },
+      }),
+    }))
+    vi.doMock('@/core/db', () => ({ createDbFromEnv: async () => ({}) }))
+    vi.doMock('@/modules/rbac/service', () => ({
+      hasPermission: async (_db: unknown, _userId: string, code: string) =>
+        options.permissions.includes(code),
+    }))
+    vi.doMock('@/modules/manual-payments/service', () => ({
+      errorResponse: (code: string) =>
+        Response.json({ error: code }, { status: code === 'FORBIDDEN' ? 403 : 404 }),
+      findAccountFileRef: async () => options.account ?? null,
+      hasOrderForAccount: async () => options.ownsOrder ?? false,
+    }))
+    return import('@/routes/api/manual-payments/accounts/$accountId/qrcode')
+  }
+
+  function handlerOf(route: unknown, method: 'GET' | 'POST') {
+    const handlers = (route as { options?: { server?: { handlers?: Record<string, unknown> } } })
+      .options?.server?.handlers
+    const handler = handlers?.[method]
+    if (typeof handler !== 'function') throw new Error(`${method} handler 缺失`)
+    return handler as (ctx: {
+      request: Request
+      params: { accountId: string }
+    }) => Promise<Response>
+  }
+
+  it('只有 admin.orders.read 的人不能上传收款码（403）', async () => {
+    const { Route } = await importQrcodeRoute({ permissions: ['admin.orders.read'] })
+    const res = await handlerOf(
+      Route,
+      'POST',
+    )({
+      request: new Request('https://jerbix.dev/api/manual-payments/accounts/alipay_main/qrcode', {
+        method: 'POST',
+      }),
+      params: { accountId: 'alipay_main' },
+    })
+    expect(res.status).toBe(403)
+    await expect(res.json()).resolves.toEqual({ error: 'FORBIDDEN' })
+  })
+
+  it('持 admin.orders.write 时越过授权检查（进入后续流程）', async () => {
+    const { Route } = await importQrcodeRoute({ permissions: ['admin.orders.write'] })
+    const res = await handlerOf(
+      Route,
+      'POST',
+    )({
+      request: new Request('https://jerbix.dev/api/manual-payments/accounts/alipay_main/qrcode', {
+        method: 'POST',
+      }),
+      params: { accountId: 'alipay_main' },
+    })
+    // 授权已通过：后续因账户不存在 / 无表单体而失败，但绝不是 403。
+    expect(res.status).not.toBe(403)
+    await expect(res.json()).resolves.not.toEqual({ error: 'FORBIDDEN' })
+  })
+
+  it('非订单所有者且无 admin.orders.read 时读不到收款码（404）', async () => {
+    const { Route } = await importQrcodeRoute({
+      permissions: [],
+      account: {
+        accountId: 'alipay_main',
+        channel: 'alipay',
+        displayName: '主账户',
+        currency: 'cny',
+      },
+    })
+    const res = await handlerOf(
+      Route,
+      'GET',
+    )({
+      request: new Request('https://jerbix.dev/api/manual-payments/accounts/alipay_main/qrcode'),
+      params: { accountId: 'alipay_main' },
+    })
+    expect(res.status).toBe(404)
+    await expect(res.json()).resolves.toEqual({ error: 'ORDER_NOT_FOUND' })
+  })
+})

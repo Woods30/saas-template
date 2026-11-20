@@ -17,11 +17,11 @@ const flow = vi.hoisted(() => ({
   login: vi.fn().mockResolvedValue({ error: null }),
   social: vi.fn(),
 }))
-vi.mock('@/auth/client', () => ({
+vi.mock('@/core/auth/client', () => ({
   signIn: { social: flow.social, email: flow.login },
   signUp: { email: flow.signup },
 }))
-vi.mock('@/auth/providers', () => ({ fetchAuthProviderAvailability: vi.fn() }))
+vi.mock('@/core/auth/providers', () => ({ fetchAuthProviderAvailability: vi.fn() }))
 vi.mock('@/lib/analytics/events', () => ({ trackSignUp: vi.fn(), trackLogin: vi.fn() }))
 
 const verificationRequired = websiteConfig.auth.requireEmailVerification
@@ -39,7 +39,7 @@ vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (options: Record<string, unknown>) => ({
     options,
     useSearch: () => flow.search,
-    useRouteContext: () => ({ google: true }),
+    useRouteContext: () => ({ email: true, google: true, github: false }),
   }),
   Link: ({
     children,
@@ -198,19 +198,47 @@ describe('SubmitButton', () => {
 })
 
 describe('SocialAuthButtons', () => {
-  it('未配置 Google 时不渲染任何按钮', () => {
+  it('未配置任何 provider 时不渲染任何按钮', () => {
     const { container } = render(
-      <SocialAuthButtons googleEnabled={false} onGoogleClick={vi.fn()} />,
+      <SocialAuthButtons
+        googleEnabled={false}
+        githubEnabled={false}
+        onGoogleClick={vi.fn()}
+        onGithubClick={vi.fn()}
+      />,
     )
     expect(container).toBeEmptyDOMElement()
   })
 
   it('配置了 Google 时渲染可点击的 Google 按钮', () => {
     const onClick = vi.fn()
-    render(<SocialAuthButtons googleEnabled onGoogleClick={onClick} />)
+    render(
+      <SocialAuthButtons
+        googleEnabled
+        githubEnabled={false}
+        onGoogleClick={onClick}
+        onGithubClick={vi.fn()}
+      />,
+    )
     const button = screen.getByRole('button', { name: /Google/ })
     button.click()
     expect(onClick).toHaveBeenCalledOnce()
+  })
+
+  it('配置了 GitHub 时渲染独立的 GitHub 按钮', () => {
+    setLocale('zh', { reload: false })
+    const onGithubClick = vi.fn()
+    render(
+      <SocialAuthButtons
+        googleEnabled={false}
+        githubEnabled
+        onGoogleClick={vi.fn()}
+        onGithubClick={onGithubClick}
+      />,
+    )
+    const button = screen.getByRole('button', { name: '使用 GitHub 继续' })
+    button.click()
+    expect(onGithubClick).toHaveBeenCalledOnce()
   })
 })
 

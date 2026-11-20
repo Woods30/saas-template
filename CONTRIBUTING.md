@@ -59,7 +59,7 @@ cp .env.example .env   # 照抄示例即可，optional 字段留空
 
 ## 环境变量
 
-- 业务代码不得直接读取 `process.env` / `import.meta.env`，一律经 `src/env/public.ts`、
-  `src/env/server.ts`。
+- 业务代码不得直接读取 `process.env` / `import.meta.env`，一律经 `src/core/env/public.ts`、
+  `src/core/env/server.ts`。
 - `VITE_` 前缀变量会进入客户端 bundle，**不得**存放 secret；服务端 secret 只能经
   Workers binding 或服务端读取。

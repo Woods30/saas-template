@@ -7,6 +7,12 @@ src/locale/paraglide
 *.log
 .env
 .env.local
+# 数据库生成物：`src/core/db/schema.ts` 按 DATABASE_PROVIDER 指向对应方言的手写
+# schema（`pnpm db:setup` 产出）。入库会出现「一半 sqlite、一半 pg」的 schema。
+src/core/db/schema.ts
+# 迁移不入库：每个 clone / 每种方言的首份迁移在本地生成，后续变更同样本地生成 +
+# 手工 apply。库结构的事实源是手写 schema，不是 SQL 文件。
+src/core/db/migrations/
 # 生产环境变量：含真实域名与生产 secret，绝不入库。
 # `pnpm deploy` 与 `vite build` 都读它（见 scripts/check-env-prod.ts）。
 .env.production

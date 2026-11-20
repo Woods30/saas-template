@@ -32,7 +32,7 @@ describe('robots.txt', () => {
     expect(text).toContain('User-agent: *')
     expect(text).toContain('Allow: /')
     expect(text).toContain('Disallow: /api/')
-    expect(text).toContain('Disallow: /dashboard/')
+    expect(text).toContain('Disallow: /settings/')
     expect(text).toContain('Disallow: /admin/')
   })
 

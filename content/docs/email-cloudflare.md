@@ -44,25 +44,20 @@ account and Email Routing is enabled for it.
    address — replace it with a real one before enabling. `destination_address` restricts the
    binding to a specific verified address; use the address you actually send to.
 
-4. **Set the sending address.** `MAIL_FROM` wins; `CLOUDFLARE_EMAIL_SENDER` is only the fallback:
+4. **Switch provider and set the sending address in the admin.** Open **Settings → Mail**:
+
+   - choose `cloudflare` as the provider;
+   - enter the sender address in the Mail group (for example `noreply@<your-domain.com>`);
+     leaving it blank falls back to the Cloudflare Email sender field.
+
+   The address must be a plain email address; a display name is rejected. Saving takes effect
+   immediately.
+
+   Alternatively put `MAIL_FROM` / `CLOUDFLARE_EMAIL_SENDER` in `.env` and run `pnpm db:seed`.
+
+5. **Deploy.** Changes to the `EMAIL` binding require a redeploy:
 
    ```bash
-   MAIL_FROM=noreply@<your-domain.com>
-   ```
-
-   Neither variable uses a **`VITE_` prefix**. `MAIL_FROM` must be a plain email address; a
-   display name is rejected.
-
-5. **Switch provider and deploy.** In `src/config/website.ts`:
-
-   ```ts
-   mail: { enabled: true, provider: 'cloudflare', supportEmail: '<your-support-email>' },
-   ```
-
-   Then hand the runtime secret to the Worker and deploy:
-
-   ```bash
-   pnpm exec wrangler secret put MAIL_FROM
    pnpm deploy
    ```
 
@@ -74,11 +69,7 @@ account's verified addresses.
 
 ## Verify
 
-```bash
-pnpm run check:env
-```
-
-The `mail` item should stop reporting missing configuration; whether the binding exists is
+After saving in the admin, the `mail` item should stop reporting missing configuration; whether the binding exists is
 listed by `pnpm check` as a deployment check. Then trigger a sign-up or a contact form
 submission and confirm the message is actually delivered.
 
@@ -86,13 +77,14 @@ submission and confirm the message is actually delivered.
 pnpm email:dev
 ```
 
-Previews the templates in `src/mail/templates/` on port 3001.
+Previews the templates in `src/core/email/templates/` on port 3001.
 
 ## Notes
 
 - The Cloudflare Email binding **can only send to verified addresses** — check your account's
   limits before deploying.
-- `CLOUDFLARE_EMAIL_SENDER` is only consulted when `provider` is `cloudflare`.
+- The Cloudflare Email sender is only used as a fallback when the mail sender is blank, and
+  only while `provider` is `cloudflare`.
 
 Once mail works, continue with the contact form in [Email Overview](./email), or
 [Newsletter](./newsletter).

@@ -1,15 +1,12 @@
-import { IconDotsVertical, IconLogout, IconSettings } from '@tabler/icons-react'
-import { Link } from '@tanstack/react-router'
+import { IconDotsVertical } from '@tabler/icons-react'
 import { useState } from 'react'
-import type { SessionInfo } from '@/auth/session'
-import { signOutAndRedirect } from '@/auth/sign-out'
+import { AccountMenuLinks, canEnterAdmin, SignOutMenuItem } from '@/components/layout/account-menu'
 import { THEME_ICON, ThemeMenuItems, useTheme } from '@/components/theme/ThemeToggle'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
@@ -23,6 +20,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import type { SessionInfo } from '@/core/auth/session'
 import { getRequestLocale } from '@/lib/locale'
 import { m } from '@/locale/paraglide/messages.js'
 
@@ -89,14 +87,10 @@ export function DashboardUserCard({ session }: { session: SessionInfo }) {
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              render={
-                <Link to="/{-$locale}/dashboard/profile" params={{ locale: getRequestLocale() }} />
-              }
-            >
-              <IconSettings size={16} aria-hidden />
-              {m.settings_user_menu()}
-            </DropdownMenuItem>
+            <AccountMenuLinks
+              isAdmin={canEnterAdmin(session.permissions)}
+              locale={getRequestLocale()}
+            />
             {enabled && (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
@@ -109,10 +103,7 @@ export function DashboardUserCard({ session }: { session: SessionInfo }) {
               </DropdownMenuSub>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => void signOutAndRedirect()}>
-              <IconLogout size={16} aria-hidden />
-              {m.auth_logout()}
-            </DropdownMenuItem>
+            <SignOutMenuItem />
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

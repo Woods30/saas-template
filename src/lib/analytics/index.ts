@@ -1,5 +1,4 @@
 import { websiteConfig } from '@/config/website'
-import { publicEnv } from '@/env/public'
 import { ClarityAnalyticsProvider } from './clarity'
 import { createGtag, GAAnalyticsProvider, type GtagCommand } from './ga'
 import { PlausibleAnalyticsProvider } from './plausible'
@@ -40,9 +39,10 @@ export function initAnalytics() {
   initialized = true
 
   const selected = new Set(websiteConfig.analytics.providers)
+  const ids = websiteConfig.analytics.config
 
-  if (selected.has('ga') && publicEnv.VITE_GA_ID) {
-    const gaId = publicEnv.VITE_GA_ID
+  if (selected.has('ga') && ids.gaId) {
+    const gaId = ids.gaId
     providers.push(new GAAnalyticsProvider(gaId))
     const dataLayer = (window as unknown as { dataLayer?: unknown[] }).dataLayer ?? []
     ;(window as unknown as { dataLayer: unknown[] }).dataLayer = dataLayer
@@ -56,16 +56,16 @@ export function initAnalytics() {
     injectAfterLoad(`https://www.googletagmanager.com/gtag/js?id=${gaId}`)
   }
 
-  if (selected.has('plausible') && publicEnv.VITE_PLAUSIBLE_DOMAIN) {
-    const plausibleDomain = publicEnv.VITE_PLAUSIBLE_DOMAIN
+  if (selected.has('plausible') && ids.plausibleDomain) {
+    const plausibleDomain = ids.plausibleDomain
     providers.push(new PlausibleAnalyticsProvider(plausibleDomain))
     injectScript('https://plausible.io/js/script.js', {
       'data-domain': plausibleDomain,
     })
   }
 
-  const umamiId = publicEnv.VITE_UMAMI_WEBSITE_ID ?? publicEnv.VITE_UMAMI_ID
-  const umamiScriptUrl = publicEnv.VITE_UMAMI_SCRIPT_URL
+  const umamiId = ids.umamiWebsiteId
+  const umamiScriptUrl = ids.umamiScriptUrl
   if (selected.has('umami') && umamiId && umamiScriptUrl) {
     providers.push(new UmamiAnalyticsProvider(umamiId))
     injectScript(umamiScriptUrl, {
@@ -73,7 +73,7 @@ export function initAnalytics() {
     })
   }
 
-  const clarityId = publicEnv.VITE_CLARITY_PROJECT_ID ?? publicEnv.VITE_CLARITY_ID
+  const clarityId = ids.clarityProjectId
   if (selected.has('clarity') && clarityId) {
     providers.push(new ClarityAnalyticsProvider(clarityId))
     injectScript(`https://www.clarity.ms/tag/${clarityId}`)

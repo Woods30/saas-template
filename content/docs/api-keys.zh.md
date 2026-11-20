@@ -4,7 +4,7 @@ description: 开启 API 密钥功能，用户自助创建与删除密钥
 locale: zh
 order: 11
 group: auth
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 API 密钥让用户在自己的账号下签发调用凭据。密钥存在 `apikey` 表，**明文不入库**——插件对完整密钥
@@ -14,14 +14,10 @@ API 密钥让用户在自己的账号下签发调用凭据。密钥存在 `apike
 
 ## 步骤
 
-1. **打开功能开关。**
+1. **打开用户功能开关。** 管理后台**系统设置** → **用户** tab，打开 `userFeatures.apiKeys`。
+   也可以在 `src/config/website.ts` 里改默认值。
 
-   ```ts
-   // src/config/website.ts
-   features: { enableApiKeys: true },
-   ```
-
-2. **进入密钥页。** 地址 `/dashboard/api-keys`，入口在个人中心侧边栏。开关关掉时页面 404，
+2. **进入密钥页。** 地址 `/settings/api-keys`，入口在个人中心侧边栏。开关关掉时页面 404，
    `/api/auth/api-key/*` 这一组端点也整体 404（`src/routes/api/auth/$.ts`）。
 
 3. **创建。** 填名称 + 选有效期 → `authClient.apiKey.create({ name, expiresIn })`。响应里的 `key`
@@ -62,13 +58,13 @@ if (!result.valid) return new Response('Unauthorized', { status: 401 })
 | `keyExpiration.defaultExpiresIn` | `null` | 客户端不传时的兜底（单位是秒）；`null` 表示不过期 |
 
 有效期只在**创建那一刻**有意义：插件把它换算成 `expiresAt` 落库，列表读的是那个时间戳，所以创建后
-无法在界面上续期，只能删了重建。改上下限要同时改 `src/auth/auth.ts` 的 `apiKey({ keyExpiration })`
-和 `src/routes/{-$locale}/_layout/dashboard/api-keys.tsx` 的 `EXPIRY_OPTIONS`，否则用户能选到一个
+无法在界面上续期，只能删了重建。改上下限要同时改 `src/core/auth/auth.ts` 的 `apiKey({ keyExpiration })`
+和 `src/routes/{-$locale}/_layout/settings/api-keys.tsx` 的 `EXPIRY_OPTIONS`，否则用户能选到一个
 必然被服务端拒绝的值。
 
 ## 注意事项
 
-- **关闭 `features.enableApiKeys` 只停掉 HTTP 端点。** 服务端直接调 `verifyApiKey` 走函数调用，
+- **关闭 `userFeatures.apiKeys` 只停掉 HTTP 端点。** 服务端直接调 `verifyApiKey` 走函数调用，
   绕过路由门禁，已签发密钥仍能通过校验。要连校验一起停用，得在自己的业务路由里再判一次
-  `websiteConfig.features.enableApiKeys`。
+  `websiteConfig.userFeatures.apiKeys`。
 - 明文只在创建响应里出现一次，之后任何接口都不再返回。

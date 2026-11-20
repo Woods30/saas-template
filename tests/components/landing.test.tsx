@@ -1,11 +1,12 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LandingPage } from '@/components/marketing/LandingPage'
-import { websiteConfig } from '@/config/website'
+import { LandingPage } from '@/blocks/landing-page'
+import { baseConfig, websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { getLocale, setLocale } from '@/locale/paraglide/runtime.js'
 
+const router = vi.hoisted(() => ({ navigate: vi.fn() }))
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
     children,
@@ -24,15 +25,27 @@ vi.mock('@tanstack/react-router', () => ({
       {children}
     </a>
   ),
+  useNavigate: () => router.navigate,
 }))
 
 const auth = vi.hoisted(() => ({ session: null as { user: { id: string } } | null }))
-vi.mock('@/auth/client', () => ({ useSession: () => ({ data: auth.session, isPending: false }) }))
+vi.mock('@/core/auth/client', () => ({
+  useSession: () => ({ data: auth.session, isPending: false }),
+}))
 
-const originalConfig = structuredClone(websiteConfig)
+// 核销链路只 mock 下单这一个函数，其余（错误码文案等）走真实实现。
+const manualPayment = vi.hoisted(() => ({ createOrder: vi.fn() }))
+vi.mock('@/modules/manual-payments/service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/modules/manual-payments/service')>()
+  return { ...actual, createManualPaymentOrder: manualPayment.createOrder }
+})
+
+const originalConfig = structuredClone(baseConfig)
 let motion: MediaQueryList
 beforeEach(() => {
   auth.session = null
+  router.navigate.mockReset()
+  manualPayment.createOrder.mockReset().mockResolvedValue({ kind: 'redirect', orderId: 'ord_1' })
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Unavailable', { status: 400 })))
   setLocale('zh', { reload: false })
   motion = Object.assign(new EventTarget(), {
@@ -49,7 +62,7 @@ afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
-  Object.assign(websiteConfig, structuredClone(originalConfig))
+  Object.assign(baseConfig, structuredClone(originalConfig))
   setLocale('zh', { reload: false })
 })
 function advance(ms: number) {
@@ -76,7 +89,7 @@ function demo() {
 /**
  * 演示「改之后」那侧显示的是站点自己的品牌（文案里的 `home_demo_brand`）。
  *
- * 取相对值而不是写死占位串：品牌是配置项，改名（`pnpm run init` 之后就是改名）
+ * 取相对值而不是写死占位串：品牌是配置项，改名（改过配置就是改名）
  * 不该让测试变红。演示「改之前」那侧固定是模板原品牌，那是模板自己的对照物。
  */
 function customizedBrand(): string {
@@ -261,6 +274,79 @@ describe('LandingPage', () => {
     await waitFor(() =>
       expect(assign).toHaveBeenCalledWith('/zh/auth/login?redirect=%2Fzh%2F%23pricing'),
     )
+  })
+
+  /**
+   * 核销收款链路：首页购买入口不调渠道结账，而是创建核销订单并站内导航到
+   * 订单详情；价格显示本地标价。
+   */
+  describe('核销收款链路', () => {
+    beforeEach(() => {
+      auth.session = { user: { id: 'user_1' } }
+      websiteConfig.payment.checkoutMode = 'manual_payments'
+      // 两条链路互斥：核销链路下支付模块关着也不影响购买入口。
+      websiteConfig.payment.enabled = false
+      websiteConfig.manualPayments.enabled = true
+    })
+
+    it('价格显示核销链路的本地标价', () => {
+      const { container } = render(
+        <LandingPage priceCents={9900} manualPaymentPrice={{ amount: 18_000, currency: 'cny' }} />,
+      )
+      expect(container.querySelector('#pricing')).toHaveTextContent('¥180')
+      expect(container.querySelector('#pricing')).not.toHaveTextContent('$99')
+    })
+
+    it('「立即购买」创建核销订单并进入订单详情，不调渠道结账', async () => {
+      const request = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
+      vi.stubGlobal('fetch', request)
+      render(
+        <LandingPage priceCents={9900} manualPaymentPrice={{ amount: 18_000, currency: 'cny' }} />,
+      )
+      fireEvent.click(
+        within(screen.getByRole('region', { name: '一次购买，持续创造。' })).getByRole('button', {
+          name: '立即购买',
+        }),
+      )
+      await waitFor(() => expect(router.navigate).toHaveBeenCalled())
+      expect(router.navigate).toHaveBeenCalledWith({
+        to: '/{-$locale}/settings/manual-payments/$orderId',
+        params: { locale: 'zh', orderId: 'ord_1' },
+      })
+      expect(request).not.toHaveBeenCalled()
+    })
+
+    it('核销模块关闭时购买入口不可用', () => {
+      websiteConfig.manualPayments.enabled = false
+      render(
+        <LandingPage priceCents={9900} manualPaymentPrice={{ amount: 18_000, currency: 'cny' }} />,
+      )
+      expect(
+        within(screen.getByRole('region', { name: '一次购买，持续创造。' })).getByRole('button', {
+          name: '立即购买',
+        }),
+      ).toBeDisabled()
+    })
+
+    it('下单失败时按稳定错误码提示，不编造文案', async () => {
+      manualPayment.createOrder.mockResolvedValue({
+        kind: 'error',
+        code: 'NO_MANUAL_PAYMENT_ACCOUNT',
+      })
+      render(
+        <LandingPage priceCents={9900} manualPaymentPrice={{ amount: 18_000, currency: 'cny' }} />,
+      )
+      fireEvent.click(
+        within(screen.getByRole('region', { name: '一次购买，持续创造。' })).getByRole('button', {
+          name: '立即购买',
+        }),
+      )
+      await waitFor(() =>
+        expect(
+          within(screen.getByRole('region', { name: '一次购买，持续创造。' })).getByRole('status'),
+        ).toHaveTextContent('暂无可用收款账户，请联系站点管理员。'),
+      )
+    })
   })
 
   it('源码与页面同步更新，默认自动进入第二轮', () => {

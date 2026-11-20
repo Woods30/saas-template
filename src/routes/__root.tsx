@@ -12,7 +12,8 @@ import type { ReactNode } from 'react'
 import { AnalyticsProvider } from '@/components/AnalyticsProvider'
 import { JsonLd } from '@/components/JsonLd'
 import { Toaster } from '@/components/ui/toast'
-import { websiteConfig } from '@/config/website'
+import { getResolvedConfig, websiteConfig } from '@/config/website'
+import { serializeSiteConfig } from '@/core/config/serialize'
 import { organizationJsonLd } from '@/lib/json-ld'
 import { htmlLang } from '@/lib/locale'
 import { getTheme } from '@/lib/theme'
@@ -35,8 +36,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content: websiteConfig.ui.themeColor.dark,
         media: '(prefers-color-scheme: dark)',
       },
-      { title: m.site_name() },
-      { name: 'description', content: m.site_description() },
+      // 标题与描述取数据库配置（品牌 / SEO 分组）；未装载时回退出厂值。
+      { title: getResolvedConfig().metadata.name },
+      {
+        name: 'description',
+        content: getResolvedConfig().seo.default.description || m.site_description(),
+      },
     ],
     links: [
       { rel: 'stylesheet', href: globalsCss },
@@ -64,6 +69,15 @@ function RootDocument({ children }: { children: ReactNode }) {
     <html lang={htmlLang(locale)} data-theme={theme}>
       <head>
         <HeadContent />
+        {/* 生效配置（品牌、模块开关…）：客户端在 hydration 前读它装上，
+            保证 SSR 与 hydration 读到同一份。type 用 application/json，
+            不会被 script-src 拦，也不必带 nonce。 */}
+        <script
+          id="site-config"
+          type="application/json"
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: 配置必须内联，客户端要读回来
+          dangerouslySetInnerHTML={{ __html: serializeSiteConfig(getResolvedConfig()) }}
+        />
       </head>
       <body>
         <JsonLd data={organizationJsonLd()} />

@@ -1,11 +1,11 @@
 import { llmsConfig } from '@/config/llms'
 import type { Locale } from '@/config/locale'
 import { websiteConfig } from '@/config/website'
+import { findCatalogAmount } from '@/core/payment/price-catalog'
+import { getPriceCatalog } from '@/core/payment/price-catalog.server'
 import { renderLlmsFull, renderLlmsIndex } from '@/lib/llms'
 import { defaultLlmsSource } from '@/lib/llms-source.server'
 import { getBaseUrl } from '@/lib/urls'
-import { findCatalogAmount } from '@/payment/price-catalog'
-import { getPriceCatalog } from '@/payment/price-catalog.server'
 
 /**
  * llms.txt / llms-full.txt 的响应。

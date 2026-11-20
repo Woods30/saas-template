@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeStripeEvent } from '@/payment/provider/stripe'
+import { normalizeStripeEvent } from '@/core/payment/provider/stripe'
 
 describe('Stripe 事件归一化', () => {
   it('延迟付款尚未成功时不产生已付款记录', () => {

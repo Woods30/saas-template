@@ -7,7 +7,7 @@ group: deploy
 updated: 2026-11-03
 ---
 
-服务端缓存走 **Cloudflare KV**，经 `CACHE` binding 访问，代码在 `src/cache/`。
+服务端缓存走 **Cloudflare KV**，经 `CACHE` binding 访问，代码在 `src/core/cache/`。
 
 适合「读多写少、短暂过期可接受」的数据：第三方状态查询、公开列表、慢接口的结果。
 不适合需要强一致或高频写入的数据——KV 的写入有延迟传播。
@@ -52,7 +52,7 @@ await deleteCacheByPrefix(createCacheKey('products', 'list'))    // 前缀批量
 ```
 
 **key 必须经 `createCacheKey()` 拼**：它把各段里的 `:` 换成 `_` 再用 `:` 连接，避免参数里的
-冒号污染层级，导致前缀失效时误删。TTL 也用 `src/cache/constants.ts` 里的常量，不要在调用处写
+冒号污染层级，导致前缀失效时误删。TTL 也用 `src/core/cache/constants.ts` 里的常量，不要在调用处写
 数字：
 
 | 常量 | 秒 | 用途 |
@@ -69,9 +69,9 @@ await deleteCacheByPrefix(createCacheKey('products', 'list'))    // 前缀批量
 
 | 位置 | 用途 |
 |---|---|
-| `src/newsletter/index.ts` | 缓存订阅状态，订阅与退订后主动失效 |
+| `src/modules/newsletter/index.ts` | 缓存订阅状态，订阅与退订后主动失效 |
 | `src/lib/rate-limit.ts` | 用 `createCacheKey` 拼限流键 |
-| `src/payment/price-catalog.server.ts` | 缓存支付价格目录 |
+| `src/core/payment/price-catalog.server.ts` | 缓存支付价格目录 |
 
 限流与缓存共用同一个 `CACHE` namespace。
 

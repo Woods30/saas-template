@@ -1,10 +1,10 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SessionInfo } from '@/auth/session'
 import { DashboardUserCard } from '@/components/dashboard/DashboardUserCard'
 import { Sidebar, SidebarFooter, SidebarProvider } from '@/components/ui/sidebar'
 import { websiteConfig } from '@/config/website'
+import type { SessionInfo } from '@/core/auth/session'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 
 /**
@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   signOutAndRedirect: vi.fn(),
 }))
 
-vi.mock('@/auth/sign-out', () => ({
+vi.mock('@/core/auth/sign-out', () => ({
   signOutAndRedirect: (...args: unknown[]) => mocks.signOutAndRedirect(...args),
 }))
 
@@ -84,16 +84,18 @@ function renderCard(session: SessionInfo) {
 }
 
 function sessionWith(overrides: Partial<SessionInfo['user']> = {}): SessionInfo {
+  const user = {
+    id: 'u_1',
+    name: 'woods',
+    email: 'woods@example.com',
+    emailVerified: true,
+    image: null,
+    role: 'user',
+    ...overrides,
+  }
   return {
-    user: {
-      id: 'u_1',
-      name: 'woods',
-      email: 'woods@example.com',
-      emailVerified: true,
-      image: null,
-      role: 'user',
-      ...overrides,
-    },
+    user,
+    permissions: user.role === 'admin' ? ['*'] : [],
     impersonating: false,
   }
 }
@@ -168,6 +170,18 @@ describe('DashboardUserCard', () => {
     await waitFor(() => expect(screen.getByText('退出登录')).toBeInTheDocument())
     screen.getByText('退出登录').click()
     await waitFor(() => expect(mocks.signOutAndRedirect).toHaveBeenCalled())
+  })
+
+  it('管理员展开用户卡片后显示「管理后台」入口，普通用户不显示', async () => {
+    const { unmount } = renderCard(sessionWith({ role: 'admin' }))
+    screen.getByRole('button', { name: /woods/ }).click()
+    await waitFor(() => expect(screen.getByText('管理后台')).toBeInTheDocument())
+    unmount()
+
+    renderCard(sessionWith({ role: 'user' }))
+    screen.getByRole('button', { name: /woods/ }).click()
+    await waitFor(() => expect(screen.getByText('个人中心')).toBeInTheDocument())
+    expect(screen.queryByText('管理后台')).toBeNull()
   })
 })
 

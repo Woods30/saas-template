@@ -4,7 +4,7 @@ description: 角色字段、管理台入口与命令行提权
 locale: zh
 order: 12
 group: auth
-updated: 2026-11-03
+updated: 2026-11-19
 ---
 
 用户管理基于 Better Auth 的 admin 插件。管理员在个人中心的管理台查看全部用户、改角色、
@@ -12,15 +12,22 @@ updated: 2026-11-03
 
 ## 角色
 
-`users.role` 是普通文本列（`src/db/schema.ts`），默认 `'user'`。本仓只用两个取值：
+能做什么由 **RBAC** 决定，而不是 `users.role` 列：`src/core/db/schema.ts` 里的 `roles`、`permissions`、
+`role_permissions`、`user_roles` 四张表。内置角色：
 
-| 取值 | 含义 |
+| 角色 | 权限 |
 |---|---|
-| `user` | 普通用户，只能进自己的个人中心 |
-| `admin` | 管理员，额外可见「管理」分组与管理台 |
+| `super_admin` | `*`，全部 |
+| `admin` | 除「改角色权限矩阵」外的全部权限点 |
+| `editor` | 内容与客服工单 |
+| `viewer` | 全部 `*.read` 权限点 |
 
-判定是**精确匹配**：`assertAdminRole` 只认 `'admin'`，未登录或字段缺失一律拒绝（用 404 而非 403，
-不向非管理员泄漏这个页面存在）。
+进管理台要求持有**任意 `admin.*` 权限点**——`editor` 与 `viewer` 也进得来，页面内再按各自的
+权限点校验。没有权限的人拿到 404 而不是 403，不泄漏这个页面存在。
+
+`users.role` 是普通文本列（`src/core/db/schema.ts`），默认 `'user'`，由 RBAC 同步维护：
+`assignRolesToUser` 在用户持有任意 `admin.*` 权限时写 `'admin'`，否则写 `'user'`。它是**粗粒度
+标记**，供 Better Auth 的 admin 插件与顶栏菜单使用，不是授权依据。
 
 ## 提权
 
@@ -40,8 +47,8 @@ pnpm db:admin:remote <your-email>   # 线上 D1
 
 ## 管理台
 
-`/dashboard/admin/users`，入口在个人中心侧边栏的「管理」分组；`/dashboard/admin/revenue` 是营收总览。
-两者都受**双重**约束：`features.enableAdmin` 开关与 `admin` 角色都满足才可见、可进。
+`/admin/users`，入口在个人中心侧边栏的「管理」分组；`/admin` 是营收总览。
+两者都要求持有**任意 `admin.*` 权限点**；页面内再按 `admin.users.read` / `admin.users.write` 校验。
 
 - **列表**：服务端直接查 D1（`fetchAdminUsers`），支持按邮箱搜索、按角色与状态筛选、offset 翻页，
   每页 20 条。
@@ -53,8 +60,10 @@ pnpm db:admin:remote <your-email>   # 线上 D1
 - **删除**：`authClient.admin.removeUser({ userId })`，连带删掉其会话，不可撤销。
 - **模拟登录**：`authClient.admin.impersonateUser({ userId })`，可查看并吊销该用户的会话。
 
-> 关闭 `features.enableAdmin` 会让 `/api/auth/admin/*` 这组 HTTP 端点整体 404，但**角色判定不在
-> 路由层**：非 admin 调用插件端点由插件自己返回 403。UI 门禁与 API 门禁两者缺一不可。
+> `/api/auth/admin/*` 是插件自带的端点，插件按 `users.role` 判定。而该列是上面说的粗粒度标记——
+> 只读的 `viewer` 在那里也是 `'admin'`。因此 `src/routes/api/auth/$.ts` 在进 handler 之前再按
+> **权限点**拦一道：读端点要 `admin.users.read`，其余（含插件将来新增的端点）默认要
+> `admin.users.write`。`stop-impersonating` 例外：被模拟的用户必须能自己结束模拟。
 
 ## `role` 与 `ADMIN_EMAILS` 是两套机制
 
@@ -64,5 +73,6 @@ pnpm db:admin:remote <your-email>   # 线上 D1
 
 ## 验证
 
-登录管理台账号后打开 `/dashboard/admin/users`，应能看到用户列表；把 `features.enableAdmin` 关掉，
-侧栏入口消失，同一地址 404。
+登录管理台账号后打开 `/admin/users`，应能看到用户列表；去掉该账号的全部 `admin.*` 权限
+（角色页或 RBAC 表），侧栏入口消失，同一地址 404。只去掉 `admin.users.read` 时管理台仍进得去
+（入口只要求任意 `admin.*` 权限），但这一页自己的请求会被拒。

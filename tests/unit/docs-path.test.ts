@@ -4,7 +4,7 @@ import {
   docsPublicPath,
   rewriteDocsInput,
   rewriteDocsOutput,
-} from '@/lib/docs-path'
+} from '@/modules/docs/service'
 
 /**
  * 文档站独立部署时（`docs.asHome`），对外地址不应再带一层 `/docs`：

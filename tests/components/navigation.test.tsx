@@ -7,17 +7,17 @@ import {
 } from '@tanstack/react-router'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Header } from '@/blocks/header'
 import { MenuItems } from '@/components/layout/MenuItems'
-import { Navbar } from '@/components/marketing/Navbar'
 import { getPublicLinkOptions, type MenuItem } from '@/config/navigation'
-import { websiteConfig } from '@/config/website'
+import { baseConfig, websiteConfig } from '@/config/website'
 import { m } from '@/locale/paraglide/messages.js'
 import { setLocale } from '@/locale/paraglide/runtime.js'
 import { getRouter } from '@/router'
 
 // 首页价格来自 Stripe 的价格目录（server function）。测试环境里 server function
 // 不可执行，loader 会降级为「价格暂不可用」——这里 mock 出目录，页面才显示真实价格。
-vi.mock('@/payment/pricing', () => ({
+vi.mock('@/core/payment/pricing', () => ({
   fetchPriceCatalog: vi.fn().mockResolvedValue({
     one_time: {
       reference: 'one_time',
@@ -32,13 +32,16 @@ vi.mock('@/payment/pricing', () => ({
 }))
 
 // 站点配置是模块级单例，afterEach 用快照整体复原，避免用例相互污染。
-const originalConfig = structuredClone(websiteConfig)
+// 快照取 `baseConfig` 而不是 `websiteConfig`：后者是 Proxy，structuredClone 克隆不了
+// （V8 对 Proxy 直接抛 DataCloneError）。而用例里的 `websiteConfig.docs = …` 赋值
+// 落到的正是 Proxy 的目标对象 `baseConfig`。
+const originalConfig = structuredClone(baseConfig)
 
 beforeEach(() => setLocale('en', { reload: false }))
 afterEach(() => {
   cleanup()
   setLocale('zh', { reload: false })
-  Object.assign(websiteConfig, structuredClone(originalConfig))
+  Object.assign(baseConfig, structuredClone(originalConfig))
 })
 
 /** 用真实 Router + memory history 渲染真实页面。 */
@@ -53,11 +56,11 @@ async function renderRoute(path: string) {
 }
 
 /**
- * 用最小 Router 只挂载 Navbar，供需要交互的用例使用：真实 routeTree 的 `shellComponent`
+ * 用最小 Router 只挂载 Header，供需要交互的用例使用：真实 routeTree 的 `shellComponent`
  * 会在 jsdom 里渲染嵌套 `<html>`，之后任何 state 更新都不返回。
  */
-async function renderNavbar() {
-  const rootRoute = createRootRoute({ component: () => <Navbar /> })
+async function renderHeader() {
+  const rootRoute = createRootRoute({ component: () => <Header /> })
   const router = createRouter({
     routeTree: rootRoute,
     history: createMemoryHistory({ initialEntries: ['/en'] }),
@@ -94,7 +97,7 @@ function internalLink(
   } satisfies MenuItem
 }
 
-describe('Navbar 消费菜单配置（真实 Router）', () => {
+describe('Header 消费菜单配置（真实 Router）', () => {
   it.each(['en', 'zh'] as const)('旧 %s 定价页跳转首页价格区且不展示演示商品', async (locale) => {
     setLocale(locale, { reload: false })
     await renderRoute(`/${locale}/pricing`)
@@ -146,7 +149,7 @@ describe('Navbar 消费菜单配置（真实 Router）', () => {
   // 此后任何 state 更新都不返回，还会拖死同 run 的其他文件。
   it('移动端 Escape 关闭面板并把焦点还给触发按钮', async () => {
     websiteConfig.docs = { enabled: true }
-    await renderNavbar()
+    await renderHeader()
     const header = within(screen.getByRole('banner'))
     const trigger = screen.getByRole('button', { name: 'Open navigation menu' })
     expect(header.getAllByRole('link', { name: 'Docs' })).toHaveLength(1)

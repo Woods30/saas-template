@@ -10,32 +10,28 @@ updated: 2026-11-03
 The newsletter module collects visitor emails into a list. The list lives in a third-party service
 (Resend Audiences or Beehiiv); this site only receives signups and reads the status. Once enabled
 there are two entry points: the signup box on marketing pages (the `NewsletterCta` component) and
-the preference toggle in the account area (`/dashboard/notifications`).
+the preference toggle in the account area (`/settings/notifications`).
 
 ## Steps
 
-1. **Pick a provider and enable it.** In `src/config/website.ts`:
-
-   ```ts
-   newsletter: { enabled: true, provider: 'resend' },
-   ```
+1. **Enable it and pick a provider.** Turn on Newsletter under admin **Settings → Modules**, then
+   choose `resend` or `beehiiv` under **Mail → Newsletter**.
 
    Two providers: `resend` or `beehiiv`.
-2. **Set the environment variables.**
+2. **Enter credentials.** On the same tab:
 
-   | Provider | Required variables | Where they come from |
+   | Provider | Required fields | Where they come from |
    |---|---|---|
-   | `resend` | `RESEND_API_KEY` + `RESEND_AUDIENCE_ID` | Both from the Resend dashboard |
-   | `beehiiv` | `BEEHIIV_API_KEY` + `BEEHIIV_PUBLICATION_ID` | Both from the Beehiiv dashboard |
+   | `resend` | Resend API key + Audience ID | Both from the Resend dashboard |
+   | `beehiiv` | Beehiiv API key + Publication ID | Both from the Beehiiv dashboard |
 
-   `BEEHIIV_SEND_WELCOME_EMAIL` controls whether Beehiiv sends a welcome email to new subscribers;
-   `'true'` / `'false'`, default `'false'`. None of these variables uses a **`VITE_` prefix**.
+   The Beehiiv group also has a "send welcome email" switch, off by default. Secrets are
+   encrypted at rest and masked; saving takes effect immediately.
 
-3. **Deploy.** Hand the variables to the Worker in production
-   (`pnpm exec wrangler secret put <NAME>`); with automatic Release deployment, set Secrets of
-   the same name in GitHub **Settings → Environments → production**. `RESEND_AUDIENCE_ID` and the
-   `BEEHIIV_*` variables are **not** in the deployment workflow's runtime upload allowlist — add
-   them to the `env` block and the allowlist in `.github/workflows/deploy.yml` before enabling.
+   Alternatively put the same values in `.env` and run `pnpm db:seed` to write them to the
+   database.
+
+3. **No redeploy needed.** The configuration lives in the database; saving is enough.
 
 ## Endpoints
 
@@ -51,7 +47,7 @@ subscribing or unsubscribing invalidates that key immediately.
 
 ## Verify
 
-`pnpm run check:env` should stop reporting missing configuration under `newsletter`. Then submit
+After saving in the admin, the service status should stop reporting missing configuration under `newsletter`. Then submit
 a signup on the page and confirm the address appears in the third-party list.
 
 ## Notes

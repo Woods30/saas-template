@@ -212,34 +212,20 @@ jobs:
             .replace(kvPattern, `$1${kv.id}$2`)
           writeFileSync('wrangler.jsonc', updated)
           NODE
-          # 迁移必须先于部署：Worker 启动即访问 users 表，缺表会让所有走会话的请求 500。
-          echo "应用 D1 迁移"
-          pnpm exec wrangler d1 migrations apply DB --remote
+          # 迁移不入库：生产库结构变更需本地生成迁移后手工 apply（wrangler d1 migrations apply DB --remote 或 pnpm db:migrate:pg）。
       - name: Validate, build and deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
           VITE_BASE_URL: ${{ vars.VITE_BASE_URL || secrets.VITE_BASE_URL }}
-          # 模块与能力开关白名单：同一份代码发到不同场景时按环境覆盖。
-          VITE_MODULES: ${{ vars.VITE_MODULES }}
-          VITE_FEATURES: ${{ vars.VITE_FEATURES }}
-          VITE_DOCS_AS_HOME: ${{ vars.VITE_DOCS_AS_HOME }}
           # 自定义域名要能读 zone 的 token 才能建；没有时只发到 workers.dev。
           DEPLOY_SKIP_CUSTOM_DOMAIN: ${{ vars.DEPLOY_SKIP_CUSTOM_DOMAIN }}
-          # 公开变量既可能配成 Variable 也可能配成 Secret：GA ID 与 Turnstile site key
-          # 会进客户端 bundle，语义上是公开的，但用 Secret 存放同样安全。
-          VITE_GA_ID: ${{ vars.VITE_GA_ID || secrets.VITE_GA_ID }}
-          VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY || secrets.VITE_TURNSTILE_SITE_KEY }}
+          # 启动必需的 secret。支付 / 邮件 / 分析的凭据在数据库里（ADR-0010），
+          # 不再进构建与部署环境；首部署后在后台「系统设置」里填写，
+          # 或用带 env 的 `pnpm db:seed` 写进远端库。
           BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL || vars.VITE_BASE_URL || secrets.VITE_BASE_URL }}
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          MAIL_FROM: ${{ vars.MAIL_FROM || secrets.MAIL_FROM }}
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+          CONFIG_ENCRYPTION_KEY: ${{ secrets.CONFIG_ENCRYPTION_KEY }}
           ADMIN_EMAILS: ${{ vars.ADMIN_EMAILS || secrets.ADMIN_EMAILS }}
         run: |
           set -euo pipefail
@@ -260,9 +246,7 @@ jobs:
           node --input-type=module - "$secrets_file" <<'NODE'
           import { writeFileSync } from 'node:fs'
           const keys = [
-            'BETTER_AUTH_SECRET', 'BETTER_AUTH_URL', 'RESEND_API_KEY', 'MAIL_FROM',
-            'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'DISCORD_WEBHOOK_URL',
-            'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'TURNSTILE_SECRET_KEY', 'ADMIN_EMAILS',
+            'BETTER_AUTH_SECRET', 'BETTER_AUTH_URL', 'CONFIG_ENCRYPTION_KEY', 'ADMIN_EMAILS',
           ]
           const bindings = Object.fromEntries(keys.filter(key => process.env[key]).map(key => [key, process.env[key]]))
           writeFileSync(process.argv[2], JSON.stringify(bindings))
@@ -271,7 +255,6 @@ jobs:
       - name: Smoke test
         env:
           BASE_URL: ${{ vars.VITE_BASE_URL || secrets.VITE_BASE_URL }}
-          VITE_MODULES: ${{ vars.VITE_MODULES }}
         run: |
           set -euo pipefail
           # 首次绑定自定义域名时 DNS 与证书签发需要时间（通常几分钟）。直接检查会以
@@ -301,22 +284,10 @@ jobs:
               exit 1
             fi
           done
-          # 给了 VITE_MODULES 时只有名单里的模块需要检查：auth 模块关闭时
-          # 认证端点本就是 404，缺了它不算故障。
-          auth_enabled=1
-          if [ -n "${VITE_MODULES:-}" ]; then
-            case ",${VITE_MODULES}," in
-              *,auth,*) auth_enabled=1 ;;
-              *) auth_enabled=0 ;;
-            esac
-          fi
-          if [ "$auth_enabled" = "1" ]; then
-            code=$(curl --retry 3 --retry-delay 2 --max-time 30 -sS -o /dev/null -w '%{http_code}' "$BASE_URL/api/auth/get-session")
-            echo "/api/auth/get-session → $code"
-            case "$code" in
-              2*) ;;
-              *) echo "::error::认证端点响应异常，检查认证 secret 与 D1 绑定"; exit 1 ;;
-            esac
-          else
-            echo "auth 模块未启用，跳过认证端点检查"
-          fi
+          # 认证模块默认开启；端点异常通常意味着 secret 或 D1 绑定没配好。
+          code=$(curl --retry 3 --retry-delay 2 --max-time 30 -sS -o /dev/null -w '%{http_code}' "$BASE_URL/api/auth/get-session")
+          echo "/api/auth/get-session → $code"
+          case "$code" in
+            2*) ;;
+            *) echo "::error::认证端点响应异常，检查认证 secret 与 D1 绑定"; exit 1 ;;
+          esac

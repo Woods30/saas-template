@@ -8,8 +8,8 @@ updated: 2026-11-03
 ---
 
 The notification module pushes key site events to a chat webhook. Discord and Feishu have almost
-identical setup, so they share this page: create the bot → copy the webhook URL → set the
-environment variable → switch the provider.
+identical setup, so they share this page: create the bot → copy the webhook URL → enter it in
+the admin and pick a provider.
 
 ## Steps
 
@@ -19,54 +19,37 @@ environment variable → switch the provider.
      the webhook URL.
    - **Feishu**: group settings → bots → add a "custom bot", copy the webhook URL.
 
-2. **Set the environment variable.** The URL prefixes are enforced by the schema, so a wrong one
-   fails at startup:
+2. **Enter the URL and pick a provider.** Open admin **Settings → Notification**:
 
-   | Provider | Variable | Required prefix |
+   enable the module, choose the provider (`discord` / `feishu`), and paste the webhook URL into
+   the matching group. The prefix is validated on save:
+
+   | Provider | Field | Required prefix |
    |---|---|---|
-   | `discord` | `DISCORD_WEBHOOK_URL` | `https://discord.com/api/webhooks/` |
-   | `feishu` | `FEISHU_WEBHOOK_URL` | `https://open.feishu.cn/open-apis/bot/v2/hook/` |
+   | `discord` | Discord webhook URL | `https://discord.com/api/webhooks/` |
+   | `feishu` | Feishu webhook URL | `https://open.feishu.cn/open-apis/bot/v2/hook/` |
 
-   Neither variable uses a **`VITE_` prefix**.
+   The URL is encrypted at rest; saving takes effect immediately, no deploy needed.
 
-3. **Switch the provider.** In `src/config/website.ts`:
-
-   ```ts
-   notification: { enabled: true, provider: 'discord' },
-   ```
-
-   Two providers, and it **must match the webhook you configured**: selecting `feishu` while
-   only `DISCORD_WEBHOOK_URL` is set leaves the diagnostic at `incomplete`.
-
-4. **Deploy.** Hand the webhook URL to the Worker in production:
-
-   ```bash
-   pnpm exec wrangler secret put DISCORD_WEBHOOK_URL
-   ```
-
-   With automatic Release deployment, set a Secret of the same name in GitHub **Settings →
-   Environments → production**. `DISCORD_WEBHOOK_URL` is already in the deployment workflow's
-   runtime upload allowlist; **`FEISHU_WEBHOOK_URL` is not** — if you use Feishu, add it to the
-   `env` block and the upload allowlist in `.github/workflows/deploy.yml` yourself.
+3. **Mismatched provider.** The provider **must match the URL you entered**: selecting `feishu`
+   while only the Discord URL is set leaves the service status `incomplete` and lists the missing
+   field.
 
 ## Trigger points
 
 | Event | Contents | Location |
 |---|---|---|
-| Successful payment | Plan name, amount, user ID, purchase type | `src/payment/events.ts` |
-| Contact form submission | Visitor name, email, subject, body | `src/contact/notifications.ts` |
+| Successful payment | Plan name, amount, user ID, purchase type | `src/core/payment/events.ts` |
+| Contact form submission | Visitor name, email, subject, body | `src/modules/contact/notifications.ts` |
 
 The contact form's email channel and webhook channel **back each other up**: either one
 succeeding counts as delivered; only when both fail is the submission reported as failed.
 
 ## Verify
 
-```bash
-pnpm run check:env
-```
-
-The `notification` item should stop reporting missing configuration. Then make a payment or
-submit the contact form and confirm the webhook receives the message.
+After saving in the admin, the `notification` item should stop reporting missing configuration
+in the service status. Then make a payment or submit the contact form and confirm the webhook
+receives the message.
 
 ## Notes
 

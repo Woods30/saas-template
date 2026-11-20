@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { z } from 'zod'
 import { AuthLayout } from '@/components/auth/AuthLayout'
-import { assertPageEnabled } from '@/lib/module-access'
 import { resolveRedirectTarget, safeInternalPath } from '@/lib/urls'
 import { m } from '@/locale/paraglide/messages.js'
 
@@ -11,7 +10,6 @@ export const Route = createFileRoute('/{-$locale}/auth/verify-email')({
     error: z.string().optional(),
     redirect: z.unknown().transform(safeInternalPath).optional(),
   }),
-  beforeLoad: () => assertPageEnabled('auth'),
   component: VerifyEmailPage,
 })
 
