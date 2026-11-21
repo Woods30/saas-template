@@ -27,6 +27,14 @@ export enum PostType {
  */
 export const PUBLIC_BLOG_TYPES = [PostType.ARTICLE];
 
+/**
+ * Types an older version wrote and no code path produces any more. An upgraded
+ * database still carries these rows, and the admin editor is the one place
+ * they would otherwise surface — hide them there too, so nobody edits a dead
+ * row into a shape the current code cannot handle.
+ */
+export const RETIRED_POST_TYPES = ['guest'];
+
 export enum PostStatus {
   PUBLISHED = 'published',
   PENDING = 'pending',

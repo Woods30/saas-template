@@ -28,6 +28,7 @@ export async function GET({ request, actor }: AdminHandlerContext) {
       status,
       page,
       pageSize,
+      excludeTypes: postsService.RETIRED_POST_TYPES,
     });
     return respPage(items, total);
   } catch (error: any) {
