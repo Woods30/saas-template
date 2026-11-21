@@ -627,6 +627,47 @@ export const userEvent = table(
 export type UserEvent = typeof userEvent.$inferSelect;
 export type NewUserEvent = typeof userEvent.$inferInsert;
 
+// ─── Invite Codes ────────────────────────────────────────────────────────────
+export const inviteCode = table(
+  'invite_code',
+  {
+    id: varchar191('id').primaryKey(),
+    code: varchar191('code').notNull().unique(),
+    maxUses: int('max_uses').notNull().default(1),
+    usedCount: int('used_count').notNull().default(0),
+    trialDays: int('trial_days').notNull().default(15),
+    note: text('note'),
+    createdBy: varchar191('created_by').references(() => user.id),
+    expiresAt: timestamp('expires_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [index('idx_invite_code_code').on(t.code)]
+);
+
+export const userInvite = table(
+  'user_invite',
+  {
+    id: varchar191('id').primaryKey(),
+    userId: varchar191('user_id')
+      .notNull()
+      .references(() => user.id),
+    inviteCodeId: varchar191('invite_code_id')
+      .notNull()
+      .references(() => inviteCode.id),
+    activatedAt: timestamp('activated_at').defaultNow().notNull(),
+    trialEndsAt: timestamp('trial_ends_at').notNull(),
+  },
+  (t) => [
+    index('idx_user_invite_user').on(t.userId),
+    index('idx_user_invite_code').on(t.inviteCodeId),
+  ]
+);
+
+export type InviteCode = typeof inviteCode.$inferSelect;
+export type NewInviteCode = typeof inviteCode.$inferInsert;
+export type UserInvite = typeof userInvite.$inferSelect;
+export type NewUserInvite = typeof userInvite.$inferInsert;
+
 // ─── First-party operations ──────────────────────────────────────────────────
 // One immutable first-touch cohort per browser. No IPs or raw URL queries.
 export const analyticsVisitor = table(
