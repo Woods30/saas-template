@@ -1,9 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
+
+import { respData } from '@/lib/resp';
+
 import { authenticateAdmin } from '@/server/admin/auth';
 import { operationCatalog } from '@/server/admin/discovery';
 import { adminErrorResponse } from '@/server/admin/execute';
-
-import { respData } from '@/lib/resp';
 
 export const Route = createFileRoute('/api/admin/agent/operations')({
   server: {

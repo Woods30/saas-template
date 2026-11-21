@@ -15,13 +15,6 @@ const search = { ...page, search: short.optional() };
 const postStatus = z.enum(['draft', 'pending', 'published', 'archived']);
 const ticketStatus = z.enum(['open', 'replied', 'closed']);
 // No 'draft': unpaid drafts never show up in admin lists.
-const guestPostStatus = z.enum([
-  'submitted',
-  'changes_requested',
-  'published',
-  'rejected',
-  'unpublished',
-]);
 const postFields = {
   slug: z.string().min(1).max(191),
   title: z.string().min(1).max(500),
@@ -672,83 +665,6 @@ export const adminOperations: AdminOperation[] = [
     'PATCH',
     'tickets/{id}',
     z.object({ id, status: ticketStatus }).strict()
-  ),
-  op(
-    'guest_posts_list',
-    'List guest post submissions (articles outside authors paid to publish) with optional status/keyword filters. status=submitted is the review queue (paid, awaiting a decision).',
-    'guest-posts.read',
-    'GET',
-    'guest-posts',
-    z.object({ ...search, status: guestPostStatus.optional() }).strict()
-  ),
-  op(
-    'guest_posts_get',
-    'Read a guest post submission with its article, package and author.',
-    'guest-posts.read',
-    'GET',
-    'guest-posts/{id}',
-    remove
-  ),
-  op(
-    'guest_posts_review',
-    'Review a paid guest post awaiting a decision: approve (publishes it now) or request_changes (the author edits and resubmits without paying again; note required). To reject, use guest_posts_reject.',
-    'guest-posts.review',
-    'POST',
-    'guest-posts/{id}',
-    z
-      .object({
-        id,
-        action: z.enum(['approve', 'request_changes']),
-        note: z.string().max(2000).optional(),
-      })
-      .strict()
-  ),
-  op(
-    'guest_posts_reject',
-    'Reject a paid guest post and refund its order in full (real money). Note to the author required.',
-    'guest-posts.reject',
-    'POST',
-    'guest-posts/{id}/reject',
-    z.object({ id, note: z.string().trim().min(1).max(2000) }).strict()
-  ),
-  op(
-    'guest_posts_update',
-    "Edit a guest post's article (title, URL slug, summary, cover, markdown). Edits a published one live; changing a published slug breaks its old URL. The package's link cap still applies.",
-    'guest-posts.review',
-    'PUT',
-    'guest-posts/{id}',
-    z
-      .object({
-        id,
-        title: z.string().min(1).max(200),
-        slug: z.string().max(80).optional(),
-        description: z.string().max(500).optional(),
-        image: z.string().max(2048).optional(),
-        content: z.string().max(50_000),
-      })
-      .strict()
-  ),
-  op(
-    'guest_posts_unpublish',
-    'Take a published guest post down. It stays paid; refund the order separately if owed.',
-    'guest-posts.review',
-    'PATCH',
-    'guest-posts/{id}',
-    z.object({ id, note: z.string().max(2000).optional() }).strict()
-  ),
-  op(
-    'guest_posts_restore',
-    'Bring back an unpublished guest post whose order is still paid: republish (live again) or request_changes (the author edits and resubmits without paying; note required). Refunded ones cannot be restored.',
-    'guest-posts.review',
-    'POST',
-    'guest-posts/{id}/restore',
-    z
-      .object({
-        id,
-        action: z.enum(['republish', 'request_changes']),
-        note: z.string().max(2000).optional(),
-      })
-      .strict()
   ),
   op(
     'settings_get',

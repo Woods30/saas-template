@@ -13,7 +13,12 @@ import {
 } from '@/components/ui/dialog';
 
 export type PaymentProvider =
-  'stripe' | 'creem' | 'paypal' | 'alipay' | 'wechat' | 'manual_payments';
+  | 'stripe'
+  | 'creem'
+  | 'paypal'
+  | 'alipay'
+  | 'wechat'
+  | 'manual_payments';
 
 interface Props {
   open: boolean;

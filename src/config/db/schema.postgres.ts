@@ -217,8 +217,8 @@ export const order = table(
     subscriptionResult: text('subscription_result'),
     checkoutUrl: text('checkout_url'),
     callbackUrl: text('callback_url'),
-    // What the order buys beyond productId, as `<kind>:<id>` (e.g.
-    // `guest_post:<id>`). Set at checkout; read back by fulfillment.
+    // What the order buys beyond productId, as `<kind>:<id>`. Set at
+    // checkout; read back by whichever flow fulfills that kind.
     reference: text('reference'),
     creditsAmount: integer('credits_amount'),
     creditsValidDays: integer('credits_valid_days'),
@@ -609,45 +609,6 @@ export type Ticket = typeof ticket.$inferSelect;
 export type NewTicket = typeof ticket.$inferInsert;
 export type TicketMessage = typeof ticketMessage.$inferSelect;
 export type NewTicketMessage = typeof ticketMessage.$inferInsert;
-
-// ─── Guest posts ─────────────────────────────────────────────────────────────
-// Paid, reviewed articles from outside authors. The article body lives in
-// `post` (type 'guest', status 'draft' until approved); this row tracks the
-// submission. Flow: draft → (paid) submitted → (changes_requested ↔
-// submitted) → published | rejected (refunded); published → unpublished.
-// Checkout orders point back here through order.reference.
-
-export const guestPost = table(
-  'guest_post',
-  {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    postId: text('post_id')
-      .notNull()
-      .unique()
-      .references(() => post.id, { onDelete: 'cascade' }),
-    productId: text('product_id').notNull(), // guest post package in pricing.ts
-    status: text('status').notNull(),
-    reviewNote: text('review_note'),
-    orderNo: text('order_no'), // the order that paid for it
-    submittedAt: timestamp('submitted_at'),
-    publishedAt: timestamp('published_at'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at')
-      .defaultNow()
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (t) => [
-    index('idx_guest_post_user').on(t.userId),
-    index('idx_guest_post_status').on(t.status),
-  ]
-);
-
-export type GuestPost = typeof guestPost.$inferSelect;
-export type NewGuestPost = typeof guestPost.$inferInsert;
 
 // ─── Custom tables ───────────────────────────────────────────────────────────
 // Add your own tables below this line.

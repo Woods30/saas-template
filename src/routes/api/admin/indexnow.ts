@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { runAdminRoute } from '@/server/admin/execute';
 
 import { enforceMinIntervalRateLimit } from '@/lib/rate-limit';
+
+import { runAdminRoute } from '@/server/admin/execute';
 
 function run(name: string, context: { request: Request }) {
   const limited = enforceMinIntervalRateLimit(context.request, {

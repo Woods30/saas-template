@@ -5,8 +5,6 @@ import * as categories from './handlers/categories';
 import * as config from './handlers/config';
 import * as config_custom from './handlers/config-custom';
 import * as credits from './handlers/credits';
-import * as guest_posts from './handlers/guest-posts';
-import * as guest_posts_id from './handlers/guest-posts-id';
 import * as indexnow from './handlers/indexnow';
 import * as invite_codes from './handlers/invite-codes';
 import * as manual_accounts from './handlers/manual-accounts';
@@ -87,13 +85,6 @@ export const handlers: Record<
   roles_unassign: roles_assign.DELETE,
   roles_permissions_get: roles_permissions.GET,
   roles_permissions_update: roles_permissions.PUT,
-  guest_posts_list: guest_posts.GET,
-  guest_posts_get: guest_posts_id.GET,
-  guest_posts_review: guest_posts_id.POST,
-  guest_posts_reject: guest_posts_id.REJECT,
-  guest_posts_update: guest_posts_id.PUT,
-  guest_posts_unpublish: guest_posts_id.PATCH,
-  guest_posts_restore: guest_posts_id.RESTORE,
   tickets_list: tickets.GET,
   tickets_get: tickets_id.GET,
   tickets_reply: tickets_id.POST,

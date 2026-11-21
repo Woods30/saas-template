@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from 'react';
 
 import {
+  type CookieConsent,
   readCookieConsent,
   subscribeCookieConsent,
-  type CookieConsent,
 } from '@/lib/cookie-consent';
 
 // The visitor's cookie choice. `initial` is the value the server read from the

@@ -13,11 +13,11 @@ import {
   apiDelete,
   apiGet,
   apiPost,
-  pageQuery,
   type PageResult,
+  pageQuery,
 } from '@/lib/api-client';
 import { m } from '@/paraglide/messages.js';
-import { DataTable, type Column } from '@/components/data-table';
+import { type Column, DataTable } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {

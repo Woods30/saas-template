@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Favicon">
-  <rect width="512" height="512" rx="96" fill="#0a0a0a"/>
-  <rect x="128" y="128" width="112" height="256" rx="28" fill="#ffffff"/>
-  <rect x="272" y="128" width="112" height="112" rx="28" fill="#ffffff"/>
-  <rect x="272" y="272" width="112" height="112" rx="28" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Jerbix">
+  <rect width="512" height="512" rx="112" fill="#0F0D0B"/>
+  <rect x="112" y="132" width="288" height="40" rx="20" fill="#F5F1E8"/>
+  <rect x="112" y="212" width="176" height="40" rx="20" fill="#F5F1E8"/>
+  <path d="M164 330 L222 388 L356 244" fill="none" stroke="#B4432B" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

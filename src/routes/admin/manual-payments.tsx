@@ -21,7 +21,7 @@ import {
 import { formatDateTime } from '@/lib/time';
 import { m } from '@/paraglide/messages.js';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { DataTable, type Column } from '@/components/data-table';
+import { type Column, DataTable } from '@/components/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

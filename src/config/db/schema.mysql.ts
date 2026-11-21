@@ -205,8 +205,8 @@ export const order = table(
     subscriptionResult: text('subscription_result'),
     checkoutUrl: text('checkout_url'),
     callbackUrl: text('callback_url'),
-    // What the order buys beyond productId, as `<kind>:<id>` (e.g.
-    // `guest_post:<id>`). Set at checkout; read back by fulfillment.
+    // What the order buys beyond productId, as `<kind>:<id>`. Set at
+    // checkout; read back by whichever flow fulfills that kind.
     reference: varchar('reference', { length: 255 }),
     creditsAmount: int('credits_amount'),
     creditsValidDays: int('credits_valid_days'),
@@ -578,42 +578,6 @@ export type NewTicket = typeof ticket.$inferInsert;
 export type TicketMessage = typeof ticketMessage.$inferSelect;
 export type NewTicketMessage = typeof ticketMessage.$inferInsert;
 
-// ─── Guest posts ─────────────────────────────────────────────────────────────
-// Paid, reviewed articles from outside authors. The article body lives in
-// `post` (type 'guest', status 'draft' until approved); this row tracks the
-// submission. Flow: draft → (paid) submitted → (changes_requested ↔
-// submitted) → published | rejected (refunded); published → unpublished.
-// Checkout orders point back here through order.reference.
-
-export const guestPost = table(
-  'guest_post',
-  {
-    id: varchar191('id').primaryKey(),
-    userId: varchar191('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    postId: varchar191('post_id')
-      .notNull()
-      .unique()
-      .references(() => post.id, { onDelete: 'cascade' }),
-    productId: varchar('product_id', { length: 100 }).notNull(), // guest post package in pricing.ts
-    status: varchar('status', { length: 50 }).notNull(),
-    reviewNote: text('review_note'),
-    orderNo: varchar191('order_no'), // the order that paid for it
-    submittedAt: timestamp('submitted_at'),
-    publishedAt: timestamp('published_at'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
-  },
-  (t) => [
-    index('idx_guest_post_user').on(t.userId),
-    index('idx_guest_post_status').on(t.status),
-  ]
-);
-
-export type GuestPost = typeof guestPost.$inferSelect;
-export type NewGuestPost = typeof guestPost.$inferInsert;
-
 // ─── Custom tables ───────────────────────────────────────────────────────────
 // Add your own tables below this line.
 
@@ -662,6 +626,47 @@ export const userEvent = table(
 
 export type UserEvent = typeof userEvent.$inferSelect;
 export type NewUserEvent = typeof userEvent.$inferInsert;
+
+// ─── Invite Codes ────────────────────────────────────────────────────────────
+export const inviteCode = table(
+  'invite_code',
+  {
+    id: varchar191('id').primaryKey(),
+    code: varchar191('code').notNull().unique(),
+    maxUses: int('max_uses').notNull().default(1),
+    usedCount: int('used_count').notNull().default(0),
+    trialDays: int('trial_days').notNull().default(15),
+    note: text('note'),
+    createdBy: varchar191('created_by').references(() => user.id),
+    expiresAt: timestamp('expires_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [index('idx_invite_code_code').on(t.code)]
+);
+
+export const userInvite = table(
+  'user_invite',
+  {
+    id: varchar191('id').primaryKey(),
+    userId: varchar191('user_id')
+      .notNull()
+      .references(() => user.id),
+    inviteCodeId: varchar191('invite_code_id')
+      .notNull()
+      .references(() => inviteCode.id),
+    activatedAt: timestamp('activated_at').defaultNow().notNull(),
+    trialEndsAt: timestamp('trial_ends_at').notNull(),
+  },
+  (t) => [
+    index('idx_user_invite_user').on(t.userId),
+    index('idx_user_invite_code').on(t.inviteCodeId),
+  ]
+);
+
+export type InviteCode = typeof inviteCode.$inferSelect;
+export type NewInviteCode = typeof inviteCode.$inferInsert;
+export type UserInvite = typeof userInvite.$inferSelect;
+export type NewUserInvite = typeof userInvite.$inferInsert;
 
 // ─── First-party operations ──────────────────────────────────────────────────
 // One immutable first-touch cohort per browser. No IPs or raw URL queries.

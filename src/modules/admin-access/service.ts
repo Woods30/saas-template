@@ -14,6 +14,7 @@ import {
 import { matchPermission } from '@/core/auth/rbac';
 import { db } from '@/core/db';
 import {
+  type AdminExecution,
   adminExecution,
   apikey,
   permission,
@@ -21,7 +22,6 @@ import {
   rolePermission,
   user,
   userRole,
-  type AdminExecution,
 } from '@/config/db/schema';
 import { getUuid } from '@/lib/hash';
 

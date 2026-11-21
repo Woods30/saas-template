@@ -1,23 +1,23 @@
 import {
-  CheckoutSession,
-  PaymentBilling,
-  PaymentEventType,
-  PaymentInterval,
-  PaymentInvoice,
-  PaymentStatus,
-  PaymentType,
-  RefundStatus,
-  SubscriptionCycleType,
-  SubscriptionInfo,
-  SubscriptionStatus,
-  WebhookIgnoredError,
+  type CheckoutSession,
+  type PaymentBilling,
   type PaymentConfigs,
   type PaymentEvent,
+  PaymentEventType,
+  PaymentInterval,
+  type PaymentInvoice,
   type PaymentOrder,
   type PaymentProvider,
   type PaymentRefund,
   type PaymentRefundRequest,
   type PaymentSession,
+  PaymentStatus,
+  PaymentType,
+  RefundStatus,
+  SubscriptionCycleType,
+  type SubscriptionInfo,
+  SubscriptionStatus,
+  WebhookIgnoredError,
 } from './types';
 
 /**
@@ -471,7 +471,7 @@ export class PayPalProvider implements PaymentProvider {
 
       // Map PayPal event type to internal event type
       const eventType = this.mapPayPalEventType(event.event_type);
-      let paymentSession: PaymentSession | undefined = undefined;
+      let paymentSession: PaymentSession | undefined;
 
       // Build payment session based on event type
       if (eventType === PaymentEventType.CHECKOUT_SUCCESS) {
@@ -820,10 +820,6 @@ export class PayPalProvider implements PaymentProvider {
       case 'BILLING.SUBSCRIPTION.SUSPENDED':
       case 'BILLING.SUBSCRIPTION.EXPIRED':
         return PaymentEventType.SUBSCRIBE_CANCELED;
-
-      // Subscription payment events
-      case 'PAYMENT.SALE.COMPLETED':
-        return PaymentEventType.PAYMENT_SUCCESS;
 
       default:
         throw new WebhookIgnoredError(

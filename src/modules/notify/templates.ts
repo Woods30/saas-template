@@ -96,31 +96,6 @@ Country: {{country}}
 View ticket: {{admin_url}}{{/admin_url}}`,
 };
 
-export const GUEST_POST_TEMPLATES: Record<NotifyLanguage, string> = {
-  en: `[{{app_name}}] {{event}}
-
-Title: {{title}}
-Package: {{package}}{{#amount}} ({{amount}}){{/amount}}
-Author: {{user}}
-Registered: {{registered_at}}
-Submitted: {{submitted_at}}
-Country: {{country}}
-{{#preview_url}}
-Preview: {{preview_url}}{{/preview_url}}
-{{#admin_url}}
-Review: {{admin_url}}{{/admin_url}}`,
-};
-
-export const GUEST_POST_EVENT_LABELS: Record<
-  NotifyLanguage,
-  Record<'submitted' | 'resubmitted', string>
-> = {
-  en: {
-    submitted: 'Guest post awaiting review',
-    resubmitted: 'Guest post resubmitted',
-  },
-};
-
 export function normalizeNotifyLanguage(_value?: string): NotifyLanguage {
   return 'en';
 }

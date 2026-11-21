@@ -30,8 +30,9 @@ execFileSync(
 );
 const { db } = await import('../src/core/db');
 const schema = await import('../src/config/db/schema');
-const { POST: setPassword } =
-  await import('../src/server/admin/handlers/users-password');
+const { POST: setPassword } = await import(
+  '../src/server/admin/handlers/users-password'
+);
 
 after(async () => {
   await rm(directory, { recursive: true, force: true });

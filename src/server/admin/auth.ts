@@ -3,7 +3,7 @@ import { matchPermission } from '@/core/auth/rbac';
 import { validateAdminKey } from '@/modules/admin-access/service';
 import { getUserPermissionCodes } from '@/modules/rbac/service';
 
-import { AdminError, type AdminActor } from './types';
+import { type AdminActor, AdminError } from './types';
 
 export async function authenticateAdmin(request: Request): Promise<AdminActor> {
   // Never fall back to a cookie if an invalid Authorization header was supplied.

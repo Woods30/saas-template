@@ -29,12 +29,15 @@ execFileSync(
 );
 const { db } = await import('../src/core/db');
 const schema = await import('../src/config/db/schema');
-const { parseClientEvent, recordEvent, sanitizeEventDetail } =
-  await import('../src/modules/events/service');
-const { customTimelineSources } =
-  await import('../src/server/admin/timeline-sources');
-const { GET: timeline } =
-  await import('../src/server/admin/handlers/users-timeline');
+const { parseClientEvent, recordEvent, sanitizeEventDetail } = await import(
+  '../src/modules/events/service'
+);
+const { customTimelineSources } = await import(
+  '../src/server/admin/timeline-sources'
+);
+const { GET: timeline } = await import(
+  '../src/server/admin/handlers/users-timeline'
+);
 const { Route: eventsRoute } = await import('../src/routes/api/events');
 
 after(async () => {

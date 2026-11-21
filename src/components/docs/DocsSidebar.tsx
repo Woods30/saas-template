@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ChevronRight } from 'lucide-react';
 
-import { groupDocs, type DocEntry, type DocGroup } from '@/modules/docs/paths';
+import { type DocEntry, type DocGroup, groupDocs } from '@/modules/docs/paths';
 import { m } from '@/paraglide/messages.js';
 import { DOC_FALLBACK_ICON, DOC_ICON } from '@/components/docs/doc-icons';
 

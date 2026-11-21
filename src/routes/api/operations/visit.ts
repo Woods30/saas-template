@@ -1,5 +1,5 @@
-import { randomUUID } from 'node:crypto';
 import { createFileRoute } from '@tanstack/react-router';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 import { getAuth } from '@/core/auth';

@@ -24,13 +24,13 @@ import { m } from '@/paraglide/messages.js';
 import { getLocale } from '@/paraglide/runtime.js';
 import { usePublicConfig } from '@/hooks/use-public-config';
 import {
-  PaymentProviderModal,
   type PaymentProvider,
+  PaymentProviderModal,
 } from '@/components/payment-provider-modal';
 import {
-  PricingTable,
   type PricingGroup,
   type PricingPlan,
+  PricingTable,
 } from '@/components/pricing-table';
 
 const ALL_PROVIDERS: PaymentProvider[] = [

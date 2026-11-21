@@ -57,8 +57,9 @@ export const Route = createFileRoute('/sitemap.xml')({
 
         // BlogSection posts: db posts merged with local MDX posts.
         try {
-          const { listPublishedArticles } =
-            await import('@/modules/posts/service');
+          const { listPublishedArticles } = await import(
+            '@/modules/posts/service'
+          );
           const rows = await listPublishedArticles().catch(() => []);
           const dbPosts = rows.map((row) => ({
             slug: row.slug,

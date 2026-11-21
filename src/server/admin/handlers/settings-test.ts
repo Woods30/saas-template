@@ -5,7 +5,6 @@ import {
 } from '@/modules/config/service';
 import { getTestSpec, runTest } from '@/modules/config/settings-test';
 import {
-  sendTestGuestPostNotification,
   sendTestPaymentNotification,
   sendTestTicketNotification,
 } from '@/modules/notify/service';
@@ -51,7 +50,6 @@ export async function POST({ request, actor }: AdminHandlerContext) {
           ? [
               ...(await sendTestPaymentNotification(configs)),
               ...(await sendTestTicketNotification(configs)),
-              ...(await sendTestGuestPostNotification(configs)),
             ]
           : await sendTestPaymentNotification(configs, channel as any);
       const failed = results.filter((r) => !r.success);

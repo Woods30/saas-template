@@ -43,14 +43,16 @@ const { getAuth } = await import('../src/core/auth');
 const { hashPassword } = await import('better-auth/crypto');
 const { runAdminRoute, executeAdmin, findOperation, adminErrorResponse } =
   await import('../src/server/admin/execute');
-const { operationCatalog, adminOpenApi } =
-  await import('../src/server/admin/discovery');
+const { operationCatalog, adminOpenApi } = await import(
+  '../src/server/admin/discovery'
+);
 const { handleAdminMcp } = await import('../src/server/admin/mcp');
 const { adminOperations } = await import('../src/lib/admin-operations');
 const apikeys = await import('../src/modules/apikeys/service');
 const { Route: keysRoute } = await import('../src/routes/api/admin/agent/keys');
-const { Route: executeRoute } =
-  await import('../src/routes/api/admin/agent/execute');
+const { Route: executeRoute } = await import(
+  '../src/routes/api/admin/agent/execute'
+);
 let fullToken: string;
 let readToken: string;
 let fullAgentId: string;
@@ -440,8 +442,9 @@ test('RBAC writes cannot exceed the caller: no self-escalation to super_admin', 
   assert.equal((await ok.json()).code, 0);
   // Humans are held to the same ceiling.
   const limited = { userId: 'viewer', permissions: ['admin.roles.write'] };
-  const { executeAdmin: run, findOperation: find } =
-    await import('../src/server/admin/execute');
+  const { executeAdmin: run, findOperation: find } = await import(
+    '../src/server/admin/execute'
+  );
   const res = await run(
     find('roles_assign'),
     { userId: 'viewer', roleId: 'owner-role' },
@@ -948,8 +951,9 @@ test('stdio MCP and standalone skill client use the published API contract', asy
   } finally {
     await client.close();
   }
-  const { adminConnection, adminRequest } =
-    await import('../scripts/admin-client.mjs');
+  const { adminConnection, adminRequest } = await import(
+    '../scripts/admin-client.mjs'
+  );
   assert.throws(() =>
     adminConnection({
       SITE_ADMIN_URL: 'http://remote.example',
@@ -1003,9 +1007,10 @@ test('skill client manages several projects in a private store and never prints 
   );
   // Without a default and with several projects, the caller must choose.
   const store = await client.readStore(env);
-  await (
-    await import('node:fs/promises')
-  ).writeFile(configFile, JSON.stringify({ projects: store.projects }));
+  await (await import('node:fs/promises')).writeFile(
+    configFile,
+    JSON.stringify({ projects: store.projects })
+  );
   await assert.rejects(client.resolveConnection({ env }), /Several projects/);
   // The single-site env pair still works and wins when no project is named.
   const viaEnv = await client.resolveConnection({

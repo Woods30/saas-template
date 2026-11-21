@@ -39,8 +39,9 @@ const {
   siteOrigin,
   keyFileUrl,
 } = await import('../src/modules/indexnow/service');
-const { executeAdmin, findOperation, runAdminRoute } =
-  await import('../src/server/admin/execute');
+const { executeAdmin, findOperation, runAdminRoute } = await import(
+  '../src/server/admin/execute'
+);
 const { getAdminConfigs, getCustomConfigs, saveConfigs, replaceCustomConfigs } =
   await import('../src/modules/config/service');
 const { checkSessionOrigin } = await import('../src/server/admin/auth');

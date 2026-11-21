@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+
 import { authenticateAdmin } from '@/server/admin/auth';
 import { adminOpenApi } from '@/server/admin/discovery';
 import { adminErrorResponse } from '@/server/admin/execute';

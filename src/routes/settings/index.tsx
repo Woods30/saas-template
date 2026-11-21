@@ -6,7 +6,6 @@ import {
   Coins,
   Key,
   LifeBuoy,
-  PenLine,
   Sparkles,
   User,
 } from 'lucide-react';
@@ -16,7 +15,6 @@ import { Link } from '@/core/i18n/navigation';
 import { apiGet, type PageResult } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { m } from '@/paraglide/messages.js';
-import { useGuestPostInfo } from '@/hooks/use-guest-posts';
 import { useUserFeatures } from '@/hooks/use-user-features';
 import { buttonVariants } from '@/components/ui/button';
 import {
@@ -185,14 +183,12 @@ function DashboardPage() {
   // Cards and lists follow the admin's User FeaturesSection switches.
   const features = useUserFeatures();
   // Until the switches load, fetch nothing (a page may turn out to be off).
-  const guestPostInfo = useGuestPostInfo();
   const on = {
     credits: features.loaded && features.credits,
     billing: features.loaded && features.billing,
     payments: features.loaded && features.payments,
     apikeys: features.loaded && features.apikeys,
     tickets: features.loaded && features.tickets,
-    guestPosts: !!guestPostInfo.data?.enabled,
   };
   // Totals only (pageSize=1): one request per number shown.
   const count = (key: unknown[], url: string, enabled: boolean) => ({
@@ -212,27 +208,6 @@ function DashboardPage() {
       ['user-tickets', 'count', 'replied'],
       '/api/tickets?page=1&pageSize=1&status=replied',
       on.tickets
-    )
-  );
-  const guestPostsQuery = useQuery(
-    count(
-      ['guest-posts', 'count'],
-      '/api/guest-posts?page=1&pageSize=1',
-      on.guestPosts
-    )
-  );
-  const changesQuery = useQuery(
-    count(
-      ['guest-posts', 'count', 'changes_requested'],
-      '/api/guest-posts?page=1&pageSize=1&status=changes_requested',
-      on.guestPosts
-    )
-  );
-  const reviewQuery = useQuery(
-    count(
-      ['guest-posts', 'count', 'submitted'],
-      '/api/guest-posts?page=1&pageSize=1&status=submitted',
-      on.guestPosts
     )
   );
   const creditsQuery = useQuery({
@@ -293,23 +268,13 @@ function DashboardPage() {
         : m['settings.overview.plan_free_description']();
 
   const name = session?.user?.name || session?.user?.email || '';
-  const statCards = [
-    on.billing,
-    on.credits,
-    on.apikeys,
-    on.tickets,
-    on.guestPosts,
-  ].filter(Boolean).length;
+  const statCards = [on.billing, on.credits, on.apikeys, on.tickets].filter(
+    Boolean
+  ).length;
   const replied = repliedQuery.data?.total ?? 0;
-  const changes = changesQuery.data?.total ?? 0;
-  const inReview = reviewQuery.data?.total ?? 0;
   // Nothing else to show: point at the one page every user has.
   const empty =
-    features.loaded &&
-    !guestPostInfo.isPending &&
-    statCards === 0 &&
-    !on.payments &&
-    !on.credits;
+    features.loaded && statCards === 0 && !on.payments && !on.credits;
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -395,29 +360,6 @@ function DashboardPage() {
                 replied > 0
                   ? m['settings.overview.tickets_replied']({ count: replied })
                   : m['settings.overview.tickets_none']()
-              }
-            />
-          )}
-          {on.guestPosts && (
-            <StatCard
-              href="/settings/guest-posts"
-              title={m['settings.nav.guest_posts']()}
-              icon={<PenLine className="text-muted-foreground size-4" />}
-              value={
-                guestPostsQuery.isPending
-                  ? loading
-                  : (guestPostsQuery.data?.total ?? '—')
-              }
-              hint={
-                changes > 0
-                  ? m['settings.overview.guest_posts_changes']({
-                      count: changes,
-                    })
-                  : inReview > 0
-                    ? m['settings.overview.guest_posts_review']({
-                        count: inReview,
-                      })
-                    : m['settings.overview.guest_posts_none']()
               }
             />
           )}

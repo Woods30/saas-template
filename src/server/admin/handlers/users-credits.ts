@@ -3,8 +3,8 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/core/db';
 import { user } from '@/config/db/schema';
 import {
-  consume,
   CreditTransactionScene,
+  consume,
   getBalance,
   grant,
 } from '@/modules/credits/service';

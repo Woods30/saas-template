@@ -73,16 +73,20 @@ if (useD1) {
   disposeD1 = proxy.dispose;
 }
 const { db } = await import('../src/core/db');
-const { atomic, AtomicGuardError, guard, setAtomicModeForTests } =
-  await import('../src/core/db/atomic');
+const { atomic, AtomicGuardError, guard, setAtomicModeForTests } = await import(
+  '../src/core/db/atomic'
+);
 const schema = await import('@/config/db/schema');
-const { settleCheckoutOrder, handleSubscriptionRenewal } =
-  await import('../src/modules/payment/service');
-const { consume, revoke, getBalance } =
-  await import('../src/modules/credits/service');
+const { settleCheckoutOrder, handleSubscriptionRenewal } = await import(
+  '../src/modules/payment/service'
+);
+const { consume, revoke, getBalance } = await import(
+  '../src/modules/credits/service'
+);
 const { createTask } = await import('../src/modules/ai-tasks/service');
-const { redeemInviteCode } =
-  await import('../src/modules/invite-codes/service');
+const { redeemInviteCode } = await import(
+  '../src/modules/invite-codes/service'
+);
 
 // Concurrency scenarios need the backend's real locking: SQLite runs the batch
 // path (as D1 does), Postgres the transaction path.
@@ -102,9 +106,7 @@ after(async () => {
   await disposeD1?.();
   await rm(directory, { recursive: true, force: true });
   if (pgServer) {
-    await (
-      await import('../src/core/db')
-    ).closeDb({
+    await (await import('../src/core/db')).closeDb({
       database_provider: 'postgresql',
       database_url: process.env.DATABASE_URL!,
     } as any);

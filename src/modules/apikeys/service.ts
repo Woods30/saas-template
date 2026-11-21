@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import { and, count, eq, isNull, like, sql, type SQL } from 'drizzle-orm';
+import { and, count, eq, isNull, like, type SQL, sql } from 'drizzle-orm';
 
 import { db } from '@/core/db';
 import { apikey } from '@/config/db/schema';

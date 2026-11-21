@@ -252,8 +252,9 @@ test('the 100th live order on one account hits AMOUNT_POOL_EXHAUSTED', async () 
   );
 
   // Expiring the stale rows hands the amounts back.
-  const { expireStaleOrders } =
-    await import('../src/modules/manual-payments/service');
+  const { expireStaleOrders } = await import(
+    '../src/modules/manual-payments/service'
+  );
   const expired = await expireStaleOrders(
     account.id,
     new Date(now.getTime() + MANUAL_PAYMENT_TTL_MS + 1)

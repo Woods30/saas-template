@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ComponentType, type SVGProps } from 'react';
+import { type ComponentType, type SVGProps, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 
@@ -14,7 +14,8 @@ import { Button } from '@/components/ui/button';
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
 export type PricingFeature =
-  string | { icon?: IconComponent; label: string; tooltip?: string };
+  | string
+  | { icon?: IconComponent; label: string; tooltip?: string };
 
 export interface PricingPlan {
   id: string;

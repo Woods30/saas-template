@@ -30,11 +30,13 @@ execFileSync(
 const { db } = await import('../src/core/db');
 const schema = await import('../src/config/db/schema');
 const { settleCheckoutOrder } = await import('../src/modules/payment/service');
-const { assertEndpointSecretsResupplied } =
-  await import('../src/modules/config/service');
+const { assertEndpointSecretsResupplied } = await import(
+  '../src/modules/config/service'
+);
 const { enforceMinIntervalRateLimit } = await import('../src/lib/rate-limit');
-const { PATCH: patchOrder } =
-  await import('../src/server/admin/handlers/orders');
+const { PATCH: patchOrder } = await import(
+  '../src/server/admin/handlers/orders'
+);
 const { isValidEmbedSetting } = await import('../src/lib/embed-ids');
 
 before(async () => {

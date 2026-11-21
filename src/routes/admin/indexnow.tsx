@@ -9,9 +9,9 @@ import { z } from 'zod';
 import { apiGet, apiPost, apiPut } from '@/lib/api-client';
 import {
   INDEXNOW_KEY_PATTERN,
-  indexNowAccess,
   type IndexNowStatus,
   type IndexNowSubmitResult,
+  indexNowAccess,
 } from '@/lib/indexnow';
 import {
   checkIndexNowKeyFile,

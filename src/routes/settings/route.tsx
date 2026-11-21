@@ -6,14 +6,12 @@ import {
   Key,
   LayoutDashboard,
   LifeBuoy,
-  PenLine,
   Receipt,
   User,
 } from 'lucide-react';
 
 import { envConfigs } from '@/config';
 import { m } from '@/paraglide/messages.js';
-import { useGuestPostInfo } from '@/hooks/use-guest-posts';
 import { useUserFeatures } from '@/hooks/use-user-features';
 import { SupportWidget } from '@/blocks/support-widget';
 import { AppLayout } from '@/components/app-layout';
@@ -76,17 +74,6 @@ function SettingsLayout() {
       show: features.tickets,
     },
   ].filter((item) => item.show !== false);
-
-  // Only when the site accepts guest posts.
-  const guestPostInfo = useGuestPostInfo();
-  if (guestPostInfo.data?.enabled) {
-    navItems.push({
-      href: '/settings/guest-posts',
-      label: m['settings.nav.guest_posts'](),
-      icon: PenLine,
-      group: contentGroup,
-    });
-  }
 
   const footerNavItems = [
     { href: '/', label: m['common.systems.home'](), icon: Home, newTab: true },

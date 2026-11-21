@@ -8,7 +8,7 @@ import { Link } from '@/core/i18n/navigation';
 import { apiGet, type PageResult } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { m } from '@/paraglide/messages.js';
-import { DataTable, type Column } from '@/components/data-table';
+import { type Column, DataTable } from '@/components/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -34,15 +34,10 @@ type Order = {
   invoiceUrl?: string | null;
   paidAt?: string | null;
   createdAt: string;
-  /** Set when the order paid for a guest post. */
-  guestPost?: { id: string; title: string } | null;
 };
 
 /** "Product · Plan", or one of them when they're the same / missing. */
 function productLabel(o: Order) {
-  if (o.guestPost) {
-    return `${m['guest_posts.title']()} · ${o.planName || ''}`.trim();
-  }
   if (o.productName && o.planName && o.planName !== o.productName) {
     return `${o.productName} · ${o.planName}`;
   }
@@ -128,19 +123,7 @@ function PaymentsPage() {
     },
     {
       header: m['settings.payments.product'](),
-      cell: (o) => (
-        <div className="min-w-0">
-          <span>{productLabel(o)}</span>
-          {o.guestPost && (
-            <Link
-              href={`/settings/guest-posts/${o.guestPost.id}`}
-              className="text-muted-foreground hover:text-foreground block max-w-[240px] truncate text-xs hover:underline"
-            >
-              {o.guestPost.title || '—'}
-            </Link>
-          )}
-        </div>
-      ),
+      cell: (o) => <span className="block truncate">{productLabel(o)}</span>,
     },
     {
       header: m['settings.payments.amount'](),

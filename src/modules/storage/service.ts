@@ -1,5 +1,5 @@
 import { R2Provider, StorageManager } from '@/core/storage';
-import { getAllConfigs, type ConfigMap } from '@/modules/config/service';
+import { type ConfigMap, getAllConfigs } from '@/modules/config/service';
 
 /**
  * Storage config is DB-driven (like auth/payment/email): values come from the

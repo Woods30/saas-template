@@ -9,7 +9,7 @@ import { respData, respErr } from '@/lib/resp';
 import type { AdminHandlerContext } from '../types';
 
 /** Admin view: every account, disabled ones included. */
-export async function GET({}: AdminHandlerContext) {
+export async function GET() {
   try {
     return respData(await listAccounts());
   } catch (error: any) {

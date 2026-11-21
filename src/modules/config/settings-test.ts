@@ -19,15 +19,15 @@ import {
   StripeProvider,
   WechatPayProvider,
 } from '@/core/payment';
-import { PaymentType, type PaymentOrder } from '@/core/payment/types';
+import { type PaymentOrder, PaymentType } from '@/core/payment/types';
 import { R2Provider } from '@/core/storage/r2';
 import { envConfigs } from '@/config';
 import { getUniSeq } from '@/lib/hash';
 
 import type { TestResult } from './settings-test-specs';
 
-export { getTestSpec, getTestableGroups } from './settings-test-specs';
-export type { TestField, TestSpec, TestResult } from './settings-test-specs';
+export type { TestField, TestResult, TestSpec } from './settings-test-specs';
+export { getTestableGroups, getTestSpec } from './settings-test-specs';
 
 export async function runTest(
   group: string,

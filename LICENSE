@@ -1,80 +1,93 @@
-ShipAny SaaS Boilerplate License Agreement
+Jerbix Commercial License
+Copyright (c) 2026 Jerbix. All rights reserved.
 
-TL;DR;
-Personal License: Build unlimited SaaS products as an individual developer.
-Team License: Build unlimited SaaS products as a team.
+This license governs the source code, configuration and documentation in
+this repository (the "Template"). By downloading, installing or using the
+Template you accept these terms. If you do not accept them, do not use the
+Template and delete your copy.
 
-This License Agreement ("Agreement") is made between ShipAny ("Licensor"), and you ("Licensee"), concerning the use of ShipAny SaaS Boilerplate ("Product"). By using the Product, you agree to these terms.
+1. What you are buying
 
-1. License Types and Rights
+   A license to build products with the Template. A product you build and
+   operate under this license is an "Application". The Template itself is
+   not an Application.
 
-1.1 Personal License
+2. Tiers
 
-ShipAny grants you a Personal License that includes:
+   Personal. For one individual. You may build and operate any number of
+   Applications, commercially or otherwise, and charge whatever you like
+   for them.
 
-- Development of unlimited SaaS applications
-- Use of all included service templates and components
-- Commercial usage rights for your developed applications
-- Access to basic documentation and community support
+   Team. For an organisation, or any group of more than one person working
+   together. Seats may be reassigned as people join or leave. You may build
+   and operate any number of Applications.
 
-1.2 Team License
+   Both tiers are perpetual for the version you obtained, and both cover
+   unlimited Applications and unlimited end users of those Applications.
 
-ShipAny grants you a Team License that includes:
+   If you need procurement paperwork, invoicing, a purchase order or terms
+   for an entity larger than a single team, write to the licensing contact
+   address published on the project website.
 
-- All Personal License features
-- Team collaboration capabilities
-- Premium integration templates
-- Enterprise-ready features and configurations
-- Priority technical support
-- Advanced service implementation guides
+3. What you may not do
 
-2. Usage Restrictions
+   You may not resell or redistribute the Template. Concretely, you may not
+   publish the Template, or a substantially similar copy of it, as a
+   template, starter kit, boilerplate, source-code bundle, course asset or
+   any other product whose value is the code itself rather than an
+   Application built with it.
 
-You agree not to:
+   You may not sublicense the Template to third parties, and you may not
+   place it in a public code host where it can be copied by people who have
+   not bought a license.
 
-- Resell the boilerplate code as a standalone product
-- Share license keys or access credentials
-- Remove copyright notices from the source code
-- Redistribute the source code publicly
-- Create competing boilerplate products
-- Use the code in violation of any laws or regulations
-- Present your product as made, owned or endorsed by ShipAny
+   You may not use this license for open-source relicensing of the Template.
 
-The "Built with ShipAny" link included in the Product is optional. You are welcome to keep it, and you may restyle, move or remove it.
+4. What you may do
 
-3. Intellectual Property
+   Build Applications and operate them commercially. Modify the Template
+   freely, keep modifications private, and ship Applications to any number
+   of customers. No attribution is required in your Application, and you may
+   remove any branding that ships with the Template.
 
-The Product, including all source code, documentation, and integration templates, remains the exclusive property of ShipAny. Your license grants you usage rights but not ownership of the Product.
+   You may hand the Template, as it exists inside an Application, to a
+   contractor who is working on that Application for you, provided they do
+   not retain or reuse it for anyone else.
 
-4. Warranty Disclaimer
+5. Your data and your customers' data
 
-The Product is provided "as is" without warranty. ShipAny does not guarantee that the Product will meet your specific requirements or be error-free.
+   The Template includes no telemetry and sends nothing to us. Data your
+   Application collects is yours, and you are responsible for how it is
+   handled, including any legal or regulatory duty that applies to it.
 
-5. Liability Limitations
+6. No warranty
 
-ShipAny shall not be liable for any damages arising from:
+   The Template is provided as is, without warranty of any kind, express or
+   implied, including without limitation any warranty of merchantability,
+   fitness for a particular purpose, or non-infringement. You are
+   responsible for testing it before you rely on it, and for the security of
+   the Applications you deploy with it.
 
-- Use or inability to use the Product
-- Integration with third-party services
-- Data processing operations
-- Service interruptions or failures
+7. Limit of liability
 
-6. Term and Termination
+   To the maximum extent permitted by law, Jerbix is not liable for any
+   claim, damage, loss of data, loss of revenue or other liability arising
+   from the Template or from your use of it, whether in contract, tort or
+   otherwise. Our total liability is limited to the amount you paid for the
+   license.
 
-ShipAny may terminate your license if you breach this Agreement. Upon termination, you must cease using the Product and destroy all copies.
+8. Ending this license
 
-7. Support and Updates
+   This license ends automatically if you break section 3. On termination
+   you must stop using the Template and delete your copies. Applications you
+   deployed before termination may keep running, but you may not start new
+   ones from the Template.
 
-- Personal License includes community support
-- Team License includes priority email support
-- Updates and improvements are provided at ShipAny's discretion
+9. General
 
-8. General Provisions
+   This is the whole agreement on this subject. If any clause is found
+   unenforceable, the rest stands. It is governed by the laws of the
+   jurisdiction in which Jerbix is established.
 
-This Agreement is governed by the laws of Singapore. Any disputes shall be resolved in the courts of Singapore.
-
-Last Updated: 2026-10-17
-
-ShipAny
-Website: https://shipany.ai
-Contact: support@shipany.ai
+Questions about these terms: see the licensing contact address published on
+the project website.

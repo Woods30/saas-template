@@ -2,8 +2,8 @@ import { createFileRoute } from '@tanstack/react-router';
 
 import { getAuth } from '@/core/auth';
 import {
-  ManualPaymentError,
   MAX_RECEIPT_BYTES,
+  ManualPaymentError,
   submitReceipt,
 } from '@/modules/manual-payments/service';
 import { enforceMinIntervalRateLimit } from '@/lib/rate-limit';

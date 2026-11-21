@@ -1,7 +1,7 @@
 import {
+  type CustomConfig,
   getCustomConfigs,
   replaceCustomConfigs,
-  type CustomConfig,
 } from '@/modules/config/service';
 import { respData, respErr, respOk } from '@/lib/resp';
 

@@ -192,10 +192,11 @@ export async function saveConfigs(configs: ConfigMap) {
           !MODULE_MANAGED_CONFIG_KEYS.has(name) &&
           !isMaskedConfigValue(value)
       )
-      .map(async ([name, value]): Promise<[string, string]> =>
-        isSecretConfigKey(name)
-          ? [name, await encryptSecret(value)]
-          : [name, value]
+      .map(
+        async ([name, value]): Promise<[string, string]> =>
+          isSecretConfigKey(name)
+            ? [name, await encryptSecret(value)]
+            : [name, value]
       )
   );
   if (entries.length === 0) {
@@ -312,10 +313,11 @@ export async function replaceCustomConfigs(
   const entries = await Promise.all(
     clean
       .filter(([, value]) => !isMaskedConfigValue(value))
-      .map(async ([name, value]): Promise<[string, string]> =>
-        isSecretConfigKey(name)
-          ? [name, await encryptSecret(value)]
-          : [name, value]
+      .map(
+        async ([name, value]): Promise<[string, string]> =>
+          isSecretConfigKey(name)
+            ? [name, await encryptSecret(value)]
+            : [name, value]
       )
   );
 

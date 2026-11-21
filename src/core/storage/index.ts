@@ -201,7 +201,7 @@ export class StorageManager {
 // Global storage manager instance
 export const storageManager = new StorageManager();
 
+export * from './local-private';
+export * from './r2';
 // Export all providers
 export * from './s3';
-export * from './r2';
-export * from './local-private';

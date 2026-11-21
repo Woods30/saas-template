@@ -33,14 +33,6 @@ export type PricingProduct = {
   credits: number;
   creditsValidDays?: number;
   plan?: PricingPlanInfo;
-  /**
-   * 'guest_post': a guest post package. Sold only through
-   * /api/guest-posts/$id/checkout (tied to an approved submission); the
-   * generic checkout refuses it.
-   */
-  kind?: 'guest_post';
-  /** Guest post packages: most external links the article may contain. */
-  maxLinks?: number;
 };
 
 /**
@@ -159,35 +151,6 @@ export const pricingCatalog: Record<string, PricingProduct> = {
     cnyPriceInCents: 1399900,
     credits: 10000000,
   },
-
-  // Guest posts (see src/modules/guest-posts). Published permanently, every
-  // external link rendered rel="sponsored nofollow".
-  guest_post_standard: {
-    productId: 'guest_post_standard',
-    productName: 'Guest Post',
-    planName: 'Standard',
-    description: 'Guest post (1 link)',
-    type: PaymentType.ONE_TIME,
-    priceInCents: 9900,
-    currency: 'usd',
-    cnyPriceInCents: 69900,
-    credits: 0,
-    kind: 'guest_post',
-    maxLinks: 1,
-  },
-  guest_post_premium: {
-    productId: 'guest_post_premium',
-    productName: 'Guest Post',
-    planName: 'Premium',
-    description: 'Guest post (3 links)',
-    type: PaymentType.ONE_TIME,
-    priceInCents: 19900,
-    currency: 'usd',
-    cnyPriceInCents: 139900,
-    credits: 0,
-    kind: 'guest_post',
-    maxLinks: 3,
-  },
 };
 
 export function getPricingProduct(productId: string): PricingProduct | null {
@@ -197,8 +160,4 @@ export function getPricingProduct(productId: string): PricingProduct | null {
 
 export function listPricingProducts(): PricingProduct[] {
   return Object.values(pricingCatalog);
-}
-
-export function listGuestPostPackages(): PricingProduct[] {
-  return listPricingProducts().filter((p) => p.kind === 'guest_post');
 }

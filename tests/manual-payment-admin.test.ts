@@ -33,11 +33,13 @@ const { db } = await import('../src/core/db');
 const schema = await import('../src/config/db/schema');
 const { PaymentType } = await import('../src/core/payment/types');
 const { saveConfigs } = await import('../src/modules/config/service');
-const { executeAdmin, findOperation } =
-  await import('../src/server/admin/execute');
+const { executeAdmin, findOperation } = await import(
+  '../src/server/admin/execute'
+);
 const { adminOperations } = await import('../src/lib/admin-operations');
-const { createAccount, createManualOrder, submitReceipt } =
-  await import('../src/modules/manual-payments/service');
+const { createAccount, createManualOrder, submitReceipt } = await import(
+  '../src/modules/manual-payments/service'
+);
 
 const reader = { userId: 'admin-reader', permissions: ['admin.payments.read'] };
 const writer = {

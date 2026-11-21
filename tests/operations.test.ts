@@ -31,14 +31,18 @@ execFileSync(
 const { db } = await import('../src/core/db');
 const schema = await import('../src/config/db/schema');
 const operations = await import('../src/modules/operations/service');
-const { sameTimeWindows, formatOperationsMoney } =
-  await import('../src/lib/operations');
-const { readVisitorCookie, signVisitor } =
-  await import('../src/lib/operations-cookie');
-const { executeAdmin, findOperation } =
-  await import('../src/server/admin/execute');
-const { Route: visitRoute } =
-  await import('../src/routes/api/operations/visit');
+const { sameTimeWindows, formatOperationsMoney } = await import(
+  '../src/lib/operations'
+);
+const { readVisitorCookie, signVisitor } = await import(
+  '../src/lib/operations-cookie'
+);
+const { executeAdmin, findOperation } = await import(
+  '../src/server/admin/execute'
+);
+const { Route: visitRoute } = await import(
+  '../src/routes/api/operations/visit'
+);
 after(async () => {
   await rm(directory, { recursive: true, force: true });
 });

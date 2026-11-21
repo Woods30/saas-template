@@ -28,8 +28,9 @@ execFileSync(
   { stdio: 'pipe', env: process.env }
 );
 const { db } = await import('../src/core/db');
-const { credit, order, subscription, user } =
-  await import('../src/config/db/schema');
+const { credit, order, subscription, user } = await import(
+  '../src/config/db/schema'
+);
 const {
   settleCheckoutOrder,
   handleSubscriptionRenewal,

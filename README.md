@@ -1,4 +1,4 @@
-# saas-template
+# Jerbix
 
 A SaaS application template built on **TanStack Start**. Clone it, set five environment variables, and you have a running product: authentication, RBAC, orders, payments, credits, subscriptions, storage, email and AI are already wired, and the admin console lets you configure providers without touching code.
 
@@ -24,7 +24,7 @@ Open `http://localhost:3000`, sign in with the admin account you just created, a
 
 ```env
 VITE_APP_URL=http://localhost:3000
-VITE_APP_NAME=My App
+VITE_APP_NAME=Jerbix
 DATABASE_PROVIDER=sqlite        # sqlite | postgres | mysql | turso | d1
 DATABASE_URL=file:data/local.db
 AUTH_SECRET=                    # openssl rand -base64 32
@@ -34,13 +34,26 @@ Nothing else is required. Provider credentials (payment keys, OAuth clients, mai
 
 Local env lives in `.env.development` (gitignored). It is loaded by both Vite and the `db:*` scripts. See `.env.example` for the full list of optional variables.
 
+## Upgrading from an earlier version
+
+The schema templates no longer declare `guest_post`, and nothing in the
+codebase reads it. A database created by an earlier version still holds the
+table and its rows: they are inert, but they are also dead weight.
+
+- **Development:** re-run `pnpm db:push`. It syncs the schema and reports
+  the removed table; accept the drop when prompted.
+- **Production:** run `pnpm db:generate`, review the generated SQL (it
+  contains a `DROP TABLE guest_post`), then `pnpm db:migrate`.
+
+Nothing else changed shape. If your deployment never enabled the feature the
+table is empty, so dropping it loses nothing.
+
 ## Features
 
 - **Auth** — Email/password, Google/GitHub OAuth and Google One Tap via better-auth
 - **Payments** — Stripe, Creem, PayPal, Alipay, WeChat Pay: checkout, subscriptions, webhooks, refunds, coupons. Every grant is atomic and idempotent
 - **Manual payments** — offline transfer (QR code + receipt upload) for one-time products, off by default
 - **Credits** — FIFO consumption, expiration, auto-grant on signup, refunds
-- **Guest posts** — paid articles: authors pay to submit, admins approve, request changes or reject with a refund; published with sponsored links
 - **Support tickets** — user tickets with a floating support button and an admin inbox
 - **AI** — Replicate, Gemini, Fal, Kie providers with task tracking and credit deduction
 - **RBAC** — roles, permissions, wildcard matching, admin management
@@ -48,7 +61,7 @@ Local env lives in `.env.development` (gitignored). It is loaded by both Vite an
 - **API keys & invite codes** — key CRUD + validation; trial invite codes with batch generation
 - **CMS & blog** — categories and posts, Markdown blog, MDX static pages
 - **Documentation site** — an optional `/docs` module with markdown content, sidebar, TOC and search
-- **Bot notifications** — Telegram / Feishu / WeCom / webhook messages for payments, tickets and guest posts
+- **Bot notifications** — Telegram / Feishu / WeCom / webhook messages for paid orders and tickets
 - **i18n** — English-only UI and content via Paraglide JS
 - **Appearance** — optional admin-controlled color themes, font, size, sidebar layout and light/dark
 - **Database** — SQLite, PostgreSQL, MySQL, Turso and Cloudflare D1 via Drizzle ORM
@@ -90,7 +103,7 @@ content/docs/            # Documentation content (ships empty)
 
 ## User Center & Admin Panel
 
-The user center (`/settings`) has profile, credits, billing, payments, API keys, support tickets and guest posts. Optional pages can be switched off at Settings → Users.
+The user center (`/settings`) has profile, credits, billing, payments, API keys and support tickets. Optional pages can be switched off at Settings → Users.
 
 The admin panel (`/admin`):
 
@@ -100,7 +113,7 @@ The admin panel (`/admin`):
 | Operations | First-party traffic, revenue and experiments (needs `admin.operations.read`)                |
 | RBAC       | Users (with activity timeline), Invite Codes, Roles, Permissions                            |
 | Billing    | Payments, Manual Payments, Subscriptions, Credits                                           |
-| Content    | Categories, Posts, Guest Posts, Tickets                                                     |
+| Content    | Categories, Posts, Tickets                                                                  |
 | Agent      | Agent accounts, tokens and audit log                                                        |
 | Settings   | General, Users, Auth, Payment, Email, Storage, AI, Analytics, Ads, Customer Service, Notify |
 
@@ -116,8 +129,8 @@ pnpm start     # node .output/server/index.mjs
 A multi-stage `Dockerfile` is included. `DATABASE_PROVIDER` is a build argument — it decides which schema template (`sqlite` / `postgres` / `mysql`) is stamped into `src/config/db/schema.ts` during install and build:
 
 ```bash
-docker build --build-arg DATABASE_PROVIDER=sqlite -t saas-template .
-docker run -p 3000:3000 --env-file .env.production saas-template
+docker build --build-arg DATABASE_PROVIDER=sqlite -t jerbix .
+docker run -p 3000:3000 --env-file .env.production jerbix
 ```
 
 Before a production deploy, run the deploy gate. It refuses to continue with a missing or placeholder `AUTH_SECRET`, or without `CONFIG_ENCRYPTION_KEY`:
@@ -133,7 +146,7 @@ Same codebase, different target: D1 (default) or Postgres via Hyperdrive.
 ```bash
 cp wrangler.example.jsonc wrangler.jsonc   # wrangler.jsonc is gitignored
 # fill in the real D1 database_id and vars in wrangler.jsonc
-npx wrangler d1 create saas-template-db
+npx wrangler d1 create jerbix-db
 pnpm cf:build
 pnpm cf:deploy        # runs check:deploy-env first
 ```
@@ -165,6 +178,7 @@ To turn it on:
 
 ```markdown
 ---
+
 title: Getting started
 description: How to set the template up.
 order: 1
@@ -230,6 +244,8 @@ CONFIG_ENCRYPTION_KEY=
 | `pnpm cf:build`         | Cloudflare Workers build                                                  |
 | `pnpm cf:deploy`        | Cloudflare Workers deploy (runs `check:deploy-env` first)                 |
 | `pnpm check:deploy-env` | Refuse to deploy without a real `AUTH_SECRET` and `CONFIG_ENCRYPTION_KEY` |
+| `pnpm format`           | Format and sort imports with Biome                                        |
+| `pnpm format:check`     | Report formatting drift without rewriting (CI-safe)                       |
 
 ## Tests and CI
 

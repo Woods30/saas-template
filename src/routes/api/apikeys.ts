@@ -1,9 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { userFeatureEnabled } from '@/server/user-features';
 
 import { getAuth } from '@/core/auth';
 import * as apikeys from '@/modules/apikeys/service';
 import { respData, respErr, respOk, respPage } from '@/lib/resp';
+
+import { userFeatureEnabled } from '@/server/user-features';
 
 async function GET({ request }: { request: Request }) {
   try {

@@ -1,11 +1,11 @@
 import { createServerFn } from '@tanstack/react-start';
 
 import {
+  type BlogPost,
+  type BlogPostDetail,
   getLocalPosts,
   loadLocalPost,
   mergePosts,
-  type BlogPost,
-  type BlogPostDetail,
 } from './index';
 
 // Database access stays behind server functions (dynamic import keeps
@@ -24,7 +24,6 @@ async function getDbPosts(): Promise<BlogPost[]> {
       authorName: row.authorName || undefined,
       authorImage: row.authorImage || undefined,
       source: 'db' as const,
-      sponsored: row.type === 'guest',
     }));
   } catch {
     // Database not configured/reachable — local posts still render.
@@ -66,7 +65,6 @@ export const getBlogPostFn = createServerFn()
           authorName: row.authorName || undefined,
           authorImage: row.authorImage || undefined,
           source: 'db',
-          sponsored: row.type === 'guest',
           content: row.content || '',
         };
       }
@@ -87,74 +85,4 @@ export const getBlogPostFn = createServerFn()
       authorImage: meta.author_image,
       source: 'local',
     };
-  });
-
-/** Whether the site accepts guest posts (the blog links to /guest-post). */
-export const getGuestPostsOpenFn = createServerFn().handler(async () => {
-  try {
-    const { getAllConfigs } = await import('@/modules/config/service');
-    const configs = await getAllConfigs();
-    return configs.guest_post_enabled === 'true';
-  } catch {
-    return false;
-  }
-});
-
-/**
- * An unpublished guest post, rendered in the blog layout for its author or a
- * reviewer (admin.guest-posts.read). Null for anyone else, so the page 404s.
- */
-export const getBlogPreviewFn = createServerFn()
-  .validator((data: { slug: string }) => data)
-  .handler(async ({ data }): Promise<BlogPostDetail | null> => {
-    try {
-      const { getRequest } = await import('@tanstack/react-start/server');
-      const { getAuth } = await import('@/core/auth');
-      const session = await getAuth().api.getSession({
-        headers: getRequest().headers,
-      });
-      if (!session?.user) return null;
-
-      const { findGuestPostBySlug } =
-        await import('@/modules/guest-posts/service');
-      const row = await findGuestPostBySlug(data.slug);
-      if (!row) return null;
-      if (row.authorId !== session.user.id) {
-        const { hasPermission } = await import('@/modules/rbac/service');
-        if (!(await hasPermission(session.user.id, 'admin.guest-posts.read'))) {
-          return null;
-        }
-      }
-      const p = row.post;
-      const { getPricingProduct } = await import('@/config/pricing');
-      const pkg = getPricingProduct(row.productId);
-      const { getAllConfigs } = await import('@/modules/config/service');
-      const { guestPostSettings } =
-        await import('@/server/guest-posts/settings');
-      const { minWords } = guestPostSettings(await getAllConfigs());
-      return {
-        slug: p.slug,
-        title: p.title || p.slug,
-        description: p.description || '',
-        image: p.image || undefined,
-        createdAt: new Date(p.createdAt).toISOString(),
-        authorName: p.authorName || undefined,
-        authorImage: p.authorImage || undefined,
-        source: 'db',
-        sponsored: true,
-        preview: p.status !== 'published',
-        previewInfo: {
-          guestPostId: row.guestPostId,
-          status: row.status,
-          isAuthor: row.authorId === session.user.id,
-          priceInCents: pkg?.priceInCents ?? 0,
-          currency: pkg?.currency ?? 'usd',
-          minWords,
-          maxLinks: pkg?.maxLinks ?? 0,
-        },
-        content: p.content || '',
-      };
-    } catch {
-      return null;
-    }
   });

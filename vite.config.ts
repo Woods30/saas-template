@@ -1,6 +1,6 @@
+import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import mdx from '@mdx-js/rollup';
 import tailwindcss from '@tailwindcss/vite';

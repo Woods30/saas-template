@@ -6,8 +6,8 @@ import { config } from '@/config/db/schema';
 import { decryptSecret } from '@/lib/crypto';
 import {
   INDEXNOW_KEY_PATTERN,
-  MAX_INDEXNOW_URLS,
   type IndexNowSubmitResult,
+  MAX_INDEXNOW_URLS,
 } from '@/lib/indexnow';
 import { serverSiteOrigin } from '@/lib/site-origin';
 

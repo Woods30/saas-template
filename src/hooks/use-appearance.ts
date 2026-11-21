@@ -2,8 +2,11 @@ import { useRouter, useRouterState } from '@tanstack/react-router';
 
 import { tDynamic } from '@/core/i18n/dynamic';
 import {
+  type Appearance,
+  type AppearanceKey,
   appearanceStyle,
   COLOR_MODES,
+  type ColorModeId,
   DEFAULT_APPEARANCE,
   DEFAULT_COLOR_MODE,
   FONT_SIZES,
@@ -12,9 +15,6 @@ import {
   SIDEBAR_VARIANTS,
   THEME_COOKIE,
   THEMES,
-  type Appearance,
-  type AppearanceKey,
-  type ColorModeId,
   type ThemeId,
 } from '@/config/appearance';
 import { deleteCookie, setCookie } from '@/lib/cookie';
