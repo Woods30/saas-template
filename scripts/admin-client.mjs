@@ -5,6 +5,23 @@ import { pathToFileURL } from 'node:url';
 
 // Credentials for one or more sites ("projects"), kept in a private
 // local file. Tokens are never printed; `projects` shows only a prefix.
+
+// Read all of stdin. Reading the device path directly looks simpler but
+// resolves to nothing inside the containers CI runs in (ENXIO), so a piped
+// token works locally and fails on every push; the stream does the same job on
+// a pipe, a file or a terminal.
+function readStdin() {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => {
+      data += chunk;
+    });
+    process.stdin.on('end', () => resolve(data));
+    process.stdin.on('error', reject);
+  });
+}
+
 export function storePath(env = process.env) {
   return (
     env.SITE_ADMIN_CONFIG || join(homedir(), '.site-admin', 'projects.json')
@@ -162,7 +179,7 @@ async function main() {
   if (command === 'help' || !command) return console.log(USAGE);
 
   if (command === 'add') {
-    const token = await readFile('/dev/stdin', 'utf8');
+    const token = await readStdin();
     return console.log(
       JSON.stringify(await addProject(a1, a2, token), null, 2)
     );
@@ -206,10 +223,7 @@ async function main() {
       connection
     );
   else if (command === 'call' && a1 && a2) {
-    const source =
-      a2 === '-'
-        ? await readFile('/dev/stdin', 'utf8')
-        : await readFile(a2, 'utf8');
+    const source = a2 === '-' ? await readStdin() : await readFile(a2, 'utf8');
     response = await adminRequest(
       '/api/admin/agent/execute',
       {
