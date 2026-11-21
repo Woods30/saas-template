@@ -203,8 +203,6 @@ export enum PaymentEventType {
   SUBSCRIBE_CANCELED = 'subscribe.canceled', // subscription canceled
 }
 
-export interface EventInfo {}
-
 /**
  * Thrown when a webhook is authentic but carries an event this app does not
  * process (unknown event type, or one with no handler). The webhook route acks

@@ -8,23 +8,23 @@
   "files": {
     "includes": [
       "**",
-      "!src/components/ui/**",
+      "!src/components/ui",
       "!src/styles/globals.css",
-      "!src/paraglide/**",
+      "!src/paraglide",
       "!src/routeTree.gen.ts",
-      "!drizzle/**",
-      "!public/**",
-      "!.output/**",
-      "!.wrangler/**",
-      "!.superpowers/**",
-      "!docs/superpowers/**",
-      "!.claude/**",
-      "!.agents/**",
-      "!.codex/**",
-      "!.cursor/**",
+      "!drizzle",
+      "!public",
+      "!.output",
+      "!.wrangler",
+      "!.superpowers",
+      "!docs/superpowers",
+      "!.claude",
+      "!.agents",
+      "!.codex",
+      "!.cursor",
       "!pnpm-lock.yaml",
       "!package-lock.json",
-      "!data/**"
+      "!data"
     ]
   },
   "formatter": {
@@ -74,6 +74,19 @@
     }
   },
   "linter": {
-    "enabled": false
+    "enabled": true,
+    "rules": {
+      "nursery": {
+        "useTailwindSortedClasses": "warn"
+      },
+      "a11y": {
+        "noLabelWithoutControl": "warn",
+        "noSvgWithoutTitle": "warn",
+        "noStaticElementInteractions": "warn",
+        "noNoninteractiveTabindex": "warn",
+        "useButtonType": "warn",
+        "useSemanticElements": "warn"
+      }
+    }
   }
 }
